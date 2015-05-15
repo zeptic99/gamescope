@@ -1,9 +1,20 @@
-steamos-compositor (1.25) alchemist; urgency=medium
+steamos-compositor (1.27) brewmaster; urgency=medium
 
-  * Fix commandline argument descriptions and getopt call to match actual behavior.
-    Thanks to Wouter Wijsman for the fix!
+  * depend on libudev1 instead of libudev0
 
- -- Pierre-Loup A. Griffais <pgriffais@valvesoftware.com>  Thu, 18 Dec 2014 12:51:54 -0800
+ -- John Vert <johnv@valvesoftware.com>  Fri, 15 May 2015 11:45:12 -0700
+
+steamos-compositor (1.26) brewmaster; urgency=medium
+
+  * compilation fixes
+
+ -- John Vert <johnv@valvesoftware.com>  Fri, 15 May 2015 11:29:10 -0700
+
+steamos-compositor (1.25) brewmaster; urgency=medium
+
+  * fix missing tab in debian/rules, change Build-Depends from automake to automake1.11
+
+ -- John Vert <johnv@valvesoftware.com>  Fri, 01 May 2015 16:25:26 -0700
 
 steamos-compositor (1.24) alchemist; urgency=medium
 
