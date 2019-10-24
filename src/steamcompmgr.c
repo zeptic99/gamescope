@@ -54,6 +54,9 @@
 #include "glext.h"
 #include "GL/glxext.h"
 
+#include "wlr/xwayland.h"
+#include "server.h"
+
 PFNGLXSWAPINTERVALEXTPROC				__pointer_to_glXSwapIntervalEXT;
 
 void (*__pointer_to_glXBindTexImageEXT) (Display     *display, 
@@ -201,6 +204,7 @@ static Atom		sizeHintsAtom;
 static Atom		fullscreenAtom;
 static Atom		WMStateAtom;
 static Atom		WMStateHiddenAtom;
+static Atom		WLSurfaceIDAtom;
 
 GLXContext glContext;
 
@@ -259,7 +263,7 @@ win_extents (Display *dpy, win *w);
 
 static Bool		doRender = True;
 static Bool		drawDebugInfo = False;
-static Bool		debugEvents = False;
+static Bool		debugEvents = True;
 static Bool		allowUnredirection = False;
 
 const int tfpAttribs[] = {
@@ -1499,6 +1503,40 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 		map_win (dpy, id, sequence);
 	
 	focusDirty = True;
+	
+	struct wlr_xwayland_surface *surface =
+	calloc(1, sizeof(struct wlr_xwayland_surface));
+	
+// 	surface->xwm = xwm;
+	surface->window_id = id;
+	surface->x = new->a.x;
+	surface->y = new->a.y;
+	surface->width = new->a.width;
+	surface->height = new->a.height;
+	surface->override_redirect = new->a.override_redirect;
+	wl_list_init(&surface->children);
+	wl_list_init(&surface->parent_link);
+	wl_signal_init(&surface->events.destroy);
+	wl_signal_init(&surface->events.request_configure);
+	wl_signal_init(&surface->events.request_move);
+	wl_signal_init(&surface->events.request_resize);
+	wl_signal_init(&surface->events.request_maximize);
+	wl_signal_init(&surface->events.request_fullscreen);
+	wl_signal_init(&surface->events.request_activate);
+	wl_signal_init(&surface->events.map);
+	wl_signal_init(&surface->events.unmap);
+	wl_signal_init(&surface->events.set_class);
+	wl_signal_init(&surface->events.set_role);
+	wl_signal_init(&surface->events.set_title);
+	wl_signal_init(&surface->events.set_parent);
+	wl_signal_init(&surface->events.set_pid);
+	wl_signal_init(&surface->events.set_window_type);
+	wl_signal_init(&surface->events.set_hints);
+	wl_signal_init(&surface->events.set_decorations);
+	wl_signal_init(&surface->events.set_override_redirect);
+	wl_signal_init(&surface->events.ping_timeout);
+	
+	wl_signal_emit(&server.desktop->xwayland->events.new_surface, surface);
 }
 
 static void
@@ -1583,6 +1621,16 @@ circulate_win (Display *dpy, XCirculateEvent *ce)
 		new_above = None;
 	restack_win (dpy, w, new_above);
 	clipChanged = True;
+}
+
+static void map_request (Display *dpy, XMapRequestEvent *mapRequest)
+{
+	XMapWindow( dpy, mapRequest->window );
+	
+// 	win * w = find_win(dpy, mapRequest->window);
+// 	
+// 	if (w && w->id == mapRequest->window)
+// 		map_win (dpy, mapRequest->window, mapRequest->serial);
 }
 
 static void
@@ -1801,7 +1849,7 @@ register_cm (Display *dpy)
 }
 
 int
-main (int argc, char **argv)
+steamcompmgr_main (int argc, char **argv)
 {
 	Display	   *dpy;
 	XEvent	    ev;
@@ -1816,6 +1864,8 @@ main (int argc, char **argv)
 	int		    composite_major, composite_minor;
 	char	    *display = NULL;
 	int		    o;
+	
+	
 	
 	while ((o = getopt (argc, argv, "D:I:O:d:r:o:l:t:scnufFCaSvV")) != -1)
 	{
@@ -1916,6 +1966,7 @@ main (int argc, char **argv)
 	fullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", False);
 	WMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", False);
 	WMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
+	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", False);
 	
 	pa.subwindow_mode = IncludeInferiors;
 	
@@ -2011,6 +2062,7 @@ main (int argc, char **argv)
 				  SubstructureNotifyMask|
 				  ExposureMask|
 				  StructureNotifyMask|
+				  SubstructureRedirectMask|
 				  FocusChangeMask|
 				  PointerMotionMask|
 				  LeaveWindowMask|
@@ -2048,7 +2100,7 @@ main (int argc, char **argv)
 				discard_ignore (dpy, ev.xany.serial);
 			if (debugEvents)
 			{
-				printf ("event %x\n", ev.type);
+				printf ("event %d\n", ev.type);
 			}
 			switch (ev.type) {
 				case CreateNotify:
@@ -2108,6 +2160,9 @@ main (int argc, char **argv)
 					break;
 				case CirculateNotify:
 					circulate_win (dpy, &ev.xcirculate);
+					break;
+				case MapRequest:
+					map_request (dpy, &ev.xmaprequest);
 					break;
 				case Expose:
 					break;
@@ -2233,14 +2288,21 @@ main (int argc, char **argv)
 					break;
 					case ClientMessage:
 					{
-						win * w = find_win(dpy, ev.xclient.window);
-						if (w)
+						if (ev.xclient.message_type == WLSurfaceIDAtom)
 						{
-							if (ev.xclient.data.l[1] == fullscreenAtom)
+							printf("surfaceID! W %p %d\n", w, ev.xclient.data.l[0]);
+						}
+						else
+						{
+							win * w = find_win(dpy, ev.xclient.window);
+							if (w)
 							{
-								w->isFullscreen = ev.xclient.data.l[0];
-								
-								focusDirty = True;
+								if (ev.xclient.data.l[1] == fullscreenAtom)
+								{
+									w->isFullscreen = ev.xclient.data.l[0];
+									
+									focusDirty = True;
+								}
 							}
 						}
 						break;
