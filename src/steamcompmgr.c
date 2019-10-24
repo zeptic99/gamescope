@@ -121,9 +121,6 @@ static win		*list;
 static int		scr;
 static Window		root;
 static Picture		rootPicture;
-static Picture		rootBuffer;
-static Picture		blackPicture;
-static Picture		transBlackPicture;
 static XserverRegion	allDamage;
 static Bool		clipChanged;
 static int		root_height, root_width;
@@ -258,9 +255,6 @@ init_text_rendering(void)
 									 &textXAdvance[0]);
 }
 
-static XserverRegion
-win_extents (Display *dpy, win *w);
-
 static Bool		doRender = True;
 static Bool		drawDebugInfo = False;
 static Bool		debugEvents = True;
@@ -385,19 +379,6 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 	}
 	
 	w->isHidden = hidden;
-}
-
-static XserverRegion
-win_extents (Display *dpy, win *w)
-{
-	XRectangle	    r;
-	
-	r.x = w->a.x;
-	r.y = w->a.y;
-	r.width = w->a.width + w->a.border_width * 2;
-	r.height = w->a.height + w->a.border_width * 2;
-	
-	return XFixesCreateRegion (dpy, &r, 1);
 }
 
 GLXFBConfig win_fbconfig(Display *display, Window id)
@@ -835,7 +816,7 @@ paint_message (const char *message, int Y, float r, float g, float b)
 								 GL_TRANSLATE_X_NV,
 								 &horizontalOffsets[1]);
 	
-	float messageWidth = horizontalOffsets[messageLength - 1] + textXAdvance[message[messageLength - 1]];
+	float messageWidth = horizontalOffsets[messageLength - 1] + textXAdvance[(int)message[messageLength - 1]];
 	
 	glPushMatrix();
 	
@@ -929,7 +910,6 @@ paint_all (Display *dpy)
 	win	*w;
 	win	*overlay;
 	win	*notification;
-	win	*t = NULL;
 	
 	Bool canUnredirect = True;
 	Bool overlayDamaged = False;
@@ -1239,7 +1219,7 @@ determine_and_apply_focus (Display *dpy)
 	
 	setup_pointer_barriers(dpy);
 	
-	if (gameFocused || !gamesRunningCount && list[0].id != focus->id)
+	if (gameFocused || (!gamesRunningCount && list[0].id != focus->id))
 	{
 		XRaiseWindow(dpy, focus->id);
 	}
@@ -1316,7 +1296,7 @@ get_size_hints(Display *dpy, win *w)
 	XGetWMNormalHints(dpy, w->id, &hints, &hintsSpecified);
 	
 	if (hintsSpecified & (PMaxSize | PMinSize) &&
-		hints.max_width * hints.max_height * hints.min_width * hints.min_height &&
+		hints.max_width && hints.max_height && hints.min_width && hints.min_height &&
 		hints.max_width == hints.min_width && hints.min_height == hints.max_height)
 	{
 		w->requestedWidth = hints.max_width;
@@ -1554,9 +1534,11 @@ restack_win (Display *dpy, win *w, Window new_above)
 		
 		/* unhook */
 		for (prev = &list; *prev; prev = &(*prev)->next)
+		{
 			if ((*prev) == w)
 				break;
-			*prev = w->next;
+		}
+		*prev = w->next;
 		
 		/* rehook */
 		for (prev = &list; *prev; prev = &(*prev)->next)
@@ -1575,7 +1557,6 @@ static void
 configure_win (Display *dpy, XConfigureEvent *ce)
 {
 	win		    *w = find_win (dpy, ce->window);
-	XserverRegion   damage = None;
 	
 	if (!w || w->id != ce->window)
 	{
@@ -1858,9 +1839,6 @@ steamcompmgr_main (int argc, char **argv)
 	unsigned int    nchildren;
 	int		    i;
 	XRenderPictureAttributes	pa;
-	XRectangle	    *expose_rects = NULL;
-	int		    size_expose = 0;
-	int		    n_expose = 0;
 	int		    composite_major, composite_minor;
 	char	    *display = NULL;
 	int		    o;
@@ -2009,7 +1987,7 @@ steamcompmgr_main (int argc, char **argv)
 		exit (1);
 	}
 	
-	__pointer_to_glXSwapIntervalEXT = (void *)glXGetProcAddress("glXSwapIntervalEXT");
+	__pointer_to_glXSwapIntervalEXT = (void *)glXGetProcAddress((const GLubyte *)"glXSwapIntervalEXT");
 	if (__pointer_to_glXSwapIntervalEXT)
 	{
 		__pointer_to_glXSwapIntervalEXT(dpy, root, 1);
@@ -2019,8 +1997,8 @@ steamcompmgr_main (int argc, char **argv)
 		fprintf (stderr, "Could not find glXSwapIntervalEXT proc pointer\n");
 	}
 	
-	__pointer_to_glXBindTexImageEXT = (void *)glXGetProcAddress("glXBindTexImageEXT");
-	__pointer_to_glXReleaseTexImageEXT = (void *)glXGetProcAddress("glXReleaseTexImageEXT");
+	__pointer_to_glXBindTexImageEXT = (void *)glXGetProcAddress((const GLubyte *)"glXBindTexImageEXT");
+	__pointer_to_glXReleaseTexImageEXT = (void *)glXGetProcAddress((const GLubyte *)"glXReleaseTexImageEXT");
 	
 	if (!__pointer_to_glXBindTexImageEXT || !__pointer_to_glXReleaseTexImageEXT)
 	{
@@ -2028,20 +2006,20 @@ steamcompmgr_main (int argc, char **argv)
 		exit (1);
 	}
 	
-	if (!strstr(glGetString(GL_EXTENSIONS), "GL_NV_path_rendering"))
+	if (!strstr((const char *)glGetString(GL_EXTENSIONS), "GL_NV_path_rendering"))
 	{
 		drawDebugInfo = False;
 	}
 	else
 	{
-		__pointer_to_glGenPathsNV = (PFNGLGENPATHSNVPROC) glXGetProcAddress("glGenPathsNV");
-		__pointer_to_glPathGlyphRangeNV = (PFNGLPATHGLYPHRANGENVPROC) glXGetProcAddress("glPathGlyphRangeNV");
-		__pointer_to_glGetPathMetricRangeNV = (PFNGLGETPATHMETRICRANGENVPROC) glXGetProcAddress("glGetPathMetricRangeNV");
-		__pointer_to_glGetPathSpacingNV = (PFNGLGETPATHSPACINGNVPROC) glXGetProcAddress("glGetPathSpacingNV");
-		__pointer_to_glStencilFillPathInstancedNV = (PFNGLSTENCILFILLPATHINSTANCEDNVPROC) glXGetProcAddress("glStencilFillPathInstancedNV");
-		__pointer_to_glStencilStrokePathInstancedNV = (PFNGLSTENCILSTROKEPATHINSTANCEDNVPROC) glXGetProcAddress("glStencilStrokePathInstancedNV");
-		__pointer_to_glCoverFillPathInstancedNV = (PFNGLCOVERFILLPATHINSTANCEDNVPROC) glXGetProcAddress("glCoverFillPathInstancedNV");
-		__pointer_to_glCoverStrokePathInstancedNV = (PFNGLCOVERSTROKEPATHINSTANCEDNVPROC) glXGetProcAddress("glCoverStrokePathInstancedNV");
+		__pointer_to_glGenPathsNV = (PFNGLGENPATHSNVPROC) glXGetProcAddress((const GLubyte *)"glGenPathsNV");
+		__pointer_to_glPathGlyphRangeNV = (PFNGLPATHGLYPHRANGENVPROC) glXGetProcAddress((const GLubyte *)"glPathGlyphRangeNV");
+		__pointer_to_glGetPathMetricRangeNV = (PFNGLGETPATHMETRICRANGENVPROC) glXGetProcAddress((const GLubyte *)"glGetPathMetricRangeNV");
+		__pointer_to_glGetPathSpacingNV = (PFNGLGETPATHSPACINGNVPROC) glXGetProcAddress((const GLubyte *)"glGetPathSpacingNV");
+		__pointer_to_glStencilFillPathInstancedNV = (PFNGLSTENCILFILLPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glStencilFillPathInstancedNV");
+		__pointer_to_glStencilStrokePathInstancedNV = (PFNGLSTENCILSTROKEPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glStencilStrokePathInstancedNV");
+		__pointer_to_glCoverFillPathInstancedNV = (PFNGLCOVERFILLPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glCoverFillPathInstancedNV");
+		__pointer_to_glCoverStrokePathInstancedNV = (PFNGLCOVERSTROKEPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glCoverStrokePathInstancedNV");
 	}
 	
 	glEnable(GL_TEXTURE_2D);
@@ -2172,7 +2150,6 @@ steamcompmgr_main (int argc, char **argv)
 					{
 						/* reset mode and redraw window */
 						win * w = find_win(dpy, ev.xproperty.window);
-						win * mainOverlayWindow = find_win(dpy, currentOverlayWindow);
 						if (w && w->isOverlay)
 						{
 							unsigned int newOpacity = get_prop(dpy, w->id, opacityAtom, TRANSLUCENT);
@@ -2267,7 +2244,7 @@ steamcompmgr_main (int argc, char **argv)
 						
 						win *w;
 						
-						if (w = find_win(dpy, currentFocusWindow))
+						if ((w = find_win(dpy, currentFocusWindow)))
 							w->damaged = 1;
 						
 						focusDirty = True;
@@ -2280,7 +2257,7 @@ steamcompmgr_main (int argc, char **argv)
 						
 						win *w;
 						
-						if (w = find_win(dpy, currentFocusWindow))
+						if ((w = find_win(dpy, currentFocusWindow)))
 							w->damaged = 1;
 						
 						focusDirty = True;
@@ -2288,14 +2265,14 @@ steamcompmgr_main (int argc, char **argv)
 					break;
 					case ClientMessage:
 					{
-						if (ev.xclient.message_type == WLSurfaceIDAtom)
+						win * w = find_win(dpy, ev.xclient.window);
+						if (w)
 						{
-							printf("surfaceID! W %p %d\n", w, ev.xclient.data.l[0]);
-						}
-						else
-						{
-							win * w = find_win(dpy, ev.xclient.window);
-							if (w)
+							if (ev.xclient.message_type == WLSurfaceIDAtom)
+							{
+								printf("surfaceID! W %p %ld\n", w, ev.xclient.data.l[0]);
+							}
+							else
 							{
 								if (ev.xclient.data.l[1] == fullscreenAtom)
 								{
