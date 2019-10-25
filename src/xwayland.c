@@ -8,19 +8,20 @@
 #include <wlr/util/log.h>
 #include <wlr/xwayland.h>
 #include "server.h"
+#include "xwayland.h"
 
 static void activate(struct roots_view *view, bool active) {
 	struct wlr_xwayland_surface *xwayland_surface =
 		roots_xwayland_surface_from_view(view)->xwayland_surface;
-	wlr_xwayland_surface_activate(xwayland_surface, active);
+// 	wlr_xwayland_surface_activate(xwayland_surface, active);
 }
 
 static void move(struct roots_view *view, double x, double y) {
 	struct wlr_xwayland_surface *xwayland_surface =
 		roots_xwayland_surface_from_view(view)->xwayland_surface;
 	view_update_position(view, x, y);
-	wlr_xwayland_surface_configure(xwayland_surface, x, y,
-		xwayland_surface->width, xwayland_surface->height);
+// 	wlr_xwayland_surface_configure(xwayland_surface, x, y,
+// 		xwayland_surface->width, xwayland_surface->height);
 }
 
 static void apply_size_constraints(
@@ -353,3 +354,39 @@ struct roots_xwayland_surface *roots_xwayland_surface_from_view(
 	assert(view->impl == &view_impl);
 	return (struct roots_xwayland_surface *)view;
 }
+
+static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
+	assert(wlr_surface->role == &xwayland_surface_role);
+	struct wlr_xwayland_surface *surface = wlr_surface->role_data;
+	if (surface == NULL) {
+		return;
+	}
+	
+	if (!surface->mapped && wlr_surface_has_buffer(surface->surface)) {
+		wl_signal_emit(&surface->events.map, surface);
+		surface->mapped = true;
+	}
+}
+
+static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
+	assert(wlr_surface->role == &xwayland_surface_role);
+	struct wlr_xwayland_surface *surface = wlr_surface->role_data;
+	if (surface == NULL) {
+		return;
+	}
+	
+	if (wlr_surface->pending.committed & WLR_SURFACE_STATE_BUFFER &&
+		wlr_surface->pending.buffer_resource == NULL) {
+		// This is a NULL commit
+		if (surface->mapped) {
+			wl_signal_emit(&surface->events.unmap, surface);
+			surface->mapped = false;
+		}
+	}
+}
+
+const struct wlr_surface_role xwayland_surface_role = {
+	.name = "wlr_xwayland_surface",
+	.commit = xwayland_surface_role_commit,
+	.precommit = xwayland_surface_role_precommit,
+};

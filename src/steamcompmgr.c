@@ -29,12 +29,15 @@
  *   says above. Not that I can really do anything about it
  */
 
+#include <assert.h> 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <sys/poll.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -56,6 +59,7 @@
 
 #include "wlr/xwayland.h"
 #include "server.h"
+#include "xwayland.h"
 
 PFNGLXSWAPINTERVALEXTPROC				__pointer_to_glXSwapIntervalEXT;
 
@@ -110,6 +114,8 @@ typedef struct _win {
 	Bool validContents;
 	
 	Bool mouseMoved;
+	
+	struct wlr_xwayland_surface *xwl_surface;
 } win;
 
 typedef struct _conv {
@@ -204,6 +210,10 @@ static Atom		WMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
 
 GLXContext glContext;
+
+struct wl_display *wlDisplay;
+struct wl_client *wlClient;
+int wlSockets[2];
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -1477,13 +1487,6 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new->mouseMoved = False;
 	
-	new->next = *p;
-	*p = new;
-	if (new->a.map_state == IsViewable)
-		map_win (dpy, id, sequence);
-	
-	focusDirty = True;
-	
 	struct wlr_xwayland_surface *surface =
 	calloc(1, sizeof(struct wlr_xwayland_surface));
 	
@@ -1517,6 +1520,15 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	wl_signal_init(&surface->events.ping_timeout);
 	
 	wl_signal_emit(&server.desktop->xwayland->events.new_surface, surface);
+	
+	new->xwl_surface = surface;
+	
+	new->next = *p;
+	*p = new;
+	if (new->a.map_state == IsViewable)
+		map_win (dpy, id, sequence);
+	
+	focusDirty = True;
 }
 
 static void
@@ -1682,6 +1694,46 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 		XDamageSubtract(dpy, w->damage, None, None);
 }
 
+static void
+handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
+{
+	struct wlr_surface *surface = NULL;
+
+	if (w->xwl_surface == NULL) {
+		fprintf (stderr, "never called add_win?\n");
+		return;
+	}
+
+	struct wl_resource *resource = wl_client_get_object(server.desktop->xwayland->client, surfaceID);
+	if (resource) {
+		surface = wlr_surface_from_resource(resource);
+	}
+	else
+	{
+		fprintf (stderr, "wayland surface for window not found, implement pending list for late surface notification\n");
+		return;
+	}
+	
+	
+	if (!wlr_surface_set_role(surface, &xwayland_surface_role, w->xwl_surface, NULL, 0))
+	{
+		fprintf (stderr, "Failed to set xwayland surface role");
+		return;
+	}
+		
+	w->xwl_surface->surface = surface;
+}
+
+static void compositor_new_surface(struct wl_listener *listener,
+									void *data) {
+	struct wlr_surface *surface = data;
+	uint32_t surface_id = wl_resource_get_id(surface->resource);
+	
+	fprintf (stderr, "New xwayland surface: %p %u\n", surface, surface_id);
+}
+
+struct wl_listener compositor_new_surface_listener = { .notify = compositor_new_surface };
+						   
 static int
 error (Display *dpy, XErrorEvent *ev)
 {
@@ -2066,6 +2118,14 @@ steamcompmgr_main (int argc, char **argv)
 	
 	globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
 	
+	assert(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, wlSockets) == 0);
+	wlDisplay = wl_display_create();
+	assert(wlDisplay);
+	wlClient = wl_client_create(wlDisplay, wlSockets[0]);
+	assert(wlClient);
+	
+	wl_signal_add(&server.desktop->xwayland->events.ready, &compositor_new_surface_listener);
+	
 	determine_and_apply_focus(dpy);
 	
 	for (;;)
@@ -2270,7 +2330,7 @@ steamcompmgr_main (int argc, char **argv)
 						{
 							if (ev.xclient.message_type == WLSurfaceIDAtom)
 							{
-								printf("surfaceID! W %p %ld\n", w, ev.xclient.data.l[0]);
+								handle_wl_surface_id(dpy, w, ev.xclient.data.l[0]);
 							}
 							else
 							{
