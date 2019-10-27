@@ -54,6 +54,8 @@
 #define GLX_GLEXT_LEGACY
 
 #include <GL/glx.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include "glext.h"
 #include "GL/glxext.h"
 
@@ -61,16 +63,15 @@
 #include "server.h"
 #include "xwayland.h"
 
+#define C_SIDE
+#include "main.hpp"
+
+#define WAFFLE_API_VERSION 0x0106
+#include <waffle.h>
+
+PFNEGLCREATEIMAGEKHRPROC				__pointer_to_eglCreateImageKHR;
+
 PFNGLXSWAPINTERVALEXTPROC				__pointer_to_glXSwapIntervalEXT;
-
-void (*__pointer_to_glXBindTexImageEXT) (Display     *display, 
-										 GLXDrawable drawable, 
-										 int         buffer,
-										 const int   *attrib_list);
-
-void (*__pointer_to_glXReleaseTexImageEXT) (Display     *display, 
-											GLXDrawable drawable, 
-											int         buffer);
 
 PFNGLGENPATHSNVPROC 					__pointer_to_glGenPathsNV;
 PFNGLPATHGLYPHRANGENVPROC				__pointer_to_glPathGlyphRangeNV;
@@ -90,8 +91,7 @@ typedef struct _win {
 	struct _win		*next;
 	Window		id;
 	Pixmap		pixmap;
-	GLXPixmap	glxPixmap;
-	GLXFBConfig fbConfig;
+	EGLImageKHR eglImage;
 	GLuint		texName;
 	XWindowAttributes	a;
 	int			mode;
@@ -116,6 +116,8 @@ typedef struct _win {
 	Bool mouseMoved;
 	
 	struct wlr_xwayland_surface *xwl_surface;
+	Bool dmabuf_attribs_valid;
+	struct wlr_dmabuf_attributes dmabuf_attribs;
 } win;
 
 typedef struct _conv {
@@ -126,7 +128,6 @@ typedef struct _conv {
 static win		*list;
 static int		scr;
 static Window		root;
-static Picture		rootPicture;
 static XserverRegion	allDamage;
 static Bool		clipChanged;
 static int		root_height, root_width;
@@ -391,83 +392,6 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 	w->isHidden = hidden;
 }
 
-GLXFBConfig win_fbconfig(Display *display, Window id)
-{
-	XWindowAttributes attrib;
-	VisualID visualid;
-	GLXFBConfig *fbconfigs;
-	int nfbconfigs, i, value;
-	XVisualInfo *visinfo;
-	
-	attrib.visual = 0x0;
-	XGetWindowAttributes (display, id, &attrib);
-	
-	if (!attrib.visual)
-		return None;
-	
-	visualid = XVisualIDFromVisual (attrib.visual);
-	
-	fbconfigs = glXGetFBConfigs (display, scr, &nfbconfigs);
-	for (i = 0; i < nfbconfigs; i++)
-	{
-		visinfo = glXGetVisualFromFBConfig (display, fbconfigs[i]);
-		if (!visinfo || visinfo->visualid != visualid)
-			continue;
-		
-		glXGetFBConfigAttrib (display, fbconfigs[i], GLX_DRAWABLE_TYPE, &value);
-		if (!(value & GLX_PIXMAP_BIT))
-			continue;
-		
-		glXGetFBConfigAttrib (display, fbconfigs[i],
-							  GLX_BIND_TO_TEXTURE_TARGETS_EXT,
-						&value);
-		if (!(value & GLX_TEXTURE_2D_BIT_EXT))
-			continue;
-		
-		glXGetFBConfigAttrib (display, fbconfigs[i],
-							  GLX_BIND_TO_TEXTURE_RGBA_EXT,
-						&value);
-		if (value == False)
-		{
-			glXGetFBConfigAttrib (display, fbconfigs[i],
-								  GLX_BIND_TO_TEXTURE_RGB_EXT,
-						 &value);
-			if (value == False)
-				continue;
-		}
-		
-		glXGetFBConfigAttrib(display, fbconfigs[i],
-							 GLX_SAMPLE_BUFFERS,
-					   &value);
-		if (value)
-			continue;
-		
-		// 		glXGetFBConfigAttrib (display, fbconfigs[i],
-		// 							  GLX_Y_INVERTED_EXT,
-		// 						&value);
-		// 		if (value == True)
-		// 		{
-		// 			top = 0.0f;
-		// 			bottom = 1.0f;
-		// 		}
-		// 		else
-		// 		{
-		// 			top = 1.0f;
-		// 			bottom = 0.0f;
-		// 		}
-		
-		break;
-	}
-	
-	if (i == nfbconfigs)
-	{
-		fprintf (stderr, "Could not get fbconfig from window\n");
-		return None;
-	}
-	
-	return fbconfigs[i];
-}
-
 static void
 teardown_win_resources (Display *dpy, win *w)
 {
@@ -477,11 +401,11 @@ teardown_win_resources (Display *dpy, win *w)
 	if (w->pixmap)
 	{
 		glBindTexture (GL_TEXTURE_2D, w->texName);
-		__pointer_to_glXReleaseTexImageEXT (dpy, w->glxPixmap, GLX_FRONT_LEFT_EXT);
+// 		__pointer_to_glXReleaseTexImageEXT (dpy, w->glxPixmap, GLX_FRONT_LEFT_EXT);
 		glBindTexture (GL_TEXTURE_2D, 0);
 		w->texName = 0;
-		glXDestroyPixmap(dpy, w->glxPixmap);
-		w->glxPixmap = None;
+// 		glXDestroyPixmap(dpy, w->glxPixmap);
+// 		w->glxPixmap = None;
 		
 		XFreePixmap(dpy, w->pixmap);
 		w->pixmap = None;
@@ -494,16 +418,31 @@ teardown_win_resources (Display *dpy, win *w)
 static void
 ensure_win_resources (Display *dpy, win *w)
 {
-	if (!w || !w->fbConfig)
+	if (!w)
 		return;
 	
-	if (!w->pixmap)
+	if (!w->eglImage && w->dmabuf_attribs_valid == True)
 	{
-		w->pixmap = XCompositeNameWindowPixmap (dpy, w->id);
-		w->glxPixmap = glXCreatePixmap (dpy, w->fbConfig, w->pixmap, w->isOverlay ? tfpAttribsRGBA : tfpAttribs);
+// 		w->pixmap = XCompositeNameWindowPixmap (dpy, w->id);
+// 		w->glxPixmap = glXCreatePixmap (dpy, w->fbConfig, w->pixmap, w->isOverlay ? tfpAttribsRGBA : tfpAttribs);
+// 		
+// 		glBindTexture (GL_TEXTURE_2D, w->texName);
+// 		__pointer_to_glXBindTexImageEXT (dpy, w->glxPixmap, GLX_FRONT_LEFT_EXT, NULL);
+		EGLint attr[] = {
+			EGL_WIDTH, w->dmabuf_attribs.width,
+			EGL_HEIGHT, w->dmabuf_attribs.height,
+			EGL_LINUX_DRM_FOURCC_EXT, w->dmabuf_attribs.format,
+			EGL_DMA_BUF_PLANE0_FD_EXT, w->dmabuf_attribs.fd[0],
+			EGL_DMA_BUF_PLANE0_OFFSET_EXT, w->dmabuf_attribs.offset[0],
+			EGL_DMA_BUF_PLANE0_PITCH_EXT, w->dmabuf_attribs.stride[0],
+			EGL_NONE
+		};
+		
+		w->eglImage = __pointer_to_eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
+								EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
 		
 		glBindTexture (GL_TEXTURE_2D, w->texName);
-		__pointer_to_glXBindTexImageEXT (dpy, w->glxPixmap, GLX_FRONT_LEFT_EXT, NULL);
+		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
 		
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1051,7 +990,7 @@ paint_all (Display *dpy)
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
 	
-	glXSwapBuffers(dpy, root);
+	waffle_window_swap_buffers(window);
 	
 	if (glGetError() != GL_NO_ERROR)
 	{
@@ -1377,6 +1316,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	
 	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
 	w->gameID = get_prop (dpy, w->id, gameAtom, 0);
+// 	w->gameID = 1;
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 	
 	get_size_hints(dpy, w);
@@ -1452,14 +1392,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new->damaged = 0;
 	new->validContents = False;
 	new->pixmap = None;
-	new->fbConfig = win_fbconfig(dpy, new->id);
-	if (new->fbConfig == None)
-	{
-		// XXX figure out why Thomas was Alone window doesn't work when using its
-		// visual but works with that fallback to the root window visual; is it
-		// because it has several samples?
-		new->fbConfig = win_fbconfig(dpy, root);
-	}
+	new->eglImage = EGL_NO_IMAGE_KHR;
 	glGenTextures (1, &new->texName);
 	new->damage_sequence = 0;
 	new->map_sequence = 0;
@@ -1477,6 +1410,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new->isOverlay = False;
 	new->isSteam = False;
 	new->gameID = 0;
+// 	new->gameID = 1;
 	new->isFullscreen = False;
 	new->isHidden = False;
 	new->sizeHintsSpecified = False;
@@ -1522,6 +1456,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	wl_signal_emit(&server.desktop->xwayland->events.new_surface, surface);
 	
 	new->xwl_surface = surface;
+	new->dmabuf_attribs_valid = False;
 	
 	new->next = *p;
 	*p = new;
@@ -1881,6 +1816,32 @@ register_cm (Display *dpy)
 	return True;
 }
 
+void check_new_wayland_res(void)
+{
+	struct ResListEntry_t newEntry = {};
+	
+	while ( steamCompMgr_PullSurface( &newEntry ) )
+	{
+		Bool bFound = False;
+		win	*w;
+		
+		for (w = list; w; w = w->next)
+		{
+			if (w->xwl_surface == newEntry.surf)
+			{
+				w->dmabuf_attribs = newEntry.attribs;
+				w->dmabuf_attribs_valid = True;
+				bFound = True;
+			}
+		}
+		
+		if ( bFound == False )
+		{
+			fprintf (stderr, "waylandres but no win\n");
+		}
+	}
+}
+
 int
 steamcompmgr_main (int argc, char **argv)
 {
@@ -1890,7 +1851,6 @@ steamcompmgr_main (int argc, char **argv)
 	Window	    *children;
 	unsigned int    nchildren;
 	int		    i;
-	XRenderPictureAttributes	pa;
 	int		    composite_major, composite_minor;
 	char	    *display = NULL;
 	int		    o;
@@ -1998,46 +1958,13 @@ steamcompmgr_main (int argc, char **argv)
 	WMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
 	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", False);
 	
-	pa.subwindow_mode = IncludeInferiors;
-	
 	root_width = DisplayWidth (dpy, scr);
 	root_height = DisplayHeight (dpy, scr);
 	
-	rootPicture = XRenderCreatePicture (dpy, root,
-										XRenderFindVisualFormat (dpy,
-																 DefaultVisual (dpy, scr)),
-										CPSubwindowMode,
-									 &pa);
 	allDamage = None;
 	clipChanged = True;
 	
-	XWindowAttributes rootAttribs;
-	XVisualInfo visualInfoTemplate;
-	int visualInfoCount;
-	XVisualInfo *rootVisualInfo;
-	
-	XGetWindowAttributes (dpy, root, &rootAttribs);
-	
-	visualInfoTemplate.visualid = XVisualIDFromVisual (rootAttribs.visual);
-	
-	rootVisualInfo = XGetVisualInfo (dpy, VisualIDMask, &visualInfoTemplate, &visualInfoCount);
-	if (!visualInfoCount)
-	{
-		fprintf (stderr, "Could not get root window visual info\n");
-		exit (1);
-	}
-	
-	glContext = glXCreateContext(dpy, rootVisualInfo, NULL, True);
-	if (!glContext)
-	{
-		fprintf (stderr, "Could not create GLX context\n");
-		exit (1);
-	}
-	if (!glXMakeCurrent(dpy, root, glContext))
-	{
-		fprintf (stderr, "Could not make GL context current\n");
-		exit (1);
-	}
+	__pointer_to_eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
 	
 	__pointer_to_glXSwapIntervalEXT = (void *)glXGetProcAddress((const GLubyte *)"glXSwapIntervalEXT");
 	if (__pointer_to_glXSwapIntervalEXT)
@@ -2047,15 +1974,6 @@ steamcompmgr_main (int argc, char **argv)
 	else
 	{
 		fprintf (stderr, "Could not find glXSwapIntervalEXT proc pointer\n");
-	}
-	
-	__pointer_to_glXBindTexImageEXT = (void *)glXGetProcAddress((const GLubyte *)"glXBindTexImageEXT");
-	__pointer_to_glXReleaseTexImageEXT = (void *)glXGetProcAddress((const GLubyte *)"glXReleaseTexImageEXT");
-	
-	if (!__pointer_to_glXBindTexImageEXT || !__pointer_to_glXReleaseTexImageEXT)
-	{
-		fprintf (stderr, "Could not get GLX_EXT_texture_from_pixmap entrypoints!\n");
-		exit (1);
 	}
 	
 	if (!strstr((const char *)glGetString(GL_EXTENSIONS), "GL_NV_path_rendering"))
@@ -2079,8 +1997,6 @@ steamcompmgr_main (int argc, char **argv)
 	
 	if (drawDebugInfo)
 		init_text_rendering();
-	
-	XFree(rootVisualInfo);
 	
 	XGrabServer (dpy);
 	
@@ -2133,6 +2049,7 @@ steamcompmgr_main (int argc, char **argv)
 		focusDirty = False;
 		
 		do {
+			check_new_wayland_res();
 			XNextEvent (dpy, &ev);
 			if ((ev.type & 0x7f) != KeymapNotify)
 				discard_ignore (dpy, ev.xany.serial);

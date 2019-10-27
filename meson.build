@@ -44,6 +44,7 @@ libinput       = dependency('libinput')
 xkbcommon      = dependency('xkbcommon')
 math           = cc.find_library('m')
 thread_dep = dependency('threads')
+waffle_dep = dependency('waffle-1')
 
 subdir('protocol')
 
@@ -74,6 +75,6 @@ executable(
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
         dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, protos, wayland_server,
-        wayland_protos, libinput, xkbcommon, math, thread_dep
+        wayland_protos, libinput, xkbcommon, math, thread_dep, waffle_dep
     ],
 )

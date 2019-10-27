@@ -10,16 +10,19 @@
 #include "server.h"
 #include "xwayland.h"
 
+#define C_SIDE
+#include "main.hpp"
+
 static void activate(struct roots_view *view, bool active) {
-	struct wlr_xwayland_surface *xwayland_surface =
-		roots_xwayland_surface_from_view(view)->xwayland_surface;
+// 	struct wlr_xwayland_surface *xwayland_surface =
+// 		roots_xwayland_surface_from_view(view)->xwayland_surface;
 // 	wlr_xwayland_surface_activate(xwayland_surface, active);
 }
 
 static void move(struct roots_view *view, double x, double y) {
-	struct wlr_xwayland_surface *xwayland_surface =
-		roots_xwayland_surface_from_view(view)->xwayland_surface;
-	view_update_position(view, x, y);
+// 	struct wlr_xwayland_surface *xwayland_surface =
+// 		roots_xwayland_surface_from_view(view)->xwayland_surface;
+// 	view_update_position(view, x, y);
 // 	wlr_xwayland_surface_configure(xwayland_surface, x, y,
 // 		xwayland_surface->width, xwayland_surface->height);
 }
@@ -366,6 +369,13 @@ static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 		wl_signal_emit(&surface->events.map, surface);
 		surface->mapped = true;
 	}
+	
+	struct wlr_texture *tex = wlr_surface_get_texture( wlr_surface );
+	
+	struct wlr_dmabuf_attributes dmabuf_attribs = {};
+	wlr_texture_to_dmabuf( tex, &dmabuf_attribs );
+	
+	wayland_PushSurface( surface, &dmabuf_attribs );
 }
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
