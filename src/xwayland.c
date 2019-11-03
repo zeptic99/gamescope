@@ -370,10 +370,18 @@ static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 		surface->mapped = true;
 	}
 	
+// 	wlr_buffer_ref( surface->surface->buffer );
+	
 	struct wlr_texture *tex = wlr_surface_get_texture( wlr_surface );
 	
 	struct wlr_dmabuf_attributes dmabuf_attribs = {};
-	wlr_texture_to_dmabuf( tex, &dmabuf_attribs );
+	bool result = False;
+	result = wlr_texture_to_dmabuf( tex, &dmabuf_attribs );
+	
+	if (result == False)
+	{
+		//
+	}
 	
 	wayland_PushSurface( surface, &dmabuf_attribs );
 }

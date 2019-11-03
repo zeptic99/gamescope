@@ -333,7 +333,7 @@ teardown_win_resources (Display *dpy, win *w)
 	if (!w)
 		return;
 	
-	if (w->eglImage)
+	if (w->eglImage != EGL_NO_IMAGE_KHR)
 	{
 		glBindTexture( GL_TEXTURE_2D, 0 );
 		glDeleteTextures( 1, &w->texName );
@@ -353,7 +353,7 @@ ensure_win_resources (Display *dpy, win *w)
 	if (!w)
 		return;
 	
-	if (!w->eglImage && w->dmabuf_attribs_valid == True)
+	if (w->dmabuf_attribs_valid == True)
 	{
 		teardown_win_resources( dpy, w );
 
@@ -370,9 +370,14 @@ ensure_win_resources (Display *dpy, win *w)
 		w->eglImage = __pointer_to_eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
 								EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
 		
+		close(w->dmabuf_attribs.fd[0]);
+		
 		glGenTextures( 1, &w->texName );
 		glBindTexture (GL_TEXTURE_2D, w->texName);
 		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
+		
+		// Only consume once
+		w->dmabuf_attribs_valid = False;
 		
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1677,6 +1682,11 @@ void check_new_wayland_res(void)
 		{
 			if (w->xwl_surface == newEntry.surf)
 			{
+				if ( w->dmabuf_attribs_valid == True )
+				{
+					// Existing data here hasn't been consumed - need to consume the dma-buf fd
+					close(w->dmabuf_attribs.fd[0]);
+				}
 				w->dmabuf_attribs = newEntry.attribs;
 				w->dmabuf_attribs_valid = True;
 				bFound = True;
