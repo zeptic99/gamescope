@@ -51,13 +51,11 @@
 #include <X11/extensions/xf86vmode.h>
 
 #define GL_GLEXT_PROTOTYPES
-#define GLX_GLEXT_LEGACY
 
-#include <GL/glx.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include "GL/gl.h"
 #include "glext.h"
-#include "GL/glxext.h"
 
 #include "wlr/xwayland.h"
 #include "server.h"
@@ -70,17 +68,7 @@
 #include <waffle.h>
 
 PFNEGLCREATEIMAGEKHRPROC				__pointer_to_eglCreateImageKHR;
-
-PFNGLXSWAPINTERVALEXTPROC				__pointer_to_glXSwapIntervalEXT;
-
-PFNGLGENPATHSNVPROC 					__pointer_to_glGenPathsNV;
-PFNGLPATHGLYPHRANGENVPROC				__pointer_to_glPathGlyphRangeNV;
-PFNGLGETPATHMETRICRANGENVPROC			__pointer_to_glGetPathMetricRangeNV;
-PFNGLGETPATHSPACINGNVPROC 				__pointer_to_glGetPathSpacingNV;
-PFNGLSTENCILFILLPATHINSTANCEDNVPROC 	__pointer_to_glStencilFillPathInstancedNV;
-PFNGLSTENCILSTROKEPATHINSTANCEDNVPROC 	__pointer_to_glStencilStrokePathInstancedNV;
-PFNGLCOVERFILLPATHINSTANCEDNVPROC 		__pointer_to_glCoverFillPathInstancedNV;
-PFNGLCOVERSTROKEPATHINSTANCEDNVPROC 	__pointer_to_glCoverStrokePathInstancedNV;
+PFNEGLDESTROYIMAGEKHRPROC				__pointer_to_eglDestroyImageKHR;
 
 typedef struct _ignore {
 	struct _ignore	*next;
@@ -90,7 +78,6 @@ typedef struct _ignore {
 typedef struct _win {
 	struct _win		*next;
 	Window		id;
-	Pixmap		pixmap;
 	EGLImageKHR eglImage;
 	GLuint		texName;
 	XWindowAttributes	a;
@@ -144,8 +131,6 @@ static int		composite_opcode;
 static Window	currentFocusWindow;
 static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
-
-static Window	unredirectedWindow;
 
 static Window	ourWindow;
 static XEvent	exposeEvent;
@@ -210,8 +195,6 @@ static Atom		WMStateAtom;
 static Atom		WMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
 
-GLXContext glContext;
-
 struct wl_display *wlDisplay;
 struct wl_client *wlClient;
 int wlSockets[2];
@@ -228,10 +211,7 @@ int wlSockets[2];
 #define TRANSLUCENT	0x00000000
 #define OPAQUE		0xffffffff
 
-GLuint textPathObjects;
-GLfloat textYMin;
 GLfloat textYMax;
-GLfloat textXAdvance[256];
 
 #define			FRAME_RATE_SAMPLING_PERIOD 160
 
@@ -239,49 +219,9 @@ unsigned int	frameCounter;
 unsigned int	lastSampledFrameTime;
 float			currentFrameRate;
 
-static void
-init_text_rendering(void)
-{
-	textPathObjects = __pointer_to_glGenPathsNV(256);
-	
-	__pointer_to_glPathGlyphRangeNV(textPathObjects,
-									GL_STANDARD_FONT_NAME_NV, "Sans", GL_BOLD_BIT_NV,
-								 0, 256, GL_USE_MISSING_GLYPH_NV, ~0, 30);
-	
-	/* Query font and glyph metrics. */
-	GLfloat font_data[4];
-	__pointer_to_glGetPathMetricRangeNV(GL_FONT_Y_MIN_BOUNDS_BIT_NV |
-	GL_FONT_Y_MAX_BOUNDS_BIT_NV |
-	GL_FONT_UNDERLINE_POSITION_BIT_NV |
-	GL_FONT_UNDERLINE_THICKNESS_BIT_NV,
-	textPathObjects + ' ', 1, 4 * sizeof(GLfloat),
-										font_data);
-	
-	textYMin = font_data[0];
-	textYMax = font_data[1];
-	
-	__pointer_to_glGetPathMetricRangeNV(GL_GLYPH_HORIZONTAL_BEARING_ADVANCE_BIT_NV,
-										textPathObjects, 256,
-									 0,
-									 &textXAdvance[0]);
-}
-
 static Bool		doRender = True;
 static Bool		drawDebugInfo = False;
 static Bool		debugEvents = True;
-static Bool		allowUnredirection = False;
-
-const int tfpAttribs[] = {
-	GLX_TEXTURE_TARGET_EXT, GLX_TEXTURE_2D_EXT,
-	GLX_TEXTURE_FORMAT_EXT, GLX_TEXTURE_FORMAT_RGB_EXT,
-	None
-};
-
-const int tfpAttribsRGBA[] = {
-	GLX_TEXTURE_TARGET_EXT, GLX_TEXTURE_2D_EXT,
-	GLX_TEXTURE_FORMAT_EXT, GLX_TEXTURE_FORMAT_RGBA_EXT,
-	None
-};
 
 static unsigned int
 get_time_in_milliseconds (void)
@@ -398,17 +338,14 @@ teardown_win_resources (Display *dpy, win *w)
 	if (!w)
 		return;
 	
-	if (w->pixmap)
+	if (w->eglImage)
 	{
-		glBindTexture (GL_TEXTURE_2D, w->texName);
-// 		__pointer_to_glXReleaseTexImageEXT (dpy, w->glxPixmap, GLX_FRONT_LEFT_EXT);
-		glBindTexture (GL_TEXTURE_2D, 0);
+		glBindTexture( GL_TEXTURE_2D, 0 );
+		glDeleteTextures( 1, &w->texName );
 		w->texName = 0;
-// 		glXDestroyPixmap(dpy, w->glxPixmap);
-// 		w->glxPixmap = None;
 		
-		XFreePixmap(dpy, w->pixmap);
-		w->pixmap = None;
+		__pointer_to_eglDestroyImageKHR( eglGetCurrentDisplay(), w->eglImage );
+		w->eglImage = EGL_NO_IMAGE_KHR;
 	}
 	
 	w->damaged = 0;
@@ -423,11 +360,8 @@ ensure_win_resources (Display *dpy, win *w)
 	
 	if (!w->eglImage && w->dmabuf_attribs_valid == True)
 	{
-// 		w->pixmap = XCompositeNameWindowPixmap (dpy, w->id);
-// 		w->glxPixmap = glXCreatePixmap (dpy, w->fbConfig, w->pixmap, w->isOverlay ? tfpAttribsRGBA : tfpAttribs);
-// 		
-// 		glBindTexture (GL_TEXTURE_2D, w->texName);
-// 		__pointer_to_glXBindTexImageEXT (dpy, w->glxPixmap, GLX_FRONT_LEFT_EXT, NULL);
+		teardown_win_resources( dpy, w );
+
 		EGLint attr[] = {
 			EGL_WIDTH, w->dmabuf_attribs.width,
 			EGL_HEIGHT, w->dmabuf_attribs.height,
@@ -441,6 +375,7 @@ ensure_win_resources (Display *dpy, win *w)
 		w->eglImage = __pointer_to_eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
 								EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
 		
+		glGenTextures( 1, &w->texName );
 		glBindTexture (GL_TEXTURE_2D, w->texName);
 		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
 		
@@ -753,54 +688,7 @@ paint_window (Display *dpy, win *w, Bool doBlend, Bool notificationMode)
 static void
 paint_message (const char *message, int Y, float r, float g, float b)
 {
-	int messageLength = strlen(message);
-	GLfloat horizontalOffsets[messageLength + 1];
-	
-	horizontalOffsets[0] = 0;
-	
-	__pointer_to_glGetPathSpacingNV(GL_ACCUM_ADJACENT_PAIRS_NV,
-									(GLsizei)messageLength, GL_UNSIGNED_BYTE, message,
-									textPathObjects,
-								 1.0, 1.0,
-								 GL_TRANSLATE_X_NV,
-								 &horizontalOffsets[1]);
-	
-	float messageWidth = horizontalOffsets[messageLength - 1] + textXAdvance[(int)message[messageLength - 1]];
-	
-	glPushMatrix();
-	
-	glTranslatef(root_width - messageWidth - 100, Y + textYMax - textYMin, 0.0);
-	glScalef(1.0, -1.0, 1.0);
-	
-	glEnable(GL_STENCIL_TEST);
-	
-	glStencilFunc(GL_NOTEQUAL, 0, 0xFF);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
-	
-	__pointer_to_glStencilFillPathInstancedNV(	(GLsizei)messageLength,
-												GL_UNSIGNED_BYTE, message, textPathObjects,
-											GL_PATH_FILL_MODE_NV, ~0, /* Use all stencil bits */
-											GL_TRANSLATE_X_NV, &horizontalOffsets[0]);
-	
-	glColor3f(r,g,b);
-	__pointer_to_glCoverFillPathInstancedNV((GLsizei)messageLength,
-											GL_UNSIGNED_BYTE, message, textPathObjects,
-										 GL_PATH_FILL_COVER_MODE_NV,
-										 GL_TRANSLATE_X_NV, &horizontalOffsets[0]);
-	
-	__pointer_to_glStencilStrokePathInstancedNV((GLsizei)messageLength,
-												GL_UNSIGNED_BYTE, message, textPathObjects,
-											 1, ~0, /* Use all stencil bits */
-											 GL_TRANSLATE_X_NV, &horizontalOffsets[0]);
-	glColor3f(0.0,0.0,0.0);
-	__pointer_to_glCoverStrokePathInstancedNV((GLsizei)messageLength,
-											  GL_UNSIGNED_BYTE, message, textPathObjects,
-										   GL_PATH_STROKE_COVER_MODE_NV,
-										   GL_TRANSLATE_X_NV, &horizontalOffsets[0]);
-	
-	glDisable(GL_STENCIL_TEST);
-	
-	glPopMatrix();
+
 }
 
 static void
@@ -860,11 +748,7 @@ paint_all (Display *dpy)
 	win	*overlay;
 	win	*notification;
 	
-	Bool canUnredirect = True;
 	Bool overlayDamaged = False;
-	
-	if (unredirectedWindow)
-		return;
 	
 	unsigned int currentTime = get_time_in_milliseconds();
 	Bool fadingOut = ((currentTime - fadeOutStartTime) < FADE_OUT_DURATION && fadeOutWindow.id != None);
@@ -929,8 +813,6 @@ paint_all (Display *dpy)
 		w->opacity = newOpacity * OPAQUE;
 		
 		paint_window(dpy, w, True, False);
-		
-		canUnredirect = False;
 	}
 	else
 	{
@@ -938,11 +820,6 @@ paint_all (Display *dpy)
 		ensure_win_resources(dpy, w);
 		// Just draw focused window as normal, be it Steam or the game
 		paint_window(dpy, w, False, False);
-		
-		if (focusedWindowNeedsScale)
-		{
-			canUnredirect = False;
-		}
 		
 		if (fadeOutWindow.id) {
 			
@@ -964,7 +841,6 @@ paint_all (Display *dpy)
 		if (overlay->opacity)
 		{
 			paint_window(dpy, overlay, True, False);
-			canUnredirect = False;
 		}
 		overlay->damaged = 0;
 	}
@@ -974,7 +850,6 @@ paint_all (Display *dpy)
 		if (notification->opacity)
 		{
 			paint_window(dpy, notification, True, True);
-			canUnredirect = False;
 		}
 		notification->damaged = 0;
 	}
@@ -984,7 +859,6 @@ paint_all (Display *dpy)
 	{
 		if (!hideCursorForMovement)
 			paint_fake_cursor(dpy, w);
-		canUnredirect = False;
 	}
 	
 	if (drawDebugInfo)
@@ -996,14 +870,6 @@ paint_all (Display *dpy)
 	{
 		fprintf (stderr, "GL error!\n");
 		exit (1);
-	}
-	
-	// Enable when hitching and blinking issues are resolved
-	if (allowUnredirection && canUnredirect)
-	{
-		unredirectedWindow = currentFocusWindow;
-		teardown_win_resources(dpy, w);
-		XCompositeUnredirectWindow(dpy, unredirectedWindow, CompositeRedirectManual);
 	}
 }
 
@@ -1075,13 +941,6 @@ determine_and_apply_focus (Display *dpy)
 	Bool usingOverrideRedirectWindow = False;
 	
 	unsigned int maxOpacity = 0;
-	
-	if (unredirectedWindow != None)
-	{
-		XCompositeRedirectWindow(dpy, unredirectedWindow, CompositeRedirectManual);
-		ensure_win_resources(dpy, find_win(dpy, unredirectedWindow));
-		unredirectedWindow = None;
-	}
 	
 	for (w = list; w; w = w->next)
 	{
@@ -1336,7 +1195,7 @@ finish_unmap_win (Display *dpy, win *w)
 	w->damaged = 0;
 	w->validContents = False;
 	
-	if (w->pixmap && fadeOutWindow.id != w->id)
+	if (w->eglImage && fadeOutWindow.id != w->id)
 	{
 		teardown_win_resources(dpy, w);
 	}
@@ -1391,9 +1250,10 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	}
 	new->damaged = 0;
 	new->validContents = False;
-	new->pixmap = None;
+
+	new->texName = 0;
 	new->eglImage = EGL_NO_IMAGE_KHR;
-	glGenTextures (1, &new->texName);
+
 	new->damage_sequence = 0;
 	new->map_sequence = 0;
 	if (new->a.class == InputOnly)
@@ -1401,9 +1261,6 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	else
 	{
 		new->damage = XDamageCreate (dpy, id, XDamageReportRawRectangles);
-		// Make sure the Windows we present have background = None for seamless unredirection
-		if (allowUnredirection)
-			XSetWindowBackgroundPixmap (dpy, id, None);
 	}
 	new->opacity = TRANSLUCENT;
 	
@@ -1519,11 +1376,7 @@ configure_win (Display *dpy, XConfigureEvent *ce)
 	w->a.y = ce->y;
 	if (w->a.width != ce->width || w->a.height != ce->height)
 	{
-		if (w->pixmap)
-		{
-			XFreePixmap (dpy, w->pixmap);
-			w->pixmap = None;
-		}
+		teardown_win_resources( dpy, w );
 	}
 	w->a.width = ce->width;
 	w->a.height = ce->height;
@@ -1875,9 +1728,6 @@ steamcompmgr_main (int argc, char **argv)
 			case 'V':
 				debugEvents = True;
 				break;
-			case 'u':
-				allowUnredirection = True;
-				break;
 			default:
 				usage (argv[0]);
 				break;
@@ -1965,38 +1815,12 @@ steamcompmgr_main (int argc, char **argv)
 	clipChanged = True;
 	
 	__pointer_to_eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
+	__pointer_to_eglDestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
 	
-	__pointer_to_glXSwapIntervalEXT = (void *)glXGetProcAddress((const GLubyte *)"glXSwapIntervalEXT");
-	if (__pointer_to_glXSwapIntervalEXT)
-	{
-		__pointer_to_glXSwapIntervalEXT(dpy, root, 1);
-	}
-	else
-	{
-		fprintf (stderr, "Could not find glXSwapIntervalEXT proc pointer\n");
-	}
-	
-	if (!strstr((const char *)glGetString(GL_EXTENSIONS), "GL_NV_path_rendering"))
-	{
-		drawDebugInfo = False;
-	}
-	else
-	{
-		__pointer_to_glGenPathsNV = (PFNGLGENPATHSNVPROC) glXGetProcAddress((const GLubyte *)"glGenPathsNV");
-		__pointer_to_glPathGlyphRangeNV = (PFNGLPATHGLYPHRANGENVPROC) glXGetProcAddress((const GLubyte *)"glPathGlyphRangeNV");
-		__pointer_to_glGetPathMetricRangeNV = (PFNGLGETPATHMETRICRANGENVPROC) glXGetProcAddress((const GLubyte *)"glGetPathMetricRangeNV");
-		__pointer_to_glGetPathSpacingNV = (PFNGLGETPATHSPACINGNVPROC) glXGetProcAddress((const GLubyte *)"glGetPathSpacingNV");
-		__pointer_to_glStencilFillPathInstancedNV = (PFNGLSTENCILFILLPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glStencilFillPathInstancedNV");
-		__pointer_to_glStencilStrokePathInstancedNV = (PFNGLSTENCILSTROKEPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glStencilStrokePathInstancedNV");
-		__pointer_to_glCoverFillPathInstancedNV = (PFNGLCOVERFILLPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glCoverFillPathInstancedNV");
-		__pointer_to_glCoverStrokePathInstancedNV = (PFNGLCOVERSTROKEPATHINSTANCEDNVPROC) glXGetProcAddress((const GLubyte *)"glCoverStrokePathInstancedNV");
-	}
+	eglSwapInterval( eglGetCurrentDisplay(), 1 );
 	
 	glEnable(GL_TEXTURE_2D);
 	glGenTextures(1, &cursorTextureName);
-	
-	if (drawDebugInfo)
-		init_text_rendering();
 	
 	XGrabServer (dpy);
 	
@@ -2137,13 +1961,6 @@ steamcompmgr_main (int argc, char **argv)
 								w->opacity = newOpacity;
 							}
 							
-							if (w->opacity && w->isOverlay && unredirectedWindow != None)
-							{
-								XCompositeRedirectWindow(dpy, unredirectedWindow, CompositeRedirectManual);
-								ensure_win_resources(dpy, find_win(dpy, unredirectedWindow));
-								unredirectedWindow = None;
-							}
-							
 							if (w->isOverlay)
 							{
 								set_win_hidden(dpy, w, w->opacity == TRANSLUCENT);
@@ -2192,7 +2009,7 @@ steamcompmgr_main (int argc, char **argv)
 							
 							// Overlay windows need a RGBA pixmap, so destroy the old one there
 							// It'll be reallocated as RGBA in ensure_win_resources()
-							if (w->pixmap && w->isOverlay)
+							if (w->eglImage && w->isOverlay)
 							{
 								teardown_win_resources(dpy, w);
 							}
