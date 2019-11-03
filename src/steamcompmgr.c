@@ -1407,11 +1407,6 @@ circulate_win (Display *dpy, XCirculateEvent *ce)
 static void map_request (Display *dpy, XMapRequestEvent *mapRequest)
 {
 	XMapWindow( dpy, mapRequest->window );
-	
-// 	win * w = find_win(dpy, mapRequest->window);
-// 	
-// 	if (w && w->id == mapRequest->window)
-// 		map_win (dpy, mapRequest->window, mapRequest->serial);
 }
 
 static void
@@ -1446,6 +1441,14 @@ destroy_win (Display *dpy, Window id, Bool gone, Bool fade)
 	if (currentNotificationWindow == id && gone)
 		currentNotificationWindow = None;
 	focusDirty = True;
+	
+	win	*w = find_win(dpy, id);
+	if (w != NULL)
+	{
+		if (w->xwl_surface != NULL) {
+			wl_signal_emit(&w->xwl_surface->events.destroy, w->xwl_surface);
+		}
+	}
 	
 	finish_destroy_win (dpy, id, gone);
 }
