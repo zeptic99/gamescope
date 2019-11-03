@@ -107,11 +107,6 @@ typedef struct _win {
 	struct wlr_dmabuf_attributes dmabuf_attribs;
 } win;
 
-typedef struct _conv {
-	int	    size;
-	double  *data;
-} conv;
-
 static win		*list;
 static int		scr;
 static Window		root;
