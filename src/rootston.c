@@ -21,12 +21,16 @@ int rootston_init(int argc, char **argv) {
 	server.wl_event_loop = wl_display_get_event_loop(server.wl_display);
 	assert(server.config && server.wl_display && server.wl_event_loop);
 
-	server.backend = wlr_backend_autocreate(server.wl_display, NULL);
+	server.backend = wlr_headless_backend_create(server.wl_display, NULL);
 	if (server.backend == NULL) {
 		wlr_log(WLR_ERROR, "could not start backend");
 		return 1;
 	}
-
+	
+	wlr_headless_add_output( server.backend, 1280, 720 );
+	wlr_headless_add_input_device ( server.backend, WLR_INPUT_DEVICE_KEYBOARD );
+	wlr_headless_add_input_device ( server.backend, WLR_INPUT_DEVICE_POINTER );
+	
 	server.renderer = wlr_backend_get_renderer(server.backend);
 	assert(server.renderer);
 	server.data_device_manager =
