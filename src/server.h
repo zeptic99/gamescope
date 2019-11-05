@@ -23,6 +23,7 @@ struct roots_server {
 	/* Wayland resources */
 	struct wl_display *wl_display;
 	struct wl_event_loop *wl_event_loop;
+	struct wlr_session *wlr_session;
 
 	/* WLR tools */
 	struct wlr_backend *backend;

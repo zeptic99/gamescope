@@ -65,8 +65,8 @@ void initOutput(void)
 		0,
 	};
 	
-	const int32_t window_width = 1024;
-	const int32_t window_height = 768;
+	const int32_t window_width = 1280;
+	const int32_t window_height = 720;
 	
 	waffle_init(init_attrs);
 	dpy = waffle_display_connect(NULL);
