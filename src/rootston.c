@@ -15,15 +15,29 @@
 
 struct roots_server server = { 0 };
 
+struct wlr_input_device *keyboard;
+struct wlr_input_device *pointer;
+
 int rootston_init(int argc, char **argv) {
+	bool bIsDRM = False;
+	
+	if ( getenv("DISPLAY") == NULL )
+	{
+		bIsDRM = True;
+	}
+	
 	wlr_log_init(WLR_DEBUG, NULL);
 	server.config = roots_config_create_from_args(argc, argv);
 	server.wl_display = wl_display_create();
-	server.wlr_session = wlr_session_create(server.wl_display);
+	
+	server.wlr_session = ( bIsDRM == True ) ? wlr_session_create(server.wl_display) : NULL;
+	
 	server.wl_event_loop = wl_display_get_event_loop(server.wl_display);	
+	
 	server.backend = wlr_multi_backend_create(server.wl_display);
 	
-	assert(server.config && server.wl_display && server.wlr_session && server.wl_event_loop && server.backend);
+	assert(server.config && server.wl_display && server.wl_event_loop && server.backend);
+	assert( !bIsDRM || server.wlr_session );
 
 	struct wlr_backend* headless_backend = wlr_headless_backend_create(server.wl_display, NULL);
 	if (headless_backend == NULL) {
@@ -34,12 +48,20 @@ int rootston_init(int argc, char **argv) {
 	
 	wlr_headless_add_output( headless_backend, 1280, 720 );
 	
-	struct wlr_backend *libinput_backend = wlr_libinput_backend_create(server.wl_display, server.wlr_session);
-	if (libinput_backend == NULL) {
-		wlr_log(WLR_ERROR, "could not start libinput_backend");
-		return 1;
+	if ( bIsDRM == True )
+	{
+		struct wlr_backend *libinput_backend = wlr_libinput_backend_create(server.wl_display, server.wlr_session);
+		if (libinput_backend == NULL) {
+			wlr_log(WLR_ERROR, "could not start libinput_backend");
+			return 1;
+		}
+		wlr_multi_backend_add(server.backend, libinput_backend);
 	}
-	wlr_multi_backend_add(server.backend, libinput_backend);
+	else
+	{
+		keyboard = wlr_headless_add_input_device( headless_backend, WLR_INPUT_DEVICE_KEYBOARD );
+		pointer = wlr_headless_add_input_device( headless_backend, WLR_INPUT_DEVICE_POINTER );
+	}
 	
 	server.renderer = wlr_backend_get_renderer(server.backend);
 	assert(server.renderer);
