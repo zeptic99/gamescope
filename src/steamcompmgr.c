@@ -69,6 +69,7 @@
 
 PFNEGLCREATEIMAGEKHRPROC				__pointer_to_eglCreateImageKHR;
 PFNEGLDESTROYIMAGEKHRPROC				__pointer_to_eglDestroyImageKHR;
+PFNGLEGLIMAGETARGETTEXTURE2DOESPROC 	__pointer_to_glEGLImageTargetTexture2DOES;
 
 typedef struct _ignore {
 	struct _ignore	*next;
@@ -374,7 +375,7 @@ ensure_win_resources (Display *dpy, win *w)
 		
 		glGenTextures( 1, &w->texName );
 		glBindTexture (GL_TEXTURE_2D, w->texName);
-		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
+		__pointer_to_glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
 		
 		// Only consume once
 		w->dmabuf_attribs_valid = False;
@@ -1832,6 +1833,7 @@ steamcompmgr_main (int argc, char **argv)
 	
 	__pointer_to_eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
 	__pointer_to_eglDestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+	__pointer_to_glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
 	
 	eglSwapInterval( eglGetCurrentDisplay(), 1 );
 	

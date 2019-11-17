@@ -48,6 +48,9 @@ waffle_dep = dependency('waffle-1')
 
 subdir('protocol')
 
+wlroots_proj = subproject('wlroots')
+wlroots_static_dep = wlroots_proj.get_variable('wlroots_static_dep')
+
 executable(
     'steamcompmgr',
     'src/steamcompmgr.c',
@@ -75,6 +78,7 @@ executable(
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
         dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, protos, wayland_server,
-        wayland_protos, libinput, xkbcommon, math, thread_dep, waffle_dep
+        wayland_protos, libinput, xkbcommon, math, thread_dep, waffle_dep,
+        wlroots_static_dep
     ],
 )
