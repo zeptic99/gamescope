@@ -46,7 +46,9 @@ int rootston_init(int argc, char **argv) {
 	}
 	wlr_multi_backend_add(server.backend, headless_backend);
 	
-	wlr_headless_add_output( headless_backend, 1280, 720 );
+	server.wlr_output = wlr_headless_add_output( headless_backend, 1280, 720 );
+	
+	wlr_output_create_global( server.wlr_output );
 	
 	if ( bIsDRM == True )
 	{
@@ -89,13 +91,11 @@ int rootston_init(int argc, char **argv) {
 	}
 
 	setenv("WAYLAND_DISPLAY", socket, true);
-#if WLR_HAS_XWAYLAND
-	if (server.desktop->xwayland != NULL) {
-		struct roots_seat *xwayland_seat =
-			input_get_seat(server.input, ROOTS_CONFIG_DEFAULT_SEAT_NAME);
-		wlr_xwayland_set_seat(server.desktop->xwayland, xwayland_seat->seat);
-	}
-#endif
+
+	server.seat = wlr_seat_create(server.wl_display, ROOTS_CONFIG_DEFAULT_SEAT_NAME);
+	wlr_xwayland_set_seat(server.desktop->xwayland, server.seat);
+
+
 
 	if (server.config->startup_cmd != NULL) {
 		const char *cmd = server.config->startup_cmd;

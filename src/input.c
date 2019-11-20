@@ -96,8 +96,8 @@ struct roots_input *input_create(struct roots_server *server,
 
 	wl_list_init(&input->seats);
 
-	input->new_input.notify = handle_new_input;
-	wl_signal_add(&server->backend->events.new_input, &input->new_input);
+// 	input->new_input.notify = handle_new_input;
+// 	wl_signal_add(&server->backend->events.new_input, &input->new_input);
 
 	return input;
 }

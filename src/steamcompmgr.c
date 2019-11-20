@@ -1305,7 +1305,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	wl_signal_init(&surface->events.set_override_redirect);
 	wl_signal_init(&surface->events.ping_timeout);
 	
-	wl_signal_emit(&server.desktop->xwayland->events.new_surface, surface);
+// 	wl_signal_emit(&server.desktop->xwayland->events.new_surface, surface);
 	
 	new->xwl_surface = surface;
 	new->dmabuf_attribs_valid = False;

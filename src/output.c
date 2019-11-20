@@ -601,7 +601,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	struct roots_desktop *desktop = wl_container_of(listener, desktop,
 		new_output);
 	struct wlr_output *wlr_output = data;
-	struct roots_input *input = desktop->server->input;
+// 	struct roots_input *input = desktop->server->input;
 	struct roots_config *config = desktop->config;
 
 	wlr_log(WLR_DEBUG, "Output '%s' added", wlr_output->name);
@@ -672,17 +672,17 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 		if (preferred_mode != NULL) {
 			wlr_output_set_mode(wlr_output, preferred_mode);
 		}
-		wlr_output_layout_add_auto(desktop->layout, wlr_output);
+// 		wlr_output_layout_add_auto(desktop->layout, wlr_output);
 	}
 
-	struct roots_seat *seat;
-	wl_list_for_each(seat, &input->seats, link) {
-		roots_seat_configure_cursor(seat);
-		roots_seat_configure_xcursor(seat);
-	}
+// 	struct roots_seat *seat;
+// 	wl_list_for_each(seat, &input->seats, link) {
+// 		roots_seat_configure_cursor(seat);
+// 		roots_seat_configure_xcursor(seat);
+// 	}
 
-	arrange_layers(output);
-	output_damage_whole(output);
-
-	update_output_manager_config(desktop);
+// 	arrange_layers(output);
+// 	output_damage_whole(output);
+// 
+// 	update_output_manager_config(desktop);
 }

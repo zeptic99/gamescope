@@ -288,39 +288,39 @@ struct roots_desktop *desktop_create(struct roots_server *server,
 		return NULL;
 	}
 
-	wl_list_init(&desktop->views);
-	wl_list_init(&desktop->outputs);
-
-	desktop->new_output.notify = handle_new_output;
-	wl_signal_add(&server->backend->events.new_output, &desktop->new_output);
-
-	desktop->server = server;
-	desktop->config = config;
-
-	desktop->layout = wlr_output_layout_create();
-	wlr_xdg_output_manager_v1_create(server->wl_display, desktop->layout);
-	desktop->layout_change.notify = handle_layout_change;
-	wl_signal_add(&desktop->layout->events.change, &desktop->layout_change);
+// 	wl_list_init(&desktop->views);
+// 	wl_list_init(&desktop->outputs);
+// 
+// 	desktop->new_output.notify = handle_new_output;
+// 	wl_signal_add(&server->backend->events.new_output, &desktop->new_output);
+// 
+// 	desktop->server = server;
+// 	desktop->config = config;
+// 
+// 	desktop->layout = wlr_output_layout_create();
+// 	wlr_xdg_output_manager_v1_create(server->wl_display, desktop->layout);
+// 	desktop->layout_change.notify = handle_layout_change;
+// 	wl_signal_add(&desktop->layout->events.change, &desktop->layout_change);
 
 	desktop->compositor = wlr_compositor_create(server->wl_display,
 		server->renderer);
 
-	desktop->xdg_shell_v6 = wlr_xdg_shell_v6_create(server->wl_display);
-	wl_signal_add(&desktop->xdg_shell_v6->events.new_surface,
-		&desktop->xdg_shell_v6_surface);
-	desktop->xdg_shell_v6_surface.notify = handle_xdg_shell_v6_surface;
+// 	desktop->xdg_shell_v6 = wlr_xdg_shell_v6_create(server->wl_display);
+// 	wl_signal_add(&desktop->xdg_shell_v6->events.new_surface,
+// 		&desktop->xdg_shell_v6_surface);
+// 	desktop->xdg_shell_v6_surface.notify = handle_xdg_shell_v6_surface;
 
-	desktop->xdg_shell = wlr_xdg_shell_create(server->wl_display);
-	wl_signal_add(&desktop->xdg_shell->events.new_surface,
-		&desktop->xdg_shell_surface);
-	desktop->xdg_shell_surface.notify = handle_xdg_shell_surface;
+// 	desktop->xdg_shell = wlr_xdg_shell_create(server->wl_display);
+// 	wl_signal_add(&desktop->xdg_shell->events.new_surface,
+// 		&desktop->xdg_shell_surface);
+// 	desktop->xdg_shell_surface.notify = handle_xdg_shell_surface;
 
-	desktop->layer_shell = wlr_layer_shell_v1_create(server->wl_display);
-	wl_signal_add(&desktop->layer_shell->events.new_surface,
-		&desktop->layer_shell_surface);
-	desktop->layer_shell_surface.notify = handle_layer_shell_surface;
-
-	desktop->tablet_v2 = wlr_tablet_v2_create(server->wl_display);
+// 	desktop->layer_shell = wlr_layer_shell_v1_create(server->wl_display);
+// 	wl_signal_add(&desktop->layer_shell->events.new_surface,
+// 		&desktop->layer_shell_surface);
+// 	desktop->layer_shell_surface.notify = handle_layer_shell_surface;
+// 
+// 	desktop->tablet_v2 = wlr_tablet_v2_create(server->wl_display);
 
 	const char *cursor_theme = NULL;
 #if WLR_HAS_XWAYLAND
@@ -358,9 +358,9 @@ struct roots_desktop *desktop_create(struct roots_server *server,
 	if (config->xwayland) {
 		desktop->xwayland = wlr_xwayland_create(server->wl_display,
 			desktop->compositor, config->xwayland_lazy);
-		wl_signal_add(&desktop->xwayland->events.new_surface,
-			&desktop->xwayland_surface);
-		desktop->xwayland_surface.notify = handle_xwayland_surface;
+// 		wl_signal_add(&desktop->xwayland->events.new_surface,
+// 			&desktop->xwayland_surface);
+// 		desktop->xwayland_surface.notify = handle_xwayland_surface;
 
 		setenv("DISPLAY", desktop->xwayland->display_name, true);
 
@@ -378,73 +378,73 @@ struct roots_desktop *desktop_create(struct roots_server *server,
 	}
 #endif
 
-	desktop->gamma_control_manager_v1 = wlr_gamma_control_manager_v1_create(
-		server->wl_display);
-	desktop->export_dmabuf_manager_v1 =
-		wlr_export_dmabuf_manager_v1_create(server->wl_display);
-	desktop->server_decoration_manager =
-		wlr_server_decoration_manager_create(server->wl_display);
-	wlr_server_decoration_manager_set_default_mode(
-		desktop->server_decoration_manager,
-		WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT);
-	desktop->idle = wlr_idle_create(server->wl_display);
-	desktop->idle_inhibit = wlr_idle_inhibit_v1_create(server->wl_display);
-	desktop->primary_selection_device_manager =
-		wlr_gtk_primary_selection_device_manager_create(server->wl_display);
-	desktop->input_inhibit =
-		wlr_input_inhibit_manager_create(server->wl_display);
-	desktop->input_inhibit_activate.notify = input_inhibit_activate;
-	wl_signal_add(&desktop->input_inhibit->events.activate,
-		&desktop->input_inhibit_activate);
-	desktop->input_inhibit_deactivate.notify = input_inhibit_deactivate;
-	wl_signal_add(&desktop->input_inhibit->events.deactivate,
-		&desktop->input_inhibit_deactivate);
+// 	desktop->gamma_control_manager_v1 = wlr_gamma_control_manager_v1_create(
+// 		server->wl_display);
+// 	desktop->export_dmabuf_manager_v1 =
+// 		wlr_export_dmabuf_manager_v1_create(server->wl_display);
+// 	desktop->server_decoration_manager =
+// 		wlr_server_decoration_manager_create(server->wl_display);
+// 	wlr_server_decoration_manager_set_default_mode(
+// 		desktop->server_decoration_manager,
+// 		WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT);
+// 	desktop->idle = wlr_idle_create(server->wl_display);
+// 	desktop->idle_inhibit = wlr_idle_inhibit_v1_create(server->wl_display);
+// 	desktop->primary_selection_device_manager =
+// 		wlr_gtk_primary_selection_device_manager_create(server->wl_display);
+// 	desktop->input_inhibit =
+// 		wlr_input_inhibit_manager_create(server->wl_display);
+// 	desktop->input_inhibit_activate.notify = input_inhibit_activate;
+// 	wl_signal_add(&desktop->input_inhibit->events.activate,
+// 		&desktop->input_inhibit_activate);
+// 	desktop->input_inhibit_deactivate.notify = input_inhibit_deactivate;
+// 	wl_signal_add(&desktop->input_inhibit->events.deactivate,
+// 		&desktop->input_inhibit_deactivate);
+// 
+// 	desktop->input_method =
+// 		wlr_input_method_manager_v2_create(server->wl_display);
+// 
+// 	desktop->text_input = wlr_text_input_manager_v3_create(server->wl_display);
+// 
+// 	desktop->virtual_keyboard = wlr_virtual_keyboard_manager_v1_create(
+// 		server->wl_display);
+// 	wl_signal_add(&desktop->virtual_keyboard->events.new_virtual_keyboard,
+// 		&desktop->virtual_keyboard_new);
+// 	desktop->virtual_keyboard_new.notify = handle_virtual_keyboard;
+// 
+// 	desktop->screencopy = wlr_screencopy_manager_v1_create(server->wl_display);
+// 
+// 	desktop->xdg_decoration_manager =
+// 		wlr_xdg_decoration_manager_v1_create(server->wl_display);
+// 	wl_signal_add(&desktop->xdg_decoration_manager->events.new_toplevel_decoration,
+// 		&desktop->xdg_toplevel_decoration);
+// 	desktop->xdg_toplevel_decoration.notify = handle_xdg_toplevel_decoration;
+// 
+// 	desktop->pointer_constraints =
+// 		wlr_pointer_constraints_v1_create(server->wl_display);
+// 	desktop->pointer_constraint.notify = handle_pointer_constraint;
+// 	wl_signal_add(&desktop->pointer_constraints->events.new_constraint,
+// 		&desktop->pointer_constraint);
+// 
+// 	desktop->presentation =
+// 		wlr_presentation_create(server->wl_display, server->backend);
+// 	desktop->foreign_toplevel_manager_v1 =
+// 		wlr_foreign_toplevel_manager_v1_create(server->wl_display);
+// 	desktop->relative_pointer_manager =
+// 		wlr_relative_pointer_manager_v1_create(server->wl_display);
+// 	desktop->pointer_gestures =
+// 		wlr_pointer_gestures_v1_create(server->wl_display);
+// 
+// 	desktop->output_manager_v1 =
+// 		wlr_output_manager_v1_create(server->wl_display);
+// 	desktop->output_manager_apply.notify = handle_output_manager_apply;
+// 	wl_signal_add(&desktop->output_manager_v1->events.apply,
+// 		&desktop->output_manager_apply);
+// 	desktop->output_manager_test.notify = handle_output_manager_test;
+// 	wl_signal_add(&desktop->output_manager_v1->events.test,
+// 		&desktop->output_manager_test);
 
-	desktop->input_method =
-		wlr_input_method_manager_v2_create(server->wl_display);
-
-	desktop->text_input = wlr_text_input_manager_v3_create(server->wl_display);
-
-	desktop->virtual_keyboard = wlr_virtual_keyboard_manager_v1_create(
-		server->wl_display);
-	wl_signal_add(&desktop->virtual_keyboard->events.new_virtual_keyboard,
-		&desktop->virtual_keyboard_new);
-	desktop->virtual_keyboard_new.notify = handle_virtual_keyboard;
-
-	desktop->screencopy = wlr_screencopy_manager_v1_create(server->wl_display);
-
-	desktop->xdg_decoration_manager =
-		wlr_xdg_decoration_manager_v1_create(server->wl_display);
-	wl_signal_add(&desktop->xdg_decoration_manager->events.new_toplevel_decoration,
-		&desktop->xdg_toplevel_decoration);
-	desktop->xdg_toplevel_decoration.notify = handle_xdg_toplevel_decoration;
-
-	desktop->pointer_constraints =
-		wlr_pointer_constraints_v1_create(server->wl_display);
-	desktop->pointer_constraint.notify = handle_pointer_constraint;
-	wl_signal_add(&desktop->pointer_constraints->events.new_constraint,
-		&desktop->pointer_constraint);
-
-	desktop->presentation =
-		wlr_presentation_create(server->wl_display, server->backend);
-	desktop->foreign_toplevel_manager_v1 =
-		wlr_foreign_toplevel_manager_v1_create(server->wl_display);
-	desktop->relative_pointer_manager =
-		wlr_relative_pointer_manager_v1_create(server->wl_display);
-	desktop->pointer_gestures =
-		wlr_pointer_gestures_v1_create(server->wl_display);
-
-	desktop->output_manager_v1 =
-		wlr_output_manager_v1_create(server->wl_display);
-	desktop->output_manager_apply.notify = handle_output_manager_apply;
-	wl_signal_add(&desktop->output_manager_v1->events.apply,
-		&desktop->output_manager_apply);
-	desktop->output_manager_test.notify = handle_output_manager_test;
-	wl_signal_add(&desktop->output_manager_v1->events.test,
-		&desktop->output_manager_test);
-
-	wlr_primary_selection_v1_device_manager_create(server->wl_display);
-	wlr_data_control_manager_v1_create(server->wl_display);
+// 	wlr_primary_selection_v1_device_manager_create(server->wl_display);
+// 	wlr_data_control_manager_v1_create(server->wl_display);
 
 	return desktop;
 }
