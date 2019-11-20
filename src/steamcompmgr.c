@@ -2136,6 +2136,9 @@ steamcompmgr_main (int argc, char **argv)
 		
 		if (doRender)
 		{
+			struct timespec now;
+			clock_gettime(CLOCK_MONOTONIC, &now);
+
 			paint_all(dpy);
 			
 			// If we're in the middle of a fade, pump an event into the loop to
@@ -2177,6 +2180,15 @@ steamcompmgr_main (int argc, char **argv)
 				if (w && focusedWindowNeedsScale && gameFocused)
 				{
 					w->damaged = 1;
+				}
+			}
+			
+			// Send frame done event to all Wayland surfaces
+			for (win *w = list; w; w = w->next)
+			{
+				if ( w->xwl_surface && w->xwl_surface->surface )
+				{
+					wlr_surface_send_frame_done(w->xwl_surface->surface, &now);
 				}
 			}
 		}

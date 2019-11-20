@@ -548,7 +548,7 @@ static void output_damage_handle_frame(struct wl_listener *listener,
 		void *data) {
 	struct roots_output *output =
 		wl_container_of(listener, output, damage_frame);
-	output_render(output);
+// 	output_render(output);
 }
 
 static void output_damage_handle_destroy(struct wl_listener *listener,
