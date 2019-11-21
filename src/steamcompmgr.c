@@ -213,7 +213,7 @@ float			currentFrameRate;
 
 static Bool		doRender = True;
 static Bool		drawDebugInfo = False;
-static Bool		debugEvents = True;
+static Bool		debugEvents = False;
 
 static unsigned int
 get_time_in_milliseconds (void)
