@@ -81,7 +81,7 @@ void initOutput(void)
 std::mutex g_ResListLock;
 std::vector<ResListEntry_t> g_vecResListEntries;
 
-void wayland_PushSurface(struct wlr_xwayland_surface *surf, struct wlr_dmabuf_attributes *attribs)
+void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes *attribs)
 {
 	std::lock_guard<std::mutex> lock(g_ResListLock);
 	

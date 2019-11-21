@@ -103,7 +103,7 @@ typedef struct _win {
 	
 	Bool mouseMoved;
 	
-	struct wlr_xwayland_surface *xwl_surface;
+	struct wlr_surface *wlrsurface;
 	Bool dmabuf_attribs_valid;
 	struct wlr_dmabuf_attributes dmabuf_attribs;
 } win;
@@ -190,10 +190,6 @@ static Atom		fullscreenAtom;
 static Atom		WMStateAtom;
 static Atom		WMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
-
-struct wl_display *wlDisplay;
-struct wl_client *wlClient;
-int wlSockets[2];
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -1273,41 +1269,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new->mouseMoved = False;
 	
-	struct wlr_xwayland_surface *surface =
-	calloc(1, sizeof(struct wlr_xwayland_surface));
-	
-// 	surface->xwm = xwm;
-	surface->window_id = id;
-	surface->x = new->a.x;
-	surface->y = new->a.y;
-	surface->width = new->a.width;
-	surface->height = new->a.height;
-	surface->override_redirect = new->a.override_redirect;
-	wl_list_init(&surface->children);
-	wl_list_init(&surface->parent_link);
-	wl_signal_init(&surface->events.destroy);
-	wl_signal_init(&surface->events.request_configure);
-	wl_signal_init(&surface->events.request_move);
-	wl_signal_init(&surface->events.request_resize);
-	wl_signal_init(&surface->events.request_maximize);
-	wl_signal_init(&surface->events.request_fullscreen);
-	wl_signal_init(&surface->events.request_activate);
-	wl_signal_init(&surface->events.map);
-	wl_signal_init(&surface->events.unmap);
-	wl_signal_init(&surface->events.set_class);
-	wl_signal_init(&surface->events.set_role);
-	wl_signal_init(&surface->events.set_title);
-	wl_signal_init(&surface->events.set_parent);
-	wl_signal_init(&surface->events.set_pid);
-	wl_signal_init(&surface->events.set_window_type);
-	wl_signal_init(&surface->events.set_hints);
-	wl_signal_init(&surface->events.set_decorations);
-	wl_signal_init(&surface->events.set_override_redirect);
-	wl_signal_init(&surface->events.ping_timeout);
-	
-// 	wl_signal_emit(&server.desktop->xwayland->events.new_surface, surface);
-	
-	new->xwl_surface = surface;
+	new->wlrsurface = NULL;
 	new->dmabuf_attribs_valid = False;
 	
 	new->next = *p;
@@ -1437,14 +1399,6 @@ destroy_win (Display *dpy, Window id, Bool gone, Bool fade)
 		currentNotificationWindow = None;
 	focusDirty = True;
 	
-	win	*w = find_win(dpy, id);
-	if (w != NULL)
-	{
-		if (w->xwl_surface != NULL) {
-			wl_signal_emit(&w->xwl_surface->events.destroy, w->xwl_surface);
-		}
-	}
-	
 	finish_destroy_win (dpy, id, gone);
 }
 
@@ -1485,11 +1439,6 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 {
 	struct wlr_surface *surface = NULL;
 
-	if (w->xwl_surface == NULL) {
-		fprintf (stderr, "never called add_win?\n");
-		return;
-	}
-
 	struct wl_resource *resource = wl_client_get_object(wlserver.wlr.xwayland->client, surfaceID);
 	if (resource) {
 		surface = wlr_surface_from_resource(resource);
@@ -1500,25 +1449,14 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 		return;
 	}
 	
-	
-	if (!wlr_surface_set_role(surface, &xwayland_surface_role, w->xwl_surface, NULL, 0))
+	if (!wlr_surface_set_role(surface, &xwayland_surface_role, w, NULL, 0))
 	{
 		fprintf (stderr, "Failed to set xwayland surface role");
 		return;
 	}
 		
-	w->xwl_surface->surface = surface;
+	w->wlrsurface = surface;
 }
-
-static void compositor_new_surface(struct wl_listener *listener,
-									void *data) {
-	struct wlr_surface *surface = data;
-	uint32_t surface_id = wl_resource_get_id(surface->resource);
-	
-	fprintf (stderr, "New xwayland surface: %p %u\n", surface, surface_id);
-}
-
-struct wl_listener compositor_new_surface_listener = { .notify = compositor_new_surface };
 						   
 static int
 error (Display *dpy, XErrorEvent *ev)
@@ -1678,7 +1616,7 @@ void check_new_wayland_res(void)
 		
 		for (w = list; w; w = w->next)
 		{
-			if (w->xwl_surface == newEntry.surf)
+			if (w->wlrsurface == newEntry.surf)
 			{
 				if ( w->dmabuf_attribs_valid == True )
 				{
@@ -1878,14 +1816,6 @@ steamcompmgr_main (int argc, char **argv)
 	zoomScaleRatio = get_prop(dpy, root, screenZoomAtom, 0xFFFF) / (double)0xFFFF;
 	
 	globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
-	
-	assert(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, wlSockets) == 0);
-	wlDisplay = wl_display_create();
-	assert(wlDisplay);
-	wlClient = wl_client_create(wlDisplay, wlSockets[0]);
-	assert(wlClient);
-	
-	wl_signal_add(&wlserver.wlr.xwayland->events.ready, &compositor_new_surface_listener);
 	
 	determine_and_apply_focus(dpy);
 	
@@ -2186,9 +2116,9 @@ steamcompmgr_main (int argc, char **argv)
 			// Send frame done event to all Wayland surfaces
 			for (win *w = list; w; w = w->next)
 			{
-				if ( w->xwl_surface && w->xwl_surface->surface )
+				if ( w->wlrsurface )
 				{
-					wlr_surface_send_frame_done(w->xwl_surface->surface, &now);
+					wlr_surface_send_frame_done(w->wlrsurface, &now);
 				}
 			}
 		}

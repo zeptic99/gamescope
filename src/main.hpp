@@ -12,11 +12,11 @@ void startSteamCompMgr(void);
 
 
 struct ResListEntry_t {
-	struct wlr_xwayland_surface *surf;
+	struct wlr_surface *surf;
 	struct wlr_dmabuf_attributes attribs;
 };
 
-void wayland_PushSurface(struct wlr_xwayland_surface *surf, struct wlr_dmabuf_attributes *attribs);
+void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes *attribs);
 
 int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry );
 

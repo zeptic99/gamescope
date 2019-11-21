@@ -15,10 +15,6 @@
 
 static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
-	struct wlr_xwayland_surface *surface = wlr_surface->role_data;
-	if (surface == NULL) {
-		return;
-	}
 	
 	struct wlr_texture *tex = wlr_surface_get_texture( wlr_surface );
 	
@@ -31,7 +27,7 @@ static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 		//
 	}
 	
-	wayland_PushSurface( surface, &dmabuf_attribs );
+	wayland_PushSurface( wlr_surface, &dmabuf_attribs );
 }
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
