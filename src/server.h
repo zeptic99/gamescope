@@ -28,6 +28,8 @@ struct roots_server {
 	/* WLR tools */
 	struct wlr_backend *backend;
 	struct wlr_renderer *renderer;
+	struct wlr_compositor *compositor;
+	struct wlr_xwayland *xwayland;
 	
 	struct wlr_seat *seat;
 	struct wlr_output *wlr_output;

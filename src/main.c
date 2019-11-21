@@ -13,5 +13,5 @@ struct wl_listener xwayland_ready_listener = { .notify = xwayland_ready };
 
 void register_signal(void)
 {
-	wl_signal_add(&server.desktop->xwayland->events.ready, &xwayland_ready_listener);
+	wl_signal_add(&server.xwayland->events.ready, &xwayland_ready_listener);
 }

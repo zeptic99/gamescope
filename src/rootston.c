@@ -66,12 +66,16 @@ int rootston_init(int argc, char **argv) {
 	}
 	
 	server.renderer = wlr_backend_get_renderer(server.backend);
+	
 	assert(server.renderer);
-	server.data_device_manager =
-		wlr_data_device_manager_create(server.wl_display);
+
 	wlr_renderer_init_wl_display(server.renderer, server.wl_display);
-	server.desktop = desktop_create(&server, server.config);
-	server.input = input_create(&server, server.config);
+
+	server.compositor = wlr_compositor_create(server.wl_display, server.renderer);
+	
+	server.xwayland = wlr_xwayland_create(server.wl_display, server.compositor, False);
+	
+	setenv("DISPLAY", server.xwayland->display_name, true);
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {
@@ -93,9 +97,7 @@ int rootston_init(int argc, char **argv) {
 	setenv("WAYLAND_DISPLAY", socket, true);
 
 	server.seat = wlr_seat_create(server.wl_display, ROOTS_CONFIG_DEFAULT_SEAT_NAME);
-	wlr_xwayland_set_seat(server.desktop->xwayland, server.seat);
-
-
+	wlr_xwayland_set_seat(server.xwayland, server.seat);
 
 	if (server.config->startup_cmd != NULL) {
 		const char *cmd = server.config->startup_cmd;
@@ -116,7 +118,7 @@ int rootston_run(void)
 #if WLR_HAS_XWAYLAND
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise
 	// wlroots will restart it automatically.
-	wlr_xwayland_destroy(server.desktop->xwayland);
+	wlr_xwayland_destroy(server.xwayland);
 #endif
 	wl_display_destroy_clients(server.wl_display);
 	wl_display_destroy(server.wl_display);

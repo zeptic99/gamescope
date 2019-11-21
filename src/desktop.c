@@ -302,8 +302,6 @@ struct roots_desktop *desktop_create(struct roots_server *server,
 // 	desktop->layout_change.notify = handle_layout_change;
 // 	wl_signal_add(&desktop->layout->events.change, &desktop->layout_change);
 
-	desktop->compositor = wlr_compositor_create(server->wl_display,
-		server->renderer);
 
 // 	desktop->xdg_shell_v6 = wlr_xdg_shell_v6_create(server->wl_display);
 // 	wl_signal_add(&desktop->xdg_shell_v6->events.new_surface,
@@ -322,38 +320,38 @@ struct roots_desktop *desktop_create(struct roots_server *server,
 // 
 // 	desktop->tablet_v2 = wlr_tablet_v2_create(server->wl_display);
 
-	const char *cursor_theme = NULL;
-#if WLR_HAS_XWAYLAND
-	const char *cursor_default = ROOTS_XCURSOR_DEFAULT;
-#endif
-	struct roots_cursor_config *cc =
-		roots_config_get_cursor(config, ROOTS_CONFIG_DEFAULT_SEAT_NAME);
-	if (cc != NULL) {
-		cursor_theme = cc->theme;
-#if WLR_HAS_XWAYLAND
-		if (cc->default_image != NULL) {
-			cursor_default = cc->default_image;
-		}
-#endif
-	}
-
-	char cursor_size_fmt[16];
-	snprintf(cursor_size_fmt, sizeof(cursor_size_fmt),
-		"%d", ROOTS_XCURSOR_SIZE);
-	setenv("XCURSOR_SIZE", cursor_size_fmt, 1);
-	if (cursor_theme != NULL) {
-		setenv("XCURSOR_THEME", cursor_theme, 1);
-	}
-
-#if WLR_HAS_XWAYLAND
-	desktop->xcursor_manager = wlr_xcursor_manager_create(cursor_theme,
-		ROOTS_XCURSOR_SIZE);
-	if (desktop->xcursor_manager == NULL) {
-		wlr_log(WLR_ERROR, "Cannot create XCursor manager for theme %s",
-			cursor_theme);
-		free(desktop);
-		return NULL;
-	}
+// 	const char *cursor_theme = NULL;
+// #if WLR_HAS_XWAYLAND
+// 	const char *cursor_default = ROOTS_XCURSOR_DEFAULT;
+// #endif
+// 	struct roots_cursor_config *cc =
+// 		roots_config_get_cursor(config, ROOTS_CONFIG_DEFAULT_SEAT_NAME);
+// 	if (cc != NULL) {
+// 		cursor_theme = cc->theme;
+// #if WLR_HAS_XWAYLAND
+// 		if (cc->default_image != NULL) {
+// 			cursor_default = cc->default_image;
+// 		}
+// #endif
+// 	}
+// 
+// 	char cursor_size_fmt[16];
+// 	snprintf(cursor_size_fmt, sizeof(cursor_size_fmt),
+// 		"%d", ROOTS_XCURSOR_SIZE);
+// 	setenv("XCURSOR_SIZE", cursor_size_fmt, 1);
+// 	if (cursor_theme != NULL) {
+// 		setenv("XCURSOR_THEME", cursor_theme, 1);
+// 	}
+// 
+// #if WLR_HAS_XWAYLAND
+// 	desktop->xcursor_manager = wlr_xcursor_manager_create(cursor_theme,
+// 		ROOTS_XCURSOR_SIZE);
+// 	if (desktop->xcursor_manager == NULL) {
+// 		wlr_log(WLR_ERROR, "Cannot create XCursor manager for theme %s",
+// 			cursor_theme);
+// 		free(desktop);
+// 		return NULL;
+// 	}
 
 	if (config->xwayland) {
 		desktop->xwayland = wlr_xwayland_create(server->wl_display,
@@ -364,19 +362,19 @@ struct roots_desktop *desktop_create(struct roots_server *server,
 
 		setenv("DISPLAY", desktop->xwayland->display_name, true);
 
-		if (wlr_xcursor_manager_load(desktop->xcursor_manager, 1)) {
-			wlr_log(WLR_ERROR, "Cannot load XWayland XCursor theme");
-		}
-		struct wlr_xcursor *xcursor = wlr_xcursor_manager_get_xcursor(
-			desktop->xcursor_manager, cursor_default, 1);
-		if (xcursor != NULL) {
-			struct wlr_xcursor_image *image = xcursor->images[0];
-			wlr_xwayland_set_cursor(desktop->xwayland, image->buffer,
-				image->width * 4, image->width, image->height, image->hotspot_x,
-				image->hotspot_y);
-		}
+// 		if (wlr_xcursor_manager_load(desktop->xcursor_manager, 1)) {
+// 			wlr_log(WLR_ERROR, "Cannot load XWayland XCursor theme");
+// 		}
+// 		struct wlr_xcursor *xcursor = wlr_xcursor_manager_get_xcursor(
+// 			desktop->xcursor_manager, cursor_default, 1);
+// 		if (xcursor != NULL) {
+// 			struct wlr_xcursor_image *image = xcursor->images[0];
+// 			wlr_xwayland_set_cursor(desktop->xwayland, image->buffer,
+// 				image->width * 4, image->width, image->height, image->hotspot_x,
+// 				image->hotspot_y);
+// 		}
 	}
-#endif
+// #endif
 
 // 	desktop->gamma_control_manager_v1 = wlr_gamma_control_manager_v1_create(
 // 		server->wl_display);
