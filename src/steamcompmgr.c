@@ -1512,31 +1512,6 @@ error (Display *dpy, XErrorEvent *ev)
 	return 0;
 }
 
-static void
-usage (char *program)
-{
-	fprintf (stderr, "%s v%s\n", program, "v4");
-	fprintf (stderr, "usage: %s [options]\n", program);
-	fprintf (stderr, "Options\n");
-	fprintf (stderr, "   -d display\n      Specifies which display should be managed.\n");
-	fprintf (stderr, "   -r radius\n      Specifies the blur radius for client-side shadows. (default 12)\n");
-	fprintf (stderr, "   -o opacity\n      Specifies the translucency for client-side shadows. (default .75)\n");
-	fprintf (stderr, "   -l left-offset\n      Specifies the left offset for client-side shadows. (default -15)\n");
-	fprintf (stderr, "   -t top-offset\n      Specifies the top offset for clinet-side shadows. (default -15)\n");
-	fprintf (stderr, "   -I fade-in-step\n      Specifies the opacity change between steps while fading in. (default 0.028)\n");
-	fprintf (stderr, "   -O fade-out-step\n      Specifies the opacity change between steps while fading out. (default 0.03)\n");
-	fprintf (stderr, "   -D fade-delta-time\n      Specifies the time between steps in a fade in milliseconds. (default 10)\n");
-	fprintf (stderr, "   -a\n      Use automatic server-side compositing. Faster, but no special effects.\n");
-	fprintf (stderr, "   -c\n      Draw client-side shadows with fuzzy edges.\n");
-	fprintf (stderr, "   -C\n      Avoid drawing shadows on dock/panel windows.\n");
-	fprintf (stderr, "   -f\n      Fade windows in/out when opening/closing.\n");
-	fprintf (stderr, "   -F\n      Fade windows during opacity changes.\n");
-	fprintf (stderr, "   -n\n      Normal client-side compositing with transparency support\n");
-	fprintf (stderr, "   -s\n      Draw server-side shadows with sharp edges.\n");
-	fprintf (stderr, "   -S\n      Enable synchronous operation (for debugging).\n");
-	exit (1);
-}
-
 static Bool
 register_cm (Display *dpy)
 {
@@ -1669,8 +1644,10 @@ steamcompmgr_main (int argc, char **argv)
 	int		    o;
 	
 	
+	// :/
+	optind = 1;
 	
-	while ((o = getopt (argc, argv, "D:I:O:d:r:o:l:t:scnufFCaSvV")) != -1)
+	while ((o = getopt (argc, argv, ":d:nSvV")) != -1)
 	{
 		switch (o) {
 			case 'd':
@@ -1689,7 +1666,6 @@ steamcompmgr_main (int argc, char **argv)
 				debugEvents = True;
 				break;
 			default:
-				usage (argv[0]);
 				break;
 		}
 	}

@@ -10,7 +10,11 @@
 #include <wlr/backend/libinput.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/util/log.h>
+
+#define C_SIDE
+
 #include "wlserver.h"
+#include "main.hpp"
 
 struct wlserver_t wlserver;
 
@@ -41,7 +45,8 @@ int rootston_init(int argc, char **argv) {
 	}
 	wlr_multi_backend_add(wlserver.wlr.backend, headless_backend);
 	
-	wlserver.wlr.output = wlr_headless_add_output( headless_backend, 1280, 720 );
+	wlserver.wlr.output = wlr_headless_add_output( headless_backend, g_nNestedWidth, g_nNestedHeight );
+	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nNestedRefresh * 1000 );
 	
 	wlr_output_create_global( wlserver.wlr.output );
 	

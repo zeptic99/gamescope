@@ -20,6 +20,10 @@ void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes 
 
 int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry );
 
+extern int g_nNestedWidth;
+extern int g_nNestedHeight;
+extern int g_nNestedRefresh;
+
 #ifndef C_SIDE
 }
 #endif

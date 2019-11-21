@@ -4,6 +4,8 @@
 #include <mutex>
 #include <vector>
 
+#include <unistd.h>
+
 #include "rootston.h"
 #include "steamcompmgr.h"
 
@@ -21,10 +23,32 @@ struct waffle_context *ctx;
 
 Display *XWLDpy;
 
+int g_nNestedWidth = 1280;
+int g_nNestedHeight = 720;
+int g_nNestedRefresh = 60;
+
 int main(int argc, char **argv)
 {
+	int o;
 	ac = argc;
 	av = argv;
+	
+	while ((o = getopt (argc, argv, ":w:h:r:")) != -1)
+	{
+		switch (o) {
+			case 'w':
+				g_nNestedWidth = atoi( optarg );
+				break;
+			case 'h':
+				g_nNestedHeight = atoi( optarg );
+				break;
+			case 'r':
+				g_nNestedRefresh = atoi( optarg );
+				break;
+			default:
+				break;
+		}
+	}
 	
 	XInitThreads();
 	
