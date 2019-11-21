@@ -58,7 +58,7 @@
 #include "glext.h"
 
 #include "wlr/xwayland.h"
-#include "server.h"
+#include "wlserver.h"
 #include "xwayland.h"
 
 #define C_SIDE
@@ -1490,7 +1490,7 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 		return;
 	}
 
-	struct wl_resource *resource = wl_client_get_object(server.xwayland->client, surfaceID);
+	struct wl_resource *resource = wl_client_get_object(wlserver.wlr.xwayland->client, surfaceID);
 	if (resource) {
 		surface = wlr_surface_from_resource(resource);
 	}
@@ -1885,7 +1885,7 @@ steamcompmgr_main (int argc, char **argv)
 	wlClient = wl_client_create(wlDisplay, wlSockets[0]);
 	assert(wlClient);
 	
-	wl_signal_add(&server.xwayland->events.ready, &compositor_new_surface_listener);
+	wl_signal_add(&wlserver.wlr.xwayland->events.ready, &compositor_new_surface_listener);
 	
 	determine_and_apply_focus(dpy);
 	

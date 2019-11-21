@@ -46,8 +46,6 @@ math           = cc.find_library('m')
 thread_dep = dependency('threads')
 waffle_dep = dependency('waffle-1')
 
-subdir('protocol')
-
 wlroots_proj = subproject('wlroots')
 wlroots_static_dep = wlroots_proj.get_variable('wlroots_static_dep')
 
@@ -56,28 +54,11 @@ executable(
     'src/steamcompmgr.c',
     'src/main.cpp',
 	'src/main.c',
-	'src/bindings.c',
-	'src/config.c',
-	'src/cursor.c',
-	'src/desktop.c',
-	'src/ini.c',
-	'src/input.c',
-	'src/keyboard.c',
-	'src/layer_shell.c',
-	'src/rootston.c',
-	'src/output.c',
-	'src/render.c',
-	'src/seat.c',
-	'src/switch.c',
-	'src/text_input.c',
-	'src/view.c',
-	'src/virtual_keyboard.c',
-	'src/xdg_shell_v6.c',
-	'src/xdg_shell.c',
+	'src/wlserver.c',
 	'src/xwayland.c',
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
-        dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, protos, wayland_server,
+        dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, wayland_server,
         wayland_protos, libinput, xkbcommon, math, thread_dep, waffle_dep,
         wlroots_static_dep
     ],

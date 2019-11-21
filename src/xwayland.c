@@ -7,17 +7,11 @@
 #include <wlr/types/wlr_surface.h>
 #include <wlr/util/log.h>
 #include <wlr/xwayland.h>
-#include "server.h"
+#include "wlserver.h"
 #include "xwayland.h"
 
 #define C_SIDE
 #include "main.hpp"
-
-struct roots_xwayland_surface *roots_xwayland_surface_from_view(
-               struct roots_view *view) {
-//        assert(view->impl == &view_impl);
-       return (struct roots_xwayland_surface *)view;
-}
 
 static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
