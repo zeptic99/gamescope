@@ -759,8 +759,16 @@ paint_all (Display *dpy)
 			overlayDamaged = True;
 	}
 	
-	if (!w)
+	if ( !w )
+	{
 		return;
+	}
+	
+	// If the window has never been rendered to, there isn't much we can do here, wait a bit.
+	if ( !w->validContents )
+	{
+		return;
+	}
 	
 	// Don't pump new frames if no animation on the focus window, unless we're fading
 	if (!w->damaged && !overlayDamaged && !fadeOutWindow.id)
@@ -1622,8 +1630,6 @@ void check_new_wayland_res(void)
 				w->damaged = 1;
 				w->validContents = True;
 				
-				// TODO tickle the frame loop here somehow if we stay multi-threaded like now
-				
 				bFound = True;
 			}
 		}
@@ -1823,7 +1829,6 @@ steamcompmgr_main (int argc, char **argv)
 		focusDirty = False;
 		
 		do {
-			check_new_wayland_res();
 			XNextEvent (dpy, &ev);
 			if ((ev.type & 0x7f) != KeymapNotify)
 				discard_ignore (dpy, ev.xany.serial);
@@ -2068,6 +2073,8 @@ steamcompmgr_main (int argc, char **argv)
 			struct timespec now;
 			clock_gettime(CLOCK_MONOTONIC, &now);
 
+			check_new_wayland_res();
+			
 			paint_all(dpy);
 			
 			// If we're in the middle of a fade, pump an event into the loop to

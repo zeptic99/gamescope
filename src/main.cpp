@@ -1,3 +1,5 @@
+#include <X11/Xlib.h>
+
 #include <thread>
 #include <mutex>
 #include <vector>
@@ -17,10 +19,14 @@ struct waffle_display *dpy;
 struct waffle_window *window;
 struct waffle_context *ctx;
 
+Display *XWLDpy;
+
 int main(int argc, char **argv)
 {
 	ac = argc;
 	av = argv;
+	
+	XInitThreads();
 	
 	initOutput();
 
@@ -90,6 +96,27 @@ void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes 
 		.attribs = *attribs
 	};
 	g_vecResListEntries.push_back( newEntry );
+	
+	static bool bHasNestedDisplay = false;
+	
+	if ( bHasNestedDisplay == false )
+	{
+		// This should open the nested XWayland display as our environment changed during Xwayland init
+		XWLDpy = XOpenDisplay( nullptr );
+		
+		bHasNestedDisplay = true;
+	}
+	
+	static XEvent XWLExposeEvent = {
+		.xexpose {
+			.type = Expose,
+			.window = DefaultRootWindow( XWLDpy ),
+			.width = 1,
+			.height = 1
+		}
+	};
+	
+	XSendEvent( XWLDpy , DefaultRootWindow( XWLDpy ), True, ExposureMask, &XWLExposeEvent);
 }
 
 int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry )
