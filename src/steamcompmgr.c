@@ -339,9 +339,6 @@ teardown_win_resources (Display *dpy, win *w)
 		__pointer_to_eglDestroyImageKHR( eglGetCurrentDisplay(), w->eglImage );
 		w->eglImage = EGL_NO_IMAGE_KHR;
 	}
-	
-	w->damaged = 0;
-	w->validContents = False;
 }
 
 static void
@@ -1411,8 +1408,6 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 	if (!w)
 		return;
 	
-	w->validContents = True;
-	
 	if (w->isOverlay && !w->opacity)
 		return;
 	
@@ -1427,8 +1422,6 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 	if (focus && focus != w && w->gameID &&
 		w->damage_sequence > focus->damage_sequence)
 		focusDirty = True;
-	
-	w->damaged = 1;
 	
 	if (w->damage)
 		XDamageSubtract(dpy, w->damage, None, None);
@@ -1625,6 +1618,12 @@ void check_new_wayland_res(void)
 				}
 				w->dmabuf_attribs = newEntry.attribs;
 				w->dmabuf_attribs_valid = True;
+				
+				w->damaged = 1;
+				w->validContents = True;
+				
+				// TODO tickle the frame loop here somehow if we stay multi-threaded like now
+				
 				bFound = True;
 			}
 		}
