@@ -1165,8 +1165,8 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->opacity = get_prop (dpy, w->id, opacityAtom, TRANSLUCENT);
 	
 	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
-// 	w->gameID = get_prop (dpy, w->id, gameAtom, 0);
-	w->gameID = 1;
+	w->gameID = get_prop (dpy, w->id, gameAtom, 0);
+// 	w->gameID = 1;
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 	
 	get_size_hints(dpy, w);
@@ -1257,8 +1257,8 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new->isOverlay = False;
 	new->isSteam = False;
-// 	new->gameID = 0;
-	new->gameID = 1;
+	new->gameID = 0;
+// 	new->gameID = 1;
 	new->isFullscreen = False;
 	new->isHidden = False;
 	new->sizeHintsSpecified = False;
