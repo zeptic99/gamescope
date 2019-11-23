@@ -57,12 +57,10 @@
 #include "GL/gl.h"
 #include "glext.h"
 
-#include "wlr/xwayland.h"
-#include "wlserver.h"
-#include "xwayland.h"
-
 #define C_SIDE
+
 #include "main.hpp"
+#include "wlserver.h"
 
 #define WAFFLE_API_VERSION 0x0106
 #include <waffle.h>

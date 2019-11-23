@@ -6,7 +6,7 @@
 
 #include <unistd.h>
 
-#include "rootston.h"
+#include "wlserver.h"
 #include "steamcompmgr.h"
 
 #include "main.hpp"
@@ -54,11 +54,11 @@ int main(int argc, char **argv)
 	
 	initOutput();
 
-	rootston_init(argc, argv);
+	wlserver_init(argc, argv);
 	
 	register_signal();
 	
-	rootston_run();
+	wlserver_run();
 }
 
 void steamCompMgrThreadRun(void)

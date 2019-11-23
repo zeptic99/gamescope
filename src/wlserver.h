@@ -2,6 +2,9 @@
 
 #pragma once
 
+// Only define wlserver_t on the C side, as wlroots can't build as C++
+#ifdef C_SIDE
+
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/backend/session.h>
@@ -28,3 +31,19 @@ struct wlserver_t {
 };
 
 extern struct wlserver_t wlserver;
+
+#endif
+
+#ifndef C_SIDE
+extern "C" {
+#endif
+
+extern const struct wlr_surface_role xwayland_surface_role;
+
+int wlserver_init(int argc, char **argv);
+
+int wlserver_run(void);
+
+#ifndef C_SIDE
+}
+#endif

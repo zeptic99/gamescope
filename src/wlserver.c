@@ -18,7 +18,38 @@
 
 struct wlserver_t wlserver;
 
-int rootston_init(int argc, char **argv) {
+static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
+	assert(wlr_surface->role == &xwayland_surface_role);
+	
+	struct wlr_texture *tex = wlr_surface_get_texture( wlr_surface );
+	
+	struct wlr_dmabuf_attributes dmabuf_attribs = {};
+	bool result = False;
+	result = wlr_texture_to_dmabuf( tex, &dmabuf_attribs );
+	
+	if (result == False)
+	{
+		//
+	}
+	
+	wayland_PushSurface( wlr_surface, &dmabuf_attribs );
+}
+
+static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
+	assert(wlr_surface->role == &xwayland_surface_role);
+	struct wlr_xwayland_surface *surface = wlr_surface->role_data;
+	if (surface == NULL) {
+		return;
+	}
+}
+
+const struct wlr_surface_role xwayland_surface_role = {
+	.name = "wlr_xwayland_surface",
+	.commit = xwayland_surface_role_commit,
+	.precommit = xwayland_surface_role_precommit,
+};
+
+int wlserver_init(int argc, char **argv) {
 	bool bIsDRM = False;
 	
 	if ( getenv("DISPLAY") == NULL )
@@ -102,7 +133,7 @@ int rootston_init(int argc, char **argv) {
 	return 0;
 }
 
-int rootston_run(void)
+int wlserver_run(void)
 {
 	wl_display_run(wlserver.wl_display);
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise

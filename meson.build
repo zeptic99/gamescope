@@ -55,7 +55,6 @@ executable(
     'src/main.cpp',
 	'src/main.c',
 	'src/wlserver.c',
-	'src/xwayland.c',
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
         dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, wayland_server,

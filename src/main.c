@@ -1,8 +1,10 @@
-#include "wlserver.h"
+
 
 #define C_SIDE
 
 #include "main.hpp"
+#include "wlserver.h"
+
 
 static void xwayland_ready(struct wl_listener *listener,
 										 void *data) {
