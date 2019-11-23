@@ -141,6 +141,7 @@ void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes 
 	};
 	
 	XSendEvent( XWLDpy , DefaultRootWindow( XWLDpy ), True, ExposureMask, &XWLExposeEvent);
+	XFlush( XWLDpy );
 }
 
 int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry )

@@ -1640,19 +1640,15 @@ steamcompmgr_main (int argc, char **argv)
 	unsigned int    nchildren;
 	int		    i;
 	int		    composite_major, composite_minor;
-	char	    *display = NULL;
 	int		    o;
 	
 	
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":d:nSvV")) != -1)
+	while ((o = getopt (argc, argv, ":nSvV")) != -1)
 	{
 		switch (o) {
-			case 'd':
-				display = optarg;
-				break;
 			case 'n':
 				doRender = False;
 				break;
@@ -1670,7 +1666,7 @@ steamcompmgr_main (int argc, char **argv)
 		}
 	}
 	
-	dpy = XOpenDisplay (display);
+	dpy = XOpenDisplay (wlserver.wlr.xwayland->display_name);
 	if (!dpy)
 	{
 		fprintf (stderr, "Can't open display\n");
