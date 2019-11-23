@@ -21,8 +21,6 @@ struct waffle_display *dpy;
 struct waffle_window *window;
 struct waffle_context *ctx;
 
-Display *XWLDpy;
-
 int g_nNestedWidth = 1280;
 int g_nNestedHeight = 720;
 int g_nNestedRefresh = 60;
@@ -113,35 +111,17 @@ std::vector<ResListEntry_t> g_vecResListEntries;
 
 void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes *attribs)
 {
-	std::lock_guard<std::mutex> lock(g_ResListLock);
-	
-	ResListEntry_t newEntry = {
-		.surf = surf,
-		.attribs = *attribs
-	};
-	g_vecResListEntries.push_back( newEntry );
-	
-	static bool bHasNestedDisplay = false;
-	
-	if ( bHasNestedDisplay == false )
 	{
-		// This should open the nested XWayland display as our environment changed during Xwayland init
-		XWLDpy = XOpenDisplay( nullptr );
+		std::lock_guard<std::mutex> lock(g_ResListLock);
 		
-		bHasNestedDisplay = true;
+		ResListEntry_t newEntry = {
+			.surf = surf,
+			.attribs = *attribs
+		};
+		g_vecResListEntries.push_back( newEntry );
 	}
 	
-	static XEvent XWLExposeEvent = {
-		.xexpose {
-			.type = Expose,
-			.window = DefaultRootWindow( XWLDpy ),
-			.width = 1,
-			.height = 1
-		}
-	};
-	
-	XSendEvent( XWLDpy , DefaultRootWindow( XWLDpy ), True, ExposureMask, &XWLExposeEvent);
-	XFlush( XWLDpy );
+	send_xwayland_expose();
 }
 
 int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry )

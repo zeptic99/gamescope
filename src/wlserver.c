@@ -18,6 +18,29 @@
 
 struct wlserver_t wlserver;
 
+Display *g_XWLDpy;
+
+void send_xwayland_expose(void)
+{
+	static bool bHasNestedDisplay = false;
+	static XEvent XWLExposeEvent = {};
+	
+	if ( bHasNestedDisplay == false )
+	{
+		g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland->display_name );
+		
+		XWLExposeEvent.xexpose.type = Expose;
+		XWLExposeEvent.xexpose.window = DefaultRootWindow( g_XWLDpy );
+		XWLExposeEvent.xexpose.width = 1;
+		XWLExposeEvent.xexpose.height = 1;
+
+		bHasNestedDisplay = true;
+	}
+	
+	XSendEvent( g_XWLDpy , DefaultRootWindow( g_XWLDpy ), True, ExposureMask, &XWLExposeEvent);
+	XFlush( g_XWLDpy );
+}
+
 static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
 	

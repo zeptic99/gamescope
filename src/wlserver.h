@@ -44,6 +44,8 @@ int wlserver_init(int argc, char **argv);
 
 int wlserver_run(void);
 
+void send_xwayland_expose(void);
+
 #ifndef C_SIDE
 }
 #endif
