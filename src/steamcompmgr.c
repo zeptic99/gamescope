@@ -1604,6 +1604,15 @@ void check_new_wayland_res(void)
 				w->damaged = 1;
 				w->validContents = True;
 				
+				if ( w->committed == True )
+				{
+					// Got another commit without having consumed the previous one
+					// Acknowledge previous one, seems we can get hangs if we don't.
+					struct timespec now;
+					clock_gettime(CLOCK_MONOTONIC, &now);
+					wlr_surface_send_frame_done(w->wlrsurface, &now);
+				}
+				
 				w->committed = True;
 				
 				bFound = True;
