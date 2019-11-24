@@ -98,6 +98,7 @@ typedef struct _win {
 	Bool nudged;
 	Bool ignoreOverrideRedirect;
 	Bool validContents;
+	Bool committed;
 	
 	Bool mouseMoved;
 	
@@ -127,7 +128,7 @@ static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
 
 static Window	ourWindow;
-static XEvent	exposeEvent;
+static XEvent	nudgeEvent;
 
 Bool			gameFocused;
 
@@ -1244,6 +1245,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	}
 	new->damaged = 0;
 	new->validContents = False;
+	new->committed = False;
 
 	new->texName = 0;
 	new->eglImage = EGL_NO_IMAGE_KHR;
@@ -1571,10 +1573,9 @@ register_cm (Display *dpy)
 	
 	ourWindow = w;
 	
-	exposeEvent.type = Expose;
-	exposeEvent.xexpose.window = ourWindow;
-	exposeEvent.xexpose.width = 1;
-	exposeEvent.xexpose.height = 1;
+	nudgeEvent.xclient.type = ClientMessage;
+	nudgeEvent.xclient.window = ourWindow;
+	nudgeEvent.xclient.format = 32;
 	
 	return True;
 }
@@ -1602,6 +1603,8 @@ void check_new_wayland_res(void)
 				
 				w->damaged = 1;
 				w->validContents = True;
+				
+				w->committed = True;
 				
 				bFound = True;
 			}
@@ -2050,7 +2053,7 @@ steamcompmgr_main (int argc, char **argv)
 			// If we're in the middle of a fade, pump an event into the loop to
 			// make sure we keep pushing frames even if the app isn't updating.
 			if (fadeOutWindow.id)
-				XSendEvent(dpy, ourWindow, True, ExposureMask, &exposeEvent);
+				XSendEvent(dpy, ourWindow, True, SubstructureRedirectMask, &nudgeEvent);
 			
 			Window window_returned, child;
 			int root_x, root_y;
@@ -2092,9 +2095,12 @@ steamcompmgr_main (int argc, char **argv)
 			// Send frame done event to all Wayland surfaces
 			for (win *w = list; w; w = w->next)
 			{
-				if ( w->wlrsurface )
+				if ( w->wlrsurface && w->committed == True )
 				{
+					// Acknowledge commit once.
 					wlr_surface_send_frame_done(w->wlrsurface, &now);
+					
+					w->committed = False;
 				}
 			}
 		}

@@ -121,7 +121,7 @@ void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes 
 		g_vecResListEntries.push_back( newEntry );
 	}
 	
-	send_xwayland_expose();
+	nudge_steamcompmgr();
 }
 
 int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry )

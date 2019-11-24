@@ -20,7 +20,7 @@ struct wlserver_t wlserver;
 
 Display *g_XWLDpy;
 
-void send_xwayland_expose(void)
+void nudge_steamcompmgr(void)
 {
 	static bool bHasNestedDisplay = false;
 	static XEvent XWLExposeEvent = {};
@@ -29,15 +29,14 @@ void send_xwayland_expose(void)
 	{
 		g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland->display_name );
 		
-		XWLExposeEvent.xexpose.type = Expose;
-		XWLExposeEvent.xexpose.window = DefaultRootWindow( g_XWLDpy );
-		XWLExposeEvent.xexpose.width = 1;
-		XWLExposeEvent.xexpose.height = 1;
+		XWLExposeEvent.xclient.type = ClientMessage;
+		XWLExposeEvent.xclient.window = DefaultRootWindow( g_XWLDpy );
+		XWLExposeEvent.xclient.format = 32;
 
 		bHasNestedDisplay = true;
 	}
 	
-	XSendEvent( g_XWLDpy , DefaultRootWindow( g_XWLDpy ), True, ExposureMask, &XWLExposeEvent);
+	XSendEvent( g_XWLDpy , DefaultRootWindow( g_XWLDpy ), True, SubstructureRedirectMask, &XWLExposeEvent);
 	XFlush( g_XWLDpy );
 }
 
