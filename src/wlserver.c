@@ -71,13 +71,8 @@ const struct wlr_surface_role xwayland_surface_role = {
 	.precommit = xwayland_surface_role_precommit,
 };
 
-int wlserver_init(int argc, char **argv) {
-	bool bIsDRM = False;
-	
-	if ( getenv("DISPLAY") == NULL )
-	{
-		bIsDRM = True;
-	}
+int wlserver_init(int argc, char **argv, Bool bIsNested) {
+	bool bIsDRM = bIsNested == False;
 	
 	wlr_log_init(WLR_DEBUG, NULL);
 	wlserver.wl_display = wl_display_create();
