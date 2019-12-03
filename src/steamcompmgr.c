@@ -340,6 +340,12 @@ teardown_win_resources (Display *dpy, win *w)
 		__pointer_to_eglDestroyImageKHR( eglGetCurrentDisplay(), w->eglImage );
 		w->eglImage = EGL_NO_IMAGE_KHR;
 	}
+	
+	if ( w->fb_id != 0 )
+	{
+		drmModeRmFB( g_DRM.fd, w->fb_id );
+		w->fb_id = 0;
+	}
 }
 
 static void
@@ -352,35 +358,44 @@ ensure_win_resources (Display *dpy, win *w)
 	{
 		teardown_win_resources( dpy, w );
 
-		EGLint attr[] = {
-			EGL_WIDTH, w->dmabuf_attribs.width,
-			EGL_HEIGHT, w->dmabuf_attribs.height,
-			EGL_LINUX_DRM_FOURCC_EXT, w->dmabuf_attribs.format,
-			EGL_DMA_BUF_PLANE0_FD_EXT, w->dmabuf_attribs.fd[0],
-			EGL_DMA_BUF_PLANE0_OFFSET_EXT, w->dmabuf_attribs.offset[0],
-			EGL_DMA_BUF_PLANE0_PITCH_EXT, w->dmabuf_attribs.stride[0],
-			EGL_NONE
-		};
+		if ( BIsNested() == True )
+		{
+			EGLint attr[] = {
+				EGL_WIDTH, w->dmabuf_attribs.width,
+				EGL_HEIGHT, w->dmabuf_attribs.height,
+				EGL_LINUX_DRM_FOURCC_EXT, w->dmabuf_attribs.format,
+				EGL_DMA_BUF_PLANE0_FD_EXT, w->dmabuf_attribs.fd[0],
+				EGL_DMA_BUF_PLANE0_OFFSET_EXT, w->dmabuf_attribs.offset[0],
+				EGL_DMA_BUF_PLANE0_PITCH_EXT, w->dmabuf_attribs.stride[0],
+				EGL_NONE
+			};
+			
+			w->eglImage = __pointer_to_eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
+									EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
 		
-		w->eglImage = __pointer_to_eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
-								EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
-		
+			glGenTextures( 1, &w->texName );
+			glBindTexture (GL_TEXTURE_2D, w->texName);
+			__pointer_to_glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
+			
+			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			
+			assert( w->eglImage != EGL_NO_IMAGE_KHR );
+		}
+		else
+		{
+			w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
+			
+			assert( w->fb_id != 0 );
+		}
+
 		close(w->dmabuf_attribs.fd[0]);
-		
-		glGenTextures( 1, &w->texName );
-		glBindTexture (GL_TEXTURE_2D, w->texName);
-		__pointer_to_glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
 		
 		// Only consume once
 		w->dmabuf_attribs_valid = False;
-		
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		
-		w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
 	}
 }
 
@@ -869,7 +884,23 @@ paint_all (Display *dpy)
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
 	
-	waffle_window_swap_buffers(window);
+	if ( BIsNested() == True )
+	{
+		waffle_window_swap_buffers(window);
+	}
+	else
+	{
+		static Bool bFirstSwap = True;
+		uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
+		
+		if ( bFirstSwap == True )
+		{
+			flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+			bFirstSwap = False;
+		}
+		
+		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
+	}
 }
 
 static void
@@ -1194,7 +1225,7 @@ finish_unmap_win (Display *dpy, win *w)
 	w->damaged = 0;
 	w->validContents = False;
 	
-	if (w->eglImage && fadeOutWindow.id != w->id)
+	if (fadeOutWindow.id != w->id)
 	{
 		teardown_win_resources(dpy, w);
 	}
@@ -1253,6 +1284,8 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 
 	new->texName = 0;
 	new->eglImage = EGL_NO_IMAGE_KHR;
+	
+	new->fb_id = 0;
 
 	new->damage_sequence = 0;
 	new->map_sequence = 0;
@@ -1764,7 +1797,10 @@ steamcompmgr_main (int argc, char **argv)
 	__pointer_to_eglDestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
 	__pointer_to_glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
 	
-	eglSwapInterval( eglGetCurrentDisplay(), 1 );
+	if ( BIsNested() == True )
+	{
+		eglSwapInterval( eglGetCurrentDisplay(), 1 );
+	}
 	
 	glEnable (GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(MessageCallback, 0);
@@ -1950,7 +1986,7 @@ steamcompmgr_main (int argc, char **argv)
 							
 							// Overlay windows need a RGBA pixmap, so destroy the old one there
 							// It'll be reallocated as RGBA in ensure_win_resources()
-							if (w->eglImage && w->isOverlay)
+							if (w->isOverlay)
 							{
 								teardown_win_resources(dpy, w);
 							}

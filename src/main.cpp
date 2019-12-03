@@ -28,6 +28,11 @@ int g_nNestedRefresh = 60;
 
 bool g_bIsNested = false;
 
+int BIsNested()
+{
+	return g_bIsNested == true;
+}
+
 int main(int argc, char **argv)
 {
 	int o;

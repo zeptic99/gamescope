@@ -327,6 +327,8 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	get_properties(crtc, CRTC, drm->crtc_id);
 	get_properties(connector, CONNECTOR, drm->connector_id);
 	
+	drm->kms_in_fence_fd = -1;
+	
 	return 0;
 }
 
@@ -400,7 +402,7 @@ static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
-int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t flags)
+int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height, uint32_t flags)
 {
 	drmModeAtomicReq *req;
 	uint32_t plane_id = drm->plane->plane->plane_id;
@@ -429,8 +431,8 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t flags)
 	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
 	add_plane_property(drm, req, plane_id, "SRC_X", 0);
 	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
-	add_plane_property(drm, req, plane_id, "SRC_W", drm->mode->hdisplay << 16);
-	add_plane_property(drm, req, plane_id, "SRC_H", drm->mode->vdisplay << 16);
+	add_plane_property(drm, req, plane_id, "SRC_W", width << 16);
+	add_plane_property(drm, req, plane_id, "SRC_H", height << 16);
 	add_plane_property(drm, req, plane_id, "CRTC_X", 0);
 	add_plane_property(drm, req, plane_id, "CRTC_Y", 0);
 	add_plane_property(drm, req, plane_id, "CRTC_W", drm->mode->hdisplay);
@@ -451,7 +453,7 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t flags)
 		drm->kms_in_fence_fd = -1;
 	}
 	
-	out:
+out:
 	drmModeAtomicFree(req);
 	
 	return ret;

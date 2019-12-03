@@ -24,6 +24,8 @@ extern int g_nNestedWidth;
 extern int g_nNestedHeight;
 extern int g_nNestedRefresh;
 
+int BIsNested( void );
+
 #ifndef C_SIDE
 }
 #endif
