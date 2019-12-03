@@ -439,19 +439,31 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_
 	add_plane_property(drm, req, plane_id, "CRTC_H", drm->mode->vdisplay);
 	
 	if (drm->kms_in_fence_fd != -1) {
-		add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
-						  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
 		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);
 	}
 	
+	drm->kms_out_fence_fd = -1;
+	
+	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
+					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
+	
+	
 	ret = drmModeAtomicCommit(drm->fd, req, flags, NULL);
 	if (ret)
+	{
+		if ( ret != -EBUSY ) 
+		{
+			printf("flip error %d\n", ret);
+		}
 		goto out;
+	}
 	
 	if (drm->kms_in_fence_fd != -1) {
 		close(drm->kms_in_fence_fd);
 		drm->kms_in_fence_fd = -1;
 	}
+	
+	drm->kms_in_fence_fd = drm->kms_out_fence_fd;
 	
 out:
 	drmModeAtomicFree(req);
