@@ -5,6 +5,24 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+struct plane {
+	drmModePlane *plane;
+	drmModeObjectProperties *props;
+	drmModePropertyRes **props_info;
+};
+
+struct crtc {
+	drmModeCrtc *crtc;
+	drmModeObjectProperties *props;
+	drmModePropertyRes **props_info;
+};
+
+struct connector {
+	drmModeConnector *connector;
+	drmModeObjectProperties *props;
+	drmModePropertyRes **props_info;
+};
+
 struct drm_t {
 	int fd;
 	
@@ -19,6 +37,8 @@ struct drm_t {
 	drmModeModeInfo *mode;
 	uint32_t crtc_id;
 	uint32_t connector_id;
+	
+	uint32_t plane_id;
 };
 
 #ifndef C_SIDE
@@ -28,6 +48,7 @@ extern "C" {
 extern struct drm_t g_DRM;
 
 int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh);
+int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t flags);
 
 #ifndef C_SIDE
 }

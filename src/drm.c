@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #define C_SIDE
 
@@ -102,6 +103,64 @@ static int find_drm_device(drmModeRes **resources)
 	if (fd < 0)
 		printf("no drm device found!\n");
 	return fd;
+}
+
+/* Pick a plane.. something that at a minimum can be connected to
+ * the chosen crtc, but prefer primary plane.
+ *
+ * Seems like there is some room for a drmModeObjectGetNamedProperty()
+ * type helper in libdrm..
+ */
+static int get_plane_id(struct drm_t *drm)
+{
+	drmModePlaneResPtr plane_resources;
+	uint32_t i, j;
+	int ret = -EINVAL;
+	int found_primary = 0;
+	
+	plane_resources = drmModeGetPlaneResources(drm->fd);
+	if (!plane_resources) {
+		printf("drmModeGetPlaneResources failed: %s\n", strerror(errno));
+		return -1;
+	}
+	
+	for (i = 0; (i < plane_resources->count_planes) && !found_primary; i++) {
+		uint32_t id = plane_resources->planes[i];
+		drmModePlanePtr plane = drmModeGetPlane(drm->fd, id);
+		if (!plane) {
+			printf("drmModeGetPlane(%u) failed: %s\n", id, strerror(errno));
+			continue;
+		}
+		
+		if (plane->possible_crtcs & (1 << drm->crtc_index)) {
+			drmModeObjectPropertiesPtr props =
+			drmModeObjectGetProperties(drm->fd, id, DRM_MODE_OBJECT_PLANE);
+			
+			/* primary or not, this plane is good enough to use: */
+			ret = id;
+			
+			for (j = 0; j < props->count_props; j++) {
+				drmModePropertyPtr p =
+				drmModeGetProperty(drm->fd, props->props[j]);
+				
+				if ((strcmp(p->name, "type") == 0) &&
+					(props->prop_values[j] == DRM_PLANE_TYPE_PRIMARY)) {
+					/* found our primary plane, lets use that: */
+					found_primary = 1;
+					}
+					
+					drmModeFreeProperty(p);
+			}
+			
+			drmModeFreeObjectProperties(props);
+		}
+		
+		drmModeFreePlane(plane);
+	}
+	
+	drmModeFreePlaneResources(plane_resources);
+	
+	return ret;
 }
 
 int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh)
@@ -220,5 +279,180 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	
 	drm->connector_id = connector->connector_id;
 	
+	drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1);
+	
+	drm->plane_id = get_plane_id( &g_DRM );
+	
+	if ( drm->plane_id == 0 )
+	{
+		printf("could not find a suitable plane\n");
+		return -1;
+	}
+	
+	drm->plane = calloc(1, sizeof(*drm->plane));
+	drm->crtc = calloc(1, sizeof(*drm->crtc));
+	drm->connector = calloc(1, sizeof(*drm->connector));
+
+#define get_resource(type, Type, id) do { 					\
+		drm->type->type = drmModeGet##Type(drm->fd, id);			\
+		if (!drm->type->type) {						\
+			printf("could not get %s %i: %s\n",			\
+					#type, id, strerror(errno));		\
+			return -1;						\
+		}								\
+	} while (0)
+
+	get_resource(plane, Plane, drm->plane_id);
+	get_resource(crtc, Crtc, drm->crtc_id);
+	get_resource(connector, Connector, drm->connector_id);
+
+#define get_properties(type, TYPE, id) do {					\
+		uint32_t i;							\
+		drm->type->props = drmModeObjectGetProperties(drm->fd,		\
+				id, DRM_MODE_OBJECT_##TYPE);			\
+		if (!drm->type->props) {						\
+			printf("could not get %s %u properties: %s\n", 		\
+					#type, id, strerror(errno));		\
+			return -1;						\
+		}								\
+		drm->type->props_info = calloc(drm->type->props->count_props,	\
+				sizeof(*drm->type->props_info));			\
+		for (i = 0; i < drm->type->props->count_props; i++) {		\
+			drm->type->props_info[i] = drmModeGetProperty(drm->fd,	\
+					drm->type->props->props[i]);		\
+		}								\
+	} while (0)
+
+	get_properties(plane, PLANE, drm->plane_id);
+	get_properties(crtc, CRTC, drm->crtc_id);
+	get_properties(connector, CONNECTOR, drm->connector_id);
+	
 	return 0;
+}
+
+static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
+								  uint32_t obj_id, const char *name,
+								  uint64_t value)
+{
+	struct connector *obj = drm->connector;
+	unsigned int i;
+	int prop_id = 0;
+	
+	for (i = 0 ; i < obj->props->count_props ; i++) {
+		if (strcmp(obj->props_info[i]->name, name) == 0) {
+			prop_id = obj->props_info[i]->prop_id;
+			break;
+		}
+	}
+	
+	if (prop_id < 0) {
+		printf("no connector property: %s\n", name);
+		return -EINVAL;
+	}
+	
+	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+}
+
+static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
+							 uint32_t obj_id, const char *name,
+							 uint64_t value)
+{
+	struct crtc *obj = drm->crtc;
+	unsigned int i;
+	int prop_id = -1;
+	
+	for (i = 0 ; i < obj->props->count_props ; i++) {
+		if (strcmp(obj->props_info[i]->name, name) == 0) {
+			prop_id = obj->props_info[i]->prop_id;
+			break;
+		}
+	}
+	
+	if (prop_id < 0) {
+		printf("no crtc property: %s\n", name);
+		return -EINVAL;
+	}
+	
+	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+}
+
+static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
+							  uint32_t obj_id, const char *name,
+							  uint64_t value)
+{
+	struct plane *obj = drm->plane;
+	unsigned int i;
+	int prop_id = -1;
+	
+	for (i = 0 ; i < obj->props->count_props ; i++) {
+		if (strcmp(obj->props_info[i]->name, name) == 0) {
+			prop_id = obj->props_info[i]->prop_id;
+			break;
+		}
+	}
+	
+	
+	if (prop_id < 0) {
+		printf("no plane property: %s\n", name);
+		return -EINVAL;
+	}
+	
+	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+}
+
+int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t flags)
+{
+	drmModeAtomicReq *req;
+	uint32_t plane_id = drm->plane->plane->plane_id;
+	uint32_t blob_id;
+	int ret;
+	
+	req = drmModeAtomicAlloc();
+	
+	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
+		if (add_connector_property(drm, req, drm->connector_id, "CRTC_ID",
+			drm->crtc_id) < 0)
+			return -1;
+		
+		if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode),
+			&blob_id) != 0)
+			return -1;
+		
+		if (add_crtc_property(drm, req, drm->crtc_id, "MODE_ID", blob_id) < 0)
+			return -1;
+		
+		if (add_crtc_property(drm, req, drm->crtc_id, "ACTIVE", 1) < 0)
+			return -1;
+	}
+	
+	add_plane_property(drm, req, plane_id, "FB_ID", fb_id);
+	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
+	add_plane_property(drm, req, plane_id, "SRC_X", 0);
+	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
+	add_plane_property(drm, req, plane_id, "SRC_W", drm->mode->hdisplay << 16);
+	add_plane_property(drm, req, plane_id, "SRC_H", drm->mode->vdisplay << 16);
+	add_plane_property(drm, req, plane_id, "CRTC_X", 0);
+	add_plane_property(drm, req, plane_id, "CRTC_Y", 0);
+	add_plane_property(drm, req, plane_id, "CRTC_W", drm->mode->hdisplay);
+	add_plane_property(drm, req, plane_id, "CRTC_H", drm->mode->vdisplay);
+	
+	if (drm->kms_in_fence_fd != -1) {
+		add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
+						  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
+		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);
+	}
+	
+	ret = drmModeAtomicCommit(drm->fd, req, flags, NULL);
+	if (ret)
+		goto out;
+	
+	if (drm->kms_in_fence_fd != -1) {
+		close(drm->kms_in_fence_fd);
+		drm->kms_in_fence_fd = -1;
+	}
+	
+	out:
+	drmModeAtomicFree(req);
+	
+	return ret;
 }
