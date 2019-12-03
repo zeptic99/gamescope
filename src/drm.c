@@ -456,3 +456,14 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t flags)
 	
 	return ret;
 }
+
+uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *dma_buf )
+{
+	uint32_t ret = 0;
+	uint32_t handles[4] = { 0 };
+	drmPrimeFDToHandle( drm->fd, dma_buf->fd[0], &handles[0] );
+	
+	drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &ret, 0 );
+	
+	return ret;
+}

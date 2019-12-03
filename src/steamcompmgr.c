@@ -61,6 +61,7 @@
 
 #include "main.hpp"
 #include "wlserver.h"
+#include "drm.h"
 
 #define WAFFLE_API_VERSION 0x0106
 #include <waffle.h>
@@ -105,6 +106,7 @@ typedef struct _win {
 	struct wlr_surface *wlrsurface;
 	Bool dmabuf_attribs_valid;
 	struct wlr_dmabuf_attributes dmabuf_attribs;
+	uint32_t fb_id;
 } win;
 
 static win		*list;
@@ -377,6 +379,8 @@ ensure_win_resources (Display *dpy, win *w)
 		
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		
+		w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
 	}
 }
 
