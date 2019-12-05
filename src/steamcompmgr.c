@@ -343,7 +343,7 @@ teardown_win_resources (Display *dpy, win *w)
 	
 	if ( w->fb_id != 0 )
 	{
-		drmModeRmFB( g_DRM.fd, w->fb_id );
+		drm_free_fbid( &g_DRM, w->fb_id );
 		w->fb_id = 0;
 	}
 }

@@ -10,12 +10,16 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
-
-#define C_SIDE
+#include <sys/select.h>
+#include <signal.h>
 
 #include "drm.h"
 
+#include <thread>
+
 struct drm_t g_DRM;
+
+static int s_drm_log = 0;
 
 static uint32_t find_crtc_for_encoder(const drmModeRes *resources,
 		const drmModeEncoder *encoder) {
@@ -163,6 +167,77 @@ static int get_plane_id(struct drm_t *drm)
 	return ret;
 }
 
+static void page_flip_handler(int fd, unsigned int frame,
+							  unsigned int sec, unsigned int usec, void *data)
+{
+	uint32_t fbid = (uint32_t)(uint64_t)data;
+	
+	static uint32_t previous_fbid = 0;
+	
+	if ( s_drm_log != 0 )
+	{
+		printf("page_flip_handler %u\n", fbid);
+	}
+	
+	if ( previous_fbid != 0 )
+	{
+		assert( g_DRM.map_fbid_inflightflips[ previous_fbid ].second > 0 );
+		
+		g_DRM.map_fbid_inflightflips[ previous_fbid ].second--;
+		
+		if ( g_DRM.map_fbid_inflightflips[ previous_fbid ].second == 0 )
+		{
+			// we flipped away from this previous fbid, now safe to delete
+			std::lock_guard<std::mutex> lock( g_DRM.free_queue_lock );
+			
+			for ( uint32_t i = 0; i < g_DRM.fbid_free_queue.size(); i++ )
+			{
+				if ( g_DRM.fbid_free_queue[ i ] == previous_fbid )
+				{
+					if ( s_drm_log != 0 )
+					{
+						printf("deferred free %u\n", previous_fbid);
+					}
+					drmModeRmFB( g_DRM.fd, previous_fbid );
+					
+					g_DRM.fbid_free_queue.erase( g_DRM.fbid_free_queue.begin() + i );
+					break;
+				}
+			}
+		}
+	}
+
+	previous_fbid = fbid;
+}
+
+void flip_handler_thread_run(void)
+{
+	// :/
+	signal(SIGUSR1, SIG_IGN);
+
+	fd_set fds;
+	int ret;
+	drmEventContext evctx = {
+		.version = 2,
+		.page_flip_handler = page_flip_handler,
+	};
+
+	FD_ZERO(&fds);
+	FD_SET(0, &fds);
+	FD_SET(g_DRM.fd, &fds);
+	
+	while ( true )
+	{
+		ret = select(g_DRM.fd + 1, &fds, NULL, NULL, NULL);
+		if (ret < 0) {
+			break;
+		}
+		drmHandleEvent(g_DRM.fd, &evctx);
+	}
+}
+
+
+
 int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh)
 {
 	drmModeRes *resources;
@@ -289,9 +364,9 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		return -1;
 	}
 	
-	drm->plane = calloc(1, sizeof(*drm->plane));
-	drm->crtc = calloc(1, sizeof(*drm->crtc));
-	drm->connector = calloc(1, sizeof(*drm->connector));
+	drm->plane = (struct plane*)calloc(1, sizeof(*drm->plane));
+	drm->crtc = (struct crtc*)calloc(1, sizeof(*drm->crtc));
+	drm->connector = (struct connector*)calloc(1, sizeof(*drm->connector));
 
 #define get_resource(type, Type, id) do { 					\
 		drm->type->type = drmModeGet##Type(drm->fd, id);			\
@@ -315,7 +390,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 					#type, id, strerror(errno));		\
 			return -1;						\
 		}								\
-		drm->type->props_info = calloc(drm->type->props->count_props,	\
+		drm->type->props_info = (drmModePropertyRes**)calloc(drm->type->props->count_props,	\
 				sizeof(*drm->type->props_info));			\
 		for (i = 0; i < drm->type->props->count_props; i++) {		\
 			drm->type->props_info[i] = drmModeGetProperty(drm->fd,	\
@@ -328,6 +403,9 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	get_properties(connector, CONNECTOR, drm->connector_id);
 	
 	drm->kms_in_fence_fd = -1;
+	
+	std::thread flip_handler_thread( flip_handler_thread_run );
+	flip_handler_thread.detach();
 	
 	return 0;
 }
@@ -411,6 +489,9 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_
 	
 	req = drmModeAtomicAlloc();
 	
+	// We do internal refcounting with these events
+	flags |= DRM_MODE_PAGE_FLIP_EVENT;
+	
 	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
 		if (add_connector_property(drm, req, drm->connector_id, "CRTC_ID",
 			drm->crtc_id) < 0)
@@ -447,16 +528,26 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_
 	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
 					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
 	
-	
-	ret = drmModeAtomicCommit(drm->fd, req, flags, NULL);
+	if ( s_drm_log != 0 ) 
+	{
+		printf("flipping fbid %u\n", fb_id);
+	}
+	ret = drmModeAtomicCommit(drm->fd, req, flags, (void *)(uint64_t)fb_id);
 	if (ret)
 	{
 		if ( ret != -EBUSY ) 
 		{
 			printf("flip error %d\n", ret);
 		}
+		else if ( s_drm_log != 0 ) 
+		{
+			printf("flip busy\n");
+		}
 		goto out;
 	}
+	
+	assert( g_DRM.map_fbid_inflightflips[ fb_id ].first == true );
+	g_DRM.map_fbid_inflightflips[ fb_id ].second++;
 	
 	if (drm->kms_in_fence_fd != -1) {
 		close(drm->kms_in_fence_fd);
@@ -479,5 +570,35 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *
 	
 	drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &ret, 0 );
 	
+	if ( s_drm_log != 0 )
+	{
+		printf("make fbid %u\n", ret);
+	}
+	assert( drm->map_fbid_inflightflips[ ret ].first == false );
+
+	drm->map_fbid_inflightflips[ ret ].first = true;
+	drm->map_fbid_inflightflips[ ret ].second = 0;
+	
 	return ret;
+}
+
+void drm_free_fbid( struct drm_t *drm, uint32_t fbid )
+{
+	assert( drm->map_fbid_inflightflips[ fbid ].first == true );
+	drm->map_fbid_inflightflips[ fbid ].first = false;
+
+	if ( drm->map_fbid_inflightflips[ fbid ].second == 0 )
+	{
+		if ( s_drm_log != 0 )
+		{
+			printf("free fbid %u\n", fbid);
+		}
+		drmModeRmFB( drm->fd, fbid );
+	}
+	else
+	{
+		std::lock_guard<std::mutex> lock( drm->free_queue_lock );
+		
+		drm->fbid_free_queue.push_back( fbid );
+	}
 }
