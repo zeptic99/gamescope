@@ -11,7 +11,7 @@
 
 #include "main.hpp"
 #include "main.h"
-#include "drm.h"
+#include "drm.hpp"
 
 #include <waffle.h>
 
@@ -25,6 +25,9 @@ struct waffle_context *ctx;
 int g_nNestedWidth = 1280;
 int g_nNestedHeight = 720;
 int g_nNestedRefresh = 60;
+
+int g_nOutputWidth = 1280;
+int g_nOutputHeight = 720;
 
 bool g_bIsNested = false;
 
@@ -121,8 +124,8 @@ void initOutput(void)
 			0,
 		};
 		
-		const int32_t window_width = 1280;
-		const int32_t window_height = 720;
+		const int32_t window_width = g_nOutputWidth;
+		const int32_t window_height = g_nOutputHeight;
 		
 		waffle_init(init_attrs);
 		dpy = waffle_display_connect(NULL);

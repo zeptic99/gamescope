@@ -13,7 +13,8 @@
 #include <sys/select.h>
 #include <signal.h>
 
-#include "drm.h"
+#include "drm.hpp"
+#include "main.hpp"
 
 #include <thread>
 
@@ -406,6 +407,9 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	
 	std::thread flip_handler_thread( flip_handler_thread_run );
 	flip_handler_thread.detach();
+	
+	g_nOutputWidth = drm->mode->hdisplay;
+	g_nOutputHeight = drm->mode->vdisplay;
 	
 	return 0;
 }

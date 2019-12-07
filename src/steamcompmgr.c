@@ -61,7 +61,8 @@
 
 #include "main.hpp"
 #include "wlserver.h"
-#include "drm.h"
+#include "drm.hpp"
+#include "rendervulkan.hpp"
 
 #define WAFFLE_API_VERSION 0x0106
 #include <waffle.h>
@@ -1800,6 +1801,11 @@ steamcompmgr_main (int argc, char **argv)
 	if ( BIsNested() == True )
 	{
 		eglSwapInterval( eglGetCurrentDisplay(), 1 );
+	}
+	
+	if ( init_vulkan() != True )
+	{
+		fprintf (stderr, "alarm!!!\n");
 	}
 	
 	glEnable (GL_DEBUG_OUTPUT);
