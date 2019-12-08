@@ -18,9 +18,10 @@ class CVulkanOutputImage
 public:
 	bool BInit(uint32_t width, uint32_t height, VkFormat format);
 
-private:
 	VkImage m_vkImage;
 	VkDeviceMemory m_vkImageMemory;
+	
+	VkImageView m_vkImageView;
 	
 	wlr_dmabuf_attributes m_DMA;
 	uint32_t m_FBID;

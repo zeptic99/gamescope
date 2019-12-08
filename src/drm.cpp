@@ -20,6 +20,8 @@
 
 struct drm_t g_DRM;
 
+uint32_t g_nDRMFormat;
+
 static int s_drm_log = 0;
 
 static uint32_t find_crtc_for_encoder(const drmModeRes *resources,
@@ -151,6 +153,19 @@ static int get_plane_id(struct drm_t *drm)
 				if ((strcmp(p->name, "type") == 0) &&
 					(props->prop_values[j] == DRM_PLANE_TYPE_PRIMARY)) {
 					/* found our primary plane, lets use that: */
+					
+					for (uint32_t k = 0; k < plane->count_formats; k++)
+					{
+						uint32_t fmt = plane->formats[k];
+						if (fmt == DRM_FORMAT_XRGB8888) {
+							// Prefer formats without alpha channel for main plane
+							g_nDRMFormat = fmt;
+							break;
+						} else if (fmt == DRM_FORMAT_ARGB8888) {
+							g_nDRMFormat = fmt;
+						}
+					}
+					
 					found_primary = 1;
 					}
 					

@@ -50,6 +50,17 @@ waffle_dep = dependency('waffle-1')
 wlroots_proj = subproject('wlroots')
 wlroots_static_dep = wlroots_proj.get_variable('wlroots_static_dep')
 
+shadercompiler = find_program('glslangValidator')
+extratool = find_program('xxd')
+shaderbuilder = find_program('src/shaderbuild.sh')
+
+spirv_shader = custom_target('shader_target',
+  output : 'composite.h',
+  input : 'src/composite.comp.hlsl',
+  command : [shaderbuilder, '@INPUT@', '@OUTPUT@'],
+  install : false,
+)
+
 executable(
     'steamcompmgr',
     'src/steamcompmgr.c',
@@ -57,7 +68,7 @@ executable(
 	'src/main.c',
 	'src/wlserver.c',
 	'src/drm.cpp',
-	'src/rendervulkan.cpp',
+	[ 'src/rendervulkan.cpp', spirv_shader ],
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
         dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, wayland_server,

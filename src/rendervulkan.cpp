@@ -3,6 +3,8 @@
 #include "rendervulkan.hpp"
 #include "main.hpp"
 
+#include "composite.h"
+
 PFN_vkGetMemoryFdKHR dyn_vkGetMemoryFdKHR;
 
 const VkApplicationInfo appInfo = {
@@ -46,15 +48,40 @@ struct wsi_memory_allocate_info {
 	bool implicit_sync;
 };
 
-static inline uint32_t DRMFormatToVulkanFormat( VkFormat vkFormat )
+struct {
+	uint32_t DRMFormat;
+	VkFormat vkFormat;
+} s_DRMVKFormatTable[] = {
+	{ DRM_FORMAT_XRGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32 },
+	{ DRM_FORMAT_ARGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32 },
+	{ DRM_FORMAT_RGBA8888, VK_FORMAT_R8G8B8A8_UNORM },
+	{ DRM_FORMAT_INVALID, VK_FORMAT_UNDEFINED },
+};
+
+static inline uint32_t VulkanFormatToDRM( VkFormat vkFormat )
 {
-	switch ( vkFormat )
+	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
 	{
-		case VK_FORMAT_R8G8B8A8_UNORM:
-			return DRM_FORMAT_RGBA8888;
-		default:
-			return DRM_FORMAT_INVALID;
+		if ( s_DRMVKFormatTable[i].vkFormat == vkFormat )
+		{
+			return s_DRMVKFormatTable[i].DRMFormat;
+		}
 	}
+	
+	return DRM_FORMAT_INVALID;
+}
+
+static inline VkFormat DRMFormatToVulkan( uint32_t nDRMFormat )
+{
+	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
+	{
+		if ( s_DRMVKFormatTable[i].DRMFormat == nDRMFormat )
+		{
+			return s_DRMVKFormatTable[i].vkFormat;
+		}
+	}
+	
+	return VK_FORMAT_UNDEFINED;
 }
 
 int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeBits )
@@ -156,7 +183,7 @@ bool CVulkanOutputImage::BInit(uint32_t width, uint32_t height, VkFormat format)
 		m_DMA.n_planes = 1;
 		m_DMA.width = width;
 		m_DMA.height = height;
-		m_DMA.format = DRMFormatToVulkanFormat( format );
+		m_DMA.format = VulkanFormatToDRM( format );
 
 		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
@@ -185,6 +212,25 @@ bool CVulkanOutputImage::BInit(uint32_t width, uint32_t height, VkFormat format)
 		if ( m_FBID == 0 )
 			return false;
 	}
+	
+	VkImageViewCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	createInfo.image = m_vkImage;
+	createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	createInfo.format = format;
+	createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	createInfo.subresourceRange.baseMipLevel = 0;
+	createInfo.subresourceRange.levelCount = 1;
+	createInfo.subresourceRange.baseArrayLayer = 0;
+	createInfo.subresourceRange.layerCount = 1;
+	
+	res = vkCreateImageView(device, &createInfo, nullptr, &m_vkImageView);
+	if ( res != VK_SUCCESS )
+		return false;
 	
 	return true;
 }
@@ -264,6 +310,234 @@ int init_device()
 	return true;
 }
 
+bool initvulkan2(void)
+{
+	VkDescriptorSetLayoutBinding descriptorSetLayoutBindings =
+	{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+	};
+	
+	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo =
+	{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.bindingCount = 1,
+		&descriptorSetLayoutBindings
+	};
+	
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkResult res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, 0, &descriptorSetLayout);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
+		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		0,
+		0,
+		1,
+		&descriptorSetLayout,
+		0,
+		0
+	};
+	
+	VkPipelineLayout pipelineLayout;
+	res = vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, 0, &pipelineLayout);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
+	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCreateInfo.codeSize = composite_spv_len;
+	shaderModuleCreateInfo.pCode = (const uint32_t*)composite_spv;
+	
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
+	
+	res = vkCreateShaderModule( device, &shaderModuleCreateInfo, nullptr, &shaderModule );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkComputePipelineCreateInfo computePipelineCreateInfo = {
+		VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		0,
+		0,
+		{
+			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			0,
+			0,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			shaderModule,
+			"main",
+			0
+		},
+		pipelineLayout,
+		0,
+		0
+	};
+	
+	VkPipeline pipeline;
+	res = vkCreateComputePipelines(device, 0, 1, &computePipelineCreateInfo, 0, &pipeline);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkCommandPoolCreateInfo commandPoolCreateInfo = {
+		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		0,
+		0,
+		queueFamilyIndex
+	};
+	
+	VkDescriptorPoolSize descriptorPoolSize = {
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		1
+	};
+	
+	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		nullptr,
+		.flags = 0,
+		.maxSets = 10,
+		.poolSizeCount = 1,
+		&descriptorPoolSize
+	};
+	
+	VkDescriptorPool descriptorPool;
+	res = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, 0, &descriptorPool);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		descriptorPool,
+		1,
+		&descriptorSetLayout
+	};
+	
+	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+	res = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
+	
+	if ( res != VK_SUCCESS || descriptorSet == VK_NULL_HANDLE )
+	{
+		return false;
+	}
+	
+	VkDescriptorImageInfo imageInfo = {
+		.imageView = outputImage[0].m_vkImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+	};
+
+	VkWriteDescriptorSet writeDescriptorSet = {
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		nullptr,
+		descriptorSet,
+		0,
+		0,
+		1,
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		&imageInfo,
+		nullptr,
+		nullptr
+	};
+	
+	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+	
+	VkCommandPool commandPool;
+	res = vkCreateCommandPool(device, &commandPoolCreateInfo, 0, &commandPool);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		0,
+		commandPool,
+		VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		1
+	};
+	
+	VkCommandBuffer commandBuffer;
+	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkCommandBufferBeginInfo commandBufferBeginInfo = {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		0,
+		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		0
+	};
+	
+	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+	
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
+	
+	vkCmdDispatch(commandBuffer, g_nOutputWidth, g_nOutputHeight, 1);
+	
+	res = vkEndCommandBuffer(commandBuffer);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkSubmitInfo submitInfo = {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		0,
+		0,
+		0,
+		0,
+		1,
+		&commandBuffer,
+		0,
+		0
+	};
+	
+	res = vkQueueSubmit(queue, 1, &submitInfo, 0);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	vkQueueWaitIdle( queue );
+	
+// 	drm_atomic_commit( &g_DRM, outputImage[0].m_FBID, g_nOutputWidth, g_nOutputHeight, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_ATOMIC_ALLOW_MODESET );
+	
+	return true;
+}
+
 void fini_device()
 {
 	vkDestroyDevice(device, 0);
@@ -298,15 +572,31 @@ int init_vulkan(void)
 	if ( dyn_vkGetMemoryFdKHR == nullptr )
 		return 0;
 	
-	bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, VK_FORMAT_R8G8B8A8_UNORM );
+	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+	if ( BIsNested() == false )
+	{
+		imageFormat = DRMFormatToVulkan( g_nDRMFormat );
+		
+		if ( imageFormat == VK_FORMAT_UNDEFINED )
+		{
+			return 0;
+		}
+	}
+	
+	bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat );
 	
 	if ( bSuccess != true )
 		return 0;
 	
-	bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, VK_FORMAT_R8G8B8A8_UNORM );
+	bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat );
 	
 	if ( bSuccess != true )
 		return 0;
+	
+	if ( initvulkan2() != true )
+	{
+		return 0;
+	}
 	
 	return 1;
 }

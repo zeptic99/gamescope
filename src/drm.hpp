@@ -5,6 +5,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <assert.h>
+#include <drm_fourcc.h>
 
 #include <wlr/render/dmabuf.h>
 
@@ -62,6 +63,8 @@ extern "C" {
 #endif
 
 extern struct drm_t g_DRM;
+
+extern uint32_t g_nDRMFormat;
 
 int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh);
 int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height, uint32_t flags);
