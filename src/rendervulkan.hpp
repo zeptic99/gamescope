@@ -35,6 +35,8 @@ public:
 	uint32_t m_FBID = 0;
 };
 
+extern std::vector< const char * > g_vecSDLInstanceExts;
+
 #endif
 
 typedef uint32_t VulkanTexture_t;
@@ -57,6 +59,8 @@ void vulkan_free_texture( VulkanTexture_t vulkanTex );
 
 bool vulkan_composite( struct VulkanPipeline_t *pPipeline );
 uint32_t vulkan_get_last_composite_fbid( void );
+
+void vulkan_present_to_window( void );
 
 #ifndef C_SIDE
 }

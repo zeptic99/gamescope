@@ -52,8 +52,6 @@
 
 #define GL_GLEXT_PROTOTYPES
 
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
 #include "GL/gl.h"
 #include "glext.h"
 
@@ -64,13 +62,6 @@
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 
-#define WAFFLE_API_VERSION 0x0106
-#include <waffle.h>
-
-PFNEGLCREATEIMAGEKHRPROC				__pointer_to_eglCreateImageKHR;
-PFNEGLDESTROYIMAGEKHRPROC				__pointer_to_eglDestroyImageKHR;
-PFNGLEGLIMAGETARGETTEXTURE2DOESPROC 	__pointer_to_glEGLImageTargetTexture2DOES;
-
 typedef struct _ignore {
 	struct _ignore	*next;
 	unsigned long	sequence;
@@ -79,8 +70,6 @@ typedef struct _ignore {
 typedef struct _win {
 	struct _win		*next;
 	Window		id;
-	EGLImageKHR eglImage;
-	GLuint		texName;
 	XWindowAttributes	a;
 	int			mode;
 	int			damaged;
@@ -332,17 +321,7 @@ teardown_win_resources (Display *dpy, win *w)
 {
 	if (!w)
 		return;
-	
-	if (w->eglImage != EGL_NO_IMAGE_KHR)
-	{
-		glBindTexture( GL_TEXTURE_2D, 0 );
-		glDeleteTextures( 1, &w->texName );
-		w->texName = 0;
-		
-		__pointer_to_eglDestroyImageKHR( eglGetCurrentDisplay(), w->eglImage );
-		w->eglImage = EGL_NO_IMAGE_KHR;
-	}
-	
+
 	if ( w->fb_id != 0 )
 	{
 		drm_free_fbid( &g_DRM, w->fb_id );
@@ -366,41 +345,13 @@ ensure_win_resources (Display *dpy, win *w)
 	{
 		teardown_win_resources( dpy, w );
 
-		if ( BIsNested() == True )
-		{
-			EGLint attr[] = {
-				EGL_WIDTH, w->dmabuf_attribs.width,
-				EGL_HEIGHT, w->dmabuf_attribs.height,
-				EGL_LINUX_DRM_FOURCC_EXT, w->dmabuf_attribs.format,
-				EGL_DMA_BUF_PLANE0_FD_EXT, w->dmabuf_attribs.fd[0],
-				EGL_DMA_BUF_PLANE0_OFFSET_EXT, w->dmabuf_attribs.offset[0],
-				EGL_DMA_BUF_PLANE0_PITCH_EXT, w->dmabuf_attribs.stride[0],
-				EGL_NONE
-			};
-			
-			w->eglImage = __pointer_to_eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
-									EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
-		
-			glGenTextures( 1, &w->texName );
-			glBindTexture (GL_TEXTURE_2D, w->texName);
-			__pointer_to_glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, w->eglImage);
-			
-			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			
-			assert( w->eglImage != EGL_NO_IMAGE_KHR );
-		}
-		else
+		w->vulkanTex = vulkan_create_texture_from_dmabuf( &w->dmabuf_attribs );
+		assert( w->vulkanTex != 0 );
+
+		if ( BIsNested() == False )
 		{
 			w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
-			
-			w->vulkanTex = vulkan_create_texture_from_dmabuf( &w->dmabuf_attribs );
-			
 			assert( w->fb_id != 0 );
-			assert( w->vulkanTex != 0 );
 		}
 		
 		// Only consume once
@@ -588,7 +539,7 @@ paint_window (Display *dpy, win *w, Bool doBlend, Bool notificationMode)
 		sourceHeight = w->a.height;
 	}
 	
-	glBindTexture (GL_TEXTURE_2D, w->texName);
+// 	glBindTexture (GL_TEXTURE_2D, w->texName);
 	glEnable(GL_TEXTURE_2D);
 	
 	if (sourceWidth != root_width || sourceHeight != root_height || globalScaleRatio != 1.0f)
@@ -892,13 +843,27 @@ paint_all (Display *dpy)
 	
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
+		
+	struct VulkanPipeline_t pipeline = {};
+	
+	pipeline.layerBindings[0].tex = w->vulkanTex;
+	pipeline.layerBindings[0].bFilter = false;
+	
+	bool bResult = vulkan_composite( &pipeline );
+	
+	if ( bResult != true )
+	{
+		fprintf (stderr, "composite alarm!!!\n");
+	}
 	
 	if ( BIsNested() == True )
 	{
-		waffle_window_swap_buffers(window);
+		vulkan_present_to_window();
 	}
 	else
 	{
+		uint32_t fbid = vulkan_get_last_composite_fbid();
+		
 		static Bool bFirstSwap = True;
 		uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
 		
@@ -908,24 +873,10 @@ paint_all (Display *dpy)
 			bFirstSwap = False;
 		}
 		
-		struct VulkanPipeline_t pipeline = {};
-		
-		pipeline.layerBindings[0].tex = w->vulkanTex;
-		pipeline.layerBindings[0].bFilter = false;
-		
-		bool bResult = vulkan_composite( &pipeline );
-		
-		if ( bResult != true )
-		{
-			fprintf (stderr, "composite alarm!!!\n");
-		}
-		
-		uint32_t fbid = vulkan_get_last_composite_fbid();
-		
 		drm_atomic_commit( &g_DRM, fbid, g_nOutputWidth, g_nOutputHeight, flags );
-		
-// 		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
 	}
+	
+	// 		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
 }
 
 static void
@@ -1306,9 +1257,6 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new->damaged = 0;
 	new->validContents = False;
 	new->committed = False;
-
-	new->texName = 0;
-	new->eglImage = EGL_NO_IMAGE_KHR;
 	
 	new->fb_id = 0;
 	new->vulkanTex = 0;
@@ -1689,20 +1637,6 @@ void check_new_wayland_res(void)
 	}
 }
 
-void GLAPIENTRY
-MessageCallback( GLenum source,
-				 GLenum type,
-				 GLuint id,
-				 GLenum severity,
-				 GLsizei length,
-				 const GLchar* message,
-				 const void* userParam )
-{
-	fprintf( stderr, "GL ERROR: %s type = 0x%x, severity = 0x%x, message = %s\n",
-			 ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-			 type, severity, message );
-}
-
 int
 steamcompmgr_main (int argc, char **argv)
 {
@@ -1819,25 +1753,10 @@ steamcompmgr_main (int argc, char **argv)
 	allDamage = None;
 	clipChanged = True;
 	
-	__pointer_to_eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
-	__pointer_to_eglDestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
-	__pointer_to_glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-	
-	if ( BIsNested() == True )
-	{
-		eglSwapInterval( eglGetCurrentDisplay(), 1 );
-	}
-	
 	if ( vulkan_init() != True )
 	{
 		fprintf (stderr, "alarm!!!\n");
 	}
-	
-	glEnable (GL_DEBUG_OUTPUT);
-	glDebugMessageCallback(MessageCallback, 0);
-	
-	glEnable(GL_TEXTURE_2D);
-	glGenTextures(1, &cursorTextureName);
 	
 	XGrabServer (dpy);
 	

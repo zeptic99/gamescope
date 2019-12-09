@@ -12,22 +12,19 @@
 #include "main.hpp"
 #include "main.h"
 #include "drm.hpp"
-
-#include <waffle.h>
+#include "rendervulkan.hpp"
 
 int ac;
 char **av;
 
-struct waffle_display *dpy;
-struct waffle_window *window;
-struct waffle_context *ctx;
+SDL_Window *window;
 
 int g_nNestedWidth = 1280;
 int g_nNestedHeight = 720;
 int g_nNestedRefresh = 60;
 
-int g_nOutputWidth = 1280;
-int g_nOutputHeight = 720;
+uint32_t g_nOutputWidth = 1280;
+uint32_t g_nOutputHeight = 720;
 
 bool g_bIsNested = false;
 
@@ -82,11 +79,6 @@ int main(int argc, char **argv)
 
 void steamCompMgrThreadRun(void)
 {
-	if ( g_bIsNested == true )
-	{
-		waffle_make_current(dpy, window, ctx);
-	}
-
 	steamcompmgr_main( ac, av );
 }
 
@@ -107,34 +99,19 @@ void initOutput(void)
 
 	if ( g_bIsNested == true )
 	{
-		struct waffle_config *config;
+		SDL_Init(SDL_INIT_VIDEO);
+
+		window = SDL_CreateWindow( "steamcompmgr", SDL_WINDOWPOS_UNDEFINED,
+								   SDL_WINDOWPOS_UNDEFINED, g_nOutputWidth,
+								   g_nOutputHeight, SDL_WINDOW_VULKAN );
 		
-		const int32_t init_attrs[] = {
-			WAFFLE_PLATFORM, WAFFLE_PLATFORM_X11_EGL,
-			0,
-		};
 		
-		const int32_t config_attrs[] = {
-			WAFFLE_CONTEXT_API,         WAFFLE_CONTEXT_OPENGL,
-			
-			WAFFLE_RED_SIZE,            8,
-			WAFFLE_BLUE_SIZE,           8,
-			WAFFLE_GREEN_SIZE,          8,
-			
-			0,
-		};
+		unsigned int extCount;
+		SDL_Vulkan_GetInstanceExtensions( window, &extCount, nullptr );
 		
-		const int32_t window_width = g_nOutputWidth;
-		const int32_t window_height = g_nOutputHeight;
+		g_vecSDLInstanceExts.resize( extCount );
 		
-		waffle_init(init_attrs);
-		dpy = waffle_display_connect(NULL);
-		
-		config = waffle_config_choose(dpy, config_attrs);
-		window = waffle_window_create(config, window_width, window_height);
-		ctx = waffle_context_create(config, NULL);
-		
-		waffle_window_show(window);
+		SDL_Vulkan_GetInstanceExtensions( window, &extCount, g_vecSDLInstanceExts.data() );
 	}
 	else
 	{

@@ -2,7 +2,10 @@
 extern "C" {
 #endif
 	
-extern struct waffle_window *window;
+#include <SDL.h>
+#include <SDL_vulkan.h>
+	
+extern SDL_Window *window;
 
 #include "wlr/render/dmabuf.h"
 
@@ -24,8 +27,8 @@ extern int g_nNestedWidth;
 extern int g_nNestedHeight;
 extern int g_nNestedRefresh;
 
-extern int g_nOutputWidth;
-extern int g_nOutputHeight;
+extern uint32_t g_nOutputWidth;
+extern uint32_t g_nOutputHeight;
 
 int BIsNested( void );
 

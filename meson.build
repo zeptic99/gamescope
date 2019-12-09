@@ -45,7 +45,7 @@ libinput       = dependency('libinput')
 xkbcommon      = dependency('xkbcommon')
 math           = cc.find_library('m')
 thread_dep = dependency('threads')
-waffle_dep = dependency('waffle-1')
+sdl_dep = dependency('SDL2')
 
 wlroots_proj = subproject('wlroots')
 wlroots_static_dep = wlroots_proj.get_variable('wlroots_static_dep')
@@ -72,7 +72,7 @@ executable(
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
         dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, wayland_server,
-        wayland_protos, libinput, xkbcommon, math, thread_dep, waffle_dep,
+        wayland_protos, libinput, xkbcommon, math, thread_dep, sdl_dep,
         wlroots_static_dep, vulkan_dep
     ],
 )
