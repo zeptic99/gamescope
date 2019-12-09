@@ -907,6 +907,22 @@ paint_all (Display *dpy)
 			bFirstSwap = False;
 		}
 		
+		struct VulkanPipeline_t pipeline = {};
+		
+		pipeline.layerBindings[0].tex = w->vulkanTex;
+		pipeline.layerBindings[0].bFilter = false;
+		
+		bool bResult = vulkan_composite( &pipeline );
+		
+		if ( bResult != true )
+		{
+			fprintf (stderr, "composite alarm!!!\n");
+		}
+		
+		uint32_t fbid = vulkan_get_last_composite_fbid();
+		
+		drm_atomic_commit( &g_DRM, fbid, g_nOutputWidth, g_nOutputHeight, flags );
+		
 // 		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
 	}
 }

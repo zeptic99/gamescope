@@ -21,10 +21,14 @@ VkInstance instance = VK_NULL_HANDLE;
 VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 uint32_t queueFamilyIndex;
 VkQueue queue;
+VkShaderModule shaderModule = VK_NULL_HANDLE;
 VkDevice device = VK_NULL_HANDLE;
+VkCommandPool commandPool = VK_NULL_HANDLE;
+VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
+int g_nOutImage = 0; // ping/pong between two RTs
 CVulkanTexture outputImage[2];
 
 std::unordered_map<VulkanTexture_t, CVulkanTexture *> g_mapVulkanTextures;
@@ -354,11 +358,176 @@ int init_device()
 	if ( queue == VK_NULL_HANDLE )
 		return false;
 	
+	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
+	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCreateInfo.codeSize = composite_spv_len;
+	shaderModuleCreateInfo.pCode = (const uint32_t*)composite_spv;
+	
+	VkResult res = vkCreateShaderModule( device, &shaderModuleCreateInfo, nullptr, &shaderModule );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkCommandPoolCreateInfo commandPoolCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.queueFamilyIndex = queueFamilyIndex,
+	};
+
+	res = vkCreateCommandPool(device, &commandPoolCreateInfo, 0, &commandPool);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+
+// probably hard to hit that even with 3 overlays, and a bunch of tracked windows
+// famous last words
+//#define k_nMaxSets 20
+#define k_nMaxSets 2000 // don't have time to cache or free stuff
+
+	VkDescriptorPoolSize descriptorPoolSize[] = {
+		{
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			k_nMaxSets * 1,
+		},
+		{
+			VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+			k_nMaxSets * k_nMaxLayers,
+		},
+		{
+			VK_DESCRIPTOR_TYPE_SAMPLER,
+			k_nMaxSets * k_nMaxLayers,
+		},
+	};
+	
+	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		nullptr,
+		.flags = 0,
+		.maxSets = k_nMaxSets,
+		.poolSizeCount = 3,
+		descriptorPoolSize
+	};
+	
+	res = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, 0, &descriptorPool);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	
+	
 	return true;
 }
 
-bool initvulkan2(void)
+void fini_device()
 {
+	vkDestroyDevice(device, 0);
+}
+
+int vulkan_init(void)
+{
+	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+	
+	std::vector< const char * > vecEnabledInstanceExtensions;
+	vecEnabledInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
+	vecEnabledInstanceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME );
+	
+	const VkInstanceCreateInfo createInfo = {
+		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+		.pApplicationInfo = &appInfo,
+		.enabledExtensionCount = (uint32_t)vecEnabledInstanceExtensions.size(),
+		.ppEnabledExtensionNames = vecEnabledInstanceExtensions.data(),
+	};
+
+	result = vkCreateInstance(&createInfo, 0, &instance);
+	
+	if ( result != VK_SUCCESS )
+		return 0;
+	
+	if ( init_device() != 1 )
+	{
+		return 0;
+	}
+	
+	dyn_vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr( device, "vkGetMemoryFdKHR" );
+	if ( dyn_vkGetMemoryFdKHR == nullptr )
+		return 0;
+	
+	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+	if ( BIsNested() == false )
+	{
+		imageFormat = DRMFormatToVulkan( g_nDRMFormat );
+		
+		if ( imageFormat == VK_FORMAT_UNDEFINED )
+		{
+			return 0;
+		}
+	}
+	
+	bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
+	
+	if ( bSuccess != true )
+		return 0;
+	
+	bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
+	
+	if ( bSuccess != true )
+		return 0;
+	
+	return 1;
+}
+
+VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA )
+{
+	VulkanTexture_t ret = 0;
+
+	CVulkanTexture *pTex = new CVulkanTexture();
+	
+	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), false, true ) == false )
+	{
+		delete pTex;
+		return ret;
+	}
+	
+	ret = ++g_nMaxVulkanTexHandle;
+	g_mapVulkanTextures[ ret ] = pTex;
+	
+	return ret;
+}
+
+void vulkan_free_texture( VulkanTexture_t vulkanTex )
+{
+	if ( vulkanTex == 0 )
+		return;
+
+	assert( g_mapVulkanTextures[ vulkanTex ] != nullptr );
+	
+	// actually free something at some point
+}
+
+bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
+{
+	CVulkanTexture *pTex[ k_nMaxLayers ] = {};
+	uint32_t nTexCount = 0;
+	
+	for ( uint32_t i = 0; i < k_nMaxLayers; i ++ )
+	{
+		if ( pPipeline->layerBindings[ i ].tex != 0 )
+		{
+			pTex[ i ] = g_mapVulkanTextures[ pPipeline->layerBindings[ i ].tex ];
+			assert( pTex[ i ] );
+			
+			nTexCount++;
+		}
+	}
+
+	std::vector< VkDescriptorSetLayoutBinding > vecLayoutBindings;
 	VkDescriptorSetLayoutBinding descriptorSetLayoutBindings =
 	{
 		.binding = 0,
@@ -367,13 +536,26 @@ bool initvulkan2(void)
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 	};
 	
+	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // first binding is target storage image
+	
+	for ( uint32_t i = 0; i < nTexCount; i++ )
+	{
+		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		descriptorSetLayoutBindings.binding = 1 + ( i * 2 );
+		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
+		
+		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+		descriptorSetLayoutBindings.binding = 1 + ( i * 2 ) + 1;
+		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
+	}
+	
 	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo =
 	{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
-		.bindingCount = 1,
-		&descriptorSetLayoutBindings
+		.bindingCount = 1 + ( nTexCount * 2 ),
+		vecLayoutBindings.data()
 	};
 	
 	VkDescriptorSetLayout descriptorSetLayout;
@@ -396,20 +578,6 @@ bool initvulkan2(void)
 	
 	VkPipelineLayout pipelineLayout;
 	res = vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, 0, &pipelineLayout);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
-	
-	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
-	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleCreateInfo.codeSize = composite_spv_len;
-	shaderModuleCreateInfo.pCode = (const uint32_t*)composite_spv;
-	
-	VkShaderModule shaderModule = VK_NULL_HANDLE;
-	
-	res = vkCreateShaderModule( device, &shaderModuleCreateInfo, nullptr, &shaderModule );
 	
 	if ( res != VK_SUCCESS )
 	{
@@ -442,35 +610,6 @@ bool initvulkan2(void)
 		return false;
 	}
 	
-	VkCommandPoolCreateInfo commandPoolCreateInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		0,
-		0,
-		queueFamilyIndex
-	};
-	
-	VkDescriptorPoolSize descriptorPoolSize = {
-		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		1
-	};
-	
-	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
-		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		nullptr,
-		.flags = 0,
-		.maxSets = 10,
-		.poolSizeCount = 1,
-		&descriptorPoolSize
-	};
-	
-	VkDescriptorPool descriptorPool;
-	res = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, 0, &descriptorPool);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
-	
 	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
@@ -487,32 +626,93 @@ bool initvulkan2(void)
 		return false;
 	}
 	
-	VkDescriptorImageInfo imageInfo = {
-		.imageView = outputImage[0].m_vkImageView,
-		.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-	};
-
-	VkWriteDescriptorSet writeDescriptorSet = {
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		nullptr,
-		descriptorSet,
-		0,
-		0,
-		1,
-		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		&imageInfo,
-		nullptr,
-		nullptr
-	};
-	
-	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
-	
-	VkCommandPool commandPool;
-	res = vkCreateCommandPool(device, &commandPoolCreateInfo, 0, &commandPool);
-	
-	if ( res != VK_SUCCESS )
 	{
-		return false;
+		VkDescriptorImageInfo imageInfo = {
+			.imageView = outputImage[ g_nOutImage ].m_vkImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+		
+		VkWriteDescriptorSet writeDescriptorSet = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = descriptorSet,
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.pImageInfo = &imageInfo,
+			.pBufferInfo = nullptr,
+			.pTexelBufferView = nullptr,
+		};
+		
+		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+	}
+	
+	for ( uint32_t i = 0; i < nTexCount; i++ )
+	{
+		VkSampler sampler = VK_NULL_HANDLE;
+		
+		VkSamplerCreateInfo samplerCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.pNext = nullptr,
+			.magFilter = pPipeline->layerBindings[ i ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+			.minFilter = pPipeline->layerBindings[ i ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+			.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+			.unnormalizedCoordinates = VK_TRUE,
+		};
+		
+		res = vkCreateSampler( device, &samplerCreateInfo, nullptr, &sampler );
+		
+		if ( res != VK_SUCCESS )
+		{
+			return false;
+		}
+		
+		{
+			VkDescriptorImageInfo imageInfo = {
+				.imageView = pTex[ i ]->m_vkImageView,
+				// TODO figure out what it is exactly for the wayland surfaces
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			};
+			
+			VkWriteDescriptorSet writeDescriptorSet = {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = descriptorSet,
+				.dstBinding = 1 + (i * 2),
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+				.pImageInfo = &imageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			};
+			
+			vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+		}
+		
+		{
+			VkDescriptorImageInfo imageInfo = {
+				.sampler = sampler,
+			};
+			
+			VkWriteDescriptorSet writeDescriptorSet = {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = descriptorSet,
+				.dstBinding = 1 + (i * 2) + 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+				.pImageInfo = &imageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			};
+			
+			vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+		}
 	}
 	
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
@@ -580,98 +780,90 @@ bool initvulkan2(void)
 	
 	vkQueueWaitIdle( queue );
 	
-	drm_atomic_commit( &g_DRM, outputImage[0].m_FBID, g_nOutputWidth, g_nOutputHeight, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_ATOMIC_ALLOW_MODESET );
+	g_nOutImage = !g_nOutImage;
 	
 	return true;
 }
 
-void fini_device()
+uint32_t vulkan_get_last_composite_fbid( void )
 {
-	vkDestroyDevice(device, 0);
+	return outputImage[ !g_nOutImage ].m_FBID;
 }
 
-int vulkan_init(void)
-{
-	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
-	
-	std::vector< const char * > vecEnabledInstanceExtensions;
-	vecEnabledInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
-	vecEnabledInstanceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME );
-	
-	const VkInstanceCreateInfo createInfo = {
-		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-		.pApplicationInfo = &appInfo,
-		.enabledExtensionCount = (uint32_t)vecEnabledInstanceExtensions.size(),
-		.ppEnabledExtensionNames = vecEnabledInstanceExtensions.data(),
-	};
 
-	result = vkCreateInstance(&createInfo, 0, &instance);
-	
-	if ( result != VK_SUCCESS )
-		return 0;
-	
-	if ( init_device() != 1 )
-	{
-		return 0;
-	}
-	
-	dyn_vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr( device, "vkGetMemoryFdKHR" );
-	if ( dyn_vkGetMemoryFdKHR == nullptr )
-		return 0;
-	
-	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
-	if ( BIsNested() == false )
-	{
-		imageFormat = DRMFormatToVulkan( g_nDRMFormat );
-		
-		if ( imageFormat == VK_FORMAT_UNDEFINED )
-		{
-			return 0;
-		}
-	}
-	
-	bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
-	
-	if ( bSuccess != true )
-		return 0;
-	
-	bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
-	
-	if ( bSuccess != true )
-		return 0;
-	
-	if ( initvulkan2() != true )
-	{
-		return 0;
-	}
-	
-	return 1;
-}
 
-VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA )
-{
-	VulkanTexture_t ret = 0;
 
-	CVulkanTexture *pTex = new CVulkanTexture();
-	
-	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), false, true ) == false )
-	{
-		delete pTex;
-		return ret;
-	}
-	
-	ret = ++g_nMaxVulkanTexHandle;
-	g_mapVulkanTextures[ ret ] = pTex;
-	
-	return ret;
-}
 
-void vulkan_free_texture( VulkanTexture_t vulkanTex )
-{
-	if ( vulkanTex == 0 )
-		return;
 
-	assert( g_mapVulkanTextures[ vulkanTex ] != nullptr );
-	
-	// actually free something at some point
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

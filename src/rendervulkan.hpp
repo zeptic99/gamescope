@@ -15,6 +15,7 @@ extern "C" {
 #ifndef C_SIDE
 	
 #include <unordered_map>
+#include <vector>
 
 class CVulkanTexture
 {
@@ -38,11 +39,24 @@ public:
 
 typedef uint32_t VulkanTexture_t;
 
+#define k_nMaxLayers 4
+
+struct VulkanPipeline_t
+{
+	struct
+	{
+		VulkanTexture_t tex;
+		bool bFilter;
+	} layerBindings[ k_nMaxLayers ];
+};
+
 int vulkan_init(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
 void vulkan_free_texture( VulkanTexture_t vulkanTex );
 
+bool vulkan_composite( struct VulkanPipeline_t *pPipeline );
+uint32_t vulkan_get_last_composite_fbid( void );
 
 #ifndef C_SIDE
 }
