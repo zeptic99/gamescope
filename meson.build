@@ -14,7 +14,6 @@ dep_xxf86vm = dependency('xxf86vm')
 
 pixman_dep = dependency('pixman-1')
 drm_dep = dependency('libdrm')
-wlroots_dep = dependency('wlroots')
 vulkan_dep = dependency('vulkan')
 
 cc = meson.get_compiler('c')
@@ -71,8 +70,8 @@ executable(
 	[ 'src/rendervulkan.cpp', spirv_shader ],
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
-        dep_xxf86vm, pixman_dep, drm_dep, wlroots_dep, wayland_server,
-        wayland_protos, libinput, xkbcommon, math, thread_dep, sdl_dep,
-        wlroots_static_dep, vulkan_dep
+        dep_xxf86vm, pixman_dep, drm_dep, wayland_server, wayland_protos,
+        libinput, xkbcommon, math, thread_dep, sdl_dep, wlroots_static_dep,
+        vulkan_dep
     ],
 )
