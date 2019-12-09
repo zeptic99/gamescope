@@ -25,7 +25,10 @@ VkDevice device = VK_NULL_HANDLE;
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
-CVulkanOutputImage outputImage[2];
+CVulkanTexture outputImage[2];
+
+std::unordered_map<VulkanTexture_t, CVulkanTexture *> g_mapVulkanTextures;
+std::atomic<VulkanTexture_t> g_nMaxVulkanTexHandle;
 
 #define MAX_DEVICE_COUNT 8
 #define MAX_QUEUE_COUNT 8
@@ -100,12 +103,18 @@ int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeB
 	return -1;
 }
 
-bool CVulkanOutputImage::BInit(uint32_t width, uint32_t height, VkFormat format)
+bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bool bFlippable, bool bTextureable, wlr_dmabuf_attributes *pDMA /* = nullptr */ )
 {
+	VkResult res = VK_ERROR_INITIALIZATION_FAILED;
+
 	VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
-	// We'll only access it with compute probably
-	VkImageUsageFlags usage = VK_IMAGE_USAGE_STORAGE_BIT;
+	VkImageUsageFlags usage = bTextureable ? VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_STORAGE_BIT;
+
 	VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	
+	// Possible extensions for below
+	wsi_image_create_info wsiImageCreateInfo = {};
+	VkExternalMemoryImageCreateInfo externalImageCreateInfo = {};
 	
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -122,14 +131,27 @@ bool CVulkanOutputImage::BInit(uint32_t width, uint32_t height, VkFormat format)
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	
-	// If not nested, these images will be flipped directly to the screen
-	if ( BIsNested() == false )
+	if ( pDMA != nullptr )
 	{
-		wsi_image_create_info wsiImageCreateInfo = {};
+		assert( format == DRMFormatToVulkan( pDMA->format ) );
+	}
+	
+	if ( bFlippable == true )
+	{
 		wsiImageCreateInfo.sType = VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA;
 		wsiImageCreateInfo.scanout = VK_TRUE;
+		wsiImageCreateInfo.pNext = imageInfo.pNext;
 		
 		imageInfo.pNext = &wsiImageCreateInfo;
+	}
+	
+	if ( pDMA != nullptr )
+	{
+		externalImageCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+		externalImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+		externalImageCreateInfo.pNext = imageInfo.pNext;
+		
+		imageInfo.pNext = &externalImageCreateInfo;
 	}
 	
 	if (vkCreateImage(device, &imageInfo, nullptr, &m_vkImage) != VK_SUCCESS) {
@@ -139,46 +161,68 @@ bool CVulkanOutputImage::BInit(uint32_t width, uint32_t height, VkFormat format)
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(device, m_vkImage, &memRequirements);
 	
+	// Possible pNexts
+	wsi_memory_allocate_info wsiAllocInfo = {};
+	VkImportMemoryFdInfoKHR importMemoryInfo = {};
+	VkExportMemoryAllocateInfo memory_export_info = {};
+	VkMemoryDedicatedAllocateInfo memory_dedicated_info = {};
+	
 	VkMemoryAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = findMemoryType(properties, memRequirements.memoryTypeBits );
 	
-	if ( BIsNested() == false )
+	if ( bFlippable == true || pDMA != nullptr )
 	{
-		wsi_memory_allocate_info wsiAllocInfo = {};
+		memory_dedicated_info.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+		memory_dedicated_info.image = m_vkImage;
+		memory_dedicated_info.buffer = VK_NULL_HANDLE;
+		memory_dedicated_info.pNext = allocInfo.pNext;
+		
+		allocInfo.pNext = &memory_dedicated_info;
+	}
+	
+	if ( bFlippable == true )
+	{
 		wsiAllocInfo.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA;
 		wsiAllocInfo.implicit_sync = true;
+		wsiAllocInfo.pNext = allocInfo.pNext;
 		
 		allocInfo.pNext = &wsiAllocInfo;
 		
-		const VkExportMemoryAllocateInfo memory_export_info = {
-			.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-			.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-		};
-		const VkMemoryDedicatedAllocateInfo memory_dedicated_info = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
-			.pNext = &memory_export_info,
-			.image = m_vkImage,
-			.buffer = VK_NULL_HANDLE,
-		};
+		memory_export_info.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
+		memory_export_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+		memory_export_info.pNext = allocInfo.pNext;
 		
-		wsiAllocInfo.pNext = &memory_dedicated_info;
+		allocInfo.pNext = &memory_export_info;
+	}
+	
+	if ( pDMA != nullptr )
+	{
+		// Memory already provided by pDMA
+		importMemoryInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
+		importMemoryInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+		importMemoryInfo.fd = pDMA->fd[0];
+		importMemoryInfo.pNext = allocInfo.pNext;
+		
+		allocInfo.pNext = &importMemoryInfo;
 	}
 	
 	if (vkAllocateMemory(device, &allocInfo, nullptr, &m_vkImageMemory) != VK_SUCCESS) {
 		return false;
 	}
 	
-	VkResult res = vkBindImageMemory(device, m_vkImage, m_vkImageMemory, 0);
+	res = vkBindImageMemory(device, m_vkImage, m_vkImageMemory, 0);
 	
 	if ( res != VK_SUCCESS )
 		return false;
 	
-	m_DMA = {};
-	
-	if ( BIsNested() == false )
+	if ( bFlippable == true )
 	{
+		// We assume we own the memory when doing this right now.
+		// We could support the import scenario as well if needed
+		assert( bTextureable == false );
+
 		m_DMA.modifier = DRM_FORMAT_MOD_INVALID;
 		m_DMA.n_planes = 1;
 		m_DMA.width = width;
@@ -231,6 +275,9 @@ bool CVulkanOutputImage::BInit(uint32_t width, uint32_t height, VkFormat format)
 	res = vkCreateImageView(device, &createInfo, nullptr, &m_vkImageView);
 	if ( res != VK_SUCCESS )
 		return false;
+	
+	m_bInitialized = true;
+	m_bFlippable = bFlippable;
 	
 	return true;
 }
@@ -533,7 +580,7 @@ bool initvulkan2(void)
 	
 	vkQueueWaitIdle( queue );
 	
-// 	drm_atomic_commit( &g_DRM, outputImage[0].m_FBID, g_nOutputWidth, g_nOutputHeight, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_ATOMIC_ALLOW_MODESET );
+	drm_atomic_commit( &g_DRM, outputImage[0].m_FBID, g_nOutputWidth, g_nOutputHeight, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_ATOMIC_ALLOW_MODESET );
 	
 	return true;
 }
@@ -543,7 +590,7 @@ void fini_device()
 	vkDestroyDevice(device, 0);
 }
 
-int init_vulkan(void)
+int vulkan_init(void)
 {
 	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 	
@@ -583,12 +630,12 @@ int init_vulkan(void)
 		}
 	}
 	
-	bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat );
+	bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
 	
 	if ( bSuccess != true )
 		return 0;
 	
-	bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat );
+	bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
 	
 	if ( bSuccess != true )
 		return 0;
@@ -599,4 +646,32 @@ int init_vulkan(void)
 	}
 	
 	return 1;
+}
+
+VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA )
+{
+	VulkanTexture_t ret = 0;
+
+	CVulkanTexture *pTex = new CVulkanTexture();
+	
+	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), false, true ) == false )
+	{
+		delete pTex;
+		return ret;
+	}
+	
+	ret = ++g_nMaxVulkanTexHandle;
+	g_mapVulkanTextures[ ret ] = pTex;
+	
+	return ret;
+}
+
+void vulkan_free_texture( VulkanTexture_t vulkanTex )
+{
+	if ( vulkanTex == 0 )
+		return;
+
+	assert( g_mapVulkanTextures[ vulkanTex ] != nullptr );
+	
+	// actually free something at some point
 }

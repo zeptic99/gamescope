@@ -108,6 +108,7 @@ typedef struct _win {
 	Bool dmabuf_attribs_valid;
 	struct wlr_dmabuf_attributes dmabuf_attribs;
 	uint32_t fb_id;
+	VulkanTexture_t vulkanTex;
 } win;
 
 static win		*list;
@@ -346,6 +347,9 @@ teardown_win_resources (Display *dpy, win *w)
 	{
 		drm_free_fbid( &g_DRM, w->fb_id );
 		w->fb_id = 0;
+		
+		vulkan_free_texture( w->vulkanTex );
+		w->vulkanTex = 0;
 	}
 }
 
@@ -390,7 +394,10 @@ ensure_win_resources (Display *dpy, win *w)
 		{
 			w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
 			
+			w->vulkanTex = vulkan_create_texture_from_dmabuf( &w->dmabuf_attribs );
+			
 			assert( w->fb_id != 0 );
+			assert( w->vulkanTex != 0 );
 		}
 
 		close(w->dmabuf_attribs.fd[0]);
@@ -900,7 +907,7 @@ paint_all (Display *dpy)
 			bFirstSwap = False;
 		}
 		
-		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
+// 		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
 	}
 }
 
@@ -1287,6 +1294,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new->eglImage = EGL_NO_IMAGE_KHR;
 	
 	new->fb_id = 0;
+	new->vulkanTex = 0;
 
 	new->damage_sequence = 0;
 	new->map_sequence = 0;
@@ -1803,7 +1811,7 @@ steamcompmgr_main (int argc, char **argv)
 		eglSwapInterval( eglGetCurrentDisplay(), 1 );
 	}
 	
-	if ( init_vulkan() != True )
+	if ( vulkan_init() != True )
 	{
 		fprintf (stderr, "alarm!!!\n");
 	}
