@@ -8,7 +8,7 @@
 [[vk::binding(7, 0)]] Texture2D inLayerTex3;
 [[vk::binding(8, 0)]] SamplerState sampler3;
 
-[numthreads(32, 32, 1)]
+[numthreads(16, 16, 1)]
 void main(
     uint3 groupId : SV_GroupID,
     uint3 groupThreadId : SV_GroupThreadID,

@@ -750,7 +750,7 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 	
-	vkCmdDispatch(commandBuffer, g_nOutputWidth, g_nOutputHeight, 1);
+	vkCmdDispatch(commandBuffer, g_nOutputWidth / 16, g_nOutputHeight / 16, 1);
 	
 	res = vkEndCommandBuffer(commandBuffer);
 	
