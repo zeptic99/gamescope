@@ -347,7 +347,10 @@ teardown_win_resources (Display *dpy, win *w)
 	{
 		drm_free_fbid( &g_DRM, w->fb_id );
 		w->fb_id = 0;
-		
+	}
+	
+	if ( w->vulkanTex != 0 )
+	{
 		vulkan_free_texture( w->vulkanTex );
 		w->vulkanTex = 0;
 	}
@@ -399,8 +402,6 @@ ensure_win_resources (Display *dpy, win *w)
 			assert( w->fb_id != 0 );
 			assert( w->vulkanTex != 0 );
 		}
-
-		close(w->dmabuf_attribs.fd[0]);
 		
 		// Only consume once
 		w->dmabuf_attribs_valid = False;

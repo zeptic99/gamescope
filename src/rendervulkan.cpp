@@ -489,7 +489,7 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 
 	CVulkanTexture *pTex = new CVulkanTexture();
 	
-	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), false, true ) == false )
+	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), false, true, pDMA ) == false )
 	{
 		delete pTex;
 		return ret;
