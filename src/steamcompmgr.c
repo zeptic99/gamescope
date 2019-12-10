@@ -587,6 +587,7 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	
 	pPipeline->layerBindings[ curLayer ].tex = w->vulkanTex;
 	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : false;
+	pPipeline->layerBindings[ curLayer ].bBlackBorder = notificationMode ? false : true;
 	
 	pComposite->flLayerCount += 1.0f;
 }

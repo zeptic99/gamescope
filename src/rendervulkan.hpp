@@ -49,6 +49,7 @@ struct VulkanPipeline_t
 	{
 		VulkanTexture_t tex;
 		bool bFilter;
+		bool bBlackBorder;
 	} layerBindings[ k_nMaxLayers ];
 };
 

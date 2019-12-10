@@ -4,20 +4,28 @@
 {
 	float flLayerCount;
 
-    float2 flScale0;
-	float2 flOffset0;
+    float flScale0X;
+    float flScale0Y;
+	float flOffset0X;
+	float flOffset0Y;
 	float flOpacity0;
 
-    float2 flScale1;
-	float2 flOffset1;
+    float flScale1X;
+    float flScale1Y;
+	float flOffset1X;
+	float flOffset1Y;
 	float flOpacity1;
 
-    float2 flScale2;
-	float2 flOffset2;
+    float flScale2X;
+    float flScale2Y;
+	float flOffset2X;
+	float flOffset2Y;
 	float flOpacity2;
 
-    float2 flScale3;
-	float2 flOffset3;
+    float flScale3X;
+    float flScale3Y;
+	float flOffset3X;
+	float flOffset3Y;
 	float flOpacity3;
 }
 
@@ -46,14 +54,14 @@ void main(
 
 	if ( flLayerCount >= 1.0f )
 	{
-		outputValue = inLayerTex0.Sample( sampler0, float2( index ) * flScale0 + flOffset0 );
+		outputValue = inLayerTex0.Sample( sampler0, ( float2( index ) + float2( flOffset0X, flOffset0Y ) ) * float2( flScale0X, flScale0Y ) );
 	}
 	
 	if ( flLayerCount >= 2.0f )
 	{
-		float4 layerSample = inLayerTex1.Sample( sampler1, float2( index ) * flScale1 + flOffset1 );
+		float4 layerSample = inLayerTex1.Sample( sampler1, ( float2( index ) + float2( flOffset1X, flOffset1Y ) ) * float2( flScale1X, flScale1Y ) );
 		float layerAlpha = flOpacity1 * layerSample.a;
-		outputValue = layerSample * layerAlpha + outputValue * ( 1 - layerAlpha );
+		outputValue = layerSample * layerAlpha + outputValue * ( 1.0 - layerAlpha );
 	}
 	
     outImage [index] = outputValue;
