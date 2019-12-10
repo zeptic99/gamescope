@@ -621,14 +621,23 @@ int vulkan_init(void)
 		}
 		
 		uint32_t imageCount = surfaceCaps.minImageCount + 1;
+		uint32_t surfaceFormat = 0;
+		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+		{
+			if ( surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
+				break;
+		}
+		
+		if ( surfaceFormat == formatCount )
+			return 0;
 
 		VkSwapchainCreateInfoKHR createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		createInfo.surface = surface;
 		
 		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = surfaceFormats[0].format;
-		createInfo.imageColorSpace = surfaceFormats[0].colorSpace;
+		createInfo.imageFormat = surfaceFormats[ surfaceFormat ].format;
+		createInfo.imageColorSpace = surfaceFormats[surfaceFormat ].colorSpace;
 		createInfo.imageExtent = { g_nOutputWidth, g_nOutputHeight };
 		createInfo.imageArrayLayers = 1;
 		createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
@@ -656,7 +665,7 @@ int vulkan_init(void)
 			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			createInfo.image = swapChainImages[ i ];
 			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = surfaceFormats[ 0 ].format;
+			createInfo.format = surfaceFormats[ surfaceFormat ].format;
 			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
