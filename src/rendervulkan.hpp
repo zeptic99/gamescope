@@ -52,12 +52,24 @@ struct VulkanPipeline_t
 	} layerBindings[ k_nMaxLayers ];
 };
 
+struct Composite_t
+{
+	float flLayerCount;
+
+	struct
+	{
+		float flScaleX, flScaleY;
+		float flOffsetX, flOffsetY;
+		float flOpacity;
+	} layers[ k_nMaxLayers ];
+};
+
 int vulkan_init(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
 void vulkan_free_texture( VulkanTexture_t vulkanTex );
 
-bool vulkan_composite( struct VulkanPipeline_t *pPipeline );
+bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );
 uint32_t vulkan_get_last_composite_fbid( void );
 
 void vulkan_present_to_window( void );

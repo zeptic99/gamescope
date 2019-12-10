@@ -43,6 +43,10 @@ struct VkPhysicalDeviceMemoryProperties memoryProperties;
 int g_nOutImage; // ping/pong between two RTs
 CVulkanTexture outputImage[2];
 
+VkBuffer constantBuffer;
+VkDeviceMemory bufferMemory;
+Composite_t *g_pCompositeBuffer;
+
 std::unordered_map<VulkanTexture_t, CVulkanTexture *> g_mapVulkanTextures;
 std::atomic<VulkanTexture_t> g_nMaxVulkanTexHandle;
 
@@ -443,11 +447,15 @@ int init_device()
 // probably hard to hit that even with 3 overlays, and a bunch of tracked windows
 // famous last words
 //#define k_nMaxSets 20
-#define k_nMaxSets 2000 // don't have time to cache or free stuff
+#define k_nMaxSets 20000 // don't have time to cache or free stuff
 
 	VkDescriptorPoolSize descriptorPoolSize[] = {
 		{
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			k_nMaxSets * 1,
+		},
+		{
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			k_nMaxSets * 1,
 		},
 		{
@@ -476,7 +484,43 @@ int init_device()
 		return false;
 	}
 	
+	VkBufferCreateInfo bufferCreateInfo = {};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.pNext = nullptr;
+	bufferCreateInfo.size = sizeof( Composite_t );
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	
+	res = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &constantBuffer );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, constantBuffer, &memRequirements);
+	
+	int memTypeIndex =  findMemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memRequirements.memoryTypeBits );
+	
+	if ( memTypeIndex == -1 )
+	{
+		return false;
+	}
+	
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = memTypeIndex;
+	
+	vkAllocateMemory( device, &allocInfo, nullptr, &bufferMemory );
+	
+	vkBindBufferMemory( device, constantBuffer, bufferMemory, 0 );
+	vkMapMemory( device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&g_pCompositeBuffer );
+	
+	if ( g_pCompositeBuffer == nullptr )
+	{
+		return false;
+	}
 	
 	return true;
 }
@@ -687,8 +731,11 @@ void vulkan_free_texture( VulkanTexture_t vulkanTex )
 	// actually free something at some point
 }
 
-bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
+bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
+	*g_pCompositeBuffer = *pComposite;
+	// XXX maybe flush something?
+
 	CVulkanTexture *pTex[ k_nMaxLayers ] = {};
 	uint32_t nTexCount = 0;
 	
@@ -714,14 +761,21 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 	
 	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // first binding is target storage image
 	
+	descriptorSetLayoutBindings.binding = 1;
+	descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	
+	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // second binding is composite description buffer
+	
 	for ( uint32_t i = 0; i < nTexCount; i++ )
 	{
+		descriptorSetLayoutBindings.binding = 2 + ( i * 2 );
 		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		descriptorSetLayoutBindings.binding = 1 + ( i * 2 );
+
 		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
 		
+		descriptorSetLayoutBindings.binding = 2 + ( i * 2 ) + 1;
 		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-		descriptorSetLayoutBindings.binding = 1 + ( i * 2 ) + 1;
+
 		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
 	}
 	
@@ -730,7 +784,7 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
-		.bindingCount = 1 + ( nTexCount * 2 ),
+		.bindingCount = 2 + ( nTexCount * 2 ),
 		vecLayoutBindings.data()
 	};
 	
@@ -808,6 +862,12 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 		};
 		
+		VkDescriptorBufferInfo bufferInfo = {
+			.buffer = constantBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE
+		};
+		
 		VkWriteDescriptorSet writeDescriptorSet = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -820,6 +880,13 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 			.pBufferInfo = nullptr,
 			.pTexelBufferView = nullptr,
 		};
+		
+		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+		
+		writeDescriptorSet.dstBinding = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writeDescriptorSet.pImageInfo = nullptr;
+		writeDescriptorSet.pBufferInfo = &bufferInfo;
 		
 		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 	}
@@ -857,7 +924,7 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
 				.dstSet = descriptorSet,
-				.dstBinding = 1 + (i * 2),
+				.dstBinding = 2 + (i * 2),
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -878,7 +945,7 @@ bool vulkan_composite( struct VulkanPipeline_t *pPipeline )
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
 				.dstSet = descriptorSet,
-				.dstBinding = 1 + (i * 2) + 1,
+				.dstBinding = 2 + (i * 2) + 1,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,

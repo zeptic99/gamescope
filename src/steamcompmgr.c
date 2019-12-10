@@ -510,11 +510,10 @@ paint_fake_cursor (Display *dpy, win *w)
 }
 
 static void
-paint_window (Display *dpy, win *w, Bool doBlend, Bool notificationMode)
+paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, Bool notificationMode)
 {
 	int sourceWidth, sourceHeight;
 	int drawXOffset = 0, drawYOffset = 0;
-	Bool isScaling = False;
 	float currentScaleRatio = 1.0;
 	
 	if (!w)
@@ -539,122 +538,57 @@ paint_window (Display *dpy, win *w, Bool doBlend, Bool notificationMode)
 		sourceHeight = w->a.height;
 	}
 	
-// 	glBindTexture (GL_TEXTURE_2D, w->texName);
-	glEnable(GL_TEXTURE_2D);
-	
-	if (sourceWidth != root_width || sourceHeight != root_height || globalScaleRatio != 1.0f)
+	if (sourceWidth != g_nOutputWidth || sourceHeight != g_nOutputHeight || globalScaleRatio != 1.0f)
 	{
-		float XRatio = (float)root_width / sourceWidth;
-		float YRatio = (float)root_height / sourceHeight;
+		float XRatio = (float)g_nOutputWidth / sourceWidth;
+		float YRatio = (float)g_nOutputHeight / sourceHeight;
 		
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 		currentScaleRatio *= globalScaleRatio;
 		
-		drawXOffset = (root_width - sourceWidth * currentScaleRatio) / 2.0f;
-		drawYOffset = (root_height - sourceHeight * currentScaleRatio) / 2.0f;
+		drawXOffset = (g_nOutputWidth - sourceWidth * currentScaleRatio) / 2.0f;
+		drawYOffset = (g_nOutputHeight - sourceHeight * currentScaleRatio) / 2.0f;
 		
 		if ( zoomScaleRatio != 1.0 )
 		{
 			drawXOffset += ((sourceWidth / 2) - cursorX) * currentScaleRatio;
 			drawYOffset += ((sourceHeight / 2) - cursorY) * currentScaleRatio;
 		}
-		
-		isScaling = True;
 	}
 	
-	if (doBlend)
-		glEnable(GL_BLEND);
-	else
-		glDisable(GL_BLEND);
+	int curLayer = (int)pComposite->flLayerCount;
 	
-	// If scaling and blending, we need to draw our letterbox black border with
-	// the right opacity instead of relying on the clear color
-	if (isScaling && doBlend && !notificationMode)
-	{
-		glDisable(GL_TEXTURE_2D);
-		glColor4f(0.0f, 0.0f, 0.0f, (float)w->opacity / OPAQUE);
-		
-		glBegin (GL_QUADS);
-		
-		// We can't overdraw because we're blending
-		
-		// Top and bottom stripes, including sides
-		if (drawYOffset)
-		{
-			glVertex2d (0.0f, 0.0f);
-			glVertex2d (root_width, 0.0f);
-			glVertex2d (root_width, drawYOffset);
-			glVertex2d (0.0f, drawYOffset);
-			
-			glVertex2d (0.0f, root_height - drawYOffset);
-			glVertex2d (root_width, root_height - drawYOffset);
-			glVertex2d (root_width, root_height);
-			glVertex2d (0.0f, root_height);
-		}
-		
-		// Side stripes, excluding any top and bottom areas
-		if (drawXOffset)
-		{
-			glVertex2d (0.0f, drawYOffset);
-			glVertex2d (drawXOffset, drawYOffset);
-			glVertex2d (drawXOffset, root_height - drawYOffset);
-			glVertex2d (0.0f, root_height - drawYOffset);
-			
-			glVertex2d (root_width - drawXOffset, drawYOffset);
-			glVertex2d (root_width, drawYOffset);
-			glVertex2d (root_width, root_height - drawYOffset);
-			glVertex2d (root_width - drawXOffset, root_height - drawYOffset);
-		}
-		
-		glEnd ();
-	}
+	pComposite->layers[ curLayer ].flOpacity = (float)w->opacity / OPAQUE;
 	
-	glEnable(GL_TEXTURE_2D);
-	
-	if (w->isOverlay)
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ALPHA);
-	else
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-	
-	glColor4f(1.0f, 1.0f, 1.0f, (float)w->opacity / OPAQUE);
-	
-	int originX, originY, width, height;
+	pComposite->layers[ curLayer ].flScaleX = 1.0 / currentScaleRatio;
+	pComposite->layers[ curLayer ].flScaleY = 1.0 / currentScaleRatio;
 	
 	if (notificationMode)
 	{
 		int xOffset = 0, yOffset = 0;
 		
-		width = w->a.width * currentScaleRatio;
-		height = w->a.height * currentScaleRatio;
+		int width = w->a.width * currentScaleRatio;
+		int height = w->a.height * currentScaleRatio;
 		
 		if (globalScaleRatio != 1.0f)
 		{
-			xOffset = (root_width - root_width * globalScaleRatio) / 2.0;
-			yOffset = (root_height - root_height * globalScaleRatio) / 2.0;
+			xOffset = (g_nOutputWidth - g_nOutputWidth * globalScaleRatio) / 2.0;
+			yOffset = (g_nOutputHeight - g_nOutputHeight * globalScaleRatio) / 2.0;
 		}
 		
-		originX = root_width - xOffset - width;
-		originY = root_height - yOffset - height;
+		pComposite->layers[ curLayer ].flOffsetX = (g_nOutputWidth - xOffset - width) * -1.0f;
+		pComposite->layers[ curLayer ].flOffsetY = (g_nOutputHeight - yOffset - height) * -1.0f;
 	}
 	else
 	{
-		originX = drawXOffset;
-		originY = drawYOffset;
-		
-		width = sourceWidth * currentScaleRatio;
-		height = sourceHeight * currentScaleRatio;
+		pComposite->layers[ curLayer ].flOffsetX = -drawXOffset;
+		pComposite->layers[ curLayer ].flOffsetY = -drawYOffset;
 	}
 	
-	glBegin (GL_QUADS);
-	glTexCoord2d (0.0f, 0.0f);
-	glVertex2d (originX, originY);
-	glTexCoord2d (1.0f, 0.0f);
-	glVertex2d (originX + width, originY);
-	glTexCoord2d (1.0f, 1.0f);
-	glVertex2d (originX + width, originY + height);
-	glTexCoord2d (0.0f, 1.0f);
-	glVertex2d (originX, originY + height);
-	glEnd ();
+	pPipeline->layerBindings[ curLayer ].tex = w->vulkanTex;
+	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : false;
+	
+	pComposite->flLayerCount += 1.0f;
 }
 
 static void
@@ -768,14 +702,8 @@ paint_all (Display *dpy)
 	ensure_win_resources(dpy, overlay);
 	ensure_win_resources(dpy, notification);
 	
-	glViewport(0, 0, root_width, root_height);
-	glLoadIdentity();
-	glOrtho(0.0f, root_width, root_height, 0.0f, -1.0f, 1.0f);
-	
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-	
-	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	struct Composite_t composite = {};
+	struct VulkanPipeline_t pipeline = {};
 	
 	// Fading out from previous window?
 	if (fadingOut)
@@ -784,7 +712,7 @@ paint_all (Display *dpy)
 		
 		// Draw it in the background
 		fadeOutWindow.opacity = (1.0d - newOpacity) * OPAQUE;
-		paint_window(dpy, &fadeOutWindow, True, False);
+		paint_window(dpy, &fadeOutWindow, &composite, &pipeline, False);
 		
 		w = find_win(dpy, currentFocusWindow);
 		ensure_win_resources(dpy, w);
@@ -792,14 +720,14 @@ paint_all (Display *dpy)
 		// Blend new window on top with linear crossfade
 		w->opacity = newOpacity * OPAQUE;
 		
-		paint_window(dpy, w, True, False);
+		paint_window(dpy, w, &composite, &pipeline, False);
 	}
 	else
 	{
 		w = find_win(dpy, currentFocusWindow);
 		ensure_win_resources(dpy, w);
 		// Just draw focused window as normal, be it Steam or the game
-		paint_window(dpy, w, False, False);
+		paint_window(dpy, w, &composite, &pipeline, False);
 		
 		if (fadeOutWindow.id) {
 			
@@ -820,7 +748,7 @@ paint_all (Display *dpy)
 	{
 		if (overlay->opacity)
 		{
-			paint_window(dpy, overlay, True, False);
+			paint_window(dpy, overlay, &composite, &pipeline, False);
 		}
 		overlay->damaged = 0;
 	}
@@ -829,7 +757,7 @@ paint_all (Display *dpy)
 	{
 		if (notification->opacity)
 		{
-			paint_window(dpy, notification, True, True);
+			paint_window(dpy, notification, &composite, &pipeline, True);
 		}
 		notification->damaged = 0;
 	}
@@ -843,13 +771,8 @@ paint_all (Display *dpy)
 	
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
-		
-	struct VulkanPipeline_t pipeline = {};
 	
-	pipeline.layerBindings[0].tex = w->vulkanTex;
-	pipeline.layerBindings[0].bFilter = false;
-	
-	bool bResult = vulkan_composite( &pipeline );
+	bool bResult = vulkan_composite( &composite, &pipeline );
 	
 	if ( bResult != true )
 	{
