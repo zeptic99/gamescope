@@ -70,11 +70,13 @@ struct wsi_memory_allocate_info {
 struct {
 	uint32_t DRMFormat;
 	VkFormat vkFormat;
+	bool bNeedsSwizzle;
+	bool bHasAlpha;
 } s_DRMVKFormatTable[] = {
-	{ DRM_FORMAT_XRGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32 },
-	{ DRM_FORMAT_ARGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32 },
-	{ DRM_FORMAT_RGBA8888, VK_FORMAT_R8G8B8A8_UNORM },
-	{ DRM_FORMAT_INVALID, VK_FORMAT_UNDEFINED },
+	{ DRM_FORMAT_XRGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true, false },
+	{ DRM_FORMAT_ARGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true, true },
+	{ DRM_FORMAT_RGBA8888, VK_FORMAT_R8G8B8A8_UNORM, false, true },
+	{ DRM_FORMAT_INVALID, VK_FORMAT_UNDEFINED, false, false },
 };
 
 static inline uint32_t VulkanFormatToDRM( VkFormat vkFormat )
@@ -101,6 +103,32 @@ static inline VkFormat DRMFormatToVulkan( uint32_t nDRMFormat )
 	}
 	
 	return VK_FORMAT_UNDEFINED;
+}
+
+static inline bool DRMFormatNeedsSwizzle( uint32_t nDRMFormat )
+{
+	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
+	{
+		if ( s_DRMVKFormatTable[i].DRMFormat == nDRMFormat )
+		{
+			return s_DRMVKFormatTable[i].bNeedsSwizzle;
+		}
+	}
+	
+	return false;
+}
+
+static inline bool DRMFormatHasAlpha( uint32_t nDRMFormat )
+{
+	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
+	{
+		if ( s_DRMVKFormatTable[i].DRMFormat == nDRMFormat )
+		{
+			return s_DRMVKFormatTable[i].bHasAlpha;
+		}
+	}
+	
+	return false;
 }
 
 int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeBits )
@@ -275,15 +303,25 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 			return false;
 	}
 	
+	
+	bool bSwapChannels = pDMA ? DRMFormatNeedsSwizzle( pDMA->format ) : false;
+	bool bHasAlpha = pDMA ? DRMFormatHasAlpha( pDMA->format ) : true;
+	
+	if ( bSwapChannels || !bHasAlpha )
+	{
+		// Right now this implies no storage bit - check it now as that's incompatible with swizzle
+		assert ( bTextureable == true );
+	}
+	
 	VkImageViewCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	createInfo.image = m_vkImage;
 	createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	createInfo.format = format;
-	createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.r = bSwapChannels ? VK_COMPONENT_SWIZZLE_B : VK_COMPONENT_SWIZZLE_IDENTITY;
 	createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-	createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-	createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.b = bSwapChannels ? VK_COMPONENT_SWIZZLE_R : VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.a = bHasAlpha ? VK_COMPONENT_SWIZZLE_IDENTITY : VK_COMPONENT_SWIZZLE_ONE;
 	createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	createInfo.subresourceRange.baseMipLevel = 0;
 	createInfo.subresourceRange.levelCount = 1;
