@@ -9,7 +9,6 @@ dep_xdamage = dependency('xdamage')
 dep_xcomposite = dependency('xcomposite')
 dep_xrender = dependency('xrender')
 dep_xext = dependency('xext')
-dep_gl = dependency('GL')
 dep_xxf86vm = dependency('xxf86vm')
 
 pixman_dep = dependency('pixman-1')
@@ -69,7 +68,7 @@ executable(
 	'src/drm.cpp',
 	[ 'src/rendervulkan.cpp', spirv_shader ],
     dependencies : [
-        dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_gl,
+        dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext,
         dep_xxf86vm, pixman_dep, drm_dep, wayland_server, wayland_protos,
         libinput, xkbcommon, math, thread_dep, sdl_dep, wlroots_static_dep,
         vulkan_dep

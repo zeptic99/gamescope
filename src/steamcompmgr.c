@@ -462,12 +462,12 @@ paint_fake_cursor (Display *dpy, win *w)
 		scaledCursorY += ((w->a.height / 2) - win_y) * cursorScaleRatio * globalScaleRatio;
 	}
 	
-	glEnable(GL_BLEND);
-	glBindTexture(GL_TEXTURE_2D, cursorTextureName);
-	glEnable(GL_TEXTURE_2D);
-	
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+// 	glEnable(GL_BLEND);
+// 	glBindTexture(GL_TEXTURE_2D, cursorTextureName);
+// 	glEnable(GL_TEXTURE_2D);
+// 	
+// 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+// 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	
 	win *mainOverlayWindow = find_win(dpy, currentOverlayWindow);
 	
@@ -492,21 +492,21 @@ paint_fake_cursor (Display *dpy, win *w)
 	scaledCursorX = scaledCursorX - (cursorHotX * displayCursorScaleRatio);
 	scaledCursorY = scaledCursorY - (cursorHotY * displayCursorScaleRatio);
 	
-	float displayCursorWidth = cursorWidth * displayCursorScaleRatio;
-	float displayCursorHeight = cursorHeight * displayCursorScaleRatio;
+// 	float displayCursorWidth = cursorWidth * displayCursorScaleRatio;
+// 	float displayCursorHeight = cursorHeight * displayCursorScaleRatio;
 	
-	glColor3f(1.0f, 1.0f, 1.0f);
-	
-	glBegin (GL_QUADS);
-	glTexCoord2d (0.0f, 0.0f);
-	glVertex2d (scaledCursorX, scaledCursorY);
-	glTexCoord2d (1.0f, 0.0f);
-	glVertex2d (scaledCursorX + displayCursorWidth, scaledCursorY);
-	glTexCoord2d (1.0f, 1.0f);
-	glVertex2d (scaledCursorX + displayCursorWidth, scaledCursorY + displayCursorHeight);
-	glTexCoord2d (0.0f, 1.0f);
-	glVertex2d (scaledCursorX, scaledCursorY + displayCursorHeight);
-	glEnd ();
+// 	glColor3f(1.0f, 1.0f, 1.0f);
+// 	
+// 	glBegin (GL_QUADS);
+// 	glTexCoord2d (0.0f, 0.0f);
+// 	glVertex2d (scaledCursorX, scaledCursorY);
+// 	glTexCoord2d (1.0f, 0.0f);
+// 	glVertex2d (scaledCursorX + displayCursorWidth, scaledCursorY);
+// 	glTexCoord2d (1.0f, 1.0f);
+// 	glVertex2d (scaledCursorX + displayCursorWidth, scaledCursorY + displayCursorHeight);
+// 	glTexCoord2d (0.0f, 1.0f);
+// 	glVertex2d (scaledCursorX, scaledCursorY + displayCursorHeight);
+// 	glEnd ();
 }
 
 static void
