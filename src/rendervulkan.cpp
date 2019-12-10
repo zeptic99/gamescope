@@ -152,8 +152,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		assert( format == DRMFormatToVulkan( pDMA->format ) );
 	}
 	
-	if ( bFlippable == true )
+	if ( bFlippable == true || pDMA != nullptr )
 	{
+		// Either we're scanning out the image, or if we're importing them, they got
+		// allocated with scanout in mind by their original WSI.
 		wsiImageCreateInfo.sType = VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA;
 		wsiImageCreateInfo.scanout = VK_TRUE;
 		wsiImageCreateInfo.pNext = imageInfo.pNext;
