@@ -773,6 +773,21 @@ paint_all (Display *dpy)
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
 	
+	for ( int i = 0; i < k_nMaxLayers; i++ )
+	{
+		bool bHasSeenZero = false;
+		
+		if ( pipeline.layerBindings[ i ].tex == 0 )
+		{
+			bHasSeenZero = true;
+		}
+		else if ( bHasSeenZero == true )
+		{
+			// We have a hole in this binding that will cause GPU crashes.
+			return;
+		}
+	}
+	
 	bool bResult = vulkan_composite( &composite, &pipeline );
 	
 	if ( bResult != true )

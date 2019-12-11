@@ -44,20 +44,9 @@ typedef uint32_t VulkanTexture_t;
 
 #define k_nMaxLayers 4
 
-struct VulkanDescriptor_t
-{
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkPipelineLayout pipelineLayout;
-	VkDescriptorSet descriptorSet;
-
-	VkSampler samplers[ k_nMaxLayers ];
-
-	VkPipeline pipeline;
-};
-
 struct VulkanPipeline_t
 {
-	struct
+	struct LayerBinding_t
 	{
 		VulkanTexture_t tex;
 		bool bFilter;

@@ -38,6 +38,12 @@ VkDevice device;
 VkCommandPool commandPool;
 VkDescriptorPool descriptorPool;
 
+VkDescriptorSetLayout descriptorSetLayout;
+VkPipelineLayout pipelineLayout;
+VkDescriptorSet descriptorSet;
+
+VkPipeline pipeline;
+
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
 int g_nOutImage; // ping/pong between two RTs
@@ -50,13 +56,13 @@ Composite_t *g_pCompositeBuffer;
 std::unordered_map<VulkanTexture_t, CVulkanTexture *> g_mapVulkanTextures;
 std::atomic<VulkanTexture_t> g_nMaxVulkanTexHandle;
 
-struct VulkanDescriptorCacheEntry_t
+struct VulkanSamplerCacheEntry_t
 {
-	VulkanPipeline_t key;
-	VulkanDescriptor_t *pDesc;
+	VulkanPipeline_t::LayerBinding_t key;
+	VkSampler sampler;
 };
 
-std::vector< VulkanDescriptorCacheEntry_t > g_vecVulkanDescriptorCache;
+std::vector< VulkanSamplerCacheEntry_t > g_vecVulkanSamplerCache;
 
 #define MAX_DEVICE_COUNT 8
 #define MAX_QUEUE_COUNT 8
@@ -531,6 +537,129 @@ int init_device()
 		return false;
 	}
 	
+	std::vector< VkDescriptorSetLayoutBinding > vecLayoutBindings;
+	VkDescriptorSetLayoutBinding descriptorSetLayoutBindings =
+	{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+	};
+	
+	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // first binding is target storage image
+	
+	descriptorSetLayoutBindings.binding = 1;
+	descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	
+	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // second binding is composite description buffer
+	
+	for ( uint32_t i = 0; i < k_nMaxLayers; i++ )
+	{
+		descriptorSetLayoutBindings.binding = 2 + ( i * 2 );
+		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		
+		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
+		
+		descriptorSetLayoutBindings.binding = 2 + ( i * 2 ) + 1;
+		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+		
+		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
+	}
+	
+	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo =
+	{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.bindingCount = 2 + ( k_nMaxLayers * 2 ),
+		vecLayoutBindings.data()
+	};
+	
+	res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, 0, &descriptorSetLayout);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
+		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		0,
+		0,
+		1,
+		&descriptorSetLayout,
+		0,
+		0
+	};
+	
+	res = vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, 0, &pipelineLayout);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkComputePipelineCreateInfo computePipelineCreateInfo = {
+		VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		0,
+		0,
+		{
+			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			0,
+			0,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			shaderModule,
+			"main",
+			0
+		},
+		pipelineLayout,
+		0,
+		0
+	};
+	
+	res = vkCreateComputePipelines(device, 0, 1, &computePipelineCreateInfo, 0, &pipeline);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		descriptorPool,
+		1,
+		&descriptorSetLayout
+	};
+	
+	res = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
+	
+	if ( res != VK_SUCCESS || descriptorSet == VK_NULL_HANDLE )
+	{
+		return false;
+	}
+	
+	VkDescriptorBufferInfo bufferInfo = {
+		.buffer = constantBuffer,
+		.offset = 0,
+		.range = VK_WHOLE_SIZE
+	};
+	
+	VkWriteDescriptorSet writeDescriptorSet = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.pNext = nullptr,
+		.dstSet = descriptorSet,
+		.dstBinding = 1,
+		.dstArrayElement = 0,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.pImageInfo = nullptr,
+		.pBufferInfo = &bufferInfo,
+		.pTexelBufferView = nullptr,
+	};
+	
+	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+	
 	return true;
 }
 
@@ -749,168 +878,67 @@ void vulkan_free_texture( VulkanTexture_t vulkanTex )
 	// actually free something at some point
 }
 
-bool operator==(const struct VulkanPipeline_t& lhs, const struct VulkanPipeline_t& rhs)
+bool operator==(const struct VulkanPipeline_t::LayerBinding_t& lhs, struct VulkanPipeline_t::LayerBinding_t& rhs)
 {
-	for ( int i = 0; i < k_nMaxLayers; i++ )
-	{
-		if ( lhs.layerBindings[ i ].tex != rhs.layerBindings[ i ].tex )
-			return false;
+	if ( lhs.bFilter != rhs.bFilter )
+		return false;
 
-		if ( lhs.layerBindings[ i ].bFilter != rhs.layerBindings[ i ].bFilter )
-			return false;
-
-		if ( lhs.layerBindings[ i ].bBlackBorder != rhs.layerBindings[ i ].bBlackBorder )
-			return false;
-	}
+	if ( lhs.bBlackBorder != rhs.bBlackBorder )
+		return false;
 
 	return true;
 }
 
-VulkanDescriptor_t *vulkan_make_descriptor( struct VulkanPipeline_t *pPipeline )
+VkSampler vulkan_make_sampler( struct VulkanPipeline_t::LayerBinding_t *pBinding )
 {
-	VulkanDescriptor_t *ret = new VulkanDescriptor_t;
+	VkSampler ret = VK_NULL_HANDLE;
 
-	if ( ret == nullptr )
-		return nullptr;
+	VkSamplerCreateInfo samplerCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.pNext = nullptr,
+		.magFilter = pBinding->bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+		.minFilter = pBinding->bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.borderColor = pBinding->bBlackBorder ? VK_BORDER_COLOR_INT_OPAQUE_BLACK : VK_BORDER_COLOR_INT_TRANSPARENT_BLACK,
+		.unnormalizedCoordinates = VK_TRUE,
+	};
+	
+	vkCreateSampler( device, &samplerCreateInfo, nullptr, &ret );
+	
+	return ret;
+}
 
-	*ret = {};
-
+void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
+{
 	CVulkanTexture *pTex[ k_nMaxLayers ] = {};
 	uint32_t texLayerIDs[ k_nMaxLayers ] = {};
-
+	
 	uint32_t nTexCount = 0;
-
+	
 	for ( uint32_t i = 0; i < k_nMaxLayers; i ++ )
 	{
 		if ( pPipeline->layerBindings[ i ].tex != 0 )
 		{
 			pTex[ nTexCount ] = g_mapVulkanTextures[ pPipeline->layerBindings[ i ].tex ];
 			assert( pTex[ nTexCount ] );
-
+			
 			texLayerIDs[ nTexCount ] = i;
-
+			
 			nTexCount++;
 		}
 	}
-
-	std::vector< VkDescriptorSetLayoutBinding > vecLayoutBindings;
-	VkDescriptorSetLayoutBinding descriptorSetLayoutBindings =
-	{
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-	};
-
-	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // first binding is target storage image
-
-	descriptorSetLayoutBindings.binding = 1;
-	descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-
-	vecLayoutBindings.push_back( descriptorSetLayoutBindings ); // second binding is composite description buffer
-
-	for ( uint32_t i = 0; i < nTexCount; i++ )
-	{
-		descriptorSetLayoutBindings.binding = 2 + ( i * 2 );
-		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-
-		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
-
-		descriptorSetLayoutBindings.binding = 2 + ( i * 2 ) + 1;
-		descriptorSetLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-
-		vecLayoutBindings.push_back( descriptorSetLayoutBindings );
-	}
-
-	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo =
-	{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.bindingCount = 2 + ( nTexCount * 2 ),
-		vecLayoutBindings.data()
-	};
-
-	VkResult res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, 0, &ret->descriptorSetLayout);
-
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-
-	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
-		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		0,
-		0,
-		1,
-		&ret->descriptorSetLayout,
-		0,
-		0
-	};
-
-	res = vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, 0, &ret->pipelineLayout);
-
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo = {
-		VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		0,
-		0,
-		{
-			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			0,
-			0,
-			VK_SHADER_STAGE_COMPUTE_BIT,
-			shaderModule,
-			"main",
-			0
-		},
-		ret->pipelineLayout,
-		0,
-		0
-	};
-
-	res = vkCreateComputePipelines(device, 0, 1, &computePipelineCreateInfo, 0, &ret->pipeline);
-
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-
-	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		nullptr,
-		descriptorPool,
-		1,
-		&ret->descriptorSetLayout
-	};
-
-	res = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &ret->descriptorSet);
-
-	if ( res != VK_SUCCESS || ret->descriptorSet == VK_NULL_HANDLE )
-	{
-		return nullptr;
-	}
-
+	
 	{
 		VkDescriptorImageInfo imageInfo = {
 			.imageView = BIsNested() ? swapChainImageViews[ g_nSwapChainImageIndex ] : outputImage[ g_nOutImage ].m_vkImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 		};
-
-		VkDescriptorBufferInfo bufferInfo = {
-			.buffer = constantBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE
-		};
-
+		
 		VkWriteDescriptorSet writeDescriptorSet = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
-			.dstSet = ret->descriptorSet,
+			.dstSet = descriptorSet,
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -919,35 +947,32 @@ VulkanDescriptor_t *vulkan_make_descriptor( struct VulkanPipeline_t *pPipeline )
 			.pBufferInfo = nullptr,
 			.pTexelBufferView = nullptr,
 		};
-
-		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
-
-		writeDescriptorSet.dstBinding = 1;
-		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		writeDescriptorSet.pImageInfo = nullptr;
-		writeDescriptorSet.pBufferInfo = &bufferInfo;
-
+		
 		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 	}
-
+	
 	for ( uint32_t i = 0; i < nTexCount; i++ )
 	{
-		VkSamplerCreateInfo samplerCreateInfo = {
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.pNext = nullptr,
-			.magFilter = pPipeline->layerBindings[ texLayerIDs[ i ] ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
-			.minFilter = pPipeline->layerBindings[ texLayerIDs[ i ] ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-			.borderColor = pPipeline->layerBindings[ texLayerIDs[ i ] ].bBlackBorder ? VK_BORDER_COLOR_INT_OPAQUE_BLACK : VK_BORDER_COLOR_INT_TRANSPARENT_BLACK,
-			.unnormalizedCoordinates = VK_TRUE,
-		};
-
-		res = vkCreateSampler( device, &samplerCreateInfo, nullptr, &ret->samplers[ i ] );
-
-		if ( res != VK_SUCCESS )
+		VkSampler sampler = VK_NULL_HANDLE;
+		
+		// First try to look up the sampler in the cache.
+		for ( uint32_t j = 0; j < g_vecVulkanSamplerCache.size(); j++ )
 		{
-			return nullptr;
+			if ( g_vecVulkanSamplerCache[ j ].key == pPipeline->layerBindings[ texLayerIDs[ i ] ] )
+			{
+				sampler = g_vecVulkanSamplerCache[ j ].sampler;
+				break;
+			}
+		}
+		
+		if ( sampler == VK_NULL_HANDLE )
+		{
+			sampler = vulkan_make_sampler( &pPipeline->layerBindings[ texLayerIDs[ i ] ] );
+			
+			assert( sampler != VK_NULL_HANDLE );
+			
+			VulkanSamplerCacheEntry_t entry = { pPipeline->layerBindings[ texLayerIDs[ i ] ], sampler };
+			g_vecVulkanSamplerCache.push_back( entry );
 		}
 
 		{
@@ -956,11 +981,11 @@ VulkanDescriptor_t *vulkan_make_descriptor( struct VulkanPipeline_t *pPipeline )
 				// TODO figure out what it is exactly for the wayland surfaces
 				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 			};
-
+			
 			VkWriteDescriptorSet writeDescriptorSet = {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
-				.dstSet = ret->descriptorSet,
+				.dstSet = descriptorSet,
 				.dstBinding = 2 + (i * 2),
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
@@ -969,19 +994,19 @@ VulkanDescriptor_t *vulkan_make_descriptor( struct VulkanPipeline_t *pPipeline )
 				.pBufferInfo = nullptr,
 				.pTexelBufferView = nullptr,
 			};
-
+			
 			vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 		}
-
+		
 		{
 			VkDescriptorImageInfo imageInfo = {
-				.sampler = ret->samplers[ i ],
+				.sampler = sampler,
 			};
-
+			
 			VkWriteDescriptorSet writeDescriptorSet = {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
-				.dstSet = ret->descriptorSet,
+				.dstSet = descriptorSet,
 				.dstBinding = 2 + (i * 2) + 1,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
@@ -990,43 +1015,18 @@ VulkanDescriptor_t *vulkan_make_descriptor( struct VulkanPipeline_t *pPipeline )
 				.pBufferInfo = nullptr,
 				.pTexelBufferView = nullptr,
 			};
-
+			
 			vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 		}
 	}
-
-	return ret;
 }
 
 bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
 	*g_pCompositeBuffer = *pComposite;
 	// XXX maybe flush something?
-
-	VulkanDescriptor_t *pDescriptor = nullptr;
-
-	// First try to look up the descriptor in the cache.
-	for ( uint32_t i = 0; i < g_vecVulkanDescriptorCache.size(); i++ )
-	{
-		if ( g_vecVulkanDescriptorCache[ i ].key == *pPipeline )
-		{
-			pDescriptor = g_vecVulkanDescriptorCache[ i ].pDesc;
-			break;
-		}
-	}
-
-	if ( pDescriptor == nullptr )
-	{
-		pDescriptor = vulkan_make_descriptor( pPipeline );
-
-		if ( pDescriptor == nullptr )
-		{
-			return false;
-		}
-
-		VulkanDescriptorCacheEntry_t entry = { *pPipeline, pDescriptor };
-		g_vecVulkanDescriptorCache.push_back( entry );
-	}
+	
+	vulkan_update_descriptor( pPipeline );
 
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1058,10 +1058,10 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		return false;
 	}
 	
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pDescriptor->pipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-							pDescriptor->pipelineLayout, 0, 1, &pDescriptor->descriptorSet, 0, 0);
+							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 	
 	vkCmdDispatch(commandBuffer, g_nOutputWidth / 16, g_nOutputHeight / 16, 1);
 	
@@ -1093,7 +1093,10 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	
 	vkQueueWaitIdle( queue );
 	
-	g_nOutImage = !g_nOutImage;
+	if ( BIsNested() == false )
+	{
+		g_nOutImage = !g_nOutImage;
+	}
 	
 	return true;
 }
