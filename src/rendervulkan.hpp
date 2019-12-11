@@ -5,6 +5,10 @@
 #include "drm.hpp"
 
 #ifndef C_SIDE
+
+#include <unordered_map>
+#include <vector>
+
 extern "C" {
 #endif
 	
@@ -14,9 +18,6 @@ extern "C" {
 
 #ifndef C_SIDE
 	
-#include <unordered_map>
-#include <vector>
-
 class CVulkanTexture
 {
 public:
@@ -42,6 +43,17 @@ extern std::vector< const char * > g_vecSDLInstanceExts;
 typedef uint32_t VulkanTexture_t;
 
 #define k_nMaxLayers 4
+
+struct VulkanDescriptor_t
+{
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkPipelineLayout pipelineLayout;
+	VkDescriptorSet descriptorSet;
+
+	VkSampler samplers[ k_nMaxLayers ];
+
+	VkPipeline pipeline;
+};
 
 struct VulkanPipeline_t
 {
