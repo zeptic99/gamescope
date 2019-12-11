@@ -747,14 +747,18 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	// XXX maybe flush something?
 
 	CVulkanTexture *pTex[ k_nMaxLayers ] = {};
+	uint32_t texLayerIDs[ k_nMaxLayers ] = {};
+
 	uint32_t nTexCount = 0;
 	
 	for ( uint32_t i = 0; i < k_nMaxLayers; i ++ )
 	{
 		if ( pPipeline->layerBindings[ i ].tex != 0 )
 		{
-			pTex[ i ] = g_mapVulkanTextures[ pPipeline->layerBindings[ i ].tex ];
-			assert( pTex[ i ] );
+			pTex[ nTexCount ] = g_mapVulkanTextures[ pPipeline->layerBindings[ i ].tex ];
+			assert( pTex[ nTexCount ] );
+
+			texLayerIDs[ nTexCount ] = i;
 			
 			nTexCount++;
 		}
@@ -908,11 +912,11 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		VkSamplerCreateInfo samplerCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 			.pNext = nullptr,
-			.magFilter = pPipeline->layerBindings[ i ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
-			.minFilter = pPipeline->layerBindings[ i ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+			.magFilter = pPipeline->layerBindings[ texLayerIDs[ i ] ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+			.minFilter = pPipeline->layerBindings[ texLayerIDs[ i ] ].bFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
 			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
 			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-			.borderColor = pPipeline->layerBindings[ i ].bBlackBorder ? VK_BORDER_COLOR_INT_OPAQUE_BLACK : VK_BORDER_COLOR_INT_TRANSPARENT_BLACK,
+			.borderColor = pPipeline->layerBindings[ texLayerIDs[ i ] ].bBlackBorder ? VK_BORDER_COLOR_INT_OPAQUE_BLACK : VK_BORDER_COLOR_INT_TRANSPARENT_BLACK,
 			.unnormalizedCoordinates = VK_TRUE,
 		};
 		
