@@ -499,12 +499,17 @@ static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
-int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height )
+int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
 	drmModeAtomicReq *req;
 	uint32_t plane_id = drm->plane->plane->plane_id;
 	uint32_t blob_id;
 	int ret;
+	
+	// :/
+	assert( pComposite->flLayerCount == 1.0f );
+	
+	uint32_t fb_id = pPipeline->layerBindings[ 0 ].fbid;
 	
 	req = drmModeAtomicAlloc();
 	
@@ -540,12 +545,12 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_
 	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
 	add_plane_property(drm, req, plane_id, "SRC_X", 0);
 	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
-	add_plane_property(drm, req, plane_id, "SRC_W", width << 16);
-	add_plane_property(drm, req, plane_id, "SRC_H", height << 16);
-	add_plane_property(drm, req, plane_id, "CRTC_X", 0);
-	add_plane_property(drm, req, plane_id, "CRTC_Y", 0);
-	add_plane_property(drm, req, plane_id, "CRTC_W", drm->mode->hdisplay);
-	add_plane_property(drm, req, plane_id, "CRTC_H", drm->mode->vdisplay);
+	add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
+	add_plane_property(drm, req, plane_id, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
+	add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetX * -1);
+	add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetY * -1);
+	add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
+	add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
 	
 	if (drm->kms_in_fence_fd != -1) {
 		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);

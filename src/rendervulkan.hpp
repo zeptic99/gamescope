@@ -2,6 +2,41 @@
 
 #pragma once
 
+#include <stdint.h>
+
+typedef uint32_t VulkanTexture_t;
+
+#define k_nMaxLayers 4
+
+// These two structs are horrible
+struct VulkanPipeline_t
+{
+	struct LayerBinding_t
+	{
+		int surfaceWidth;
+		int surfaceHeight;
+		
+		VulkanTexture_t tex;
+		uint32_t fbid;
+		
+		// These fields below count for the sampler cache
+		bool bFilter;
+		bool bBlackBorder;
+	} layerBindings[ k_nMaxLayers ];
+};
+
+struct Composite_t
+{
+	float flLayerCount;
+	
+	struct
+	{
+		float flScaleX, flScaleY;
+		float flOffsetX, flOffsetY;
+		float flOpacity;
+	} layers[ k_nMaxLayers ];
+};
+
 #include "drm.hpp"
 
 #ifndef C_SIDE
@@ -39,32 +74,6 @@ public:
 extern std::vector< const char * > g_vecSDLInstanceExts;
 
 #endif
-
-typedef uint32_t VulkanTexture_t;
-
-#define k_nMaxLayers 4
-
-struct VulkanPipeline_t
-{
-	struct LayerBinding_t
-	{
-		VulkanTexture_t tex;
-		bool bFilter;
-		bool bBlackBorder;
-	} layerBindings[ k_nMaxLayers ];
-};
-
-struct Composite_t
-{
-	float flLayerCount;
-
-	struct
-	{
-		float flScaleX, flScaleY;
-		float flOffsetX, flOffsetY;
-		float flOpacity;
-	} layers[ k_nMaxLayers ];
-};
 
 int vulkan_init(void);
 

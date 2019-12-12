@@ -592,7 +592,12 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 		pComposite->layers[ curLayer ].flOffsetY = -drawYOffset;
 	}
 	
+	pPipeline->layerBindings[ curLayer ].surfaceWidth = w->a.width;
+	pPipeline->layerBindings[ curLayer ].surfaceHeight = w->a.height;
+	
 	pPipeline->layerBindings[ curLayer ].tex = w->vulkanTex;
+	pPipeline->layerBindings[ curLayer ].fbid = w->fb_id;
+	
 	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : false;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = notificationMode ? false : true;
 	
@@ -791,6 +796,7 @@ paint_all (Display *dpy)
 		else if ( bHasSeenZero == true )
 		{
 			// We have a hole in this binding that will cause GPU crashes.
+			// TODO write compacting code here
 			return;
 		}
 	}
@@ -820,16 +826,27 @@ paint_all (Display *dpy)
 		}
 		else
 		{
-			uint32_t fbid = vulkan_get_last_composite_fbid();
+			memset( &composite, 0, sizeof( composite ) );
+			composite.flLayerCount = 1.0;
+			composite.layers[ 0 ].flScaleX = 1.0;
+			composite.layers[ 0 ].flScaleY = 1.0;
 			
-			drm_atomic_commit( &g_DRM, fbid, g_nOutputWidth, g_nOutputHeight );
+			memset( &pipeline, 0, sizeof( pipeline ) );
+			
+			pipeline.layerBindings[ 0 ].surfaceWidth = g_nOutputWidth;
+			pipeline.layerBindings[ 0 ].surfaceHeight = g_nOutputHeight;
+			
+			pipeline.layerBindings[ 0 ].fbid = vulkan_get_last_composite_fbid();
+			pipeline.layerBindings[ 0 ].bFilter = true;
+			
+			drm_atomic_commit( &g_DRM, &composite, &pipeline );
 		}
 	}
 	else
 	{
 		assert( BIsNested() == false );
 		
-		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height );
+		drm_atomic_commit( &g_DRM, &composite, &pipeline );
 	}
 }
 
