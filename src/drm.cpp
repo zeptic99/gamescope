@@ -499,7 +499,7 @@ static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
-int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height, uint32_t flags)
+int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height )
 {
 	drmModeAtomicReq *req;
 	uint32_t plane_id = drm->plane->plane->plane_id;
@@ -507,6 +507,15 @@ int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_
 	int ret;
 	
 	req = drmModeAtomicAlloc();
+	
+	static bool bFirstSwap = true;
+	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
+	
+	if ( bFirstSwap == true )
+	{
+		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+		bFirstSwap = false;
+	}
 	
 	// We do internal refcounting with these events
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
@@ -620,4 +629,13 @@ void drm_free_fbid( struct drm_t *drm, uint32_t fbid )
 		
 		drm->fbid_free_queue.push_back( fbid );
 	}
+}
+
+bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite )
+{
+	// No multiplane support for now, thoon
+	if ( pComposite->flLayerCount == 1 )
+		return true;
+	
+	return false;
 }

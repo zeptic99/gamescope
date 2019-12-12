@@ -345,14 +345,21 @@ ensure_win_resources (Display *dpy, win *w)
 	{
 		teardown_win_resources( dpy, w );
 
-		w->vulkanTex = vulkan_create_texture_from_dmabuf( &w->dmabuf_attribs );
-		assert( w->vulkanTex != 0 );
-
 		if ( BIsNested() == False )
 		{
+			// We'll also need a copy for Vulkan to consume below.
+			
+			int fdCopy = dup( w->dmabuf_attribs.fd[0] );
+
 			w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
 			assert( w->fb_id != 0 );
+			
+			close( w->dmabuf_attribs.fd[0] );
+			w->dmabuf_attribs.fd[0] = fdCopy;
 		}
+		
+		w->vulkanTex = vulkan_create_texture_from_dmabuf( &w->dmabuf_attribs );
+		assert( w->vulkanTex != 0 );
 		
 		// Only consume once
 		w->dmabuf_attribs_valid = False;
@@ -788,34 +795,42 @@ paint_all (Display *dpy)
 		}
 	}
 	
-	bool bResult = vulkan_composite( &composite, &pipeline );
+	bool bDoComposite = true;
 	
-	if ( bResult != true )
+	if ( BIsNested() == false )
 	{
-		fprintf (stderr, "composite alarm!!!\n");
+		if ( drm_can_avoid_composite( &g_DRM, &composite ) == true )
+		{
+			bDoComposite = false;
+		}
 	}
 	
-	if ( BIsNested() == True )
+	if ( bDoComposite == true )
 	{
-		vulkan_present_to_window();
+		bool bResult = vulkan_composite( &composite, &pipeline );
+		
+		if ( bResult != true )
+		{
+			fprintf (stderr, "composite alarm!!!\n");
+		}
+		
+		if ( BIsNested() == True )
+		{
+			vulkan_present_to_window();
+		}
+		else
+		{
+			uint32_t fbid = vulkan_get_last_composite_fbid();
+			
+			drm_atomic_commit( &g_DRM, fbid, g_nOutputWidth, g_nOutputHeight );
+		}
 	}
 	else
 	{
-		uint32_t fbid = vulkan_get_last_composite_fbid();
+		assert( BIsNested() == false );
 		
-		static Bool bFirstSwap = True;
-		uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
-		
-		if ( bFirstSwap == True )
-		{
-			flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-			bFirstSwap = False;
-		}
-		
-		drm_atomic_commit( &g_DRM, fbid, g_nOutputWidth, g_nOutputHeight, flags );
+		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height );
 	}
-	
-	// 		drm_atomic_commit( &g_DRM, w->fb_id, w->dmabuf_attribs.width, w->dmabuf_attribs.height, flags );
 }
 
 static void

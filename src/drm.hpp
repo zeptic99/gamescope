@@ -9,6 +9,8 @@
 
 #include <wlr/render/dmabuf.h>
 
+#include "rendervulkan.hpp"
+
 #ifndef C_SIDE
 
 #include <unordered_map>
@@ -67,9 +69,10 @@ extern struct drm_t g_DRM;
 extern uint32_t g_nDRMFormat;
 
 int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh);
-int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height, uint32_t flags);
+int drm_atomic_commit(struct drm_t *drm, uint32_t fb_id, uint32_t width, uint32_t height );
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *dma_buf );
 void drm_free_fbid( struct drm_t *drm, uint32_t fbid );
+bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite );
 
 #ifndef C_SIDE
 }
