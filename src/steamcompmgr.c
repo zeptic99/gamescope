@@ -50,11 +50,6 @@
 #include <X11/extensions/shape.h>
 #include <X11/extensions/xf86vmode.h>
 
-#define GL_GLEXT_PROTOTYPES
-
-#include "GL/gl.h"
-#include "glext.h"
-
 #define C_SIDE
 
 #include "main.hpp"
@@ -139,7 +134,7 @@ int 			cursorX, cursorY;
 Bool 			cursorImageDirty = True;
 int 			cursorHotX, cursorHotY;
 int				cursorWidth, cursorHeight;
-GLuint			cursorTextureName;
+// GLuint			cursorTextureName;
 
 Bool			cursorVisible = True;
 Bool			hideCursorForScale;
@@ -194,8 +189,6 @@ static Atom		WLSurfaceIDAtom;
 
 #define TRANSLUCENT	0x00000000
 #define OPAQUE		0xffffffff
-
-GLfloat textYMax;
 
 #define			FRAME_RATE_SAMPLING_PERIOD 160
 
@@ -444,15 +437,15 @@ paint_fake_cursor (Display *dpy, win *w)
 		cursorWidth = im->width;
 		cursorHeight = im->height;
 		
-		unsigned int cursorDataBuffer[cursorWidth * cursorHeight];
-		for (int i = 0; i < cursorWidth * cursorHeight; i++)
-			cursorDataBuffer[i] = im->pixels[i];
+// 		unsigned int cursorDataBuffer[cursorWidth * cursorHeight];
+// 		for (int i = 0; i < cursorWidth * cursorHeight; i++)
+// 			cursorDataBuffer[i] = im->pixels[i];
 		
-		glBindTexture(GL_TEXTURE_2D, cursorTextureName);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cursorWidth, cursorHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, cursorDataBuffer);
-		
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+// 		glBindTexture(GL_TEXTURE_2D, cursorTextureName);
+// 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cursorWidth, cursorHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, cursorDataBuffer);
+// 		
+// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		
 		XFree(im);
 		
@@ -615,11 +608,13 @@ paint_debug_info (Display *dpy)
 {
 	int Y = 100;
 	
-	glBindTexture(GL_TEXTURE_2D, 0);
+// 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 	char messageBuffer[256];
 	
 	sprintf(messageBuffer, "Compositing at %.1f FPS", currentFrameRate);
+	
+	float textYMax = 0.0f;
 	
 	paint_message(messageBuffer, Y, 1.0f, 1.0f, 1.0f); Y += textYMax;
 	if (find_win(dpy, currentFocusWindow))
