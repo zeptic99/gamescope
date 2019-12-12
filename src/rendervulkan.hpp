@@ -28,6 +28,7 @@ struct VulkanPipeline_t
 struct Composite_t
 {
 	float flLayerCount;
+	float flSwapChannels;
 	
 	struct
 	{

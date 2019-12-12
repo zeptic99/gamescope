@@ -3,6 +3,7 @@
 [[vk::binding(1, 0)]] cbuffer compositeDesc
 {
 	float flLayerCount;
+	float flSwapChannels;
 
     float flScale0X;
     float flScale0Y;
@@ -64,5 +65,12 @@ void main(
 		outputValue = layerSample * layerAlpha + outputValue * ( 1.0 - layerAlpha );
 	}
 	
-    outImage [index] = outputValue;
+	if ( flSwapChannels == 1.0 )
+	{
+		outImage [index] = outputValue.bgra;
+    }
+    else
+    {
+		outImage [index] = outputValue;
+    }
 }

@@ -1023,6 +1023,11 @@ void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
 
 bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
+	if ( BIsNested() == false && DRMFormatNeedsSwizzle( g_nDRMFormat ) )
+	{
+		pComposite->flSwapChannels = 1.0;
+	}
+
 	*g_pCompositeBuffer = *pComposite;
 	// XXX maybe flush something?
 	
