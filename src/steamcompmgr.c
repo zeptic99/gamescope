@@ -1872,13 +1872,6 @@ steamcompmgr_main (int argc, char **argv)
 						{
 							w->isOverlay = get_prop(dpy, w->id, overlayAtom, 0);
 							focusDirty = True;
-							
-							// Overlay windows need a RGBA pixmap, so destroy the old one there
-							// It'll be reallocated as RGBA in ensure_win_resources()
-							if (w->isOverlay)
-							{
-								teardown_win_resources(dpy, w);
-							}
 						}
 					}
 					if (ev.xproperty.atom == sizeHintsAtom)
