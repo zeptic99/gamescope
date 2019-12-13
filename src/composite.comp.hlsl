@@ -73,4 +73,10 @@ void main(
     {
 		outImage [index] = outputValue;
     }
+    
+    // indicator to quickly tell if we're in the compositing path or not
+    if ( 0 && index.x > 50 && index.x < 100 && index.y > 50 && index.y < 100 )
+    {
+		outImage [index] = float4(1.0,0.0,1.0,1.0);
+    }
 }
