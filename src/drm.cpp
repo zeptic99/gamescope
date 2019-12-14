@@ -21,6 +21,7 @@
 struct drm_t g_DRM;
 
 uint32_t g_nDRMFormat;
+bool g_bRotated;
 
 static int s_drm_log = 0;
 
@@ -425,6 +426,15 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	
 	g_nOutputWidth = drm->mode->hdisplay;
 	g_nOutputHeight = drm->mode->vdisplay;
+
+	if ( g_nOutputWidth < g_nOutputHeight )
+	{
+		// We probably don't want to be in portrait mode, rotate
+		g_bRotated = true;
+
+		g_nOutputWidth = drm->mode->vdisplay;
+		g_nOutputHeight = drm->mode->hdisplay;
+	}
 	
 	return 0;
 }
@@ -540,6 +550,11 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		if (add_crtc_property(drm, req, drm->crtc_id, "ACTIVE", 1) < 0)
 			return -1;
 	}
+
+	if ( g_bRotated )
+	{
+		add_plane_property(drm, req, plane_id, "rotation", DRM_MODE_ROTATE_270);
+	}
 	
 	add_plane_property(drm, req, plane_id, "FB_ID", fb_id);
 	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
@@ -547,10 +562,25 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
 	add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
 	add_plane_property(drm, req, plane_id, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
-	add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetX * -1);
-	add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetY * -1);
-	add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
-	add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
+
+	if ( g_bRotated )
+	{
+		add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetY * -1);
+		add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetX * -1);
+
+		add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
+		add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
+
+	}
+	else
+	{
+		add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetX * -1);
+		add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetY * -1);
+
+		add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
+		add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
+	}
+
 	
 	if (drm->kms_in_fence_fd != -1) {
 		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);
