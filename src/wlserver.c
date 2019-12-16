@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200112L
 #include <assert.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -19,6 +20,16 @@
 struct wlserver_t wlserver;
 
 Display *g_XWLDpy;
+
+void sig_handler(int signal)
+{
+	wlr_log(WLR_DEBUG, "Received kill signal. Terminating!");
+
+	if (wlserver.wl_display)
+	{
+	wl_display_terminate(wlserver.wl_display);
+	}
+}
 
 void nudge_steamcompmgr(void)
 {
@@ -76,6 +87,9 @@ int wlserver_init(int argc, char **argv, Bool bIsNested) {
 	
 	wlr_log_init(WLR_DEBUG, NULL);
 	wlserver.wl_display = wl_display_create();
+
+	signal(SIGTERM, sig_handler);
+	signal(SIGINT, sig_handler);
 	
 	wlserver.wlr.session = ( bIsDRM == True ) ? wlr_session_create(wlserver.wl_display) : NULL;
 	
