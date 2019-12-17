@@ -73,4 +73,5 @@ executable(
         libinput, xkbcommon, math, thread_dep, sdl_dep, wlroots_static_dep,
         vulkan_dep
     ],
+    install: true,
 )
