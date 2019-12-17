@@ -20,15 +20,31 @@ std::vector< const char * > g_vecSDLInstanceExts;
 
 VkInstance instance;
 
-VkSurfaceKHR surface;
-VkSurfaceCapabilitiesKHR surfaceCaps;
-std::vector< VkSurfaceFormatKHR > surfaceFormats;
-std::vector< VkPresentModeKHR > presentModes;
-uint32_t g_nSwapChainImageIndex;
+struct VulkanOutput_t
+{
+	VkSurfaceKHR surface;
+	VkSurfaceCapabilitiesKHR surfaceCaps;
+	std::vector< VkSurfaceFormatKHR > surfaceFormats;
+	std::vector< VkPresentModeKHR > presentModes;
+	uint32_t nSwapChainImageIndex;
+	
+	VkSwapchainKHR swapChain;
+	std::vector< VkImage > swapChainImages;
+	std::vector< VkImageView > swapChainImageViews;
+	
+	// If no swapchain, use our own images
+	
+	int nOutImage; // ping/pong between two RTs
+	CVulkanTexture outputImage[2];
 
-VkSwapchainKHR swapChain;
-std::vector< VkImage > swapChainImages;
-std::vector< VkImageView > swapChainImageViews;
+	int nCurCmdBuffer;
+	VkCommandBuffer commandBuffers[2]; // ping/pong command buffers as well
+	
+	VkBuffer constantBuffer;
+	VkDeviceMemory bufferMemory;
+	Composite_t *pCompositeBuffer;
+};
+
 
 VkPhysicalDevice physicalDevice;
 uint32_t queueFamilyIndex;
@@ -46,12 +62,7 @@ VkPipeline pipeline;
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
-int g_nOutImage; // ping/pong between two RTs
-CVulkanTexture outputImage[2];
-
-VkBuffer constantBuffer;
-VkDeviceMemory bufferMemory;
-Composite_t *g_pCompositeBuffer;
+VulkanOutput_t g_output;
 
 std::unordered_map<VulkanTexture_t, CVulkanTexture *> g_mapVulkanTextures;
 std::atomic<VulkanTexture_t> g_nMaxVulkanTexHandle;
@@ -499,44 +510,6 @@ int init_device()
 		return false;
 	}
 	
-	VkBufferCreateInfo bufferCreateInfo = {};
-	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferCreateInfo.pNext = nullptr;
-	bufferCreateInfo.size = sizeof( Composite_t );
-	bufferCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	
-	res = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &constantBuffer );
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
-	
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, constantBuffer, &memRequirements);
-	
-	int memTypeIndex =  findMemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memRequirements.memoryTypeBits );
-	
-	if ( memTypeIndex == -1 )
-	{
-		return false;
-	}
-	
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = memTypeIndex;
-	
-	vkAllocateMemory( device, &allocInfo, nullptr, &bufferMemory );
-	
-	vkBindBufferMemory( device, constantBuffer, bufferMemory, 0 );
-	vkMapMemory( device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&g_pCompositeBuffer );
-	
-	if ( g_pCompositeBuffer == nullptr )
-	{
-		return false;
-	}
-	
 	std::vector< VkDescriptorSetLayoutBinding > vecLayoutBindings;
 	VkDescriptorSetLayoutBinding descriptorSetLayoutBindings =
 	{
@@ -639,8 +612,227 @@ int init_device()
 		return false;
 	}
 	
+	return true;
+}
+
+void fini_device()
+{
+	vkDestroyDevice(device, 0);
+}
+
+void acquire_next_image( void )
+{
+	vkAcquireNextImageKHR( device, g_output.swapChain, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &g_output.nSwapChainImageIndex );
+}
+
+void vulkan_present_to_window( void )
+{
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	
+// 	presentInfo.waitSemaphoreCount = 1;
+// 	presentInfo.pWaitSemaphores = signalSemaphores;
+	
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &g_output.swapChain;
+	
+	presentInfo.pImageIndices = &g_output.nSwapChainImageIndex;
+	
+	vkQueuePresentKHR( queue, &presentInfo );
+	
+	acquire_next_image();
+}
+
+bool vulkan_make_output( VulkanOutput_t *pOutput )
+{
+	VkResult result;
+	
+	if ( BIsNested() == true )
+	{
+		SDL_Vulkan_CreateSurface( window, instance, &pOutput->surface );
+		
+		if ( pOutput->surface == VK_NULL_HANDLE )
+			return false;
+		
+		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physicalDevice, pOutput->surface, &pOutput->surfaceCaps );
+		
+		if ( result != VK_SUCCESS )
+			return false;
+		
+		uint32_t formatCount = 0;
+		result = vkGetPhysicalDeviceSurfaceFormatsKHR( physicalDevice, pOutput->surface, &formatCount, nullptr );
+		
+		if ( result != VK_SUCCESS )
+			return false;
+		
+		if ( formatCount != 0 ) {
+			pOutput->surfaceFormats.resize( formatCount );
+			vkGetPhysicalDeviceSurfaceFormatsKHR( physicalDevice, pOutput->surface, &formatCount, pOutput->surfaceFormats.data() );
+			
+			if ( result != VK_SUCCESS )
+				return false;
+		}
+		
+		uint32_t presentModeCount = false;
+		result = vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, pOutput->surface, &presentModeCount, nullptr );
+		
+		if ( result != VK_SUCCESS )
+			return false;
+		
+		if ( presentModeCount != 0 ) {
+			pOutput->presentModes.resize(presentModeCount);
+			result = vkGetPhysicalDeviceSurfacePresentModesKHR( physicalDevice, pOutput->surface, &presentModeCount, pOutput->presentModes.data() );
+			
+			if ( result != VK_SUCCESS )
+				return false;
+		}
+		
+		uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;
+		uint32_t surfaceFormat = 0;
+		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+		{
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
+				break;
+		}
+		
+		if ( surfaceFormat == formatCount )
+			return false;
+		
+		VkSwapchainCreateInfoKHR createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		createInfo.surface = pOutput->surface;
+		
+		createInfo.minImageCount = imageCount;
+		createInfo.imageFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
+		createInfo.imageColorSpace = pOutput->surfaceFormats[surfaceFormat ].colorSpace;
+		createInfo.imageExtent = { g_nOutputWidth, g_nOutputHeight };
+		createInfo.imageArrayLayers = 1;
+		createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
+		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		
+		createInfo.preTransform = pOutput->surfaceCaps.currentTransform;
+		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		createInfo.presentMode = pOutput->presentModes[0];
+		createInfo.clipped = VK_TRUE;
+		
+		createInfo.oldSwapchain = VK_NULL_HANDLE;
+		
+		if (vkCreateSwapchainKHR( device, &createInfo, nullptr, &pOutput->swapChain) != VK_SUCCESS ) {
+			return 0;
+		}
+		
+		vkGetSwapchainImagesKHR( device, pOutput->swapChain, &imageCount, nullptr );
+		pOutput->swapChainImages.resize( imageCount );
+		pOutput->swapChainImageViews.resize( imageCount );
+		vkGetSwapchainImagesKHR( device, pOutput->swapChain, &imageCount, pOutput->swapChainImages.data() );
+		
+		for ( uint32_t i = 0; i < pOutput->swapChainImages.size(); i++ )
+		{
+			VkImageViewCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			createInfo.image = pOutput->swapChainImages[ i ];
+			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			createInfo.format = pOutput->surfaceFormats[ surfaceFormat ].format;
+			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			createInfo.subresourceRange.baseMipLevel = 0;
+			createInfo.subresourceRange.levelCount = 1;
+			createInfo.subresourceRange.baseArrayLayer = 0;
+			createInfo.subresourceRange.layerCount = 1;
+			
+			result = vkCreateImageView(device, &createInfo, nullptr, &pOutput->swapChainImageViews[ i ]);
+			
+			if ( result != VK_SUCCESS )
+				return false;
+		}
+		
+		acquire_next_image();
+	}
+	else
+	{
+		VkFormat imageFormat = DRMFormatToVulkan( g_nDRMFormat );
+		
+		if ( imageFormat == VK_FORMAT_UNDEFINED )
+		{
+			return false;
+		}
+		
+		bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
+		
+		if ( bSuccess != true )
+			return false;
+		
+		bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
+		
+		if ( bSuccess != true )
+			return false;
+	}
+
+	// Make and map constant buffer
+	
+	VkBufferCreateInfo bufferCreateInfo = {};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.pNext = nullptr;
+	bufferCreateInfo.size = sizeof( Composite_t );
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	
+	result = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &pOutput->constantBuffer );
+	
+	if ( result != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, pOutput->constantBuffer, &memRequirements);
+	
+	int memTypeIndex =  findMemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memRequirements.memoryTypeBits );
+	
+	if ( memTypeIndex == -1 )
+	{
+		return false;
+	}
+	
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = memTypeIndex;
+	
+	vkAllocateMemory( device, &allocInfo, nullptr, &pOutput->bufferMemory );
+	
+	vkBindBufferMemory( device, pOutput->constantBuffer, pOutput->bufferMemory, 0 );
+	vkMapMemory( device, pOutput->bufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&pOutput->pCompositeBuffer );
+	
+	if ( pOutput->pCompositeBuffer == nullptr )
+	{
+		return false;
+	}
+	
+	// Make command buffers
+	
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.pNext = nullptr,
+		.commandPool = commandPool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 2
+	};
+	
+	result = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, pOutput->commandBuffers);
+	
+	if ( result != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	pOutput->nCurCmdBuffer = 0;
+	
+	// Write the constant buffer itno descriptor set
 	VkDescriptorBufferInfo bufferInfo = {
-		.buffer = constantBuffer,
+		.buffer = g_output.constantBuffer,
 		.offset = 0,
 		.range = VK_WHOLE_SIZE
 	};
@@ -661,34 +853,6 @@ int init_device()
 	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 	
 	return true;
-}
-
-void fini_device()
-{
-	vkDestroyDevice(device, 0);
-}
-
-void acquire_next_image( void )
-{
-	vkAcquireNextImageKHR( device, swapChain, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &g_nSwapChainImageIndex );
-}
-
-void vulkan_present_to_window( void )
-{
-	VkPresentInfoKHR presentInfo = {};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	
-// 	presentInfo.waitSemaphoreCount = 1;
-// 	presentInfo.pWaitSemaphores = signalSemaphores;
-	
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &swapChain;
-	
-	presentInfo.pImageIndices = &g_nSwapChainImageIndex;
-	
-	vkQueuePresentKHR( queue, &presentInfo );
-	
-	acquire_next_image();
 }
 
 int vulkan_init(void)
@@ -717,134 +881,13 @@ int vulkan_init(void)
 		return 0;
 	}
 	
-	if ( BIsNested() == true )
-	{
-		SDL_Vulkan_CreateSurface( window, instance, &surface );
-		
-		if ( surface == VK_NULL_HANDLE )
-			return 0;
-		
-		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physicalDevice, surface, &surfaceCaps );
-		
-		if ( result != VK_SUCCESS )
-			return 0;
-		
-		uint32_t formatCount = 0;
-		result = vkGetPhysicalDeviceSurfaceFormatsKHR( physicalDevice, surface, &formatCount, nullptr );
-		
-		if ( result != VK_SUCCESS )
-			return 0;
-		
-		if ( formatCount != 0 ) {
-			surfaceFormats.resize( formatCount );
-			vkGetPhysicalDeviceSurfaceFormatsKHR( physicalDevice, surface, &formatCount, surfaceFormats.data() );
-			
-			if ( result != VK_SUCCESS )
-				return 0;
-		}
-		
-		uint32_t presentModeCount = 0;
-		result = vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr );
-		
-		if ( result != VK_SUCCESS )
-			return 0;
-		
-		if ( presentModeCount != 0 ) {
-			presentModes.resize(presentModeCount);
-			result = vkGetPhysicalDeviceSurfacePresentModesKHR( physicalDevice, surface, &presentModeCount, presentModes.data() );
-			
-			if ( result != VK_SUCCESS )
-				return 0;
-		}
-		
-		uint32_t imageCount = surfaceCaps.minImageCount + 1;
-		uint32_t surfaceFormat = 0;
-		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
-		{
-			if ( surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
-				break;
-		}
-		
-		if ( surfaceFormat == formatCount )
-			return 0;
-
-		VkSwapchainCreateInfoKHR createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = surface;
-		
-		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = surfaceFormats[ surfaceFormat ].format;
-		createInfo.imageColorSpace = surfaceFormats[surfaceFormat ].colorSpace;
-		createInfo.imageExtent = { g_nOutputWidth, g_nOutputHeight };
-		createInfo.imageArrayLayers = 1;
-		createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
-		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		createInfo.preTransform = surfaceCaps.currentTransform;
-		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		createInfo.presentMode = presentModes[0];
-		createInfo.clipped = VK_TRUE;
-		
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
-		
-		if (vkCreateSwapchainKHR( device, &createInfo, nullptr, &swapChain) != VK_SUCCESS ) {
-			return 0;
-		}
-		
-		vkGetSwapchainImagesKHR( device, swapChain, &imageCount, nullptr );
-		swapChainImages.resize( imageCount );
-		swapChainImageViews.resize( imageCount );
-		vkGetSwapchainImagesKHR( device, swapChain, &imageCount, swapChainImages.data() );
-		
-		for ( uint32_t i = 0; i < swapChainImages.size(); i++ )
-		{
-			VkImageViewCreateInfo createInfo = {};
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = swapChainImages[ i ];
-			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = surfaceFormats[ surfaceFormat ].format;
-			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			createInfo.subresourceRange.baseMipLevel = 0;
-			createInfo.subresourceRange.levelCount = 1;
-			createInfo.subresourceRange.baseArrayLayer = 0;
-			createInfo.subresourceRange.layerCount = 1;
-			
-			result = vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[ i ]);
-
-			if ( result != VK_SUCCESS )
-				return false;
-		}
-		
-		acquire_next_image();
-	}
-	
 	dyn_vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr( device, "vkGetMemoryFdKHR" );
 	if ( dyn_vkGetMemoryFdKHR == nullptr )
 		return 0;
 	
-	
-	if ( BIsNested() == false )
+	if ( vulkan_make_output( &g_output ) == false )
 	{
-		VkFormat imageFormat = DRMFormatToVulkan( g_nDRMFormat );
-
-		if ( imageFormat == VK_FORMAT_UNDEFINED )
-		{
-			return 0;
-		}
-		
-		bool bSuccess = outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
-		
-		if ( bSuccess != true )
-			return 0;
-		
-		bSuccess = outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
-		
-		if ( bSuccess != true )
-			return 0;
+		return 0;
 	}
 	
 	return 1;
@@ -930,8 +973,19 @@ void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
 	}
 	
 	{
+		VkImageView targetImageView;
+		
+		if ( BIsNested() == true )
+		{
+			targetImageView = g_output.swapChainImageViews[ g_output.nSwapChainImageIndex ];
+		}
+		else
+		{
+			targetImageView = g_output.outputImage[ g_output.nOutImage ].m_vkImageView;
+		}
+
 		VkDescriptorImageInfo imageInfo = {
-			.imageView = BIsNested() ? swapChainImageViews[ g_nSwapChainImageIndex ] : outputImage[ g_nOutImage ].m_vkImageView,
+			.imageView = targetImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 		};
 		
@@ -1028,26 +1082,12 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		pComposite->flSwapChannels = 1.0;
 	}
 
-	*g_pCompositeBuffer = *pComposite;
+	*g_output.pCompositeBuffer = *pComposite;
 	// XXX maybe flush something?
 	
 	vulkan_update_descriptor( pPipeline );
-
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		0,
-		commandPool,
-		VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		1
-	};
 	
-	VkCommandBuffer commandBuffer;
-	VkResult res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
+	VkCommandBuffer curCommandBuffer = g_output.commandBuffers[ g_output.nCurCmdBuffer ];
 	
 	VkCommandBufferBeginInfo commandBufferBeginInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1056,21 +1096,28 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		0
 	};
 	
-	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+	VkResult res = vkResetCommandBuffer( curCommandBuffer, 0 );
 	
 	if ( res != VK_SUCCESS )
 	{
 		return false;
 	}
 	
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+	res = vkBeginCommandBuffer( curCommandBuffer, &commandBufferBeginInfo);
 	
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+	
+	vkCmdBindDescriptorSets(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 	
-	vkCmdDispatch(commandBuffer, g_nOutputWidth / 16, g_nOutputHeight / 16, 1);
+	vkCmdDispatch(curCommandBuffer, g_nOutputWidth / 16, g_nOutputHeight / 16, 1);
 	
-	res = vkEndCommandBuffer(commandBuffer);
+	res = vkEndCommandBuffer(curCommandBuffer);
 	
 	if ( res != VK_SUCCESS )
 	{
@@ -1084,7 +1131,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		0,
 		0,
 		1,
-		&commandBuffer,
+		&curCommandBuffer,
 		0,
 		0
 	};
@@ -1100,15 +1147,17 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	
 	if ( BIsNested() == false )
 	{
-		g_nOutImage = !g_nOutImage;
+		g_output.nOutImage = !g_output.nOutImage;
 	}
+	
+	g_output.nCurCmdBuffer = !g_output.nCurCmdBuffer;
 	
 	return true;
 }
 
 uint32_t vulkan_get_last_composite_fbid( void )
 {
-	return outputImage[ !g_nOutImage ].m_FBID;
+	return g_output.outputImage[ !g_output.nOutImage ].m_FBID;
 }
 
 
