@@ -960,18 +960,18 @@ determine_and_apply_focus (Display *dpy)
 		return;
 	}
 	
-	if (fadeOutWindow.id == None && currentFocusWindow != focus->id)
-	{
-		// Initiate fade out if switching focus
-		w = find_win(dpy, currentFocusWindow);
-		
-		if (w)
-		{
-			ensure_win_resources(dpy, w);
-			fadeOutWindow = *w;
-			fadeOutStartTime = get_time_in_milliseconds();
-		}
-	}
+// 	if (fadeOutWindow.id == None && currentFocusWindow != focus->id)
+// 	{
+// 		// Initiate fade out if switching focus
+// 		w = find_win(dpy, currentFocusWindow);
+// 		
+// 		if (w)
+// 		{
+// 			ensure_win_resources(dpy, w);
+// 			fadeOutWindow = *w;
+// 			fadeOutStartTime = get_time_in_milliseconds();
+// 		}
+// 	}
 	
 	if (fadeOutWindow.id && currentFocusWindow != focus->id)
 	{
