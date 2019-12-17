@@ -20,6 +20,8 @@ std::vector< const char * > g_vecSDLInstanceExts;
 
 VkInstance instance;
 
+#define k_nMaxSets 8 // should only need one or two per output tops
+
 struct VulkanOutput_t
 {
 	VkSurfaceKHR surface;
@@ -500,11 +502,6 @@ int init_device()
 	{
 		return false;
 	}
-
-// probably hard to hit that even with 3 overlays, and a bunch of tracked windows
-// famous last words
-//#define k_nMaxSets 20
-#define k_nMaxSets 20000 // don't have time to cache or free stuff
 
 	VkDescriptorPoolSize descriptorPoolSize[] = {
 		{
