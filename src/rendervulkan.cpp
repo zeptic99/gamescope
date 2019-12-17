@@ -368,6 +368,37 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	return true;
 }
 
+CVulkanTexture::~CVulkanTexture( void )
+{
+	if ( m_vkImageView != VK_NULL_HANDLE )
+	{
+		vkDestroyImageView( device, m_vkImageView, nullptr );
+		m_vkImageView = VK_NULL_HANDLE;
+	}
+	
+	if ( m_FBID != 0 )
+	{
+		drm_free_fbid( &g_DRM, m_FBID );
+		m_FBID = 0;
+	}
+	
+	
+	if ( m_vkImage != VK_NULL_HANDLE )
+	{
+		vkDestroyImage( device, m_vkImage, nullptr );
+		m_vkImage = VK_NULL_HANDLE;
+	}
+	
+	
+	if ( m_vkImageMemory != VK_NULL_HANDLE )
+	{
+		vkFreeMemory( device, m_vkImageMemory, nullptr );	
+		m_vkImageMemory = VK_NULL_HANDLE;
+	}
+	
+	m_bInitialized = false;
+}
+
 
 int init_device()
 {
@@ -918,7 +949,10 @@ void vulkan_free_texture( VulkanTexture_t vulkanTex )
 
 	assert( g_mapVulkanTextures[ vulkanTex ] != nullptr );
 	
-	// actually free something at some point
+	// we'll just free it here for now because we WaitIdle immediately after drawing
+	// TODO move this into deferred free at some point
+	delete g_mapVulkanTextures[ vulkanTex ];
+	g_mapVulkanTextures[ vulkanTex ] = nullptr;
 }
 
 bool operator==(const struct VulkanPipeline_t::LayerBinding_t& lhs, struct VulkanPipeline_t::LayerBinding_t& rhs)

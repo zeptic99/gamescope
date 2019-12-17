@@ -59,6 +59,8 @@ class CVulkanTexture
 public:
 	bool BInit(uint32_t width, uint32_t height, VkFormat format, bool bFlippable, bool bTextureable, wlr_dmabuf_attributes *pDMA = nullptr );
 	
+	~CVulkanTexture( void );
+	
 	bool m_bInitialized = false;
 
 	VkImage m_vkImage = VK_NULL_HANDLE;
