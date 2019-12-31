@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/epoll.h>
 
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
@@ -94,7 +95,8 @@ int wlserver_init(int argc, char **argv, Bool bIsNested) {
 	
 	wlserver.wlr.session = ( bIsDRM == True ) ? wlr_session_create(wlserver.wl_display) : NULL;
 	
-	wlserver.wl_event_loop = wl_display_get_event_loop(wlserver.wl_display);	
+	wlserver.wl_event_loop = wl_display_get_event_loop(wlserver.wl_display);
+	wlserver.wl_event_loop_fd = wl_event_loop_get_fd( wlserver.wl_event_loop );
 	
 	wlserver.wlr.backend = wlr_multi_backend_create(wlserver.wl_display);
 	
@@ -179,15 +181,42 @@ void wlserver_unlock(void)
 
 int wlserver_run(void)
 {
+	int epoll_fd = epoll_create( 1 );
+	struct epoll_event ev;
+	struct epoll_event events[128];
+	int n;
+	
+	ev.events = EPOLLIN;
+	
+	if ( epoll_fd == -1 ||
+		epoll_ctl( epoll_fd, EPOLL_CTL_ADD, wlserver.wl_event_loop_fd, &ev ) == -1 )
+	{
+		return 1;
+	}
+
 	while ( 1 )
 	{
-		wlserver_lock();
-		wl_display_flush_clients(wlserver.wl_display);
-		int ret = wl_event_loop_dispatch(wlserver.wl_event_loop, 0);
-		wlserver_unlock();
-		if (ret < 0) {
+		n = epoll_wait( epoll_fd, events, 128, -1 );
+		if ( n == -1 )
+		{
 			break;
 		}
+		
+		// We have wayland stuff to do, do it while locked
+		wlserver_lock();
+		
+		for ( int i = 0; i < n; i++ )
+		{
+			wl_display_flush_clients(wlserver.wl_display);
+			int ret = wl_event_loop_dispatch(wlserver.wl_event_loop, 0);
+			if (ret < 0) {
+				wlserver_unlock();
+				break;
+			}
+			wl_display_flush_clients(wlserver.wl_display);
+		}
+
+		wlserver_unlock();
 	}
 
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise

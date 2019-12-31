@@ -14,6 +14,7 @@
 struct wlserver_t {
 	struct wl_display *wl_display;
 	struct wl_event_loop *wl_event_loop;
+	int wl_event_loop_fd;
 
 	struct {
 		struct wlr_backend *backend;
