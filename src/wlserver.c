@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
@@ -164,9 +165,31 @@ int wlserver_init(int argc, char **argv, Bool bIsNested) {
 	return 0;
 }
 
+pthread_mutex_t waylock = PTHREAD_MUTEX_INITIALIZER;
+
+void wlserver_lock(void)
+{
+	pthread_mutex_lock(&waylock);
+}
+
+void wlserver_unlock(void)
+{
+	pthread_mutex_unlock(&waylock);
+}
+
 int wlserver_run(void)
 {
-	wl_display_run(wlserver.wl_display);
+	while ( 1 )
+	{
+		wlserver_lock();
+		wl_display_flush_clients(wlserver.wl_display);
+		int ret = wl_event_loop_dispatch(wlserver.wl_event_loop, 0);
+		wlserver_unlock();
+		if (ret < 0) {
+			break;
+		}
+	}
+
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise
 	// wlroots will restart it automatically.
 	wlr_xwayland_destroy(wlserver.wlr.xwayland);

@@ -1416,6 +1416,8 @@ static void
 handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 {
 	struct wlr_surface *surface = NULL;
+	
+	wlserver_lock();
 
 	struct wl_resource *resource = wl_client_get_object(wlserver.wlr.xwayland->client, surfaceID);
 	if (resource) {
@@ -1424,14 +1426,18 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 	else
 	{
 		fprintf (stderr, "wayland surface for window not found, implement pending list for late surface notification\n");
+		wlserver_unlock();
 		return;
 	}
 	
 	if (!wlr_surface_set_role(surface, &xwayland_surface_role, w, NULL, 0))
 	{
 		fprintf (stderr, "Failed to set xwayland surface role");
+		wlserver_unlock();
 		return;
 	}
+	
+	wlserver_unlock();
 		
 	w->wlrsurface = surface;
 }
@@ -1587,7 +1593,9 @@ void check_new_wayland_res(void)
 					// Acknowledge previous one, seems we can get hangs if we don't.
 					struct timespec now;
 					clock_gettime(CLOCK_MONOTONIC, &now);
+					wlserver_lock();
 					wlr_surface_send_frame_done(w->wlrsurface, &now);
+					wlserver_unlock();
 				}
 				
 				w->committed = True;
@@ -2056,7 +2064,9 @@ steamcompmgr_main (int argc, char **argv)
 				if ( w->wlrsurface && w->committed == True )
 				{
 					// Acknowledge commit once.
+					wlserver_lock();
 					wlr_surface_send_frame_done(w->wlrsurface, &now);
+					wlserver_unlock();
 					
 					w->committed = False;
 				}

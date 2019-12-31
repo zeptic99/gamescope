@@ -46,6 +46,9 @@ int wlserver_run(void);
 
 void nudge_steamcompmgr(void);
 
+void wlserver_lock(void);
+void wlserver_unlock(void);
+
 #ifndef C_SIDE
 }
 #endif
