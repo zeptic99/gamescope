@@ -10,7 +10,6 @@
 #include "steamcompmgr.h"
 
 #include "main.hpp"
-#include "main.h"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 
@@ -71,8 +70,6 @@ int main(int argc, char **argv)
 	initOutput();
 
 	wlserver_init(argc, argv, g_bIsNested == true );
-	
-	register_signal();
 	
 	wlserver_run();
 }

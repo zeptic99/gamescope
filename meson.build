@@ -17,25 +17,6 @@ vulkan_dep = dependency('vulkan')
 
 cc = meson.get_compiler('c')
 
-add_project_arguments(cc.get_supported_arguments([
-	'-Wundef',
-	'-Wlogical-op',
-	'-Wmissing-include-dirs',
-	'-Wold-style-definition',
-	'-Wpointer-arith',
-	'-Winit-self',
-	'-Wstrict-prototypes',
-	'-Wimplicit-fallthrough=2',
-	'-Wendif-labels',
-	'-Wstrict-aliasing=2',
-	'-Woverflow',
-
-	'-Wno-missing-braces',
-	'-Wno-missing-field-initializers',
-	'-Wno-unused-parameter',
-]), language: 'c')
-
-
 wayland_server = dependency('wayland-server')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
 pixman         = dependency('pixman-1')
@@ -63,7 +44,6 @@ executable(
     'steamcompmgr',
     'src/steamcompmgr.c',
     'src/main.cpp',
-	'src/main.c',
 	'src/wlserver.c',
 	'src/drm.cpp',
 	[ 'src/rendervulkan.cpp', spirv_shader ],

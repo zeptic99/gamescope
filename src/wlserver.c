@@ -29,7 +29,7 @@ void sig_handler(int signal)
 
 	if (wlserver.wl_display)
 	{
-	wl_display_terminate(wlserver.wl_display);
+		wl_display_terminate(wlserver.wl_display);
 	}
 }
 
@@ -83,6 +83,13 @@ const struct wlr_surface_role xwayland_surface_role = {
 	.commit = xwayland_surface_role_commit,
 	.precommit = xwayland_surface_role_precommit,
 };
+
+static void xwayland_ready(struct wl_listener *listener, void *data)
+{
+	startSteamCompMgr();
+}
+
+struct wl_listener xwayland_ready_listener = { .notify = xwayland_ready };
 
 int wlserver_init(int argc, char **argv, Bool bIsNested) {
 	bool bIsDRM = bIsNested == False;
@@ -163,6 +170,8 @@ int wlserver_init(int argc, char **argv, Bool bIsNested) {
 
 	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
 	wlr_xwayland_set_seat(wlserver.wlr.xwayland, wlserver.wlr.seat);
+	
+	wl_signal_add(&wlserver.wlr.xwayland->events.ready, &xwayland_ready_listener);
 
 	return 0;
 }

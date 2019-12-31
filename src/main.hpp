@@ -13,6 +13,7 @@ void initOutput(void);
 	
 void startSteamCompMgr(void);
 
+void register_signal(void);
 
 struct ResListEntry_t {
 	struct wlr_surface *surf;
