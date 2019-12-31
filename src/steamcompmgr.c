@@ -1348,6 +1348,27 @@ static void map_request (Display *dpy, XMapRequestEvent *mapRequest)
 	XMapWindow( dpy, mapRequest->window );
 }
 
+static void configure_request (Display *dpy, XConfigureRequestEvent *configureRequest)
+{
+	XWindowChanges changes = 
+	{
+		.x = configureRequest->x,
+		.y = configureRequest->y,
+		.width = configureRequest->width,
+		.height = configureRequest->height,
+		.border_width = configureRequest->border_width,
+		.sibling = configureRequest->above,
+		.stack_mode = configureRequest->detail
+	};
+
+	XConfigureWindow( dpy, configureRequest->window, configureRequest->value_mask, &changes );
+}
+
+static void circulate_request ( Display *dpy, XCirculateRequestEvent *circulateRequest )
+{
+	XCirculateSubwindows( dpy, circulateRequest->window, circulateRequest->place );
+}
+
 static void
 finish_destroy_win (Display *dpy, Window id, Bool gone)
 {
@@ -1839,10 +1860,16 @@ steamcompmgr_main (int argc, char **argv)
 					}
 					break;
 				case CirculateNotify:
-					circulate_win (dpy, &ev.xcirculate);
+					circulate_win(dpy, &ev.xcirculate);
 					break;
 				case MapRequest:
-					map_request (dpy, &ev.xmaprequest);
+					map_request(dpy, &ev.xmaprequest);
+					break;
+				case ConfigureRequest:
+					configure_request(dpy, &ev.xconfigurerequest);
+					break;
+				case CirculateRequest:
+					circulate_request(dpy, &ev.xcirculaterequest);
 					break;
 				case Expose:
 					break;
