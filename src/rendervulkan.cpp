@@ -740,7 +740,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 		
 		createInfo.preTransform = pOutput->surfaceCaps.currentTransform;
 		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		createInfo.presentMode = pOutput->presentModes[0];
+		createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
 		createInfo.clipped = VK_TRUE;
 		
 		createInfo.oldSwapchain = VK_NULL_HANDLE;
