@@ -23,14 +23,12 @@ struct wlserver_t wlserver;
 
 Display *g_XWLDpy;
 
+static bool run = true;
+
 void sig_handler(int signal)
 {
 	wlr_log(WLR_DEBUG, "Received kill signal. Terminating!");
-
-	if (wlserver.wl_display)
-	{
-		wl_display_terminate(wlserver.wl_display);
-	}
+	run = false;
 }
 
 void nudge_steamcompmgr(void)
@@ -204,7 +202,7 @@ int wlserver_run(void)
 		return 1;
 	}
 
-	while ( 1 )
+	while ( run )
 	{
 		n = epoll_wait( epoll_fd, events, 128, -1 );
 		if ( n == -1 )
