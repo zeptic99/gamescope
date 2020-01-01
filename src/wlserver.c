@@ -185,6 +185,7 @@ void wlserver_lock(void)
 
 void wlserver_unlock(void)
 {
+	wl_display_flush_clients(wlserver.wl_display);
 	pthread_mutex_unlock(&waylock);
 }
 
@@ -222,7 +223,6 @@ int wlserver_run(void)
 				wlserver_unlock();
 				break;
 			}
-			wl_display_flush_clients(wlserver.wl_display);
 		}
 
 		wlserver_unlock();
