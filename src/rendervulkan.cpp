@@ -1,5 +1,8 @@
 // Initialize Vulkan and composite stuff with a compute queue
 
+#include <stdio.h>
+#include <string.h>
+
 #include "rendervulkan.hpp"
 #include "main.hpp"
 
@@ -61,6 +64,13 @@ VkPipelineLayout pipelineLayout;
 VkDescriptorSet descriptorSet;
 
 VkPipeline pipeline;
+
+VkBuffer uploadBuffer;
+VkDeviceMemory uploadBufferMemory;
+void *pUploadBuffer;
+
+bool bUploadCmdBufferIdle;
+VkCommandBuffer uploadCommandBuffer;
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -184,6 +194,12 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 
 	VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
 	VkImageUsageFlags usage = bTextureable ? VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_STORAGE_BIT;
+	
+	if ( bTextureable == true && pDMA == nullptr )
+	{
+		// If we're not importing it, we'll need to copy bits into it later 
+		usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	}
 
 	VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	
@@ -640,6 +656,61 @@ int init_device()
 		return false;
 	}
 	
+	// Make and map upload buffer
+	
+	VkBufferCreateInfo bufferCreateInfo = {};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.pNext = nullptr;
+	bufferCreateInfo.size = 512 * 512 * 4;
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	
+	result = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &uploadBuffer );
+	
+	if ( result != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, uploadBuffer, &memRequirements);
+	
+	int memTypeIndex =  findMemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memRequirements.memoryTypeBits );
+	
+	if ( memTypeIndex == -1 )
+	{
+		return false;
+	}
+	
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = memTypeIndex;
+	
+	vkAllocateMemory( device, &allocInfo, nullptr, &uploadBufferMemory);
+	
+	vkBindBufferMemory( device, uploadBuffer, uploadBufferMemory, 0 );
+	vkMapMemory( device, uploadBufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&pUploadBuffer );
+	
+	if ( pUploadBuffer == nullptr )
+	{
+		return false;
+	}
+	
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.pNext = nullptr,
+		.commandPool = commandPool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+	
+	result = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &uploadCommandBuffer );
+	
+	if ( result != VK_SUCCESS )
+	{
+		return false;
+	}
+	
 	return true;
 }
 
@@ -939,6 +1010,87 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 	return ret;
 }
 
+VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, void *bits )
+{
+	VulkanTexture_t ret = 0;
+	
+	CVulkanTexture *pTex = new CVulkanTexture();
+	
+	if ( pTex->BInit( width, height, format, false, true, nullptr ) == false )
+	{
+		delete pTex;
+		return ret;
+	}
+	
+	memcpy( pUploadBuffer, bits, width * height * 4 );
+	
+	VkCommandBufferBeginInfo commandBufferBeginInfo = {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		0,
+		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		0
+	};
+	
+	assert( bUploadCmdBufferIdle == true );
+	
+	VkResult res = vkResetCommandBuffer( uploadCommandBuffer, 0 );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	res = vkBeginCommandBuffer( uploadCommandBuffer, &commandBufferBeginInfo);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkBufferImageCopy region = {};
+	
+	region.imageSubresource = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.layerCount = 1
+	};
+	
+	region.imageExtent = {
+		.width = width,
+		.height = height,
+		.depth = 1
+	};
+	
+	vkCmdCopyBufferToImage( uploadCommandBuffer, uploadBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
+	
+	res = vkEndCommandBuffer( uploadCommandBuffer );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	VkSubmitInfo submitInfo = {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		0,
+		0,
+		0,
+		0,
+		1,
+		&uploadCommandBuffer,
+		0,
+		0
+	};
+	
+	res = vkQueueSubmit(queue, 1, &submitInfo, 0);
+	
+	bUploadCmdBufferIdle = false;
+	
+	ret = ++g_nMaxVulkanTexHandle;
+	g_mapVulkanTextures[ ret ] = pTex;
+	
+	return ret;
+}
+
 void vulkan_free_texture( VulkanTexture_t vulkanTex )
 {
 	if ( vulkanTex == 0 )
@@ -1175,6 +1327,8 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	}
 	
 	vkQueueWaitIdle( queue );
+	
+	bUploadCmdBufferIdle = true;
 	
 	if ( BIsNested() == false )
 	{

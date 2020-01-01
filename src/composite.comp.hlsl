@@ -65,6 +65,13 @@ void main(
 		outputValue = layerSample * layerAlpha + outputValue * ( 1.0 - layerAlpha );
 	}
 	
+	if ( flLayerCount >= 3.0f )
+	{
+		float4 layerSample = inLayerTex2.Sample( sampler2, ( float2( index ) + float2( flOffset2X, flOffset2Y ) ) * float2( flScale2X, flScale2Y ) );
+		float layerAlpha = flOpacity2 * layerSample.a;
+		outputValue = layerSample * layerAlpha + outputValue * ( 1.0 - layerAlpha );
+	}
+	
 	if ( flSwapChannels == 1.0 )
 	{
 		outImage [index] = outputValue.bgra;

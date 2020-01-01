@@ -81,6 +81,7 @@ extern std::vector< const char * > g_vecSDLInstanceExts;
 int vulkan_init(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
+VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, void *bits );
 void vulkan_free_texture( VulkanTexture_t vulkanTex );
 
 bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );

@@ -134,10 +134,8 @@ int 			cursorX, cursorY;
 Bool 			cursorImageDirty = True;
 int 			cursorHotX, cursorHotY;
 int				cursorWidth, cursorHeight;
-// GLuint			cursorTextureName;
+VulkanTexture_t cursorTexture;
 
-Bool			cursorVisible = True;
-Bool			hideCursorForScale;
 Bool			hideCursorForMovement;
 unsigned int	lastCursorMovedTime;
 
@@ -360,25 +358,6 @@ ensure_win_resources (Display *dpy, win *w)
 }
 
 static void
-apply_cursor_state (Display *dpy)
-{
-	Bool newCursorVisibility = True;
-	
-	if (hideCursorForScale || hideCursorForMovement)
-		newCursorVisibility = False;
-	
-	if (newCursorVisibility != cursorVisible)
-	{
-		cursorVisible = newCursorVisibility;
-		
-		if (cursorVisible)
-			XFixesShowCursor(dpy, DefaultRootWindow(dpy));
-		else
-			XFixesHideCursor(dpy, DefaultRootWindow(dpy));
-	}
-}
-
-static void
 handle_mouse_movement(Display *dpy, int posX, int posY)
 {
 	// Some stuff likes to warp in-place
@@ -390,7 +369,7 @@ handle_mouse_movement(Display *dpy, int posX, int posY)
 	
 	win *w = find_win(dpy, currentFocusWindow);
 	
-	if (w && focusedWindowNeedsScale && gameFocused)
+	if (w && gameFocused)
 	{
 		w->damaged = 1;
 	}
@@ -404,11 +383,10 @@ handle_mouse_movement(Display *dpy, int posX, int posY)
 	lastCursorMovedTime = get_time_in_milliseconds();
 	
 	hideCursorForMovement = False;
-	apply_cursor_state(dpy);
 }
 
 static void
-paint_fake_cursor (Display *dpy, win *w)
+paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
 	float scaledCursorX, scaledCursorY;
 	
@@ -437,16 +415,20 @@ paint_fake_cursor (Display *dpy, win *w)
 		cursorWidth = im->width;
 		cursorHeight = im->height;
 		
-// 		unsigned int cursorDataBuffer[cursorWidth * cursorHeight];
-// 		for (int i = 0; i < cursorWidth * cursorHeight; i++)
-// 			cursorDataBuffer[i] = im->pixels[i];
+		if ( cursorTexture != 0 )
+		{
+			vulkan_free_texture( cursorTexture );
+			cursorTexture = 0;
+		}
 		
-// 		glBindTexture(GL_TEXTURE_2D, cursorTextureName);
-// 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cursorWidth, cursorHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, cursorDataBuffer);
-// 		
-// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		unsigned int cursorDataBuffer[cursorWidth * cursorHeight];
+		for (int i = 0; i < cursorWidth * cursorHeight; i++)
+			cursorDataBuffer[i] = im->pixels[i];
 		
+		cursorTexture = vulkan_create_texture_from_bits( cursorWidth, cursorHeight, VK_FORMAT_R8G8B8A8_UNORM, cursorDataBuffer );
+		
+		assert( cursorTexture != 0 );
+
 		XFree(im);
 		
 		cursorImageDirty = False;
@@ -461,13 +443,6 @@ paint_fake_cursor (Display *dpy, win *w)
 		scaledCursorX += ((w->a.width / 2) - win_x) * cursorScaleRatio * globalScaleRatio;
 		scaledCursorY += ((w->a.height / 2) - win_y) * cursorScaleRatio * globalScaleRatio;
 	}
-	
-// 	glEnable(GL_BLEND);
-// 	glBindTexture(GL_TEXTURE_2D, cursorTextureName);
-// 	glEnable(GL_TEXTURE_2D);
-// 	
-// 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-// 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	
 	win *mainOverlayWindow = find_win(dpy, currentOverlayWindow);
 	
@@ -492,21 +467,26 @@ paint_fake_cursor (Display *dpy, win *w)
 	scaledCursorX = scaledCursorX - (cursorHotX * displayCursorScaleRatio);
 	scaledCursorY = scaledCursorY - (cursorHotY * displayCursorScaleRatio);
 	
-// 	float displayCursorWidth = cursorWidth * displayCursorScaleRatio;
-// 	float displayCursorHeight = cursorHeight * displayCursorScaleRatio;
+	int curLayer = (int)pComposite->flLayerCount;
 	
-// 	glColor3f(1.0f, 1.0f, 1.0f);
-// 	
-// 	glBegin (GL_QUADS);
-// 	glTexCoord2d (0.0f, 0.0f);
-// 	glVertex2d (scaledCursorX, scaledCursorY);
-// 	glTexCoord2d (1.0f, 0.0f);
-// 	glVertex2d (scaledCursorX + displayCursorWidth, scaledCursorY);
-// 	glTexCoord2d (1.0f, 1.0f);
-// 	glVertex2d (scaledCursorX + displayCursorWidth, scaledCursorY + displayCursorHeight);
-// 	glTexCoord2d (0.0f, 1.0f);
-// 	glVertex2d (scaledCursorX, scaledCursorY + displayCursorHeight);
-// 	glEnd ();
+	pComposite->layers[ curLayer ].flOpacity = 1.0;
+	
+	pComposite->layers[ curLayer ].flScaleX = displayCursorScaleRatio;
+	pComposite->layers[ curLayer ].flScaleY = displayCursorScaleRatio;
+	
+	pComposite->layers[ curLayer ].flOffsetX = -scaledCursorX;
+	pComposite->layers[ curLayer ].flOffsetY = -scaledCursorY;
+	
+	pPipeline->layerBindings[ curLayer ].surfaceWidth = cursorWidth;
+	pPipeline->layerBindings[ curLayer ].surfaceHeight = cursorHeight;
+	
+	pPipeline->layerBindings[ curLayer ].tex = cursorTexture;
+	pPipeline->layerBindings[ curLayer ].fbid = 0;
+	
+	pPipeline->layerBindings[ curLayer ].bFilter = false;
+	pPipeline->layerBindings[ curLayer ].bBlackBorder = false;
+	
+	pComposite->flLayerCount += 1.0f;
 }
 
 static void
@@ -770,11 +750,11 @@ paint_all (Display *dpy)
 		notification->damaged = 0;
 	}
 	
-	// Draw SW cursor if we need to
-	if (w && focusedWindowNeedsScale && gameFocused)
+	// Draw cursor if we need to
+	if (w && gameFocused)
 	{
 		if (!hideCursorForMovement)
-			paint_fake_cursor(dpy, w);
+			paint_cursor( dpy, w, &composite, &pipeline );
 	}
 	
 	if (drawDebugInfo)
@@ -859,20 +839,6 @@ setup_pointer_barriers (Display *dpy)
 			XFixesDestroyPointerBarrier(dpy, scaledFocusBarriers[i]);
 			scaledFocusBarriers[i] = None;
 		}
-	}
-	
-	if (focusedWindowNeedsScale == False && gameFocused)
-	{
-		hideCursorForScale = False;
-		apply_cursor_state(dpy);
-		return;
-	}
-	
-	// If we're scaling, take ownership of the cursor
-	if (doRender)
-	{
-		hideCursorForScale = True;
-		apply_cursor_state(dpy);
 	}
 	
 	if (!gameFocused)
@@ -990,12 +956,15 @@ determine_and_apply_focus (Display *dpy)
 		
 		focusedWindowNeedsScale = True;
 		cursorScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-		
-		cursorOffsetX = (root_width - w->a.width * cursorScaleRatio * globalScaleRatio) / 2.0f;
-		cursorOffsetY = (root_height - w->a.height * cursorScaleRatio * globalScaleRatio) / 2.0f;
 	}
 	else
+	{
 		focusedWindowNeedsScale = False;
+		cursorScaleRatio = 1.0f;
+	}
+	
+	cursorOffsetX = (root_width - w->a.width * cursorScaleRatio * globalScaleRatio) / 2.0f;
+	cursorOffsetY = (root_height - w->a.height * cursorScaleRatio * globalScaleRatio) / 2.0f;
 	
 	setup_pointer_barriers(dpy);
 	
@@ -1781,7 +1750,6 @@ steamcompmgr_main (int argc, char **argv)
 	
 	// Start it with the cursor hidden until moved by user
 	hideCursorForMovement = True;
-	apply_cursor_state(dpy);
 	
 	gamesRunningCount = get_prop(dpy, root, gamesRunningAtom, 0);
 	overscanScaleRatio = get_prop(dpy, root, screenScaleAtom, 0xFFFFFFFF) / (double)0xFFFFFFFF;
@@ -2061,16 +2029,14 @@ steamcompmgr_main (int argc, char **argv)
 			{
 				hideCursorForMovement = False;
 				lastCursorMovedTime = get_time_in_milliseconds();
-				apply_cursor_state(dpy);
 			}
 			
 			if (!hideCursorForMovement &&
 				(get_time_in_milliseconds() - lastCursorMovedTime) > CURSOR_HIDE_TIME)
 			{
 				hideCursorForMovement = True;
-				apply_cursor_state(dpy);
 				
-				// If hiding and was drawing the fake cursor, force redraw
+				// We're hiding the cursor, force redraw by marking focused window damaged
 				win *w = find_win(dpy, currentFocusWindow);
 				
 				// Rearm warp count
@@ -2079,7 +2045,7 @@ steamcompmgr_main (int argc, char **argv)
 					w->mouseMoved = 0;
 				}
 				
-				if (w && focusedWindowNeedsScale && gameFocused)
+				if (w && gameFocused)
 				{
 					w->damaged = 1;
 				}
