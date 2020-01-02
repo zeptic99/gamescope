@@ -12,6 +12,7 @@
 #include "main.hpp"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
+#include "inputsdl.hpp"
 
 int ac;
 char **av;
@@ -67,8 +68,10 @@ int main(int argc, char **argv)
 	
 	XInitThreads();
 	
+	inputsdl_init();
+	
 	initOutput();
-
+	
 	wlserver_init(argc, argv, g_bIsNested == true );
 	
 	wlserver_run();
@@ -96,8 +99,6 @@ void initOutput(void)
 
 	if ( g_bIsNested == true )
 	{
-		SDL_Init(SDL_INIT_VIDEO);
-
 		window = SDL_CreateWindow( "steamcompmgr", SDL_WINDOWPOS_UNDEFINED,
 								   SDL_WINDOWPOS_UNDEFINED, g_nOutputWidth,
 								   g_nOutputHeight, SDL_WINDOW_VULKAN );

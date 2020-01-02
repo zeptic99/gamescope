@@ -46,6 +46,7 @@ executable(
     'src/main.cpp',
 	'src/wlserver.c',
 	'src/drm.cpp',
+	'src/inputsdl.cpp',
 	[ 'src/rendervulkan.cpp', spirv_shader ],
     dependencies : [
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext,

@@ -25,9 +25,9 @@ struct wlserver_t {
 		struct wlr_seat *seat;
 		struct wlr_output *output;
 		
-		// Only for nested
-		struct wlr_input_device *keyboard;
-		struct wlr_input_device *pointer;
+// 		// Only for nested (?)
+// 		struct wlr_input_device *keyboard_dev;
+// 		struct wlr_input_device *pointer_dev;
 	} wlr;
 };
 
@@ -41,7 +41,7 @@ extern "C" {
 
 extern const struct wlr_surface_role xwayland_surface_role;
 
-int wlserver_init( int argc, char **argv, Bool bIsNested );
+int wlserver_init( int argc, char **argv, bool bIsNested );
 
 int wlserver_run(void);
 
@@ -49,6 +49,11 @@ void nudge_steamcompmgr(void);
 
 void wlserver_lock(void);
 void wlserver_unlock(void);
+
+void wlserver_mousefocus( struct wlr_surface *wlrsurface );
+void wlserver_mousemotion( int x, int y, uint32_t time );
+void wlserver_mousebutton( int button, bool press, uint32_t time );
+void wlserver_mousewheel( int x, int y, uint32_t time );
 
 #ifndef C_SIDE
 }

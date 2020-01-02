@@ -945,6 +945,14 @@ determine_and_apply_focus (Display *dpy)
 	}
 	
 	currentFocusWindow = focus->id;
+	
+	if ( w != focus )
+	{
+		wlserver_lock();
+		wlserver_mousefocus( focus->wlrsurface );
+		wlserver_unlock();
+	}
+	
 	w = focus;
 	
 	set_win_hidden(dpy, w, False);

@@ -1,9 +1,13 @@
 #define _POSIX_C_SOURCE 200112L
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdio.h> 
+#include <string.h> 
 #include <sys/epoll.h>
 
 #include <wayland-server-core.h>
@@ -11,6 +15,7 @@
 #include <wlr/backend/headless.h>
 #include <wlr/backend/multi.h>
 #include <wlr/backend/libinput.h>
+#include <wlr/interfaces/wlr_pointer.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/util/log.h>
 
@@ -89,8 +94,8 @@ static void xwayland_ready(struct wl_listener *listener, void *data)
 
 struct wl_listener xwayland_ready_listener = { .notify = xwayland_ready };
 
-int wlserver_init(int argc, char **argv, Bool bIsNested) {
-	bool bIsDRM = bIsNested == False;
+int wlserver_init(int argc, char **argv, bool bIsNested) {
+	bool bIsDRM = bIsNested == false;
 	
 	wlr_log_init(WLR_DEBUG, NULL);
 	wlserver.wl_display = wl_display_create();
@@ -129,11 +134,11 @@ int wlserver_init(int argc, char **argv, Bool bIsNested) {
 		}
 		wlr_multi_backend_add(wlserver.wlr.backend, libinput_backend);
 	}
-	else
-	{
-		wlserver.wlr.keyboard = wlr_headless_add_input_device( headless_backend, WLR_INPUT_DEVICE_KEYBOARD );
-		wlserver.wlr.pointer = wlr_headless_add_input_device( headless_backend, WLR_INPUT_DEVICE_POINTER );
-	}
+// 	else
+// 	{
+// 		wlserver.wlr.keyboard_dev = wlr_headless_add_input_device( headless_backend, WLR_INPUT_DEVICE_KEYBOARD );
+// 		wlserver.wlr.pointer_dev = wlr_headless_add_input_device( headless_backend, WLR_INPUT_DEVICE_POINTER );
+// 	}
 	
 	wlserver.wlr.renderer = wlr_backend_get_renderer(wlserver.wlr.backend);
 	
@@ -167,6 +172,10 @@ int wlserver_init(int argc, char **argv, Bool bIsNested) {
 	setenv("WAYLAND_DISPLAY", socket, true);
 
 	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
+	
+	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD );
+// 	wlr_seat_set_keyboard( wlserver.wlr.seat, wlserver.wlr.keyboard_dev );
+
 	wlr_xwayland_set_seat(wlserver.wlr.xwayland, wlserver.wlr.seat);
 	
 	wl_signal_add(&wlserver.wlr.xwayland->events.ready, &xwayland_ready_listener);
@@ -232,4 +241,34 @@ int wlserver_run(void)
 	wl_display_destroy_clients(wlserver.wl_display);
 	wl_display_destroy(wlserver.wl_display);
 	return 0;
+}
+
+void wlserver_mousefocus( struct wlr_surface *wlrsurface )
+{
+	wlr_seat_pointer_notify_enter( wlserver.wlr.seat, wlrsurface, 0.5, 0.5 );
+}
+
+void wlserver_mousemotion( int x, int y, uint32_t time )
+{
+	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, x, y );
+	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+}
+
+void wlserver_mousebutton( int button, bool press, uint32_t time )
+{
+	wlr_seat_pointer_notify_button( wlserver.wlr.seat, time, button, press ? WLR_BUTTON_PRESSED : WLR_BUTTON_RELEASED );
+	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+}
+
+void wlserver_mousewheel( int x, int y, uint32_t time )
+{
+	if ( x != 0 )
+	{
+		wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_HORIZONTAL, x, x, WLR_AXIS_SOURCE_WHEEL );
+	}
+	if ( y != 0 )
+	{
+		wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_VERTICAL, y, y, WLR_AXIS_SOURCE_WHEEL );
+	}
+	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
