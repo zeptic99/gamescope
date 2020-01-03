@@ -444,35 +444,16 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 		scaledCursorY += ((w->a.height / 2) - win_y) * cursorScaleRatio * globalScaleRatio;
 	}
 	
-	win *mainOverlayWindow = find_win(dpy, currentOverlayWindow);
-	
-	float displayCursorScaleRatio = 1.0f;
-	
-	// Ensure the cursor looks the same size as in Steam or the overlay
-	if (mainOverlayWindow)
-	{
-		// The first scale we need to apply is the Steam/overlay scale, if it exists
-		float steamScaleX = (float)root_width / mainOverlayWindow->a.width;
-		float steamScaleY = (float)root_height / mainOverlayWindow->a.height;
-		
-		float steamRatio = (steamScaleX < steamScaleY) ? steamScaleX : steamScaleY;
-		
-		displayCursorScaleRatio *= steamRatio;
-		
-		// Then any global scale, since it would also apply to the Steam window and its SW cursor
-		displayCursorScaleRatio *= globalScaleRatio;
-	}
-	
 	// Apply the cursor offset inside the texture using the display scale
-	scaledCursorX = scaledCursorX - (cursorHotX * displayCursorScaleRatio);
-	scaledCursorY = scaledCursorY - (cursorHotY * displayCursorScaleRatio);
+	scaledCursorX = scaledCursorX - cursorHotX;
+	scaledCursorY = scaledCursorY - cursorHotY;
 	
 	int curLayer = (int)pComposite->flLayerCount;
 	
 	pComposite->layers[ curLayer ].flOpacity = 1.0;
 	
-	pComposite->layers[ curLayer ].flScaleX = displayCursorScaleRatio;
-	pComposite->layers[ curLayer ].flScaleY = displayCursorScaleRatio;
+	pComposite->layers[ curLayer ].flScaleX = 1.0;
+	pComposite->layers[ curLayer ].flScaleY = 1.0;
 	
 	pComposite->layers[ curLayer ].flOffsetX = -scaledCursorX;
 	pComposite->layers[ curLayer ].flOffsetY = -scaledCursorY;
