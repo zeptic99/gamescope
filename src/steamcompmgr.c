@@ -197,6 +197,7 @@ float			currentFrameRate;
 static Bool		doRender = True;
 static Bool		drawDebugInfo = False;
 static Bool		debugEvents = False;
+static Bool		steamMode = False;
 
 static unsigned int
 get_time_in_milliseconds (void)
@@ -1126,8 +1127,15 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->opacity = get_prop (dpy, w->id, opacityAtom, TRANSLUCENT);
 	
 	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
-	w->gameID = get_prop (dpy, w->id, gameAtom, 0);
-// 	w->gameID = 1;
+	
+	if ( steamMode == True )
+	{
+		w->gameID = get_prop (dpy, w->id, gameAtom, 0);
+	}
+	else
+	{
+		w->gameID = w->id;
+	}
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 	
 	get_size_hints(dpy, w);
@@ -1219,8 +1227,15 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new->isOverlay = False;
 	new->isSteam = False;
-	new->gameID = 0;
-// 	new->gameID = 1;
+	
+	if ( steamMode == True )
+	{
+		new->gameID = 0;
+	}
+	else
+	{
+		new->gameID = id;
+	}
 	new->isFullscreen = False;
 	new->isHidden = False;
 	new->sizeHintsSpecified = False;
@@ -1628,7 +1643,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":nSvV")) != -1)
+	while ((o = getopt (argc, argv, ":nSvVt")) != -1)
 	{
 		switch (o) {
 			case 'n':
@@ -1642,6 +1657,9 @@ steamcompmgr_main (int argc, char **argv)
 				break;
 			case 'V':
 				debugEvents = True;
+				break;
+			case 't':
+				steamMode = True;
 				break;
 			default:
 				break;
