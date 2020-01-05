@@ -68,8 +68,6 @@ int main(int argc, char **argv)
 	
 	XInitThreads();
 	
-	inputsdl_init();
-	
 	initOutput();
 	
 	wlserver_init(argc, argv, g_bIsNested == true );
@@ -99,6 +97,8 @@ void initOutput(void)
 
 	if ( g_bIsNested == true )
 	{
+		inputsdl_init();
+
 		window = SDL_CreateWindow( "steamcompmgr", SDL_WINDOWPOS_UNDEFINED,
 								   SDL_WINDOWPOS_UNDEFINED, g_nOutputWidth,
 								   g_nOutputHeight, SDL_WINDOW_VULKAN );
