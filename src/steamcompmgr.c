@@ -421,9 +421,31 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 			cursorTexture = 0;
 		}
 		
+		// Assume the cursor is fully translucent unless proven otherwise
+		
+		static bool s_noCursor = false;
+		bool bNoCursor = true;
+		
 		unsigned int cursorDataBuffer[cursorWidth * cursorHeight];
 		for (int i = 0; i < cursorWidth * cursorHeight; i++)
+		{
 			cursorDataBuffer[i] = im->pixels[i];
+			
+			if ( cursorDataBuffer[i] & 0x000000ff )
+			{
+				bNoCursor = false;
+			}
+		}
+		
+		if ( bNoCursor != s_noCursor )
+		{
+			s_noCursor = bNoCursor;
+			
+			if ( s_noCursor == true )
+			{
+// 				fprintf( stderr, "grab?\n" );
+			}
+		}
 		
 		cursorTexture = vulkan_create_texture_from_bits( cursorWidth, cursorHeight, VK_FORMAT_R8G8B8A8_UNORM, cursorDataBuffer );
 		
@@ -477,7 +499,7 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	int drawXOffset = 0, drawYOffset = 0;
 	float currentScaleRatio = 1.0;
 	
-	if (!w)
+	if (!w) 
 		return;
 	
 	if (w->isOverlay && !w->validContents)
