@@ -54,15 +54,29 @@ struct drm_t {
 	
 	uint32_t plane_id;
 	
+	drmModeAtomicReq *req;
+	uint32_t flags;
+	
+	struct liftoff_device *lo_device;
+	struct liftoff_output *lo_output;
+	struct liftoff_layer *lo_layers[ k_nMaxLayers ];
+	
+	std::vector < uint32_t > fbids_in_req;
+	std::vector < uint32_t > fbids_on_screen;
+	
 	std::unordered_map< uint32_t, std::pair< bool, std::atomic< uint32_t > > > map_fbid_inflightflips;
 	std::mutex free_queue_lock;
 	std::vector< uint32_t > fbid_free_queue;
+	
+	std::mutex flip_lock;
 };
 #endif
 
 #ifndef C_SIDE
 extern "C" {
 #endif
+	
+#include "libliftoff.h"
 
 extern struct drm_t g_DRM;
 
@@ -72,7 +86,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *dma_buf );
 void drm_free_fbid( struct drm_t *drm, uint32_t fbid );
-bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite );
+bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );
 
 #ifndef C_SIDE
 }

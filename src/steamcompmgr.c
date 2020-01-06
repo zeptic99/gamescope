@@ -491,7 +491,7 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 	pPipeline->layerBindings[ curLayer ].surfaceHeight = cursorHeight;
 	
 	pPipeline->layerBindings[ curLayer ].tex = cursorTexture;
-	pPipeline->layerBindings[ curLayer ].fbid = 0;
+	pPipeline->layerBindings[ curLayer ].fbid = vulkan_texture_get_fbid( cursorTexture );
 	
 	pPipeline->layerBindings[ curLayer ].bFilter = false;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = false;
@@ -548,7 +548,7 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	
 	int curLayer = (int)pComposite->flLayerCount;
 	
-	pComposite->layers[ curLayer ].flOpacity = (float)w->opacity / OPAQUE;
+	pComposite->layers[ curLayer ].flOpacity = w->isOverlay ? w->opacity / (float)OPAQUE : 1.0f;
 	
 	pComposite->layers[ curLayer ].flScaleX = 1.0 / currentScaleRatio;
 	pComposite->layers[ curLayer ].flScaleY = 1.0 / currentScaleRatio;
@@ -790,7 +790,7 @@ paint_all (Display *dpy)
 	
 	if ( BIsNested() == false )
 	{
-		if ( drm_can_avoid_composite( &g_DRM, &composite ) == true )
+		if ( drm_can_avoid_composite( &g_DRM, &composite, &pipeline ) == true )
 		{
 			bDoComposite = false;
 		}

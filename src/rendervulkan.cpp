@@ -73,7 +73,6 @@ VkBuffer uploadBuffer;
 VkDeviceMemory uploadBufferMemory;
 void *pUploadBuffer;
 
-bool bUploadCmdBufferIdle;
 VkCommandBuffer uploadCommandBuffer;
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -120,7 +119,7 @@ struct {
 } s_DRMVKFormatTable[] = {
 	{ DRM_FORMAT_XRGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true, false },
 	{ DRM_FORMAT_ARGB8888, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true, true },
-	{ DRM_FORMAT_RGBA8888, VK_FORMAT_R8G8B8A8_UNORM, false, true },
+	{ DRM_FORMAT_ARGB8888, VK_FORMAT_R8G8B8A8_UNORM, false, true }, // TODO: figure out why the cursor surface didn't like DRM_FORMAT_RGBA8888
 	{ DRM_FORMAT_INVALID, VK_FORMAT_UNDEFINED, false, false },
 };
 
@@ -320,7 +319,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	{
 		// We assume we own the memory when doing this right now.
 		// We could support the import scenario as well if needed
-		assert( bTextureable == false );
+// 		assert( bTextureable == false );
 
 		m_DMA.modifier = DRM_FORMAT_MOD_INVALID;
 		m_DMA.n_planes = 1;
@@ -1034,7 +1033,7 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	
 	CVulkanTexture *pTex = new CVulkanTexture();
 	
-	if ( pTex->BInit( width, height, format, false, true, nullptr ) == false )
+	if ( pTex->BInit( width, height, format, true, true, nullptr ) == false )
 	{
 		delete pTex;
 		return ret;
@@ -1048,9 +1047,7 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		0
 	};
-	
-	assert( bUploadCmdBufferIdle == true );
-	
+
 	VkResult res = vkResetCommandBuffer( uploadCommandBuffer, 0 );
 	
 	if ( res != VK_SUCCESS )
@@ -1101,7 +1098,12 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	
 	res = vkQueueSubmit(queue, 1, &submitInfo, 0);
 	
-	bUploadCmdBufferIdle = false;
+	if ( res != VK_SUCCESS )
+	{
+		return false;
+	}
+	
+	vkQueueWaitIdle( queue );
 	
 	ret = ++g_nMaxVulkanTexHandle;
 	g_mapVulkanTextures[ ret ] = pTex;
@@ -1422,8 +1424,6 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	
 	vkQueueWaitIdle( queue );
 	
-	bUploadCmdBufferIdle = true;
-	
 	if ( BIsNested() == false )
 	{
 		g_output.nOutImage = !g_output.nOutImage;
@@ -1437,6 +1437,20 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 uint32_t vulkan_get_last_composite_fbid( void )
 {
 	return g_output.outputImage[ !g_output.nOutImage ].m_FBID;
+}
+
+uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex )
+{
+	if ( vulkanTex == 0 )
+		return 0;
+	
+	assert( g_mapVulkanTextures[ vulkanTex ] != nullptr );
+	
+	uint32_t ret = g_mapVulkanTextures[ vulkanTex ]->m_FBID;
+	
+	assert( ret != 0 );
+	
+	return ret;
 }
 
 

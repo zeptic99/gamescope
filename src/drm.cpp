@@ -187,17 +187,17 @@ static int get_plane_id(struct drm_t *drm)
 static void page_flip_handler(int fd, unsigned int frame,
 							  unsigned int sec, unsigned int usec, void *data)
 {
-	uint32_t fbid = (uint32_t)(uint64_t)data;
-	
-	static uint32_t previous_fbid = 0;
+	// TODO: get the fbids_in_req instance from data if we ever have more than one in flight
 	
 	if ( s_drm_log != 0 )
 	{
-		printf("page_flip_handler %u\n", fbid);
+		printf("page_flip_handler %p\n", data);
 	}
 	
-	if ( previous_fbid != 0 )
+	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
 	{
+		uint32_t previous_fbid = g_DRM.fbids_on_screen[ i ];
+		assert( previous_fbid != 0 );
 		assert( g_DRM.map_fbid_inflightflips[ previous_fbid ].second > 0 );
 		
 		g_DRM.map_fbid_inflightflips[ previous_fbid ].second--;
@@ -223,8 +223,17 @@ static void page_flip_handler(int fd, unsigned int frame,
 			}
 		}
 	}
-
-	previous_fbid = fbid;
+	
+	g_DRM.fbids_on_screen.clear();
+	
+	for ( uint32_t i = 0; i < g_DRM.fbids_in_req.size(); i++ )
+	{
+		g_DRM.fbids_on_screen.push_back( g_DRM.fbids_in_req[ i ] );
+	}
+	
+	g_DRM.fbids_in_req.clear();
+	
+	g_DRM.flip_lock.unlock();
 }
 
 void flip_handler_thread_run(void)
@@ -372,6 +381,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	drm->connector_id = connector->connector_id;
 	
 	drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1);
+	drmSetClientCap(drm->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 	
 	drm->plane_id = get_plane_id( &g_DRM );
 	
@@ -436,6 +446,17 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		g_nOutputHeight = drm->mode->hdisplay;
 	}
 	
+	drm->lo_device = liftoff_device_create( drm->fd );
+	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc_id );
+	
+	assert( drm->lo_device && drm->lo_output );
+	
+	for ( int i = 0; i < k_nMaxLayers; i++ )
+	{
+		drm->lo_layers[ i ] = liftoff_layer_create( drm->lo_output );
+		assert( drm->lo_layers[ i ] );
+	}
+	
 	return 0;
 }
 
@@ -485,117 +506,27 @@ static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
-static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
-							  uint32_t obj_id, const char *name,
-							  uint64_t value)
-{
-	struct plane *obj = drm->plane;
-	unsigned int i;
-	int prop_id = -1;
-	
-	for (i = 0 ; i < obj->props->count_props ; i++) {
-		if (strcmp(obj->props_info[i]->name, name) == 0) {
-			prop_id = obj->props_info[i]->prop_id;
-			break;
-		}
-	}
-	
-	
-	if (prop_id < 0) {
-		printf("no plane property: %s\n", name);
-		return -EINVAL;
-	}
-	
-	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
-}
-
 int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
-	drmModeAtomicReq *req;
-	uint32_t plane_id = drm->plane->plane->plane_id;
-	uint32_t blob_id;
 	int ret;
 	
-	// :/
-	assert( pComposite->flLayerCount == 1.0f );
+	assert( drm->req != nullptr );
 	
-	uint32_t fb_id = pPipeline->layerBindings[ 0 ].fbid;
+// 	if (drm->kms_in_fence_fd != -1) {
+// 		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);
+// 	}
 	
-	req = drmModeAtomicAlloc();
+// 	drm->kms_out_fence_fd = -1;
 	
-	static bool bFirstSwap = true;
-	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
-	
-	if ( bFirstSwap == true )
-	{
-		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-		bFirstSwap = false;
-	}
-	
-	// We do internal refcounting with these events
-	flags |= DRM_MODE_PAGE_FLIP_EVENT;
-	
-	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
-		if (add_connector_property(drm, req, drm->connector_id, "CRTC_ID",
-			drm->crtc_id) < 0)
-			return -1;
-		
-		if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode),
-			&blob_id) != 0)
-			return -1;
-		
-		if (add_crtc_property(drm, req, drm->crtc_id, "MODE_ID", blob_id) < 0)
-			return -1;
-		
-		if (add_crtc_property(drm, req, drm->crtc_id, "ACTIVE", 1) < 0)
-			return -1;
-	}
-
-	if ( g_bRotated )
-	{
-		add_plane_property(drm, req, plane_id, "rotation", DRM_MODE_ROTATE_270);
-	}
-	
-	add_plane_property(drm, req, plane_id, "FB_ID", fb_id);
-	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
-	add_plane_property(drm, req, plane_id, "SRC_X", 0);
-	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
-	add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
-	add_plane_property(drm, req, plane_id, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
-
-	if ( g_bRotated )
-	{
-		add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetY * -1);
-		add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetX * -1);
-
-		add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
-		add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
-
-	}
-	else
-	{
-		add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetX * -1);
-		add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetY * -1);
-
-		add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
-		add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
-	}
-
-	
-	if (drm->kms_in_fence_fd != -1) {
-		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);
-	}
-	
-	drm->kms_out_fence_fd = -1;
-	
-	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
-					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
+// 	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
+// 					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
 	
 	if ( s_drm_log != 0 ) 
 	{
-		printf("flipping fbid %u\n", fb_id);
+		printf("flipping\n");
 	}
-	ret = drmModeAtomicCommit(drm->fd, req, flags, (void *)(uint64_t)fb_id);
+	drm->flip_lock.lock();
+	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, nullptr );
 	if (ret)
 	{
 		if ( ret != -EBUSY ) 
@@ -609,18 +540,26 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		goto out;
 	}
 	
-	assert( g_DRM.map_fbid_inflightflips[ fb_id ].first == true );
-	g_DRM.map_fbid_inflightflips[ fb_id ].second++;
-	
-	if (drm->kms_in_fence_fd != -1) {
-		close(drm->kms_in_fence_fd);
-		drm->kms_in_fence_fd = -1;
+	for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
+	{
+		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].first == true );
+		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second++;
 	}
 	
-	drm->kms_in_fence_fd = drm->kms_out_fence_fd;
+	// Wait for flip handler to unlock
+	drm->flip_lock.lock();
+	drm->flip_lock.unlock();
+	
+// 	if (drm->kms_in_fence_fd != -1) {
+// 		close(drm->kms_in_fence_fd);
+// 		drm->kms_in_fence_fd = -1;
+// 	}
+// 	
+// 	drm->kms_in_fence_fd = drm->kms_out_fence_fd;
 	
 out:
-	drmModeAtomicFree(req);
+	drmModeAtomicFree( drm->req );
+	drm->req = nullptr;
 	
 	return ret;
 }
@@ -666,11 +605,106 @@ void drm_free_fbid( struct drm_t *drm, uint32_t fbid )
 	}
 }
 
-bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite )
+bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
-	// No multiplane support for now, thoon
-	if ( pComposite->flLayerCount == 1 )
+	drm->fbids_in_req.clear();
+
+	int nLayerCount = pComposite->flLayerCount;
+	
+	for ( int i = 0; i < k_nMaxLayers; i++ )
+	{
+		if ( i < nLayerCount )
+		{
+			if ( g_bRotated )
+			{
+				liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", DRM_MODE_ROTATE_270);
+			}
+			
+			assert( pPipeline->layerBindings[ i ].fbid != 0 );
+			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pPipeline->layerBindings[ i ].fbid);
+			drm->fbids_in_req.push_back( pPipeline->layerBindings[ i ].fbid );
+			
+// 			liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", pComposite->layers[ i ].flOpacity * 0xffff);
+			
+			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_X", 0);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_Y", 0);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", pPipeline->layerBindings[ i ].surfaceWidth << 16);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", pPipeline->layerBindings[ i ].surfaceHeight << 16);
+			
+			if ( g_bRotated )
+			{
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", pComposite->layers[ i ].flOffsetY * -1);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", pComposite->layers[ i ].flOffsetX * -1);
+				
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", pPipeline->layerBindings[ i ].surfaceWidth / pComposite->layers[ i ].flScaleX);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", pPipeline->layerBindings[ i ].surfaceHeight / pComposite->layers[ i ].flScaleY);
+				
+			}
+			else
+			{
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", pComposite->layers[ i ].flOffsetX * -1);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", pComposite->layers[ i ].flOffsetY * -1);
+				
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", pPipeline->layerBindings[ i ].surfaceWidth / pComposite->layers[ i ].flScaleX);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", pPipeline->layerBindings[ i ].surfaceHeight / pComposite->layers[ i ].flScaleY);
+			}
+		}
+		else
+		{
+			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", 0 );
+		}
+	}
+	
+	assert( drm->req == nullptr );
+	drm->req = drmModeAtomicAlloc();
+	
+	static bool bFirstSwap = true;
+	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
+	uint32_t blob_id;
+	
+	if ( bFirstSwap == true )
+	{
+		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+		bFirstSwap = false;
+	}
+	
+	// We do internal refcounting with these events
+	flags |= DRM_MODE_PAGE_FLIP_EVENT;
+	
+	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
+		if (add_connector_property(drm, drm->req, drm->connector_id, "CRTC_ID",
+			drm->crtc_id) < 0)
+			return -1;
+		
+		if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode),
+			&blob_id) != 0)
+			return -1;
+		
+		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", blob_id) < 0)
+			return -1;
+		
+		if (add_crtc_property(drm, drm->req, drm->crtc_id, "ACTIVE", 1) < 0)
+			return -1;
+	}
+	
+	drm->flags = flags;
+	
+	if ( liftoff_output_apply( drm->lo_output, drm->req ) == true )
+	{
+		if ( s_drm_log != 0 )
+		{
+			fprintf( stderr, "can drm present %i layers\n", nLayerCount );
+		}
 		return true;
+	}
+	
+	if ( s_drm_log != 0 )
+	{
+		fprintf( stderr, "can NOT drm present %i layers\n", nLayerCount );
+	}
+	
+	drmModeAtomicFree( drm->req );
+	drm->req = nullptr;
 	
 	return false;
 }

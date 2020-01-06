@@ -40,6 +40,9 @@ spirv_shader = custom_target('shader_target',
   install : false,
 )
 
+liftoff_proj = subproject('libliftoff')
+libftoff_dep = liftoff_proj.get_variable('liftoff')
+
 executable(
     'steamcompmgr',
     'src/steamcompmgr.c',
@@ -52,7 +55,7 @@ executable(
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext,
         dep_xxf86vm, pixman_dep, drm_dep, wayland_server, wayland_protos,
         libinput, xkbcommon, math, thread_dep, sdl_dep, wlroots_static_dep,
-        vulkan_dep
+        vulkan_dep, libftoff_dep
     ],
     install: true,
 )
