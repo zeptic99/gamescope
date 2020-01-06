@@ -1318,7 +1318,10 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	vkCmdBindDescriptorSets(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 	
-	vkCmdDispatch(curCommandBuffer, g_nOutputWidth / 16, g_nOutputHeight / 16, 1);
+	uint32_t nGroupCountX = g_nOutputWidth % 16 ? g_nOutputWidth / 16 + 1: g_nOutputWidth / 16;
+	uint32_t nGroupCountY = g_nOutputHeight % 16 ? g_nOutputHeight / 16 + 1: g_nOutputHeight / 16;
+	
+	vkCmdDispatch( curCommandBuffer, nGroupCountX, nGroupCountY, 1 );
 	
 	// Pipeline barrier to flush our compute operations so the buffer can be scanned out safely
 	VkImageSubresourceRange subResRange =

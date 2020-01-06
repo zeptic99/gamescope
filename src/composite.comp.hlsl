@@ -50,6 +50,14 @@ void main(
     uint groupIndex : SV_GroupIndex)
 {
 	uint2 index = uint2(dispatchThreadId.x, dispatchThreadId.y);
+	
+	uint2 outSize;
+	outImage.GetDimensions( outSize.x, outSize.y );
+	
+	if ( index.x >= outSize.x || index.y >= outSize.y )
+	{
+		return;
+	}
 
 	float4 outputValue;
 
