@@ -138,6 +138,8 @@ VulkanTexture_t cursorTexture;
 
 Bool			hideCursorForMovement;
 unsigned int	lastCursorMovedTime;
+static bool		cursorImageEmpty;
+
 
 Bool			focusDirty = False;
 
@@ -423,8 +425,6 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 		}
 		
 		// Assume the cursor is fully translucent unless proven otherwise
-		
-		static bool s_noCursor = false;
 		bool bNoCursor = true;
 		
 		unsigned int cursorDataBuffer[cursorWidth * cursorHeight];
@@ -438,15 +438,18 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 			}
 		}
 		
-		if ( bNoCursor != s_noCursor )
+		if ( bNoCursor != cursorImageEmpty )
 		{
-			s_noCursor = bNoCursor;
+			cursorImageEmpty = bNoCursor;
 			
-			if ( s_noCursor == true )
+			if ( cursorImageEmpty == true )
 			{
 // 				fprintf( stderr, "grab?\n" );
 			}
 		}
+		
+		if ( cursorImageEmpty == True )
+			return;
 		
 		cursorTexture = vulkan_create_texture_from_bits( cursorWidth, cursorHeight, VK_FORMAT_R8G8B8A8_UNORM, cursorDataBuffer );
 		
@@ -456,6 +459,9 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 		
 		cursorImageDirty = False;
 	}
+	
+	if ( cursorImageEmpty == True )
+		return;
 	
 	// Actual point on scaled screen where the cursor hotspot should be
 	scaledCursorX = (win_x - w->a.x) * cursorScaleRatio * globalScaleRatio + cursorOffsetX;
