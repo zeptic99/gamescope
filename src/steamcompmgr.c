@@ -1649,7 +1649,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":nSvVt")) != -1)
+	while ((o = getopt (argc, argv, ":nSvVe")) != -1)
 	{
 		switch (o) {
 			case 'n':
@@ -1664,7 +1664,7 @@ steamcompmgr_main (int argc, char **argv)
 			case 'V':
 				debugEvents = True;
 				break;
-			case 't':
+			case 'e':
 				steamMode = True;
 				break;
 			default:
