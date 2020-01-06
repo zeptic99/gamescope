@@ -9,6 +9,7 @@
 #include "composite.h"
 
 PFN_vkGetMemoryFdKHR dyn_vkGetMemoryFdKHR;
+PFN_vkGetFenceFdKHR dyn_vkGetFenceFdKHR;
 
 const VkApplicationInfo appInfo = {
 	.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -48,6 +49,9 @@ struct VulkanOutput_t
 	VkBuffer constantBuffer;
 	VkDeviceMemory bufferMemory;
 	Composite_t *pCompositeBuffer;
+	
+	VkFence fence;
+	int fenceFD;
 };
 
 
@@ -275,14 +279,9 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		allocInfo.pNext = &memory_dedicated_info;
 	}
 	
-	if ( bFlippable == true )
+	if ( bFlippable == true && pDMA == nullptr )
 	{
-		wsiAllocInfo.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA;
-		wsiAllocInfo.implicit_sync = true;
-		wsiAllocInfo.pNext = allocInfo.pNext;
-		
-		allocInfo.pNext = &wsiAllocInfo;
-		
+		// We'll export it to DRM
 		memory_export_info.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
 		memory_export_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
 		memory_export_info.pNext = allocInfo.pNext;
@@ -292,6 +291,13 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	
 	if ( pDMA != nullptr )
 	{
+		// We're importing WSI buffers from GL or Vulkan, set implicit_sync
+		wsiAllocInfo.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA;
+		wsiAllocInfo.implicit_sync = true;
+		wsiAllocInfo.pNext = allocInfo.pNext;
+		
+		allocInfo.pNext = &wsiAllocInfo;
+		
 		// Memory already provided by pDMA
 		importMemoryInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
 		importMemoryInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
@@ -469,6 +475,10 @@ int init_device()
 	}
 	vecEnabledDeviceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME );
 	vecEnabledDeviceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME );
+	vecEnabledDeviceExtensions.push_back( VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME );
+
+	vecEnabledDeviceExtensions.push_back( VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME );
+	vecEnabledDeviceExtensions.push_back( VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME );
 	
 	VkDeviceCreateInfo deviceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -929,6 +939,9 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	
 	pOutput->nCurCmdBuffer = 0;
 	
+	pOutput->fence = VK_NULL_HANDLE;
+	pOutput->fenceFD = -1;
+	
 	// Write the constant buffer itno descriptor set
 	VkDescriptorBufferInfo bufferInfo = {
 		.buffer = g_output.constantBuffer,
@@ -960,6 +973,7 @@ int vulkan_init(void)
 	
 	std::vector< const char * > vecEnabledInstanceExtensions;
 	vecEnabledInstanceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME );
+	vecEnabledInstanceExtensions.push_back( VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME );
 	
 	vecEnabledInstanceExtensions.insert( vecEnabledInstanceExtensions.end(), g_vecSDLInstanceExts.begin(), g_vecSDLInstanceExts.end() );
 	
@@ -982,6 +996,10 @@ int vulkan_init(void)
 	
 	dyn_vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr( device, "vkGetMemoryFdKHR" );
 	if ( dyn_vkGetMemoryFdKHR == nullptr )
+		return 0;
+	
+	dyn_vkGetFenceFdKHR = (PFN_vkGetFenceFdKHR)vkGetDeviceProcAddr( device, "vkGetFenceFdKHR" );
+	if ( dyn_vkGetFenceFdKHR == nullptr )
 		return 0;
 	
 	if ( vulkan_make_output( &g_output ) == false )
@@ -1268,6 +1286,8 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	*g_output.pCompositeBuffer = *pComposite;
 	// XXX maybe flush something?
 	
+	assert ( g_output.fence == VK_NULL_HANDLE );
+	
 	vulkan_update_descriptor( pPipeline );
 	
 	VkCommandBuffer curCommandBuffer = g_output.commandBuffers[ g_output.nCurCmdBuffer ];
@@ -1300,12 +1320,83 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	
 	vkCmdDispatch(curCommandBuffer, g_nOutputWidth / 16, g_nOutputHeight / 16, 1);
 	
+	// Pipeline barrier to flush our compute operations so the buffer can be scanned out safely
+	VkImageSubresourceRange subResRange =
+	{
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.levelCount = 1,
+		.layerCount = 1
+	};
+
+	VkImageMemoryBarrier memoryBarrier =
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT, // ?
+		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+		.newLayout = VK_IMAGE_LAYOUT_GENERAL, // does it flush more to transntion to PRESENT_SRC?
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.image = VK_NULL_HANDLE, // fill below
+		.subresourceRange = subResRange
+	};
+	
+	if ( BIsNested() == true )
+	{
+		memoryBarrier.image = g_output.swapChainImages[ g_output.nSwapChainImageIndex ];
+	}
+	else
+	{
+		memoryBarrier.image = g_output.outputImage[ g_output.nOutImage ].m_vkImage;
+	}
+	
+	vkCmdPipelineBarrier( curCommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+						  0, 0, nullptr, 0, nullptr, 1, &memoryBarrier );
+	
 	res = vkEndCommandBuffer(curCommandBuffer);
 	
 	if ( res != VK_SUCCESS )
 	{
 		return false;
 	}
+	
+// 	VkExportFenceCreateInfoKHR exportFenceCreateInfo = 
+// 	{
+// 		.sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO,
+// 		.handleTypes = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT_KHR
+// 	};
+// 	
+// 	VkFenceCreateInfo fenceCreateInfo =
+// 	{
+// 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+// 		.pNext = &exportFenceCreateInfo,
+// 	};
+// 	
+// 	res = vkCreateFence( device, &fenceCreateInfo, nullptr, &g_output.fence );
+// 	
+// 	if ( res != VK_SUCCESS )
+// 	{
+// 		return false;
+// 	}
+// 	
+// 	assert( g_output.fence != VK_NULL_HANDLE );
+// 	
+// 	VkFenceGetFdInfoKHR fenceGetFDInfo =
+// 	{
+// 		.sType = VK_STRUCTURE_TYPE_FENCE_GET_FD_INFO_KHR,
+// 		.fence = g_output.fence,
+// 		.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT_KHR
+// 	};
+// 	
+// 	res = dyn_vkGetFenceFdKHR( device, &fenceGetFDInfo, &g_output.fenceFD );
+// 	
+// 	if ( res != VK_SUCCESS )
+// 	{
+// 		return false;
+// 	}
+// 	
+// 	// In theory it can start as -1 if it's already signaled, but there's no way in this case
+// 	assert( g_output.fenceFD != -1 );
 	
 	VkSubmitInfo submitInfo = {
 		VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1319,7 +1410,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		0
 	};
 	
-	res = vkQueueSubmit(queue, 1, &submitInfo, 0);
+	res = vkQueueSubmit( queue, 1, &submitInfo, 0 );
 	
 	if ( res != VK_SUCCESS )
 	{
