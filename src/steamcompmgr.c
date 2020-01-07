@@ -88,6 +88,7 @@ typedef struct _win {
 	
 	Bool mouseMoved;
 	
+	long int WLsurfaceID;
 	struct wlr_surface *wlrsurface;
 	Bool dmabuf_attribs_valid;
 	struct wlr_dmabuf_attributes dmabuf_attribs;
@@ -1262,6 +1263,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new->mouseMoved = False;
 	
+	new->WLsurfaceID = 0;
 	new->wlrsurface = NULL;
 	new->dmabuf_attribs_valid = False;
 	
@@ -1457,7 +1459,7 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 	}
 	else
 	{
-		fprintf (stderr, "wayland surface for window not found, implement pending list for late surface notification\n");
+		w->WLsurfaceID = surfaceID;
 		wlserver_unlock();
 		return;
 	}
@@ -1467,6 +1469,13 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 		fprintf (stderr, "Failed to set xwayland surface role");
 		wlserver_unlock();
 		return;
+	}
+
+	// If we already focused on our side and are handling this late,
+	// let wayland know now.
+	if ( w->id == currentFocusWindow )
+	{
+		wlserver_mousefocus( surface );
 	}
 	
 	wlserver_unlock();
@@ -2051,6 +2060,23 @@ steamcompmgr_main (int argc, char **argv)
 		{
 			struct timespec now;
 			clock_gettime(CLOCK_MONOTONIC, &now);
+
+			// See if we have surfaceIDs we need to handle late
+			for (win *w = list; w; w = w->next)
+			{
+				if ( w->wlrsurface == NULL && w->WLsurfaceID != 0 )
+				{
+					handle_wl_surface_id( dpy, w, w->WLsurfaceID );
+
+					if ( w->wlrsurface != NULL )
+					{
+						// Got it now.
+						w->WLsurfaceID = 0;
+
+						printf ( "handled late WLSurfaceID\n" );
+					}
+				}
+			}
 
 			check_new_wayland_res();
 			
