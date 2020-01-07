@@ -960,19 +960,17 @@ determine_and_apply_focus (Display *dpy)
 // 		}
 // 	}
 	
-	if (fadeOutWindow.id && currentFocusWindow != focus->id)
+// 	if (fadeOutWindow.id && currentFocusWindow != focus->id)
+	if ( currentFocusWindow != focus->id )
 	{
-		set_win_hidden(dpy, find_win(dpy, currentFocusWindow), True);
-	}
-	
-	currentFocusWindow = focus->id;
-	
-	if ( w != focus )
-	{
+		set_win_hidden( dpy, find_win(dpy, currentFocusWindow), True );
+
 		wlserver_lock();
 		wlserver_mousefocus( focus->wlrsurface );
 		wlserver_unlock();
 	}
+	
+	currentFocusWindow = focus->id;
 	
 	w = focus;
 	
