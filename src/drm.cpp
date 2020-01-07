@@ -23,6 +23,8 @@ struct drm_t g_DRM;
 uint32_t g_nDRMFormat;
 bool g_bRotated;
 
+bool g_bUseLayers;
+
 static int s_drm_log = 0;
 
 static uint32_t find_crtc_for_encoder(const drmModeRes *resources,
@@ -607,10 +609,15 @@ void drm_free_fbid( struct drm_t *drm, uint32_t fbid )
 
 bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
-	drm->fbids_in_req.clear();
-
 	int nLayerCount = pComposite->flLayerCount;
 	
+	if ( g_bUseLayers == false && nLayerCount > 1 )
+	{
+		return false;
+	}
+
+	drm->fbids_in_req.clear();
+
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
 		if ( i < nLayerCount )
@@ -624,7 +631,16 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pPipeline->layerBindings[ i ].fbid);
 			drm->fbids_in_req.push_back( pPipeline->layerBindings[ i ].fbid );
 			
-// 			liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", pComposite->layers[ i ].flOpacity * 0xffff);
+			if ( g_bUseLayers == true )
+			{
+				liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", pPipeline->layerBindings[ i ].zpos );
+				liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", pComposite->layers[ i ].flOpacity * 0xffff);
+			
+				if ( pPipeline->layerBindings[ i ].zpos == 0 )
+				{
+					assert( ( pComposite->layers[ i ].flOpacity * 0xffff ) == 0xffff );
+				}
+			}
 			
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_X", 0);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_Y", 0);

@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 	
 	bool bSleepAtStartup = false;
 	
-	while ((o = getopt (argc, argv, ":w:h:r:s")) != -1)
+	while ((o = getopt (argc, argv, ":w:h:r:sl")) != -1)
 	{
 		switch (o) {
 			case 'w':
@@ -55,6 +55,9 @@ int main(int argc, char **argv)
 				break;
 			case 's':
 				bSleepAtStartup = true;
+				break;
+			case 'l':
+				g_bUseLayers = true;
 				break;
 			default:
 				break;

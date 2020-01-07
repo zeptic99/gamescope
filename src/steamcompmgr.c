@@ -490,6 +490,8 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 	pPipeline->layerBindings[ curLayer ].surfaceWidth = cursorWidth;
 	pPipeline->layerBindings[ curLayer ].surfaceHeight = cursorHeight;
 	
+	pPipeline->layerBindings[ curLayer ].zpos = 2; // cursor, on top of both bottom layers
+	
 	pPipeline->layerBindings[ curLayer ].tex = cursorTexture;
 	pPipeline->layerBindings[ curLayer ].fbid = vulkan_texture_get_fbid( cursorTexture );
 	
@@ -577,6 +579,8 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	
 	pPipeline->layerBindings[ curLayer ].surfaceWidth = w->a.width;
 	pPipeline->layerBindings[ curLayer ].surfaceHeight = w->a.height;
+	
+	pPipeline->layerBindings[ curLayer ].zpos = w->isOverlay ? 1 : 0;
 	
 	pPipeline->layerBindings[ curLayer ].tex = w->vulkanTex;
 	pPipeline->layerBindings[ curLayer ].fbid = w->fb_id;
@@ -815,6 +819,7 @@ paint_all (Display *dpy)
 			composite.flLayerCount = 1.0;
 			composite.layers[ 0 ].flScaleX = 1.0;
 			composite.layers[ 0 ].flScaleY = 1.0;
+			composite.layers[ 0 ].flOpacity = 1.0;
 			
 			memset( &pipeline, 0, sizeof( pipeline ) );
 			
@@ -823,6 +828,11 @@ paint_all (Display *dpy)
 			
 			pipeline.layerBindings[ 0 ].fbid = vulkan_get_last_composite_fbid();
 			pipeline.layerBindings[ 0 ].bFilter = true;
+			
+			bool bFlip = drm_can_avoid_composite( &g_DRM, &composite, &pipeline );
+			
+			// We should always handle a 1-layer flip
+			assert( bFlip == true );
 			
 			drm_atomic_commit( &g_DRM, &composite, &pipeline );
 		}
