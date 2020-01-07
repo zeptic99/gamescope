@@ -1033,7 +1033,7 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	
 	CVulkanTexture *pTex = new CVulkanTexture();
 	
-	if ( pTex->BInit( width, height, format, true, true, nullptr ) == false )
+	if ( pTex->BInit( width, height, format, BIsNested() == false, true, nullptr ) == false )
 	{
 		delete pTex;
 		return ret;

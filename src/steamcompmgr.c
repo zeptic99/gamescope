@@ -493,7 +493,7 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 	pPipeline->layerBindings[ curLayer ].zpos = 2; // cursor, on top of both bottom layers
 	
 	pPipeline->layerBindings[ curLayer ].tex = cursorTexture;
-	pPipeline->layerBindings[ curLayer ].fbid = vulkan_texture_get_fbid( cursorTexture );
+	pPipeline->layerBindings[ curLayer ].fbid = BIsNested() ? 0 : vulkan_texture_get_fbid( cursorTexture );
 	
 	pPipeline->layerBindings[ curLayer ].bFilter = false;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = false;
