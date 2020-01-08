@@ -201,6 +201,7 @@ static Bool		doRender = True;
 static Bool		drawDebugInfo = False;
 static Bool		debugEvents = False;
 static Bool		steamMode = False;
+static Bool		alwaysComposite = False;
 
 static unsigned int
 get_time_in_milliseconds (void)
@@ -793,7 +794,7 @@ paint_all (Display *dpy)
 	
 	bool bDoComposite = true;
 	
-	if ( BIsNested() == false )
+	if ( BIsNested() == false && alwaysComposite == False )
 	{
 		if ( drm_can_avoid_composite( &g_DRM, &composite, &pipeline ) == true )
 		{
@@ -1666,7 +1667,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":nSvVe")) != -1)
+	while ((o = getopt (argc, argv, ":nSvVec")) != -1)
 	{
 		switch (o) {
 			case 'n':
@@ -1683,6 +1684,9 @@ steamcompmgr_main (int argc, char **argv)
 				break;
 			case 'e':
 				steamMode = True;
+				break;
+			case 'c':
+				alwaysComposite = True;
 				break;
 			default:
 				break;
