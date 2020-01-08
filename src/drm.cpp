@@ -528,6 +528,15 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		printf("flipping\n");
 	}
 	drm->flip_lock.lock();
+
+	// Do it before the commit, as otherwise the pageflip handler could
+	// potentially beat us to the refcount checks.
+	for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
+	{
+		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].first == true );
+		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second++;
+	}
+
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, nullptr );
 	if (ret)
 	{
@@ -539,13 +548,14 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		{
 			printf("flip busy\n");
 		}
+
+		// Undo refcount if the commit didn't actually work
+		for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
+		{
+			g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second--;
+		}
+
 		goto out;
-	}
-	
-	for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
-	{
-		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].first == true );
-		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second++;
 	}
 	
 	// Wait for flip handler to unlock
