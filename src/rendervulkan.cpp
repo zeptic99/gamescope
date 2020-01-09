@@ -90,6 +90,8 @@ struct VulkanSamplerCacheEntry_t
 
 std::vector< VulkanSamplerCacheEntry_t > g_vecVulkanSamplerCache;
 
+VulkanTexture_t g_emptyTex;
+
 #define MAX_DEVICE_COUNT 8
 #define MAX_QUEUE_COUNT 8
 
@@ -1005,6 +1007,14 @@ int vulkan_init(void)
 	{
 		return 0;
 	}
+
+	uint32_t bits = 0;
+	g_emptyTex = vulkan_create_texture_from_bits( 1, 1, VK_FORMAT_R8G8B8A8_UNORM, &bits );
+
+	if ( g_emptyTex == 0 )
+	{
+		return 0;
+	}
 	
 	return 1;
 }
@@ -1157,24 +1167,6 @@ VkSampler vulkan_make_sampler( struct VulkanPipeline_t::LayerBinding_t *pBinding
 
 void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
 {
-	CVulkanTexture *pTex[ k_nMaxLayers ] = {};
-	uint32_t texLayerIDs[ k_nMaxLayers ] = {};
-	
-	uint32_t nTexCount = 0;
-	
-	for ( uint32_t i = 0; i < k_nMaxLayers; i ++ )
-	{
-		if ( pPipeline->layerBindings[ i ].tex != 0 )
-		{
-			pTex[ nTexCount ] = g_mapVulkanTextures[ pPipeline->layerBindings[ i ].tex ];
-			assert( pTex[ nTexCount ] );
-			
-			texLayerIDs[ nTexCount ] = i;
-			
-			nTexCount++;
-		}
-	}
-	
 	{
 		VkImageView targetImageView;
 		
@@ -1208,14 +1200,27 @@ void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
 		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 	}
 	
-	for ( uint32_t i = 0; i < nTexCount; i++ )
+	for ( uint32_t i = 0; i < k_nMaxLayers; i++ )
 	{
 		VkSampler sampler = VK_NULL_HANDLE;
+		CVulkanTexture *pTex = nullptr;
+
+		if ( pPipeline->layerBindings[ i ].tex != 0 )
+		{
+			pTex = g_mapVulkanTextures[ pPipeline->layerBindings[ i ].tex ];
+		}
+		else
+		{
+			pTex = g_mapVulkanTextures[ g_emptyTex ];
+
+			// Switch the border to transparent black
+			pPipeline->layerBindings[ i ].bBlackBorder = false;
+		}
 		
 		// First try to look up the sampler in the cache.
 		for ( uint32_t j = 0; j < g_vecVulkanSamplerCache.size(); j++ )
 		{
-			if ( g_vecVulkanSamplerCache[ j ].key == pPipeline->layerBindings[ texLayerIDs[ i ] ] )
+			if ( g_vecVulkanSamplerCache[ j ].key == pPipeline->layerBindings[ i ] )
 			{
 				sampler = g_vecVulkanSamplerCache[ j ].sampler;
 				break;
@@ -1224,17 +1229,17 @@ void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
 		
 		if ( sampler == VK_NULL_HANDLE )
 		{
-			sampler = vulkan_make_sampler( &pPipeline->layerBindings[ texLayerIDs[ i ] ] );
+			sampler = vulkan_make_sampler( &pPipeline->layerBindings[ i ] );
 			
 			assert( sampler != VK_NULL_HANDLE );
 			
-			VulkanSamplerCacheEntry_t entry = { pPipeline->layerBindings[ texLayerIDs[ i ] ], sampler };
+			VulkanSamplerCacheEntry_t entry = { pPipeline->layerBindings[ i ], sampler };
 			g_vecVulkanSamplerCache.push_back( entry );
 		}
 
 		{
 			VkDescriptorImageInfo imageInfo = {
-				.imageView = pTex[ i ]->m_vkImageView,
+				.imageView = pTex->m_vkImageView,
 				// TODO figure out what it is exactly for the wayland surfaces
 				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 			};

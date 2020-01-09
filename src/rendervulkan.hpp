@@ -19,11 +19,11 @@ struct VulkanPipeline_t
 		VulkanTexture_t tex;
 		uint32_t fbid;
 		
+		int zpos;
+
 		// These fields below count for the sampler cache
 		bool bFilter;
 		bool bBlackBorder;
-		
-		int zpos;
 	} layerBindings[ k_nMaxLayers ];
 };
 
