@@ -16,6 +16,8 @@
 #include "drm.hpp"
 #include "main.hpp"
 
+#include "gpuvis_trace_utils.h"
+
 #include <thread>
 
 struct drm_t g_DRM;
@@ -508,6 +510,30 @@ static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
+static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
+                                                         uint32_t obj_id, const      char* name,
+                                                         uint64_t value)
+{
+       struct plane *obj = drm->plane;
+       unsigned int i;
+       int prop_id = -1;
+
+       for (i = 0 ; i < obj->props->count_props ; i++) {
+               if (strcmp(obj->props_info[i]->name, name) == 0) {
+                       prop_id = obj->props_info[i]->prop_id;
+                       break;
+               }
+       }
+
+
+       if (prop_id < 0) {
+               printf("no plane property: %s\n", name);
+               return -EINVAL;
+       }
+
+       return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+}
+
 int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
 	int ret;
@@ -543,6 +569,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		if ( ret != -EBUSY ) 
 		{
 			printf("flip error %d\n", ret);
+			exit( 0 );
 		}
 		else if ( s_drm_log != 0 ) 
 		{
@@ -621,63 +648,72 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 {
 	int nLayerCount = pComposite->flLayerCount;
 	
-	if ( g_bUseLayers == false && nLayerCount > 1 )
+	if ( g_bUseLayers == false )
 	{
-		return false;
+		// Discard cases where our non-liftoff path is known to fail
+		
+		// It only supports one layer
+		if ( nLayerCount > 1 )
+		{
+			return false;
+		}
 	}
 
 	drm->fbids_in_req.clear();
 
-	for ( int i = 0; i < k_nMaxLayers; i++ )
+	if ( g_bUseLayers == true )
 	{
-		if ( i < nLayerCount )
+		for ( int i = 0; i < k_nMaxLayers; i++ )
 		{
-			if ( g_bRotated )
+			if ( i < nLayerCount )
 			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", DRM_MODE_ROTATE_270);
-			}
-			
-			assert( pPipeline->layerBindings[ i ].fbid != 0 );
-			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pPipeline->layerBindings[ i ].fbid);
-			drm->fbids_in_req.push_back( pPipeline->layerBindings[ i ].fbid );
-			
-			if ( g_bUseLayers == true )
-			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", pPipeline->layerBindings[ i ].zpos );
-				liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", pComposite->layers[ i ].flOpacity * 0xffff);
-			
-				if ( pPipeline->layerBindings[ i ].zpos == 0 )
+				if ( g_bRotated )
 				{
-					assert( ( pComposite->layers[ i ].flOpacity * 0xffff ) == 0xffff );
+					liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", DRM_MODE_ROTATE_270);
 				}
-			}
-			
-			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_X", 0);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_Y", 0);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", pPipeline->layerBindings[ i ].surfaceWidth << 16);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", pPipeline->layerBindings[ i ].surfaceHeight << 16);
-			
-			if ( g_bRotated )
-			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", pComposite->layers[ i ].flOffsetY * -1);
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", pComposite->layers[ i ].flOffsetX * -1);
 				
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", pPipeline->layerBindings[ i ].surfaceWidth / pComposite->layers[ i ].flScaleX);
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", pPipeline->layerBindings[ i ].surfaceHeight / pComposite->layers[ i ].flScaleY);
+				assert( pPipeline->layerBindings[ i ].fbid != 0 );
+				liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pPipeline->layerBindings[ i ].fbid);
+				drm->fbids_in_req.push_back( pPipeline->layerBindings[ i ].fbid );
 				
+				if ( g_bUseLayers == true )
+				{
+					liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", pPipeline->layerBindings[ i ].zpos );
+					liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", pComposite->layers[ i ].flOpacity * 0xffff);
+				
+					if ( pPipeline->layerBindings[ i ].zpos == 0 )
+					{
+						assert( ( pComposite->layers[ i ].flOpacity * 0xffff ) == 0xffff );
+					}
+				}
+				
+				liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_X", 0);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_Y", 0);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", pPipeline->layerBindings[ i ].surfaceWidth << 16);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", pPipeline->layerBindings[ i ].surfaceHeight << 16);
+				
+				if ( g_bRotated )
+				{
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", pComposite->layers[ i ].flOffsetY * -1);
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", pComposite->layers[ i ].flOffsetX * -1);
+					
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", pPipeline->layerBindings[ i ].surfaceWidth / pComposite->layers[ i ].flScaleX);
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", pPipeline->layerBindings[ i ].surfaceHeight / pComposite->layers[ i ].flScaleY);
+					
+				}
+				else
+				{
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", pComposite->layers[ i ].flOffsetX * -1);
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", pComposite->layers[ i ].flOffsetY * -1);
+					
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", pPipeline->layerBindings[ i ].surfaceWidth / pComposite->layers[ i ].flScaleX);
+					liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", pPipeline->layerBindings[ i ].surfaceHeight / pComposite->layers[ i ].flScaleY);
+				}
 			}
 			else
 			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", pComposite->layers[ i ].flOffsetX * -1);
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", pComposite->layers[ i ].flOffsetY * -1);
-				
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", pPipeline->layerBindings[ i ].surfaceWidth / pComposite->layers[ i ].flScaleX);
-				liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", pPipeline->layerBindings[ i ].surfaceHeight / pComposite->layers[ i ].flScaleY);
+				liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", 0 );
 			}
-		}
-		else
-		{
-			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", 0 );
 		}
 	}
 	
@@ -715,22 +751,75 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 	
 	drm->flags = flags;
 	
-	if ( liftoff_output_apply( drm->lo_output, drm->req ) == true )
+	if ( g_bUseLayers == true )
 	{
+		if ( liftoff_output_apply( drm->lo_output, drm->req ) == true )
+		{
+			if ( s_drm_log != 0 )
+			{
+				fprintf( stderr, "can drm present %i layers\n", nLayerCount );
+			}
+			return true;
+		}
+		
 		if ( s_drm_log != 0 )
 		{
-			fprintf( stderr, "can drm present %i layers\n", nLayerCount );
+			fprintf( stderr, "can NOT drm present %i layers\n", nLayerCount );
 		}
+		
+		drmModeAtomicFree( drm->req );
+		drm->req = nullptr;
+		
+		return false;
+	}
+	else
+	{
+		drmModeAtomicReq *req = drm->req;
+		uint32_t plane_id = drm->plane->plane->plane_id;
+		uint32_t fb_id = pPipeline->layerBindings[ 0 ].fbid;
+		
+		assert( fb_id != 0 );
+		drm->fbids_in_req.push_back( fb_id );
+		
+		if ( g_bRotated )
+		{
+			add_plane_property(drm, req, plane_id, "rotation", DRM_MODE_ROTATE_270);
+		}
+		
+		add_plane_property(drm, req, plane_id, "FB_ID", fb_id);
+		add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
+		add_plane_property(drm, req, plane_id, "SRC_X", 0);
+		add_plane_property(drm, req, plane_id, "SRC_Y", 0);
+		add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
+		add_plane_property(drm, req, plane_id, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
+		
+		gpuvis_trace_printf ( "legacy flip fb_id %u src %ix%i\n", fb_id,
+							 pPipeline->layerBindings[ 0 ].surfaceWidth,
+							 pPipeline->layerBindings[ 0 ].surfaceHeight );
+		
+		if ( g_bRotated )
+		{
+			add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetY * -1);
+			add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetX * -1);
+			
+			add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
+			add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
+		}
+		else
+		{
+			add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->layers[ 0 ].flOffsetX * -1);
+			add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->layers[ 0 ].flOffsetY * -1);
+			
+			add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX);
+			add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleY);
+			
+			gpuvis_trace_printf ( "crtc %i+%i@%ix%i\n",
+								  (int)pComposite->layers[ 0 ].flOffsetX * -1, (int)pComposite->layers[ 0 ].flOffsetY * -1,
+								  (int)(pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->layers[ 0 ].flScaleX),
+								  (int)(pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleX) );
+		}
+		
+		
 		return true;
 	}
-	
-	if ( s_drm_log != 0 )
-	{
-		fprintf( stderr, "can NOT drm present %i layers\n", nLayerCount );
-	}
-	
-	drmModeAtomicFree( drm->req );
-	drm->req = nullptr;
-	
-	return false;
 }
