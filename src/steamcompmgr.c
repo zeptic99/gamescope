@@ -57,6 +57,9 @@
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 
+#define GPUVIS_TRACE_IMPLEMENTATION
+#include "gpuvis_trace_utils.h"
+
 typedef struct _ignore {
 	struct _ignore	*next;
 	unsigned long	sequence;
@@ -654,6 +657,10 @@ paint_debug_info (Display *dpy)
 static void
 paint_all (Display *dpy)
 {
+	static long long int paintID = 0;
+	
+	paintID++;
+	gpuvis_trace_printf( "paint_all begin_ctx=%llu\n", paintID );
 	win	*w;
 	win	*overlay;
 	win	*notification;
@@ -845,6 +852,9 @@ paint_all (Display *dpy)
 		
 		drm_atomic_commit( &g_DRM, &composite, &pipeline );
 	}
+	
+	gpuvis_trace_printf( "paint_all end_ctx=%llu\n", paintID );
+	gpuvis_trace_printf( "paint_all %i layers, composite %i\n", (int)composite.flLayerCount, bDoComposite );
 }
 
 static void
@@ -969,6 +979,8 @@ determine_and_apply_focus (Display *dpy)
 		wlserver_lock();
 		wlserver_mousefocus( focus->wlrsurface );
 		wlserver_unlock();
+		
+		gpuvis_trace_printf( "determine_and_apply_focus focus %lu\n", focus->id );
 	}
 	
 	currentFocusWindow = focus->id;
@@ -1443,6 +1455,8 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 	
 	if (w->damage)
 		XDamageSubtract(dpy, w->damage, None, None);
+	
+	gpuvis_trace_printf( "damage_win win %lx gameID %llu\n", w->id, w->gameID );
 }
 
 static void
@@ -1825,6 +1839,7 @@ steamcompmgr_main (int argc, char **argv)
 				discard_ignore (dpy, ev.xany.serial);
 			if (debugEvents)
 			{
+				gpuvis_trace_printf ("event %d\n", ev.type);
 				printf ("event %d\n", ev.type);
 			}
 			switch (ev.type) {
