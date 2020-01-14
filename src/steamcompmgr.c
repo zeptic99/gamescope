@@ -1655,6 +1655,7 @@ void check_new_wayland_res(void)
 				w->committed = True;
 				
 				bFound = True;
+				return;
 			}
 		}
 		
@@ -2075,9 +2076,6 @@ steamcompmgr_main (int argc, char **argv)
 		
 		if (doRender)
 		{
-			struct timespec now;
-			clock_gettime(CLOCK_MONOTONIC, &now);
-
 			// See if we have surfaceIDs we need to handle late
 			for (win *w = list; w; w = w->next)
 			{
@@ -2098,6 +2096,9 @@ steamcompmgr_main (int argc, char **argv)
 			check_new_wayland_res();
 			
 			paint_all(dpy);
+			
+			struct timespec now;
+			clock_gettime(CLOCK_MONOTONIC, &now);
 			
 			// If we're in the middle of a fade, pump an event into the loop to
 			// make sure we keep pushing frames even if the app isn't updating.
