@@ -197,6 +197,7 @@ static void page_flip_handler(int fd, unsigned int frame,
 	{
 		printf("page_flip_handler %p\n", data);
 	}
+	gpuvis_trace_printf("page_flip_handler %p\n", data);
 	
 	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
 	{
@@ -461,6 +462,8 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		assert( drm->lo_layers[ i ] );
 	}
 	
+	drm->flipcount = 0;
+	
 	return 0;
 }
 
@@ -562,8 +565,10 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].first == true );
 		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second++;
 	}
-
-	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, nullptr );
+	
+	g_DRM.flipcount++;
+	gpuvis_trace_printf ( "legacy flip commit %lu\n", (uint64_t)g_DRM.flipcount );
+	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
 	if (ret)
 	{
 		if ( ret != -EBUSY ) 
@@ -581,6 +586,8 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		{
 			g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second--;
 		}
+		
+		g_DRM.flipcount--;
 
 		goto out;
 	}

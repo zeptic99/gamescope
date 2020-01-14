@@ -69,6 +69,8 @@ struct drm_t {
 	std::vector< uint32_t > fbid_free_queue;
 	
 	std::mutex flip_lock;
+	
+	std::atomic < uint64_t > flipcount;
 };
 #endif
 
