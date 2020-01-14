@@ -707,8 +707,6 @@ paint_all (Display *dpy)
 		frameCounter = 0;
 	}
 	
-	w->damaged = 0;
-	
 	ensure_win_resources(dpy, w);
 	ensure_win_resources(dpy, overlay);
 	ensure_win_resources(dpy, notification);
@@ -761,7 +759,6 @@ paint_all (Display *dpy)
 		{
 			paint_window(dpy, overlay, &composite, &pipeline, False);
 		}
-		overlay->damaged = 0;
 	}
 	
 	if (gamesRunningCount && notification)
@@ -770,7 +767,6 @@ paint_all (Display *dpy)
 		{
 			paint_window(dpy, notification, &composite, &pipeline, True);
 		}
-		notification->damaged = 0;
 	}
 	
 	// Draw cursor if we need to
@@ -852,6 +848,10 @@ paint_all (Display *dpy)
 		
 		drm_atomic_commit( &g_DRM, &composite, &pipeline );
 	}
+	
+	w->damaged = 0;
+	if ( overlay ) overlay->damaged = 0;
+	if ( notification ) notification->damaged = 0;
 	
 	gpuvis_trace_printf( "paint_all end_ctx=%llu\n", paintID );
 	gpuvis_trace_printf( "paint_all %i layers, composite %i\n", (int)composite.flLayerCount, bDoComposite );
