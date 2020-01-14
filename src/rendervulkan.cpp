@@ -1325,8 +1325,8 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	vkCmdBindDescriptorSets(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 	
-	uint32_t nGroupCountX = g_nOutputWidth % 16 ? g_nOutputWidth / 16 + 1: g_nOutputWidth / 16;
-	uint32_t nGroupCountY = g_nOutputHeight % 16 ? g_nOutputHeight / 16 + 1: g_nOutputHeight / 16;
+	uint32_t nGroupCountX = g_nOutputWidth % 8 ? g_nOutputWidth / 8 + 1: g_nOutputWidth / 8;
+	uint32_t nGroupCountY = g_nOutputHeight % 8 ? g_nOutputHeight / 8 + 1: g_nOutputHeight / 8;
 	
 	vkCmdDispatch( curCommandBuffer, nGroupCountX, nGroupCountY, 1 );
 	
