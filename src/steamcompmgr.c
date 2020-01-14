@@ -349,6 +349,13 @@ ensure_win_resources (Display *dpy, win *w)
 			// We'll also need a copy for Vulkan to consume below.
 			
 			int fdCopy = dup( w->dmabuf_attribs.fd[0] );
+			
+			if ( fdCopy == -1 )
+			{
+				w->dmabuf_attribs_valid = False;
+				close( w->dmabuf_attribs.fd[0] );
+				return;
+			}
 
 			w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
 			assert( w->fb_id != 0 );
@@ -779,18 +786,10 @@ paint_all (Display *dpy)
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
 	
-	for ( int i = 0; i < k_nMaxLayers; i++ )
+	if ( BIsNested() == false )
 	{
-		bool bHasSeenZero = false;
-		
-		if ( pipeline.layerBindings[ i ].tex == 0 )
+		if ( pipeline.layerBindings[ 0 ].fbid == 0 )
 		{
-			bHasSeenZero = true;
-		}
-		else if ( bHasSeenZero == true )
-		{
-			// We have a hole in this binding that will cause GPU crashes.
-			// TODO write compacting code here
 			return;
 		}
 	}
@@ -1635,6 +1634,9 @@ void check_new_wayland_res(void)
 					// Existing data here hasn't been consumed - need to consume the dma-buf fd
 					close(w->dmabuf_attribs.fd[0]);
 				}
+				
+				assert( newEntry.attribs.fd[0] != -1 );
+				
 				w->dmabuf_attribs = newEntry.attribs;
 				w->dmabuf_attribs_valid = True;
 				
