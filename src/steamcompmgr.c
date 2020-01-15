@@ -1679,14 +1679,17 @@ steamcompmgr_main (int argc, char **argv)
 	int		    i;
 	int		    composite_major, composite_minor;
 	int		    o;
-	
+	int			readyPipeFD = -1;
 	
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":nSvVec")) != -1)
+	while ((o = getopt (argc, argv, ":R:nSvVec")) != -1)
 	{
 		switch (o) {
+			case 'R':
+				readyPipeFD = open( optarg, O_WRONLY );
+				break;
 			case 'n':
 				doRender = False;
 				break;
@@ -1831,6 +1834,11 @@ steamcompmgr_main (int argc, char **argv)
 	globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
 	
 	determine_and_apply_focus(dpy);
+	
+	if ( readyPipeFD != -1 )
+	{
+		write( readyPipeFD, wlserver.wlr.xwayland->display_name, strlen( wlserver.wlr.xwayland->display_name ) );
+	}
 	
 	for (;;)
 	{
