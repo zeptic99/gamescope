@@ -13,7 +13,7 @@ PFN_vkGetFenceFdKHR dyn_vkGetFenceFdKHR;
 
 const VkApplicationInfo appInfo = {
 	.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-	.pApplicationName = "steamcompmgr",
+	.pApplicationName = "gamescope",
 	.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 	.pEngineName = "just some code",
 	.engineVersion = VK_MAKE_VERSION(1, 0, 0),

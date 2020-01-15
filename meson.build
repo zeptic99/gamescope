@@ -1,4 +1,4 @@
-project('steamcompmgr', ['c','cpp'])
+project('gamescope', ['c','cpp'])
 
 add_project_arguments([
 	'-DWLR_USE_UNSTABLE',
@@ -44,7 +44,7 @@ liftoff_proj = subproject('libliftoff')
 libftoff_dep = liftoff_proj.get_variable('liftoff')
 
 executable(
-    'steamcompmgr',
+    'gamescope',
     'src/steamcompmgr.c',
     'src/main.cpp',
 	'src/wlserver.c',

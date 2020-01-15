@@ -102,7 +102,7 @@ void initOutput(void)
 	{
 		inputsdl_init();
 
-		window = SDL_CreateWindow( "steamcompmgr", SDL_WINDOWPOS_UNDEFINED,
+		window = SDL_CreateWindow( "gamescope", SDL_WINDOWPOS_UNDEFINED,
 								   SDL_WINDOWPOS_UNDEFINED, g_nOutputWidth,
 								   g_nOutputHeight, SDL_WINDOW_VULKAN );
 		
