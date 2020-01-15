@@ -1837,7 +1837,9 @@ steamcompmgr_main (int argc, char **argv)
 	
 	if ( readyPipeFD != -1 )
 	{
-		write( readyPipeFD, wlserver.wlr.xwayland->display_name, strlen( wlserver.wlr.xwayland->display_name ) );
+		dprintf( readyPipeFD, "%s\n", wlserver.wlr.xwayland->display_name );
+		close( readyPipeFD );
+		readyPipeFD = -1;
 	}
 	
 	for (;;)
