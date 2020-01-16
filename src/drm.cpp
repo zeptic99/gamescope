@@ -571,14 +571,14 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
 	if (ret)
 	{
-		if ( ret != -EBUSY ) 
+		if ( ret != -EBUSY && ret != -ENOSPC )
 		{
-			printf("flip error %d\n", ret);
+			fprintf( stderr, "flip error %d\n", ret);
 			exit( 0 );
 		}
-		else if ( s_drm_log != 0 ) 
+		else
 		{
-			printf("flip busy\n");
+			fprintf( stderr, "flip busy %d\n", ret);
 		}
 
 		// Undo refcount if the commit didn't actually work
@@ -588,6 +588,8 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		}
 		
 		g_DRM.flipcount--;
+
+		drm->flip_lock.unlock();
 
 		goto out;
 	}
