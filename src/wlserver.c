@@ -225,9 +225,16 @@ int wlserver_run(void)
 		n = epoll_wait( epoll_fd, events, 128, -1 );
 		if ( n == -1 )
 		{
-			break;
+			if ( errno == EINTR )
+			{
+				continue;
+			}
+			else
+			{
+				break;
+			}
 		}
-		
+
 		// We have wayland stuff to do, do it while locked
 		wlserver_lock();
 		
