@@ -674,6 +674,11 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 		{
 			return false;
 		}
+		
+		if ( pPipeline->layerBindings[ 0 ].fbid == 0 )
+		{
+			return false;
+		}
 	}
 
 	drm->fbids_in_req.clear();
@@ -689,7 +694,10 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 					liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", DRM_MODE_ROTATE_270);
 				}
 				
-				assert( pPipeline->layerBindings[ i ].fbid != 0 );
+				if ( pPipeline->layerBindings[ i ].fbid != 0 )
+				{
+					return false;
+				}
 				liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pPipeline->layerBindings[ i ].fbid);
 				drm->fbids_in_req.push_back( pPipeline->layerBindings[ i ].fbid );
 				

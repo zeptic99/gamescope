@@ -694,16 +694,9 @@ paint_all (Display *dpy)
 		return;
 	}
 	
-	// If the window has never been rendered to, there isn't much we can do here, wait a bit.
-	if ( !w->validContents )
-	{
-		return;
-	}
-	
 	// Don't pump new frames if no animation on the focus window, unless we're fading
 	if (!w->damaged && !overlayDamaged && !fadeOutWindow.id)
 		return;
-	
 	
 	frameCounter++;
 	
@@ -785,14 +778,6 @@ paint_all (Display *dpy)
 	
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
-	
-	if ( BIsNested() == false )
-	{
-		if ( pipeline.layerBindings[ 0 ].fbid == 0 )
-		{
-			return;
-		}
-	}
 	
 	bool bDoComposite = true;
 	
