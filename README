@@ -6,7 +6,7 @@ In an embedded session usecase, gamescope does the same thing as steamcompmgr, b
  
  - It can use DRM/KMS to directly flip game frames to the screen, even when stretching or when notifications are up, removing another copy.
  
- - When it does need to the composite with the GPU, it does so with async Vulkan compute, meaning you get to see your frame quick even if the game already has the GPU busy with the next frame.
+ - When it does need to composite with the GPU, it does so with async Vulkan compute, meaning you get to see your frame quick even if the game already has the GPU busy with the next frame.
  
 It also runs on top of a regular desktop, the 'nested' usecase steamcompmgr didn't support.
 
