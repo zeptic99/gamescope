@@ -10,7 +10,7 @@ In an embedded session usecase, gamescope does the same thing as steamcompmgr, b
  
 It also runs on top of a regular desktop, the 'nested' usecase steamcompmgr didn't support.
 
- - Because the game is running in its own personal Xwayland, it can't interfere with your desktop and your desktop can't interfere with it.
+ - Because the game is running in its own personal Xwayland sandbox desktop, it can't interfere with your desktop and your desktop can't interfere with it.
  
  - You can spoof a virtual screen with a desired resolution and refresh rate as the only thing the game sees, and control/resize the output as needed. This can be useful in exotic display configurations like ultrawide or multi-monitor setups that involve rotation.
  
