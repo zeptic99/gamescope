@@ -2116,6 +2116,8 @@ steamcompmgr_main (int argc, char **argv)
 						  &child, &root_x, &root_y, &win_x, &win_y,
 						&mask_return);
 			
+			handle_mouse_movement( dpy, root_x, root_y );
+			
 			if ( mask_return & ( Button1Mask | Button2Mask | Button3Mask | Button4Mask | Button5Mask ) )
 			{
 				hideCursorForMovement = False;
