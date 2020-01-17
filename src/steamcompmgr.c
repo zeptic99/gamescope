@@ -206,7 +206,7 @@ static Bool		debugEvents = False;
 static Bool		steamMode = False;
 static Bool		alwaysComposite = False;
 
-static unsigned int
+unsigned int
 get_time_in_milliseconds (void)
 {
 	struct timeval  tv;
@@ -961,6 +961,7 @@ determine_and_apply_focus (Display *dpy)
 		set_win_hidden( dpy, find_win(dpy, currentFocusWindow), True );
 
 		wlserver_lock();
+		wlserver_keyboardfocus( focus->wlrsurface );
 		wlserver_mousefocus( focus->wlrsurface );
 		wlserver_unlock();
 		
@@ -1472,6 +1473,7 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 	// let wayland know now.
 	if ( w->id == currentFocusWindow )
 	{
+		wlserver_keyboardfocus( surface );
 		wlserver_mousefocus( surface );
 	}
 

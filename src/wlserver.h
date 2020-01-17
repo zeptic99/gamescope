@@ -17,18 +17,47 @@ struct wlserver_t {
 	int wl_event_loop_fd;
 
 	struct {
-		struct wlr_backend *backend;
+		struct wlr_backend *multi_backend;
+		struct wlr_backend *headless_backend;
+		struct wlr_backend *libinput_backend;
+
 		struct wlr_renderer *renderer;
 		struct wlr_compositor *compositor;
 		struct wlr_xwayland *xwayland;
 		struct wlr_session *session;	
 		struct wlr_seat *seat;
 		struct wlr_output *output;
-		
-// 		// Only for nested (?)
-// 		struct wlr_input_device *keyboard_dev;
-// 		struct wlr_input_device *pointer_dev;
 	} wlr;
+	
+	struct wlr_surface *mouse_focus_surface;
+	double mouse_surface_cursorx;
+	double mouse_surface_cursory;
+	
+	double touchdown_x;
+	double touchdown_y;
+	unsigned int touchdown_time_ms;
+};
+
+struct wlserver_keyboard {
+	struct wlr_input_device *device;
+	
+	struct wl_listener modifiers;
+	struct wl_listener key;
+};
+
+struct wlserver_pointer {
+	struct wlr_input_device *device;
+	
+	struct wl_listener motion;
+	struct wl_listener button;
+};
+
+struct wlserver_touch {
+	struct wlr_input_device *device;
+	
+	struct wl_listener down;
+	struct wl_listener up;
+	struct wl_listener motion;
 };
 
 extern struct wlserver_t wlserver;
@@ -51,6 +80,8 @@ void nudge_steamcompmgr(void);
 
 void wlserver_lock(void);
 void wlserver_unlock(void);
+
+void wlserver_keyboardfocus( struct wlr_surface *surface );
 
 void wlserver_mousefocus( struct wlr_surface *wlrsurface );
 void wlserver_mousemotion( int x, int y, uint32_t time );
