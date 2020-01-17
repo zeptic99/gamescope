@@ -167,8 +167,14 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 		
 		wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
 		wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
+
+		wlserver.dragging = false;
+		wlserver.candrag = true;
 		
 		wlserver.touchdown_time_ms = get_time_in_milliseconds();
+		
+		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 	}
 }
 
@@ -183,7 +189,7 @@ static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 
 		if ( fabs( wlserver.mouse_surface_cursorx - wlserver.touchdown_x ) < 50 &&
 			fabs( wlserver.mouse_surface_cursory - wlserver.touchdown_y ) < 50 &&
-			now - wlserver.touchdown_time_ms < 200 )
+			now - wlserver.touchdown_time_ms < 100 )
 		{
 			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.touchdown_x, wlserver.touchdown_y );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
@@ -192,6 +198,14 @@ static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_RELEASED );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 		}
+		
+		if ( wlserver.dragging == true )
+		{
+			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_RELEASED );
+			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		}
+
+		wlserver.dragging = false;
 	}
 }
 
@@ -202,14 +216,40 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 	
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
+		unsigned int now = get_time_in_milliseconds();
+		unsigned int sincedown = now - wlserver.touchdown_time_ms;
+
 		double x = g_bRotated ? event->y : event->x;
 		double y = g_bRotated ? 1.0 - event->x : event->y;
+		
+		if ( sincedown > 200 || wlserver.candrag == false )
+		{
+			if ( wlserver.candrag == true )
+			{
+				wlserver.candrag = false;
+				wlserver.dragging = true;
+				
+				wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.touchdown_x, wlserver.touchdown_y );
+				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+				wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_PRESSED );
+				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+			}
+			wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
+			wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
 
-		wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
-		wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
-
-		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		}
+		else
+		{
+			double posx = x * wlserver.mouse_focus_surface->current.width;
+			double posy = y * wlserver.mouse_focus_surface->current.height;
+			
+			if ( fabs( posx - wlserver.touchdown_x ) > 100 || fabs( posy - wlserver.touchdown_y ) > 100 )
+			{
+				wlserver.candrag = false;
+			}
+		}
 	}
 }
 

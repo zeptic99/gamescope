@@ -36,6 +36,8 @@ struct wlserver_t {
 	double touchdown_x;
 	double touchdown_y;
 	unsigned int touchdown_time_ms;
+	bool dragging;
+	bool candrag;
 };
 
 struct wlserver_keyboard {
