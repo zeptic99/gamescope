@@ -41,6 +41,8 @@ extern "C" {
 
 extern const struct wlr_surface_role xwayland_surface_role;
 
+void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
+
 int wlserver_init( int argc, char **argv, bool bIsNested );
 
 int wlserver_run(void);

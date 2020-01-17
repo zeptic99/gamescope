@@ -58,10 +58,15 @@ void nudge_steamcompmgr(void)
 	XFlush( g_XWLDpy );
 }
 
-static void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
+void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
 	
 	struct wlr_texture *tex = wlr_surface_get_texture( wlr_surface );
+
+	if ( tex == NULL )
+	{
+		return;
+	}
 	
 	struct wlr_dmabuf_attributes dmabuf_attribs = {};
 	bool result = False;

@@ -1474,6 +1474,9 @@ handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
 	{
 		wlserver_mousefocus( surface );
 	}
+
+	// Pull the first buffer out of that window, if needed
+	xwayland_surface_role_commit( surface );
 	
 	wlserver_unlock();
 		
@@ -2085,7 +2088,7 @@ steamcompmgr_main (int argc, char **argv)
 						// Got it now.
 						w->WLsurfaceID = 0;
 
-						printf ( "handled late WLSurfaceID\n" );
+						fprintf ( stderr, "handled late WLSurfaceID\n" );
 					}
 				}
 			}
