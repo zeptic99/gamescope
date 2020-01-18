@@ -84,6 +84,7 @@ void wlserver_lock(void);
 void wlserver_unlock(void);
 
 void wlserver_keyboardfocus( struct wlr_surface *surface );
+void wlserver_key( uint32_t key, bool press, uint32_t time );
 
 void wlserver_mousefocus( struct wlr_surface *wlrsurface );
 void wlserver_mousemotion( int x, int y, uint32_t time );
