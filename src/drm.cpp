@@ -749,7 +749,8 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
 	uint32_t blob_id;
 	
-	if ( bFirstSwap == true )
+	// Temporary hack until we figure out what AMDGPU DC expects when changing the dest rect
+	if ( 1 || bFirstSwap == true )
 	{
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 		bFirstSwap = false;
