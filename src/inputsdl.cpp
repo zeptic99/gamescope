@@ -333,8 +333,11 @@ static inline int SDLButtonToLinuxButton( int SDLButton )
 
 void inputSDLThreadRun( void )
 {
-	// :/
-	signal(SIGUSR1, SIG_IGN);
+	// see wlroots xwayland startup and how wl_event_loop_add_signal works
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGUSR1);
+	sigprocmask(SIG_BLOCK, &mask, NULL);
 
 	SDL_Event event;
 	

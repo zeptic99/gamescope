@@ -243,8 +243,11 @@ static void page_flip_handler(int fd, unsigned int frame,
 
 void flip_handler_thread_run(void)
 {
-	// :/
-	signal(SIGUSR1, SIG_IGN);
+	// see wlroots xwayland startup and how wl_event_loop_add_signal works
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGUSR1);
+	sigprocmask(SIG_BLOCK, &mask, NULL);
 
 	fd_set fds;
 	int ret;
