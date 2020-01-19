@@ -33,6 +33,8 @@ extern uint32_t g_nOutputHeight;
 
 extern bool g_bFilterGameWindow;
 
+extern uint32_t g_nSubCommandArg;
+
 int BIsNested( void );
 
 #ifndef C_SIDE

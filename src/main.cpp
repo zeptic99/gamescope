@@ -32,6 +32,8 @@ bool g_bFilterGameWindow = true;
 
 bool g_bBorderlessOutputWindow = false;
 
+uint32_t g_nSubCommandArg = 0;
+
 int BIsNested()
 {
 	return g_bIsNested == true;
@@ -39,6 +41,17 @@ int BIsNested()
 
 int main(int argc, char **argv)
 {
+	// Grab the starting position of a potential command that follows "--" in argv
+	// Do it before getopt can reorder anything, for use later
+	for ( int i = 0; i < argc; i++ )
+	{
+		if ( strcmp( "--", argv[ i ] ) == 0 && i + 1 < argc )
+		{
+			g_nSubCommandArg = i + 1;
+			break;
+		}
+	}
+
 	int o;
 	ac = argc;
 	av = argv;

@@ -41,6 +41,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <spawn.h>
+#include <signal.h>
+
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
@@ -59,6 +62,8 @@
 
 #define GPUVIS_TRACE_IMPLEMENTATION
 #include "gpuvis_trace_utils.h"
+
+extern char **environ;
 
 typedef struct _ignore {
 	struct _ignore	*next;
@@ -1702,7 +1707,7 @@ steamcompmgr_main (int argc, char **argv)
 				break;
 		}
 	}
-	
+
 	dpy = XOpenDisplay (wlserver.wlr.xwayland->display_name);
 	if (!dpy)
 	{
@@ -1830,6 +1835,22 @@ steamcompmgr_main (int argc, char **argv)
 		dprintf( readyPipeFD, "%s\n", wlserver.wlr.xwayland->display_name );
 		close( readyPipeFD );
 		readyPipeFD = -1;
+	}
+	
+	if ( g_nSubCommandArg != 0 )
+	{
+		pid_t pid;
+		
+		sigset_t fullset;
+		sigfillset( &fullset );
+		
+		posix_spawnattr_t attr;
+		
+		posix_spawnattr_init( &attr );
+		posix_spawnattr_setflags( &attr, POSIX_SPAWN_SETSIGDEF );
+		posix_spawnattr_setsigdefault( &attr, &fullset );
+		
+		posix_spawnp( &pid, argv[ g_nSubCommandArg ], NULL, &attr, &argv[ g_nSubCommandArg ], environ );
 	}
 	
 	for (;;)
