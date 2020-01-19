@@ -1289,6 +1289,15 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	{
 		pComposite->nSwapChannels = 1;
 	}
+	
+	// Sample a bit closer to texel centers in most cases
+	// TODO: probably actually need to apply a general scale/bias to properly
+	// sample from the center in all four corners in all scaling scenarios
+	for ( int i = 0; i < pComposite->nLayerCount; i++ )
+	{
+		pComposite->layers[ i ].flOffsetX += 0.5f;
+		pComposite->layers[ i ].flOffsetY += 0.5f;
+	}
 
 	*g_output.pCompositeBuffer = *pComposite;
 	// XXX maybe flush something?
