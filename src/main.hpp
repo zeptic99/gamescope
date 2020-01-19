@@ -31,6 +31,8 @@ extern int g_nNestedRefresh;
 extern uint32_t g_nOutputWidth;
 extern uint32_t g_nOutputHeight;
 
+extern bool g_bFilterGameWindow;
+
 int BIsNested( void );
 
 #ifndef C_SIDE

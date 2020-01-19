@@ -597,7 +597,7 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	pPipeline->layerBindings[ curLayer ].tex = w->vulkanTex;
 	pPipeline->layerBindings[ curLayer ].fbid = w->fb_id;
 	
-	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : false;
+	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : g_bFilterGameWindow;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = notificationMode ? false : true;
 	
 	pComposite->flLayerCount += 1.0f;
@@ -816,7 +816,7 @@ paint_all (Display *dpy)
 			pipeline.layerBindings[ 0 ].surfaceHeight = g_nOutputHeight;
 			
 			pipeline.layerBindings[ 0 ].fbid = vulkan_get_last_composite_fbid();
-			pipeline.layerBindings[ 0 ].bFilter = true;
+			pipeline.layerBindings[ 0 ].bFilter = false;
 			
 			bool bFlip = drm_can_avoid_composite( &g_DRM, &composite, &pipeline );
 			
@@ -1674,13 +1674,13 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":R:nSvVec")) != -1)
+	while ((o = getopt (argc, argv, ":R:NSvVec")) != -1)
 	{
 		switch (o) {
 			case 'R':
 				readyPipeFD = open( optarg, O_WRONLY );
 				break;
-			case 'n':
+			case 'N':
 				doRender = False;
 				break;
 			case 'S':

@@ -28,6 +28,10 @@ uint32_t g_nOutputHeight = 720;
 
 bool g_bIsNested = false;
 
+bool g_bFilterGameWindow = true;
+
+bool g_bBorderlessOutputWindow = false;
+
 int BIsNested()
 {
 	return g_bIsNested == true;
@@ -41,7 +45,7 @@ int main(int argc, char **argv)
 	
 	bool bSleepAtStartup = false;
 	
-	while ((o = getopt (argc, argv, ":w:h:r:sl")) != -1)
+	while ((o = getopt (argc, argv, ":w:h:W:H:r:slnb")) != -1)
 	{
 		switch (o) {
 			case 'w':
@@ -49,6 +53,12 @@ int main(int argc, char **argv)
 				break;
 			case 'h':
 				g_nNestedHeight = atoi( optarg );
+				break;
+			case 'W':
+				g_nOutputWidth = atoi( optarg );
+				break;
+			case 'H':
+				g_nOutputHeight = atoi( optarg );
 				break;
 			case 'r':
 				g_nNestedRefresh = atoi( optarg );
@@ -58,6 +68,12 @@ int main(int argc, char **argv)
 				break;
 			case 'l':
 				g_bUseLayers = true;
+				break;
+			case 'n':
+				g_bFilterGameWindow = false;
+				break;
+			case 'b':
+				g_bBorderlessOutputWindow = true;
 				break;
 			default:
 				break;
@@ -101,10 +117,20 @@ void initOutput(void)
 	if ( g_bIsNested == true )
 	{
 		inputsdl_init();
+		
+		uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN;
+		
+		if ( g_bBorderlessOutputWindow == true )
+		{
+			nSDLWindowFlags |= SDL_WINDOW_BORDERLESS;
+		}
 
-		window = SDL_CreateWindow( "gamescope", SDL_WINDOWPOS_UNDEFINED,
-								   SDL_WINDOWPOS_UNDEFINED, g_nOutputWidth,
-								   g_nOutputHeight, SDL_WINDOW_VULKAN );
+		window = SDL_CreateWindow( "gamescope",
+								   SDL_WINDOWPOS_UNDEFINED,
+								   SDL_WINDOWPOS_UNDEFINED,
+								   g_nOutputWidth,
+								   g_nOutputHeight,
+								   nSDLWindowFlags );
 		
 		
 		unsigned int extCount;
