@@ -1287,7 +1287,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 {
 	if ( BIsNested() == false && DRMFormatNeedsSwizzle( g_nDRMFormat ) )
 	{
-		pComposite->flSwapChannels = 1.0;
+		pComposite->nSwapChannels = 1;
 	}
 
 	*g_output.pCompositeBuffer = *pComposite;

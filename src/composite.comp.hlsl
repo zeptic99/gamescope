@@ -2,8 +2,8 @@
 
 [[vk::binding(1, 0)]] cbuffer compositeDesc
 {
-	float flLayerCount;
-	float flSwapChannels;
+	int nLayerCount;
+	int nSwapChannels;
 
     float flScale0X;
     float flScale0Y;
@@ -61,26 +61,26 @@ void main(
 
 	float4 outputValue;
 
-	if ( flLayerCount >= 1.0f )
+	if ( nLayerCount >= 1 )
 	{
 		outputValue = inLayerTex0.Sample( sampler0, ( float2( index ) + float2( flOffset0X, flOffset0Y ) ) * float2( flScale0X, flScale0Y ) );
 	}
 	
-	if ( flLayerCount >= 2.0f )
+	if ( nLayerCount >= 2 )
 	{
 		float4 layerSample = inLayerTex1.Sample( sampler1, ( float2( index ) + float2( flOffset1X, flOffset1Y ) ) * float2( flScale1X, flScale1Y ) );
 		float layerAlpha = flOpacity1 * layerSample.a;
 		outputValue = layerSample * layerAlpha + outputValue * ( 1.0 - layerAlpha );
 	}
 	
-	if ( flLayerCount >= 3.0f )
+	if ( nLayerCount >= 3 )
 	{
 		float4 layerSample = inLayerTex2.Sample( sampler2, ( float2( index ) + float2( flOffset2X, flOffset2Y ) ) * float2( flScale2X, flScale2Y ) );
 		float layerAlpha = flOpacity2 * layerSample.a;
 		outputValue = layerSample * layerAlpha + outputValue * ( 1.0 - layerAlpha );
 	}
 	
-	if ( flSwapChannels == 1.0 )
+	if ( nSwapChannels == 1 )
 	{
 		outImage [index] = outputValue.bgra;
     }

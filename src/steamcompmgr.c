@@ -494,7 +494,7 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 	scaledCursorX = scaledCursorX - cursorHotX;
 	scaledCursorY = scaledCursorY - cursorHotY;
 	
-	int curLayer = (int)pComposite->flLayerCount;
+	int curLayer = pComposite->nLayerCount;
 	
 	pComposite->layers[ curLayer ].flOpacity = 1.0;
 	
@@ -515,7 +515,7 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 	pPipeline->layerBindings[ curLayer ].bFilter = false;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = false;
 	
-	pComposite->flLayerCount += 1.0f;
+	pComposite->nLayerCount += 1;
 }
 
 static void
@@ -565,7 +565,7 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 		}
 	}
 	
-	int curLayer = (int)pComposite->flLayerCount;
+	int curLayer = pComposite->nLayerCount;
 	
 	pComposite->layers[ curLayer ].flOpacity = w->isOverlay ? w->opacity / (float)OPAQUE : 1.0f;
 	
@@ -605,7 +605,7 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : g_bFilterGameWindow;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = notificationMode ? false : true;
 	
-	pComposite->flLayerCount += 1.0f;
+	pComposite->nLayerCount += 1;
 }
 
 static void
@@ -810,7 +810,7 @@ paint_all (Display *dpy)
 		else
 		{
 			memset( &composite, 0, sizeof( composite ) );
-			composite.flLayerCount = 1.0;
+			composite.nLayerCount = 1;
 			composite.layers[ 0 ].flScaleX = 1.0;
 			composite.layers[ 0 ].flScaleY = 1.0;
 			composite.layers[ 0 ].flOpacity = 1.0;
@@ -843,7 +843,7 @@ paint_all (Display *dpy)
 	if ( notification ) notification->damaged = 0;
 	
 	gpuvis_trace_printf( "paint_all end_ctx=%llu\n", paintID );
-	gpuvis_trace_printf( "paint_all %i layers, composite %i\n", (int)composite.flLayerCount, bDoComposite );
+	gpuvis_trace_printf( "paint_all %i layers, composite %i\n", (int)composite.nLayerCount, bDoComposite );
 }
 
 static void

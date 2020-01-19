@@ -655,7 +655,7 @@ void drm_free_fbid( struct drm_t *drm, uint32_t fbid )
 
 bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
-	int nLayerCount = pComposite->flLayerCount;
+	int nLayerCount = pComposite->nLayerCount;
 	
 	if ( g_bUseLayers == false )
 	{
