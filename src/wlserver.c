@@ -12,6 +12,7 @@
 
 #include <linux/input-event-codes.h>
 
+#include <X11/extensions/XTest.h>
 #include <xkbcommon/xkbcommon.h>
 
 #include <wayland-server-core.h>
@@ -131,16 +132,45 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, event->time_msec, event->keycode, event->state );
 }
 
+static void wlserver_movecursor( int x, int y )
+{
+	wlserver.mouse_surface_cursorx += x;
+	
+	if ( wlserver.mouse_surface_cursorx > wlserver.mouse_focus_surface->current.width - 1 )
+	{
+		wlserver.mouse_surface_cursorx = wlserver.mouse_focus_surface->current.width - 1;
+	}
+	
+	if ( wlserver.mouse_surface_cursorx < 0 )
+	{
+		wlserver.mouse_surface_cursorx = 0;
+	}
+	
+	wlserver.mouse_surface_cursory += y;
+	
+	if ( wlserver.mouse_surface_cursory > wlserver.mouse_focus_surface->current.height - 1 )
+	{
+		wlserver.mouse_surface_cursory = wlserver.mouse_focus_surface->current.height - 1;
+	}
+	
+	if ( wlserver.mouse_surface_cursory < 0 )
+	{
+		wlserver.mouse_surface_cursory = 0;
+	}
+}
+
 static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *data)
 {
 	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, motion );
 	struct wlr_event_pointer_motion *event = data;
 	
-	wlserver.mouse_surface_cursorx += event->unaccel_dx;
-	wlserver.mouse_surface_cursory += event->unaccel_dy;
+	if ( wlserver.mouse_focus_surface != NULL )
+	{
+		wlserver_movecursor( event->unaccel_dx, event->unaccel_dy );
 
-	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+	}
 }
 
 static void wlserver_handle_pointer_button(struct wl_listener *listener, void *data)
@@ -497,8 +527,11 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface )
 
 void wlserver_mousemotion( int x, int y, uint32_t time )
 {
-	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, x, y );
-	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+	if ( g_XWLDpy != NULL )
+	{
+		XTestFakeRelativeMotionEvent( g_XWLDpy, x, y, CurrentTime );
+		XFlush( g_XWLDpy );
+	}
 }
 
 void wlserver_mousebutton( int button, bool press, uint32_t time )

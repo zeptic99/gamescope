@@ -339,6 +339,7 @@ void inputSDLThreadRun( void )
 	SDL_Event event;
 	
 	SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS );
+	SDL_SetRelativeMouseMode(SDL_TRUE);
 	
 	g_SDLInitLock.unlock();
 	
@@ -348,7 +349,7 @@ void inputSDLThreadRun( void )
 		{
 			case SDL_MOUSEMOTION:
 				wlserver_lock();
-				wlserver_mousemotion( event.motion.x, event.motion.y, event.motion.timestamp );
+				wlserver_mousemotion( event.motion.xrel, event.motion.yrel, event.motion.timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_MOUSEBUTTONDOWN:
