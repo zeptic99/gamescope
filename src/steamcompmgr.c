@@ -397,7 +397,7 @@ handle_mouse_movement(Display *dpy, int posX, int posY)
 	// Ignore the first events as it's likely to be non-user-initiated warps
 	// Account for one warp from us, one warp from the app and one warp from
 	// the toolkit.
-	if (w && (w->mouseMoved++ < 3))
+	if ( !w || ( w->mouseMoved++ < 3 ) )
 		return;
 	
 	lastCursorMovedTime = get_time_in_milliseconds();
