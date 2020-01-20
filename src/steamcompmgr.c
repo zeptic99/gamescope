@@ -1781,7 +1781,7 @@ steamcompmgr_main (int argc, char **argv)
 	}
 	
 	currentOutputWidth = g_nOutputWidth;
-	currentOutputHeight = g_nOutputWidth;
+	currentOutputHeight = g_nOutputHeight;
 	
 	XGrabServer (dpy);
 	
@@ -2095,9 +2095,16 @@ steamcompmgr_main (int argc, char **argv)
 			if ( currentOutputWidth != g_nOutputWidth ||
 				 currentOutputHeight != g_nOutputHeight )
 			{
-				bool bRet = vulkan_remake_swapchain();
-				
-				assert( bRet == true );
+				if ( BIsNested() == true )
+				{
+					bool bRet = vulkan_remake_swapchain();
+
+					assert( bRet == true );
+				}
+				else
+				{
+					// Remake output images if we ever care about resizing there
+				}
 				
 				currentOutputWidth = g_nOutputWidth;
 				currentOutputHeight = g_nOutputHeight;
