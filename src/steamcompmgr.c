@@ -120,6 +120,8 @@ static int		xfixes_event, xfixes_error;
 static Bool		synchronize;
 static int		composite_opcode;
 
+int				currentOutputWidth, currentOutputHeight;
+
 static Window	currentFocusWindow;
 static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
@@ -547,16 +549,16 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 		sourceHeight = w->a.height;
 	}
 	
-	if (sourceWidth != g_nOutputWidth || sourceHeight != g_nOutputHeight || globalScaleRatio != 1.0f)
+	if (sourceWidth != currentOutputWidth || sourceHeight != currentOutputHeight || globalScaleRatio != 1.0f)
 	{
-		float XRatio = (float)g_nOutputWidth / sourceWidth;
-		float YRatio = (float)g_nOutputHeight / sourceHeight;
+		float XRatio = (float)currentOutputWidth / sourceWidth;
+		float YRatio = (float)currentOutputHeight / sourceHeight;
 		
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 		currentScaleRatio *= globalScaleRatio;
 		
-		drawXOffset = (g_nOutputWidth - sourceWidth * currentScaleRatio) / 2.0f;
-		drawYOffset = (g_nOutputHeight - sourceHeight * currentScaleRatio) / 2.0f;
+		drawXOffset = (currentOutputWidth - sourceWidth * currentScaleRatio) / 2.0f;
+		drawYOffset = (currentOutputHeight - sourceHeight * currentScaleRatio) / 2.0f;
 		
 		if ( zoomScaleRatio != 1.0 )
 		{
@@ -581,12 +583,12 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 		
 		if (globalScaleRatio != 1.0f)
 		{
-			xOffset = (g_nOutputWidth - g_nOutputWidth * globalScaleRatio) / 2.0;
-			yOffset = (g_nOutputHeight - g_nOutputHeight * globalScaleRatio) / 2.0;
+			xOffset = (currentOutputWidth - currentOutputWidth * globalScaleRatio) / 2.0;
+			yOffset = (currentOutputHeight - currentOutputHeight * globalScaleRatio) / 2.0;
 		}
 		
-		pComposite->layers[ curLayer ].flOffsetX = (g_nOutputWidth - xOffset - width) * -1.0f;
-		pComposite->layers[ curLayer ].flOffsetY = (g_nOutputHeight - yOffset - height) * -1.0f;
+		pComposite->layers[ curLayer ].flOffsetX = (currentOutputWidth - xOffset - width) * -1.0f;
+		pComposite->layers[ curLayer ].flOffsetY = (currentOutputHeight - yOffset - height) * -1.0f;
 	}
 	else
 	{
@@ -1793,6 +1795,9 @@ steamcompmgr_main (int argc, char **argv)
 		fprintf (stderr, "alarm!!!\n");
 	}
 	
+	currentOutputWidth = g_nOutputWidth;
+	currentOutputHeight = g_nOutputWidth;
+	
 	XGrabServer (dpy);
 	
 	if (doRender)
@@ -2099,6 +2104,19 @@ steamcompmgr_main (int argc, char **argv)
 		
 		if (doRender)
 		{
+			// Pick our width/height for this potential frame, regardless of how it might change later
+			// At some point we might even add proper locking so we get real updates atomically instead
+			// of whatever jumble of races the below might cause over a couple of frames
+			if ( currentOutputWidth != g_nOutputWidth ||
+				 currentOutputHeight != g_nOutputHeight )
+			{
+				bool bRet = vulkan_remake_swapchain();
+				
+				assert( bRet == true );
+				
+				currentOutputWidth = g_nOutputWidth;
+				currentOutputHeight = g_nOutputHeight;
+			}
 			// See if we have surfaceIDs we need to handle late
 			for (win *w = list; w; w = w->next)
 			{

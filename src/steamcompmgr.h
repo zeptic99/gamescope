@@ -1,6 +1,9 @@
 #ifndef C_SIDE
 extern "C" {
 #endif
+
+extern int currentOutputWidth;
+extern int currentOutputHeight;
 	
 unsigned int get_time_in_milliseconds(void);
 

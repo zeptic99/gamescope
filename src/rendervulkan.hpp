@@ -94,6 +94,8 @@ uint32_t vulkan_get_last_composite_fbid( void );
 
 void vulkan_present_to_window( void );
 
+bool vulkan_remake_swapchain( void );
+
 #ifndef C_SIDE
 }
 #endif

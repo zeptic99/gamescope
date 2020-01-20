@@ -10,6 +10,7 @@
 
 #include "inputsdl.hpp"
 #include "wlserver.h"
+#include "main.hpp"
 
 std::mutex g_SDLInitLock;
 
@@ -374,6 +375,17 @@ void inputSDLThreadRun( void )
 				wlserver_key( SDLScancodeToLinuxKey( event.key.keysym.scancode ),
 							  event.type == SDL_KEYDOWN, event.key.timestamp );
 				wlserver_unlock();
+				break;
+			case SDL_WINDOWEVENT:
+				switch( event.window.event )
+				{
+					default:
+						break;
+					case SDL_WINDOWEVENT_SIZE_CHANGED:
+						g_nOutputWidth = event.window.data1;
+						g_nOutputHeight = event.window.data2;
+						break;
+				}
 				break;
 			default:
 				break;

@@ -131,7 +131,7 @@ void initOutput(void)
 	{
 		inputsdl_init();
 		
-		uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN;
+		uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
 		
 		if ( g_bBorderlessOutputWindow == true )
 		{

@@ -5,6 +5,7 @@
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
+#include "steamcompmgr.h"
 
 #include "composite.h"
 
@@ -753,6 +754,98 @@ void vulkan_present_to_window( void )
 	acquire_next_image();
 }
 
+bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
+{
+	uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;
+	uint32_t surfaceFormat = 0;
+	uint32_t formatCount = pOutput->surfaceFormats.size();
+	VkResult result = VK_SUCCESS;
+
+	for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+	{
+		if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
+			break;
+	}
+	
+	if ( surfaceFormat == formatCount )
+		return false;
+	
+	VkSwapchainCreateInfoKHR createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = pOutput->surface;
+	
+	createInfo.minImageCount = imageCount;
+	createInfo.imageFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
+	createInfo.imageColorSpace = pOutput->surfaceFormats[surfaceFormat ].colorSpace;
+	createInfo.imageExtent = { g_nOutputWidth, g_nOutputHeight };
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
+	createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	
+	createInfo.preTransform = pOutput->surfaceCaps.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+	createInfo.clipped = VK_TRUE;
+	
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+	
+	if (vkCreateSwapchainKHR( device, &createInfo, nullptr, &pOutput->swapChain) != VK_SUCCESS ) {
+		return 0;
+	}
+	
+	vkGetSwapchainImagesKHR( device, pOutput->swapChain, &imageCount, nullptr );
+	pOutput->swapChainImages.resize( imageCount );
+	pOutput->swapChainImageViews.resize( imageCount );
+	vkGetSwapchainImagesKHR( device, pOutput->swapChain, &imageCount, pOutput->swapChainImages.data() );
+	
+	for ( uint32_t i = 0; i < pOutput->swapChainImages.size(); i++ )
+	{
+		VkImageViewCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = pOutput->swapChainImages[ i ];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = pOutput->surfaceFormats[ surfaceFormat ].format;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+		
+		result = vkCreateImageView(device, &createInfo, nullptr, &pOutput->swapChainImageViews[ i ]);
+		
+		if ( result != VK_SUCCESS )
+			return false;
+	}
+	
+	acquire_next_image();
+	
+	return true;
+}
+
+bool vulkan_remake_swapchain( void )
+{
+	VulkanOutput_t *pOutput = &g_output;
+	vkQueueWaitIdle( queue );
+
+	for ( uint32_t i = 0; i < pOutput->swapChainImages.size(); i++ )
+	{
+		vkDestroyImageView( device, pOutput->swapChainImageViews[ i ], nullptr );
+		
+		pOutput->swapChainImageViews[ i ] = VK_NULL_HANDLE;
+		pOutput->swapChainImages[ i ] = VK_NULL_HANDLE;
+	}
+	
+	vkDestroySwapchainKHR( device, pOutput->swapChain, nullptr );
+	
+	pOutput->nSwapChainImageIndex = 0;
+	
+	return ( vulkan_make_swapchain( &g_output ) );
+}
+
 bool vulkan_make_output( VulkanOutput_t *pOutput )
 {
 	VkResult result;
@@ -797,69 +890,9 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 				return false;
 		}
 		
-		uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;
-		uint32_t surfaceFormat = 0;
-		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
-		{
-			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
-				break;
-		}
+		bool bRet = vulkan_make_swapchain( pOutput );
 		
-		if ( surfaceFormat == formatCount )
-			return false;
-		
-		VkSwapchainCreateInfoKHR createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = pOutput->surface;
-		
-		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
-		createInfo.imageColorSpace = pOutput->surfaceFormats[surfaceFormat ].colorSpace;
-		createInfo.imageExtent = { g_nOutputWidth, g_nOutputHeight };
-		createInfo.imageArrayLayers = 1;
-		createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
-		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		
-		createInfo.preTransform = pOutput->surfaceCaps.currentTransform;
-		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-		createInfo.clipped = VK_TRUE;
-		
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
-		
-		if (vkCreateSwapchainKHR( device, &createInfo, nullptr, &pOutput->swapChain) != VK_SUCCESS ) {
-			return 0;
-		}
-		
-		vkGetSwapchainImagesKHR( device, pOutput->swapChain, &imageCount, nullptr );
-		pOutput->swapChainImages.resize( imageCount );
-		pOutput->swapChainImageViews.resize( imageCount );
-		vkGetSwapchainImagesKHR( device, pOutput->swapChain, &imageCount, pOutput->swapChainImages.data() );
-		
-		for ( uint32_t i = 0; i < pOutput->swapChainImages.size(); i++ )
-		{
-			VkImageViewCreateInfo createInfo = {};
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = pOutput->swapChainImages[ i ];
-			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = pOutput->surfaceFormats[ surfaceFormat ].format;
-			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			createInfo.subresourceRange.baseMipLevel = 0;
-			createInfo.subresourceRange.levelCount = 1;
-			createInfo.subresourceRange.baseArrayLayer = 0;
-			createInfo.subresourceRange.layerCount = 1;
-			
-			result = vkCreateImageView(device, &createInfo, nullptr, &pOutput->swapChainImageViews[ i ]);
-			
-			if ( result != VK_SUCCESS )
-				return false;
-		}
-		
-		acquire_next_image();
+		assert( bRet == true );
 	}
 	else
 	{
@@ -1334,8 +1367,8 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	vkCmdBindDescriptorSets(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 	
-	uint32_t nGroupCountX = g_nOutputWidth % 8 ? g_nOutputWidth / 8 + 1: g_nOutputWidth / 8;
-	uint32_t nGroupCountY = g_nOutputHeight % 8 ? g_nOutputHeight / 8 + 1: g_nOutputHeight / 8;
+	uint32_t nGroupCountX = currentOutputWidth % 8 ? currentOutputWidth / 8 + 1: currentOutputWidth / 8;
+	uint32_t nGroupCountY = currentOutputHeight % 8 ? currentOutputHeight / 8 + 1: currentOutputHeight / 8;
 	
 	vkCmdDispatch( curCommandBuffer, nGroupCountX, nGroupCountY, 1 );
 	
