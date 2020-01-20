@@ -137,9 +137,6 @@ float			overscanScaleRatio = 1.0;
 float			zoomScaleRatio = 1.0;
 float			globalScaleRatio = 1.0f;
 
-Bool			focusedWindowNeedsScale;
-float			cursorScaleRatio;
-int				cursorOffsetX, cursorOffsetY;
 PointerBarrier	scaledFocusBarriers[4];
 int 			cursorX, cursorY;
 Bool 			cursorImageDirty = True;
@@ -482,14 +479,24 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 	if ( cursorImageEmpty == True )
 		return;
 	
+	float currentScaleRatio = 1.0;
+	float XRatio = (float)currentOutputWidth / w->a.width;
+	float YRatio = (float)currentOutputHeight / w->a.height;
+	int cursorOffsetX, cursorOffsetY;
+	
+	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
+	
+	cursorOffsetX = (currentOutputWidth - w->a.width * currentScaleRatio * globalScaleRatio) / 2.0f;
+	cursorOffsetY = (currentOutputHeight - w->a.height * currentScaleRatio * globalScaleRatio) / 2.0f;
+	
 	// Actual point on scaled screen where the cursor hotspot should be
-	scaledCursorX = (win_x - w->a.x) * cursorScaleRatio * globalScaleRatio + cursorOffsetX;
-	scaledCursorY = (win_y - w->a.y) * cursorScaleRatio * globalScaleRatio + cursorOffsetY;
+	scaledCursorX = (win_x - w->a.x) * currentScaleRatio * globalScaleRatio + cursorOffsetX;
+	scaledCursorY = (win_y - w->a.y) * currentScaleRatio * globalScaleRatio + cursorOffsetY;
 	
 	if ( zoomScaleRatio != 1.0 )
 	{
-		scaledCursorX += ((w->a.width / 2) - win_x) * cursorScaleRatio * globalScaleRatio;
-		scaledCursorY += ((w->a.height / 2) - win_y) * cursorScaleRatio * globalScaleRatio;
+		scaledCursorX += ((w->a.width / 2) - win_x) * currentScaleRatio * globalScaleRatio;
+		scaledCursorY += ((w->a.height / 2) - win_y) * currentScaleRatio * globalScaleRatio;
 	}
 	
 	// Apply the cursor offset inside the texture using the display scale
@@ -657,10 +664,6 @@ paint_debug_info (Display *dpy)
 	{
 		sprintf(messageBuffer, "Compositing notification at opacity %f", notification->opacity / (float)OPAQUE);
 		paint_message(messageBuffer, Y, 1.0f, 0.0f, 1.0f); Y += textYMax;
-	}
-	
-	if (focusedWindowNeedsScale) {
-		paint_message("Scaling current window", Y, 0.0f, 0.0f, 1.0f); Y += textYMax;
 	}
 	
 	if (gotXError) {
@@ -945,7 +948,6 @@ determine_and_apply_focus (Display *dpy)
 	if (!focus)
 	{
 		currentFocusWindow = None;
-		focusedWindowNeedsScale = False;
 		return;
 	}
 	
@@ -981,23 +983,6 @@ determine_and_apply_focus (Display *dpy)
 	
 	set_win_hidden(dpy, w, False);
 	
-	if (w->a.width != root_width || w->a.height != root_height || globalScaleRatio != 1.0f)
-	{
-		float XRatio = (float)root_width / w->a.width;
-		float YRatio = (float)root_height / w->a.height;
-		
-		focusedWindowNeedsScale = True;
-		cursorScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-	}
-	else
-	{
-		focusedWindowNeedsScale = False;
-		cursorScaleRatio = 1.0f;
-	}
-	
-	cursorOffsetX = (root_width - w->a.width * cursorScaleRatio * globalScaleRatio) / 2.0f;
-	cursorOffsetY = (root_height - w->a.height * cursorScaleRatio * globalScaleRatio) / 2.0f;
-	
 	setup_pointer_barriers(dpy);
 	
 	if (gameFocused || (!gamesRunningCount && list[0].id != focus->id))
@@ -1016,7 +1001,7 @@ determine_and_apply_focus (Display *dpy)
 	if (w->a.x != 0 || w->a.y != 0)
 		XMoveWindow(dpy, focus->id, 0, 0);
 	
-	if (focus->isFullscreen && focusedWindowNeedsScale)
+	if ( focus->isFullscreen && ( w->a.width != root_width || w->a.height != root_height || globalScaleRatio != 1.0f ) )
 	{
 		XResizeWindow(dpy, focus->id, root_width, root_height);
 	}
