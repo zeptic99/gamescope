@@ -377,12 +377,24 @@ void inputSDLThreadRun( void )
 				mod = SDL_GetModState();
 				key = SDLScancodeToLinuxKey( event.key.keysym.scancode );
 				
-				if ( event.type == SDL_KEYUP && mod & KMOD_LGUI && key == KEY_F )
+				if ( event.type == SDL_KEYUP && mod & KMOD_LGUI )
 				{
-					bFullscreen = !bFullscreen;
-					SDL_SetWindowFullscreen( window, bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
+					switch ( key )
+					{
+						case KEY_F:
+							bFullscreen = !bFullscreen;
+							SDL_SetWindowFullscreen( window, bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
+							break;
+						case KEY_N:
+							g_bFilterGameWindow = !g_bFilterGameWindow;
+							break;
+						default:
+							goto client;
+						
+					}
 					break;
 				}
+client:
 				wlserver_lock();
 				wlserver_key( key, event.type == SDL_KEYDOWN, event.key.timestamp );
 				wlserver_unlock();
