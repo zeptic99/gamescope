@@ -15,6 +15,11 @@ It runs on Mesa+AMDGPU, and could be made to run on other Mesa/DRM drivers with 
 
 If running RadeonSI clients, currently have to set R600_DEBUG=nodcc, or corruption will be observed until the stack picks up DRM modifiers support.
 
+## Keyboard shortcuts
+
+**Meta + F** : Toggle fullscreen
+**Meta + N** : Toggle integer scaling
+
 ## Examples
 
 On any X11 or Wayland desktop running Mesa with commit [3746ee91](https://gitlab.freedesktop.org/mesa/mesa/commit/3746ee912f4d068479c46ff18cb072b7624c60b0), you can set the Steam launch arguments of your game as follows:
