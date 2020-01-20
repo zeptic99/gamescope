@@ -341,6 +341,9 @@ void inputSDLThreadRun( void )
 	sigprocmask(SIG_BLOCK, &mask, NULL);
 
 	SDL_Event event;
+	SDL_Keymod mod;
+	uint32_t key;
+	static bool bFullscreen = false;
 	
 	SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS );
 	SDL_SetRelativeMouseMode(SDL_TRUE);
@@ -371,9 +374,17 @@ void inputSDLThreadRun( void )
 				break;
 			case SDL_KEYDOWN:
 			case SDL_KEYUP:
+				mod = SDL_GetModState();
+				key = SDLScancodeToLinuxKey( event.key.keysym.scancode );
+				
+				if ( event.type == SDL_KEYUP && mod & KMOD_LGUI && key == KEY_F )
+				{
+					bFullscreen = !bFullscreen;
+					SDL_SetWindowFullscreen( window, bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
+					break;
+				}
 				wlserver_lock();
-				wlserver_key( SDLScancodeToLinuxKey( event.key.keysym.scancode ),
-							  event.type == SDL_KEYDOWN, event.key.timestamp );
+				wlserver_key( key, event.type == SDL_KEYDOWN, event.key.timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_WINDOWEVENT:
