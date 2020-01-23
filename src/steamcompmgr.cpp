@@ -53,12 +53,11 @@
 #include <X11/extensions/shape.h>
 #include <X11/extensions/xf86vmode.h>
 
-#define C_SIDE
-
 #include "main.hpp"
 #include "wlserver.h"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
+#include "steamcompmgr.hpp"
 
 #define GPUVIS_TRACE_IMPLEMENTATION
 #include "gpuvis_trace_utils.h"
@@ -116,11 +115,10 @@ static int		damage_event, damage_error;
 static int		composite_event, composite_error;
 static int		render_event, render_error;
 static int		xshape_event, xshape_error;
-static int		xfixes_event, xfixes_error;
 static Bool		synchronize;
 static int		composite_opcode;
 
-int				currentOutputWidth, currentOutputHeight;
+uint32_t		currentOutputWidth, currentOutputHeight;
 
 static Window	currentFocusWindow;
 static Window	currentOverlayWindow;
@@ -240,7 +238,7 @@ discard_ignore (Display *dpy, unsigned long sequence)
 static void
 set_ignore (Display *dpy, unsigned long sequence)
 {
-	ignore  *i = malloc (sizeof (ignore));
+	ignore  *i = (ignore *)malloc (sizeof (ignore));
 	if (!i)
 		return;
 	i->sequence = sequence;
@@ -530,7 +528,7 @@ paint_cursor ( Display *dpy, win *w, struct Composite_t *pComposite, struct Vulk
 static void
 paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, Bool notificationMode)
 {
-	int sourceWidth, sourceHeight;
+	uint32_t sourceWidth, sourceHeight;
 	int drawXOffset = 0, drawYOffset = 0;
 	float currentScaleRatio = 1.0;
 	
@@ -917,7 +915,7 @@ determine_and_apply_focus (Display *dpy)
 		// a choice between two windows we always prefer the non-override redirect one.
 		Bool windowIsOverrideRedirect = w->a.override_redirect && !w->ignoreOverrideRedirect;
 		
-		if (w->gameID && w->a.map_state == IsViewable && w->a.class == InputOutput &&
+		if (w->gameID && w->a.map_state == IsViewable && w->a.c_class == InputOutput &&
 			(w->damage_sequence >= maxDamageSequence) &&
 			(!windowIsOverrideRedirect || !usingOverrideRedirectWindow))
 		{
@@ -1006,8 +1004,8 @@ determine_and_apply_focus (Display *dpy)
 		XResizeWindow(dpy, focus->id, root_width, root_height);
 	}
 	else if (!focus->isFullscreen && focus->sizeHintsSpecified &&
-		(focus->a.width != focus->requestedWidth ||
-		focus->a.height != focus->requestedHeight))
+		((unsigned)focus->a.width != focus->requestedWidth ||
+		(unsigned)focus->a.height != focus->requestedHeight))
 	{
 		XResizeWindow(dpy, focus->id, focus->requestedWidth, focus->requestedHeight);
 	}
@@ -1193,10 +1191,10 @@ unmap_win (Display *dpy, Window id, Bool fade)
 static void
 add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 {
-	win				*new = malloc (sizeof (win));
+	win				*new_win = (win*)malloc (sizeof (win));
 	win				**p;
 	
-	if (!new)
+	if (!new_win)
 		return;
 	if (prev)
 	{
@@ -1206,58 +1204,58 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	}
 	else
 		p = &list;
-	new->id = id;
+	new_win->id = id;
 	set_ignore (dpy, NextRequest (dpy));
-	if (!XGetWindowAttributes (dpy, id, &new->a))
+	if (!XGetWindowAttributes (dpy, id, &new_win->a))
 	{
-		free (new);
+		free (new_win);
 		return;
 	}
-	new->damaged = 0;
-	new->validContents = False;
-	new->committed = False;
+	new_win->damaged = 0;
+	new_win->validContents = False;
+	new_win->committed = False;
 	
-	new->fb_id = 0;
-	new->vulkanTex = 0;
+	new_win->fb_id = 0;
+	new_win->vulkanTex = 0;
 
-	new->damage_sequence = 0;
-	new->map_sequence = 0;
-	if (new->a.class == InputOnly)
-		new->damage = None;
+	new_win->damage_sequence = 0;
+	new_win->map_sequence = 0;
+	if (new_win->a.c_class == InputOnly)
+		new_win->damage = None;
 	else
 	{
-		new->damage = XDamageCreate (dpy, id, XDamageReportRawRectangles);
+		new_win->damage = XDamageCreate (dpy, id, XDamageReportRawRectangles);
 	}
-	new->opacity = TRANSLUCENT;
+	new_win->opacity = TRANSLUCENT;
 	
-	new->isOverlay = False;
-	new->isSteam = False;
+	new_win->isOverlay = False;
+	new_win->isSteam = False;
 	
 	if ( steamMode == True )
 	{
-		new->gameID = 0;
+		new_win->gameID = 0;
 	}
 	else
 	{
-		new->gameID = id;
+		new_win->gameID = id;
 	}
-	new->isFullscreen = False;
-	new->isHidden = False;
-	new->sizeHintsSpecified = False;
-	new->requestedWidth = 0;
-	new->requestedHeight = 0;
-	new->nudged = False;
-	new->ignoreOverrideRedirect = False;
+	new_win->isFullscreen = False;
+	new_win->isHidden = False;
+	new_win->sizeHintsSpecified = False;
+	new_win->requestedWidth = 0;
+	new_win->requestedHeight = 0;
+	new_win->nudged = False;
+	new_win->ignoreOverrideRedirect = False;
 	
-	new->mouseMoved = False;
+	new_win->mouseMoved = False;
 	
-	new->WLsurfaceID = 0;
-	new->wlrsurface = NULL;
-	new->dmabuf_attribs_valid = False;
+	new_win->WLsurfaceID = 0;
+	new_win->wlrsurface = NULL;
+	new_win->dmabuf_attribs_valid = False;
 	
-	new->next = *p;
-	*p = new;
-	if (new->a.map_state == IsViewable)
+	new_win->next = *p;
+	*p = new_win;
+	if (new_win->a.map_state == IsViewable)
 		map_win (dpy, id, sequence);
 	
 	focusDirty = True;
@@ -1437,26 +1435,19 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 }
 
 static void
-handle_wl_surface_id(Display *dpy, win *w, long surfaceID)
+handle_wl_surface_id(win *w, long surfaceID)
 {
 	struct wlr_surface *surface = NULL;
 	
 	wlserver_lock();
-
-	struct wl_resource *resource = wl_client_get_object(wlserver.wlr.xwayland->client, surfaceID);
-	if (resource) {
-		surface = wlr_surface_from_resource(resource);
-	}
-	else
-	{
-		w->WLsurfaceID = surfaceID;
-		wlserver_unlock();
-		return;
-	}
 	
-	if (!wlr_surface_set_role(surface, &xwayland_surface_role, w, NULL, 0))
+	surface = wlserver_get_surface( surfaceID );
+	
+	if ( surface == NULL )
 	{
-		fprintf (stderr, "Failed to set xwayland surface role");
+		// We'll retry next time
+		w->WLsurfaceID = surfaceID;
+		
 		wlserver_unlock();
 		return;
 	}
@@ -1632,7 +1623,7 @@ void check_new_wayland_res(void)
 					struct timespec now;
 					clock_gettime(CLOCK_MONOTONIC, &now);
 					wlserver_lock();
-					wlr_surface_send_frame_done(w->wlrsurface, &now);
+					wlserver_send_frame_done(w->wlrsurface, &now);
 					wlserver_unlock();
 				}
 				
@@ -1658,7 +1649,6 @@ steamcompmgr_main (int argc, char **argv)
 	Window	    root_return, parent_return;
 	Window	    *children;
 	unsigned int    nchildren;
-	int		    i;
 	int		    composite_major, composite_minor;
 	int		    o;
 	int			readyPipeFD = -1;
@@ -1695,7 +1685,7 @@ steamcompmgr_main (int argc, char **argv)
 		}
 	}
 
-	dpy = XOpenDisplay (wlserver.wlr.xwayland->display_name);
+	dpy = XOpenDisplay ( wlserver_get_nested_display() );
 	if (!dpy)
 	{
 		fprintf (stderr, "Can't open display\n");
@@ -1801,7 +1791,7 @@ steamcompmgr_main (int argc, char **argv)
 	XShapeSelectInput (dpy, root, ShapeNotifyMask);
 	XFixesSelectCursorInput(dpy, root, XFixesDisplayCursorNotifyMask);
 	XQueryTree (dpy, root, &root_return, &parent_return, &children, &nchildren);
-	for (i = 0; i < nchildren; i++)
+	for (uint32_t i = 0; i < nchildren; i++)
 		add_win (dpy, children[i], i ? children[i-1] : None, 0);
 	XFree (children);
 	
@@ -1822,7 +1812,7 @@ steamcompmgr_main (int argc, char **argv)
 	
 	if ( readyPipeFD != -1 )
 	{
-		dprintf( readyPipeFD, "%s\n", wlserver.wlr.xwayland->display_name );
+		dprintf( readyPipeFD, "%s\n", wlserver_get_nested_display() );
 		close( readyPipeFD );
 		readyPipeFD = -1;
 	}
@@ -2038,11 +2028,11 @@ steamcompmgr_main (int argc, char **argv)
 						{
 							if (ev.xclient.message_type == WLSurfaceIDAtom)
 							{
-								handle_wl_surface_id(dpy, w, ev.xclient.data.l[0]);
+								handle_wl_surface_id( w, ev.xclient.data.l[0]);
 							}
 							else
 							{
-								if (ev.xclient.data.l[1] == fullscreenAtom)
+								if ((unsigned)ev.xclient.data.l[1] == fullscreenAtom)
 								{
 									w->isFullscreen = ev.xclient.data.l[0];
 									
@@ -2114,7 +2104,7 @@ steamcompmgr_main (int argc, char **argv)
 			{
 				if ( w->wlrsurface == NULL && w->WLsurfaceID != 0 )
 				{
-					handle_wl_surface_id( dpy, w, w->WLsurfaceID );
+					handle_wl_surface_id( w, w->WLsurfaceID );
 
 					if ( w->wlrsurface != NULL )
 					{
@@ -2182,7 +2172,7 @@ steamcompmgr_main (int argc, char **argv)
 				{
 					// Acknowledge commit once.
 					wlserver_lock();
-					wlr_surface_send_frame_done(w->wlrsurface, &now);
+					wlserver_send_frame_done(w->wlrsurface, &now);
 					wlserver_unlock();
 					
 					w->committed = False;

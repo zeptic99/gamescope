@@ -2,9 +2,9 @@
 extern "C" {
 #endif
 
-extern int currentOutputWidth;
-extern int currentOutputHeight;
-	
+extern uint32_t currentOutputWidth;
+extern uint32_t currentOutputHeight;
+
 unsigned int get_time_in_milliseconds(void);
 
 int steamcompmgr_main(int argc, char **argv);

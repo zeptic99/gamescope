@@ -343,10 +343,10 @@ struct funcinfo_t
 static std::unordered_map< pid_t, std::unordered_map< const char *, funcinfo_t > > g_hotfuncs;
 #endif // __cplusplus
 
-// static pid_t gpuvis_gettid()
-// {
-//     return ( pid_t )syscall( SYS_gettid );
-// }
+static pid_t gpuvis_gettid()
+{
+    return ( pid_t )syscall( SYS_gettid );
+}
 
 static int exec_tracecmd( const char *cmd )
 {

@@ -70,8 +70,6 @@ extern struct wlserver_t wlserver;
 extern "C" {
 #endif
 
-extern const struct wlr_surface_role xwayland_surface_role;
-
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 
 int wlserver_init( int argc, char **argv, bool bIsNested );
@@ -90,6 +88,11 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface );
 void wlserver_mousemotion( int x, int y, uint32_t time );
 void wlserver_mousebutton( int button, bool press, uint32_t time );
 void wlserver_mousewheel( int x, int y, uint32_t time );
+
+void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when );
+struct wlr_surface *wlserver_get_surface( long surfaceID );
+
+const char *wlserver_get_nested_display( void );
 
 #ifndef C_SIDE
 }

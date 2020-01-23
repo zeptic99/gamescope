@@ -26,7 +26,7 @@
 
 #define C_SIDE
 
-#include "steamcompmgr.h"
+#include "steamcompmgr.hpp"
 #include "wlserver.h"
 #include "drm.hpp"
 #include "main.hpp"
@@ -64,6 +64,8 @@ void nudge_steamcompmgr(void)
 	XSendEvent( g_XWLDpy , DefaultRootWindow( g_XWLDpy ), True, SubstructureRedirectMask, &XWLExposeEvent);
 	XFlush( g_XWLDpy );
 }
+
+const struct wlr_surface_role xwayland_surface_role;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
@@ -551,4 +553,36 @@ void wlserver_mousewheel( int x, int y, uint32_t time )
 		wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_VERTICAL, y, y, WLR_AXIS_SOURCE_WHEEL );
 	}
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+}
+
+void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when )
+{
+	wlr_surface_send_frame_done( surf, when );
+}
+
+struct wlr_surface *wlserver_get_surface( long surfaceID )
+{
+	struct wlr_surface *ret = NULL;
+
+	struct wl_resource *resource = wl_client_get_object(wlserver.wlr.xwayland->client, surfaceID);
+	if (resource) {
+		ret = wlr_surface_from_resource(resource);
+	}
+	else
+	{
+		return NULL;
+	}
+	
+	if ( !wlr_surface_set_role(ret, &xwayland_surface_role, NULL, NULL, 0 ) )
+	{
+		fprintf (stderr, "Failed to set xwayland surface role");
+		return NULL;
+	}
+	
+	return ret;
+}
+
+const char *wlserver_get_nested_display( void )
+{
+	return wlserver.wlr.xwayland->display_name;
 }

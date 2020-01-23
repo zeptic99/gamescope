@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include "wlserver.h"
-#include "steamcompmgr.h"
+#include "steamcompmgr.hpp"
 
 #include "main.hpp"
 #include "drm.hpp"

@@ -5,7 +5,7 @@
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
-#include "steamcompmgr.h"
+#include "steamcompmgr.hpp"
 
 #include "composite.h"
 

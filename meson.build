@@ -46,7 +46,7 @@ libftoff_dep = liftoff_proj.get_variable('liftoff')
 
 executable(
     'gamescope',
-    'src/steamcompmgr.c',
+    'src/steamcompmgr.cpp',
     'src/main.cpp',
 	'src/wlserver.c',
 	'src/drm.cpp',
