@@ -93,7 +93,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	
 	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p\n", wlr_surface );
 	
-	wayland_PushSurface( wlr_surface, &dmabuf_attribs );
+	wayland_commit( wlr_surface, &dmabuf_attribs );
 }
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {

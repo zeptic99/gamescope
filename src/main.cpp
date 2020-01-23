@@ -7,9 +7,9 @@
 #include <unistd.h>
 
 #include "wlserver.h"
-#include "steamcompmgr.hpp"
 
 #include "main.hpp"
+#include "steamcompmgr.hpp"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 #include "inputsdl.hpp"
@@ -159,35 +159,17 @@ void initOutput(void)
 	}
 }
 
-std::mutex g_ResListLock;
-std::vector<ResListEntry_t> g_vecResListEntries;
-
-void wayland_PushSurface(struct wlr_surface *surf, struct wlr_dmabuf_attributes *attribs)
+void wayland_commit(struct wlr_surface *surf, struct wlr_dmabuf_attributes *attribs)
 {
 	{
-		std::lock_guard<std::mutex> lock(g_ResListLock);
+		std::lock_guard<std::mutex> lock( wayland_commit_lock );
 		
 		ResListEntry_t newEntry = {
 			.surf = surf,
 			.attribs = *attribs
 		};
-		g_vecResListEntries.push_back( newEntry );
+		wayland_commit_queue.push_back( newEntry );
 	}
 	
 	nudge_steamcompmgr();
-}
-
-int steamCompMgr_PullSurface( struct ResListEntry_t *pResEntry )
-{
-	std::lock_guard<std::mutex> lock(g_ResListLock);
-	
-	if ( g_vecResListEntries.size() > 0 )
-	{
-		*pResEntry = g_vecResListEntries[0];
-		g_vecResListEntries.erase(g_vecResListEntries.begin());
-		
-		return 1;
-	}
-	
-	return 0;
 }

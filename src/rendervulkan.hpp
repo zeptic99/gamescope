@@ -85,6 +85,9 @@ int vulkan_init(void);
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
 VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, void *bits );
 
+void* vulkan_get_texture_fence( VulkanTexture_t vulkanTex );
+void vulkan_wait_for_fence( void *fence );
+
 uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex );
 
 void vulkan_free_texture( VulkanTexture_t vulkanTex );

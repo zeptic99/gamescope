@@ -30,6 +30,10 @@
  */
 
 #include <thread>
+#include <condition_variable>
+#include <mutex>
+#include <vector>
+#include <set>
 
 #include <assert.h> 
 #include <stdlib.h>
@@ -212,6 +216,49 @@ static Bool		debugEvents = False;
 static Bool		steamMode = False;
 static Bool		alwaysComposite = False;
 
+std::mutex wayland_commit_lock;
+std::vector<ResListEntry_t> wayland_commit_queue;
+
+// poor man's semaphore
+std::mutex mtx;
+std::condition_variable cv;
+int count;
+
+std::mutex waitListLock;
+std::vector< void * > waitList;
+
+void imageWaitThreadRun( void )
+{
+begin:
+	{
+		std::unique_lock<std::mutex> lock(mtx);
+		
+		while(count == 0){
+			cv.wait(lock);
+		}
+		count--;
+	}
+	
+	void *fence = nullptr;
+	
+	{
+		std::unique_lock< std::mutex > lock( waitListLock );
+		
+		assert( waitList.size() > 0 );
+		
+		fence = waitList[ 0 ];
+		waitList.erase( waitList.begin() );
+	}
+	
+	assert( fence != nullptr );
+	
+	vulkan_wait_for_fence( fence );
+	gpuvis_trace_printf( "wait fence ended\n" );
+	
+	goto begin;
+	
+}
+
 unsigned int
 get_time_in_milliseconds (void)
 {
@@ -293,6 +340,19 @@ find_win (Display *dpy, Window id)
 	return find_win(dpy, parent);
 }
 
+static win * find_win( struct wlr_surface *surf )
+{
+	win	*w = nullptr;
+	
+	for (w = list; w; w = w->next)
+	{
+		if ( w->wlrsurface == surf )
+			return w;
+	}
+	
+	return nullptr;
+}
+
 static void
 set_win_hidden (Display *dpy, win *w, Bool hidden)
 {
@@ -322,7 +382,7 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 }
 
 static void
-teardown_win_resources (Display *dpy, win *w)
+teardown_win_resources ( win *w)
 {
 	if (!w)
 		return;
@@ -341,14 +401,14 @@ teardown_win_resources (Display *dpy, win *w)
 }
 
 static void
-ensure_win_resources (Display *dpy, win *w)
+ensure_win_resources ( win *w)
 {
 	if (!w)
 		return;
 	
 	if (w->dmabuf_attribs_valid == True)
 	{
-		teardown_win_resources( dpy, w );
+		teardown_win_resources( w );
 
 		if ( BIsNested() == False )
 		{
@@ -719,9 +779,9 @@ paint_all (Display *dpy)
 		frameCounter = 0;
 	}
 	
-	ensure_win_resources(dpy, w);
-	ensure_win_resources(dpy, overlay);
-	ensure_win_resources(dpy, notification);
+	ensure_win_resources( w );
+	ensure_win_resources( overlay );
+	ensure_win_resources( notification );
 	
 	struct Composite_t composite = {};
 	struct VulkanPipeline_t pipeline = {};
@@ -736,7 +796,7 @@ paint_all (Display *dpy)
 		paint_window(dpy, &fadeOutWindow, &composite, &pipeline, False);
 		
 		w = find_win(dpy, currentFocusWindow);
-		ensure_win_resources(dpy, w);
+		ensure_win_resources( w );
 		
 		// Blend new window on top with linear crossfade
 		w->opacity = newOpacity * OPAQUE;
@@ -746,7 +806,7 @@ paint_all (Display *dpy)
 	else
 	{
 		w = find_win(dpy, currentFocusWindow);
-		ensure_win_resources(dpy, w);
+		ensure_win_resources( w );
 		// Just draw focused window as normal, be it Steam or the game
 		paint_window(dpy, w, &composite, &pipeline, False);
 		
@@ -755,7 +815,7 @@ paint_all (Display *dpy)
 			if (fadeOutWindowGone)
 			{
 				// This is the only reference to these resources now.
-				teardown_win_resources(dpy, &fadeOutWindow);
+				teardown_win_resources( &fadeOutWindow );
 				fadeOutWindowGone = False;
 			}
 			fadeOutWindow.id = None;
@@ -1164,7 +1224,7 @@ finish_unmap_win (Display *dpy, win *w)
 	
 	if (fadeOutWindow.id != w->id)
 	{
-		teardown_win_resources(dpy, w);
+		teardown_win_resources( w );
 	}
 	
 	if (fadeOutWindow.id == w->id)
@@ -1318,7 +1378,7 @@ configure_win (Display *dpy, XConfigureEvent *ce)
 	w->a.y = ce->y;
 	if (w->a.width != ce->width || w->a.height != ce->height)
 	{
-		teardown_win_resources( dpy, w );
+		teardown_win_resources( w );
 	}
 	w->a.width = ce->width;
 	w->a.height = ce->height;
@@ -1593,56 +1653,79 @@ register_cm (Display *dpy)
 	return True;
 }
 
-void check_new_wayland_res(void)
+void check_new_wayland_res( Display *dpy )
 {
-	struct ResListEntry_t newEntry = {};
+	std::lock_guard<std::mutex> lock( wayland_commit_lock );
+	std::set< win * > already_committed;
 	
-	while ( steamCompMgr_PullSurface( &newEntry ) )
+again:
+	for ( uint32_t i = 0; i < wayland_commit_queue.size(); i++ )
 	{
-		Bool bFound = False;
-		win	*w;
+		win	*w = find_win( wayland_commit_queue[ i ].surf );
 		
-		for (w = list; w; w = w->next)
-		{
-			if (w->wlrsurface == newEntry.surf)
-			{
-				if ( w->dmabuf_attribs_valid == True )
-				{
-					// Existing data here hasn't been consumed - need to consume the dma-buf fd
-					close(w->dmabuf_attribs.fd[0]);
-				}
-				
-				assert( newEntry.attribs.fd[0] != -1 );
-				
-				w->dmabuf_attribs = newEntry.attribs;
-				w->dmabuf_attribs_valid = True;
-				
-				w->damaged = 1;
-				w->validContents = True;
-				
-				if ( w->committed == True )
-				{
-					// Got another commit without having consumed the previous one
-					// Acknowledge previous one, seems we can get hangs if we don't.
-					struct timespec now;
-					clock_gettime(CLOCK_MONOTONIC, &now);
-					wlserver_lock();
-					wlserver_send_frame_done(w->wlrsurface, &now);
-					wlserver_unlock();
-				}
-				
-				w->committed = True;
-				
-				bFound = True;
-				return;
-			}
-		}
-		
-		if ( bFound == False )
+		if ( w == nullptr )
 		{
 			fprintf (stderr, "waylandres but no win\n");
+			wayland_commit_queue.erase( wayland_commit_queue.begin() + i );
+			goto again;
 		}
+		
+		auto it = already_committed.find( w );
+		
+		if ( it != already_committed.end() )
+		{
+			// Just skip over, we'd need a real deferred free handler to kick off fences on several pending frames here
+			continue;
+		}
+		
+		if ( w->dmabuf_attribs_valid == True )
+		{
+			// Existing data here hasn't been consumed - need to consume the dma-buf fd
+			close(w->dmabuf_attribs.fd[0]);
+		}
+		
+		assert( wayland_commit_queue[ i ].attribs.fd[0] != -1 );
+		
+		w->dmabuf_attribs = wayland_commit_queue[ i ].attribs;
+		w->dmabuf_attribs_valid = True;
+		
+		w->damaged = 1;
+		w->validContents = True;
+		
+		if ( w->committed == True )
+		{
+			// Got another commit without having consumed the previous one
+			// Acknowledge previous one, seems we can get hangs if we don't.
+			struct timespec now;
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			wlserver_lock();
+			wlserver_send_frame_done(w->wlrsurface, &now);
+			wlserver_unlock();
+		}
+		
+		w->committed = True;
+		
+		ensure_win_resources( w );
+		
+		void *fence = vulkan_get_texture_fence( w->vulkanTex );
+		
+		{
+			std::unique_lock< std::mutex > lock( waitListLock );
+			
+			waitList.push_back( fence );
+		}
+		
+		// Wake up commit wait thread if chilling
+		std::unique_lock<std::mutex> lock(mtx);
+		count++;
+		cv.notify_one();
+		
+		already_committed.insert( w );
+		
+		wayland_commit_queue.erase( wayland_commit_queue.begin() + i );
+		goto again;
 	}
+
 }
 
 int
@@ -1850,6 +1933,9 @@ steamcompmgr_main (int argc, char **argv)
 		
 		waitThread.detach();
 	}
+	
+	std::thread imageWaitThread( imageWaitThreadRun );
+	imageWaitThread.detach();
 	
 	for (;;)
 	{
@@ -2134,7 +2220,7 @@ steamcompmgr_main (int argc, char **argv)
 				}
 			}
 
-			check_new_wayland_res();
+			check_new_wayland_res( dpy );
 			
 			paint_all(dpy);
 			

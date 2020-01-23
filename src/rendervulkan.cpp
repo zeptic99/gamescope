@@ -74,7 +74,7 @@ VkBuffer uploadBuffer;
 VkDeviceMemory uploadBufferMemory;
 void *pUploadBuffer;
 
-VkCommandBuffer uploadCommandBuffer;
+VkCommandBuffer scratchCommandBuffer;
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -716,7 +716,7 @@ int init_device()
 		.commandBufferCount = 1
 	};
 	
-	result = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &uploadCommandBuffer );
+	result = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &scratchCommandBuffer );
 	
 	if ( result != VK_SUCCESS )
 	{
@@ -1091,14 +1091,14 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 		0
 	};
 
-	VkResult res = vkResetCommandBuffer( uploadCommandBuffer, 0 );
+	VkResult res = vkResetCommandBuffer( scratchCommandBuffer, 0 );
 	
 	if ( res != VK_SUCCESS )
 	{
 		return false;
 	}
 	
-	res = vkBeginCommandBuffer( uploadCommandBuffer, &commandBufferBeginInfo);
+	res = vkBeginCommandBuffer( scratchCommandBuffer, &commandBufferBeginInfo);
 	
 	if ( res != VK_SUCCESS )
 	{
@@ -1118,9 +1118,9 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 		.depth = 1
 	};
 	
-	vkCmdCopyBufferToImage( uploadCommandBuffer, uploadBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
+	vkCmdCopyBufferToImage( scratchCommandBuffer, uploadBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
 	
-	res = vkEndCommandBuffer( uploadCommandBuffer );
+	res = vkEndCommandBuffer( scratchCommandBuffer );
 	
 	if ( res != VK_SUCCESS )
 	{
@@ -1134,7 +1134,7 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 		0,
 		0,
 		1,
-		&uploadCommandBuffer,
+		&scratchCommandBuffer,
 		0,
 		0
 	};
@@ -1500,6 +1500,101 @@ uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex )
 	return ret;
 }
 
+void* vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
+{
+	// Queue a trivial rendering operation referencing the texture, then wait for it
+	// This lets us simulate a "fence" for implicit-sync surfaces maybe
+	
+	CVulkanTexture *pTex = g_mapVulkanTextures[ vulkanTex ];
+
+	if ( pTex == nullptr )
+	{
+		return nullptr;
+	}
+	
+	VkResult res = vkResetCommandBuffer( scratchCommandBuffer, 0 );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return nullptr;
+	}
+	
+	VkCommandBufferBeginInfo commandBufferBeginInfo =
+	{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+	
+	res = vkBeginCommandBuffer( scratchCommandBuffer, &commandBufferBeginInfo);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return nullptr;
+	}
+	
+	VkBufferImageCopy region = {};
+	
+	region.imageSubresource = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.layerCount = 1
+	};
+	
+	region.imageExtent = {
+		.width = 1,
+		.height = 1,
+		.depth = 1
+	};
+	
+	vkCmdCopyImageToBuffer( scratchCommandBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, uploadBuffer, 1, &region );
+	
+	res = vkEndCommandBuffer( scratchCommandBuffer );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return nullptr;
+	}
+	
+	VkSubmitInfo submitInfo = {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		0,
+		0,
+		0,
+		0,
+		1,
+		&scratchCommandBuffer,
+		0,
+		0
+	};
+	
+	VkFenceCreateInfo fenceCreateInfo =
+	{
+		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+	};
+	
+	VkFence waitFence;
+		
+	res = vkCreateFence( device, &fenceCreateInfo, nullptr, &waitFence );
+	
+	if ( res != VK_SUCCESS )
+	{
+		return nullptr;
+	}
+	
+	res = vkQueueSubmit(queue, 1, &submitInfo, waitFence);
+	
+	if ( res != VK_SUCCESS )
+	{
+		return nullptr;
+	}
+	
+	return waitFence;
+}
+
+void vulkan_wait_for_fence( void *fence )
+{
+	VkFence vkfence = (VkFence)fence;
+	vkWaitForFences( device, 1, &vkfence, VK_TRUE, ~0 );
+}
 
 
 

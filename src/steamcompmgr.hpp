@@ -11,4 +11,8 @@ int steamcompmgr_main(int argc, char **argv);
 
 #ifndef C_SIDE
 }
+
+extern std::mutex wayland_commit_lock;
+extern std::vector<ResListEntry_t> wayland_commit_queue;
+
 #endif
