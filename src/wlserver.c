@@ -37,7 +37,7 @@ struct wlserver_t wlserver;
 
 Display *g_XWLDpy;
 
-static bool run = true;
+bool run = true;
 
 void sig_handler(int signal)
 {

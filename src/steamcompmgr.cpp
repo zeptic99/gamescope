@@ -29,6 +29,8 @@
  *   says above. Not that I can really do anything about it
  */
 
+#include <thread>
+
 #include <assert.h> 
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,6 +40,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/prctl.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -1830,7 +1834,21 @@ steamcompmgr_main (int argc, char **argv)
 		posix_spawnattr_setflags( &attr, POSIX_SPAWN_SETSIGDEF );
 		posix_spawnattr_setsigdefault( &attr, &fullset );
 		
+		// (Don't Lose) The Children
+		prctl( PR_SET_CHILD_SUBREAPER );
+		
 		posix_spawnp( &pid, argv[ g_nSubCommandArg ], NULL, &attr, &argv[ g_nSubCommandArg ], environ );
+		
+		std::thread waitThread([](){
+			while( wait( nullptr ) >= 0 )
+			{
+				;
+			}
+			
+			run = false;
+		});
+		
+		waitThread.detach();
 	}
 	
 	for (;;)

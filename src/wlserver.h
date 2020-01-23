@@ -69,6 +69,8 @@ extern struct wlserver_t wlserver;
 #ifndef C_SIDE
 extern "C" {
 #endif
+	
+extern bool run;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 
