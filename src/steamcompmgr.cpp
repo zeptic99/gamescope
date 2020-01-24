@@ -223,31 +223,51 @@ std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
 
 // poor man's semaphore
-std::mutex mtx;
-std::condition_variable cv;
-int count;
-
-std::mutex waitListLock;
-std::vector< void * > waitList;
-
-void imageWaitThreadRun( void )
+class sem
 {
-begin:
+public:
+	void wait( void )
 	{
 		std::unique_lock<std::mutex> lock(mtx);
-		
+
 		while(count == 0){
 			cv.wait(lock);
 		}
 		count--;
 	}
+
+	void signal( void )
+	{
+		std::unique_lock<std::mutex> lock(mtx);
+		count++;
+		cv.notify_one();
+	}
+
+private:
+	std::mutex mtx;
+	std::condition_variable cv;
+	int count = 0;
+};
+
+sem waitListSem;
+std::mutex waitListLock;
+std::vector< void * > waitList;
+
+void imageWaitThreadRun( void )
+{
+wait:
+	waitListSem.wait();
 	
 	void *fence = nullptr;
 	
+retry:
 	{
 		std::unique_lock< std::mutex > lock( waitListLock );
 		
-		assert( waitList.size() > 0 );
+		if( waitList.size() == 0 )
+		{
+			goto wait;
+		}
 		
 		fence = waitList[ 0 ];
 		waitList.erase( waitList.begin() );
@@ -258,8 +278,81 @@ begin:
 	vulkan_wait_for_fence( fence );
 	gpuvis_trace_printf( "wait fence ended\n" );
 	
-	goto begin;
+	goto retry;
 	
+}
+
+sem statsThreadSem;
+std::mutex statsEventQueueLock;
+std::vector< std::string > statsEventQueue;
+
+std::string statsThreadPath;
+int			statsPipeFD = -1;
+
+void statsThreadRun( void )
+{
+	signal(SIGPIPE, SIG_IGN);
+
+	while ( statsPipeFD == -1 )
+	{
+		statsPipeFD = open( statsThreadPath.c_str(), O_WRONLY );
+
+		if ( statsPipeFD == -1 )
+		{
+			sleep( 10 );
+		}
+	}
+
+wait:
+	statsThreadSem.wait();
+
+	std::string event;
+
+retry:
+	{
+		std::unique_lock< std::mutex > lock( statsEventQueueLock );
+
+		if( statsEventQueue.size() == 0 )
+		{
+			goto wait;
+		}
+
+		event = statsEventQueue[ 0 ];
+		statsEventQueue.erase( statsEventQueue.begin() );
+	}
+
+	dprintf( statsPipeFD, "%s", event.c_str() );
+
+	goto retry;
+}
+
+static inline void stats_printf( const char* format, ...)
+{
+	static char buffer[256];
+	static std::string eventstr;
+
+	va_list args;
+	va_start (args, format);
+	vsprintf (buffer,format, args);
+	va_end (args);
+
+	eventstr = buffer;
+
+	{
+		{
+			std::unique_lock< std::mutex > lock( statsEventQueueLock );
+
+			if( statsEventQueue.size() > 50 )
+			{
+				// overflow, drop event
+				return;
+			}
+
+			statsEventQueue.push_back( eventstr );
+
+			statsThreadSem.signal();
+		}
+	}
 }
 
 unsigned int
@@ -775,11 +868,26 @@ paint_all (Display *dpy)
 	
 	frameCounter++;
 	
-	if (frameCounter == 5)
+	if (frameCounter == 300)
 	{
-		currentFrameRate = 5 * 1000.0f / (currentTime - lastSampledFrameTime);
+		currentFrameRate = 300 * 1000.0f / (currentTime - lastSampledFrameTime);
 		lastSampledFrameTime = currentTime;
 		frameCounter = 0;
+
+		stats_printf( "fps=%f\n", currentFrameRate );
+
+		if ( w->isSteam )
+		{
+			stats_printf( "focus=steam\n" );
+		}
+		else if ( w->isSteamPopup )
+		{
+			stats_printf( "focus=steampopup\n" );
+		}
+		else
+		{
+			stats_printf( "focus=%i\n", w->gameID );
+		}
 	}
 	
 	ensure_win_resources( w );
@@ -1755,9 +1863,7 @@ again:
 		}
 		
 		// Wake up commit wait thread if chilling
-		std::unique_lock<std::mutex> lock(mtx);
-		count++;
-		cv.notify_one();
+		waitListSem.signal();
 		
 		already_committed.insert( w );
 		
@@ -1782,11 +1888,18 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 	
-	while ((o = getopt (argc, argv, ":R:NSvVec")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NSvVecslnb")) != -1)
 	{
 		switch (o) {
 			case 'R':
 				readyPipeFD = open( optarg, O_WRONLY );
+				break;
+			case 'T':
+				statsThreadPath = optarg;
+				{
+					std::thread statsThreads( statsThreadRun );
+					statsThreads.detach();
+				}
 				break;
 			case 'N':
 				doRender = False;

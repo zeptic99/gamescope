@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	
 	bool bSleepAtStartup = false;
 	
-	while ((o = getopt (argc, argv, ":w:h:W:H:r:slnb")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NSvVecslnb")) != -1)
 	{
 		switch (o) {
 			case 'w':
