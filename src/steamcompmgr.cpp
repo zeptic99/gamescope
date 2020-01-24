@@ -89,6 +89,8 @@ typedef struct _win {
 	unsigned long	damage_sequence;
 	
 	Bool isSteam;
+	Bool isSteamPopup;
+	Bool wantsUnfocus;
 	unsigned long long int gameID;
 	Bool isOverlay;
 	Bool isFullscreen;
@@ -191,6 +193,7 @@ static Atom		fullscreenAtom;
 static Atom		WMStateAtom;
 static Atom		WMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
+static Atom		steamUnfocusAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -960,6 +963,8 @@ static void
 determine_and_apply_focus (Display *dpy)
 {
 	win *w, *focus = NULL;
+	win *steam = nullptr;
+	win *steampopup = nullptr;
 	
 	gameFocused = False;
 	
@@ -970,9 +975,14 @@ determine_and_apply_focus (Display *dpy)
 	
 	for (w = list; w; w = w->next)
 	{
-		if (w->isSteam && !gameFocused)
+		if ( w->isSteam == True )
 		{
-			focus = w;
+			steam = w;
+		}
+
+		if ( w->isSteamPopup == True )
+		{
+			steampopup = w;
 		}
 		
 		// We allow using an override redirect window in some cases, but if we have
@@ -1007,12 +1017,25 @@ determine_and_apply_focus (Display *dpy)
 		}
 	}
 	
+	if ( !gameFocused )
+	{
+		if ( steampopup && ( ( steam && steam->wantsUnfocus ) || !steam ) )
+		{
+			focus = steampopup;
+		}
+
+		if ( !focus && steam )
+		{
+			focus = steam;
+		}
+	}
+
 	if (!focus)
 	{
 		currentFocusWindow = None;
 		return;
 	}
-	
+
 // 	if (fadeOutWindow.id == None && currentFocusWindow != focus->id)
 // 	{
 // 		// Initiate fade out if switching focus
@@ -1194,6 +1217,20 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->opacity = get_prop (dpy, w->id, opacityAtom, TRANSLUCENT);
 	
 	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
+
+	XTextProperty tp;
+	XGetTextProperty ( dpy, id, &tp, XA_WM_NAME );
+
+	if ( tp.value && strcmp( (const char*)tp.value, "SP" ) == 0 )
+	{
+		w->isSteamPopup = True;
+	}
+	else
+	{
+		w->isSteamPopup = False;
+	}
+
+	w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 1);
 	
 	if ( steamMode == True )
 	{
@@ -1294,7 +1331,9 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new_win->isOverlay = False;
 	new_win->isSteam = False;
-	
+	new_win->isSteamPopup = False;
+	new_win->wantsUnfocus = True;
+
 	if ( steamMode == True )
 	{
 		new_win->gameID = 0;
@@ -1825,6 +1864,7 @@ steamcompmgr_main (int argc, char **argv)
 	
 	/* get atoms */
 	steamAtom = XInternAtom (dpy, STEAM_PROP, False);
+	steamUnfocusAtom = XInternAtom (dpy, "STEAM_UNFOCUS", False);
 	gameAtom = XInternAtom (dpy, GAME_PROP, False);
 	overlayAtom = XInternAtom (dpy, OVERLAY_PROP, False);
 	opacityAtom = XInternAtom (dpy, OPACITY_PROP, False);
@@ -2062,6 +2102,15 @@ steamcompmgr_main (int argc, char **argv)
 						if (w)
 						{
 							w->isSteam = get_prop(dpy, w->id, steamAtom, 0);
+							focusDirty = True;
+						}
+					}
+					if (ev.xproperty.atom == steamUnfocusAtom )
+					{
+						win * w = find_win(dpy, ev.xproperty.window);
+						if (w)
+						{
+							w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 1);
 							focusDirty = True;
 						}
 					}
