@@ -74,7 +74,7 @@ VkBuffer uploadBuffer;
 VkDeviceMemory uploadBufferMemory;
 void *pUploadBuffer;
 
-const uint32_t k_nScratchCmdBufferCount = 50;
+const uint32_t k_nScratchCmdBufferCount = 1000;
 
 struct scratchCmdBuffer_t
 {
