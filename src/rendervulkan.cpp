@@ -74,7 +74,17 @@ VkBuffer uploadBuffer;
 VkDeviceMemory uploadBufferMemory;
 void *pUploadBuffer;
 
-VkCommandBuffer scratchCommandBuffer;
+const uint32_t k_nScratchCmdBufferCount = 50;
+
+struct scratchCmdBuffer_t
+{
+	VkCommandBuffer cmdBuf;
+	VkFence fence;
+	
+	std::atomic<bool> busy;
+};
+
+scratchCmdBuffer_t g_scratchCommandBuffers[ k_nScratchCmdBufferCount ];
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -716,12 +726,30 @@ int init_device()
 		.commandBufferCount = 1
 	};
 	
-	result = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &scratchCommandBuffer );
-	
-	if ( result != VK_SUCCESS )
+	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
 	{
-		return false;
+		result = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &g_scratchCommandBuffers[ i ].cmdBuf );
+		
+		if ( result != VK_SUCCESS )
+		{
+			return false;
+		}
+		
+		VkFenceCreateInfo fenceCreateInfo =
+		{
+			.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+		};
+		
+		result = vkCreateFence( device, &fenceCreateInfo, nullptr, &g_scratchCommandBuffers[ i ].fence );
+		
+		if ( result != VK_SUCCESS )
+		{
+			return false;
+		}
+		
+		g_scratchCommandBuffers[ i ].busy = false;
 	}
+	
 	
 	return true;
 }
@@ -1052,6 +1080,84 @@ int vulkan_init(void)
 	return 1;
 }
 
+static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence &fence )
+{
+	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
+	{
+		if ( g_scratchCommandBuffers[ i ].busy == false )
+		{
+			cmdBuf = g_scratchCommandBuffers[ i ].cmdBuf;
+			fence = g_scratchCommandBuffers[ i ].fence;
+			
+			VkCommandBufferBeginInfo commandBufferBeginInfo = {
+				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+			};
+			
+			VkResult res = vkBeginCommandBuffer( cmdBuf, &commandBufferBeginInfo);
+			
+			if ( res != VK_SUCCESS )
+			{
+				break;
+			}
+			
+			g_scratchCommandBuffers[ i ].busy = true;
+			
+			return i;
+		}
+	}
+	
+	assert( 0 );
+	return 0;
+}
+
+static inline void submit_command_buffer( uint32_t handle )
+{
+	VkCommandBuffer cmdBuf = g_scratchCommandBuffers[ handle ].cmdBuf;
+	VkFence fence = g_scratchCommandBuffers[ handle ].fence;
+	
+	VkResult res = vkEndCommandBuffer( cmdBuf );
+	
+	if ( res != VK_SUCCESS )
+	{
+		assert( 0 );
+	}
+	
+	VkSubmitInfo submitInfo = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		. commandBufferCount = 1,
+		.pCommandBuffers = &cmdBuf,
+	};
+	
+	res = vkQueueSubmit( queue, 1, &submitInfo, fence );
+	
+	if ( res != VK_SUCCESS )
+	{
+		assert( 0 );
+	}
+}
+
+void vulkan_garbage_collect( void )
+{
+	// If we ever made anything calling get_command_buffer() multi-threaded we'd have to rethink this
+	// Probably just differentiate "busy" and "submitted"
+	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
+	{
+		if ( g_scratchCommandBuffers[ i ].busy == true )
+		{
+			VkResult res = vkGetFenceStatus( device, g_scratchCommandBuffers[ i ].fence );
+			
+			if ( res == VK_SUCCESS )
+			{
+				vkResetCommandBuffer( g_scratchCommandBuffers[ i ].cmdBuf, 0 );
+				vkResetFences( device, 1, &g_scratchCommandBuffers[ i ].fence );
+
+				g_scratchCommandBuffers[ i ].busy = false;
+			}
+		}
+	}
+}
+
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA )
 {
 	VulkanTexture_t ret = 0;
@@ -1084,26 +1190,9 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	
 	memcpy( pUploadBuffer, bits, width * height * 4 );
 	
-	VkCommandBufferBeginInfo commandBufferBeginInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		0,
-		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-		0
-	};
-
-	VkResult res = vkResetCommandBuffer( scratchCommandBuffer, 0 );
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
-	
-	res = vkBeginCommandBuffer( scratchCommandBuffer, &commandBufferBeginInfo);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
+	VkCommandBuffer commandBuffer;
+	VkFence fence;
+	uint32_t handle = get_command_buffer( commandBuffer, fence );
 	
 	VkBufferImageCopy region = {};
 	
@@ -1118,33 +1207,9 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 		.depth = 1
 	};
 	
-	vkCmdCopyBufferToImage( scratchCommandBuffer, uploadBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
+	vkCmdCopyBufferToImage( commandBuffer, uploadBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
 	
-	res = vkEndCommandBuffer( scratchCommandBuffer );
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
-	
-	VkSubmitInfo submitInfo = {
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		0,
-		0,
-		0,
-		0,
-		1,
-		&scratchCommandBuffer,
-		0,
-		0
-	};
-	
-	res = vkQueueSubmit(queue, 1, &submitInfo, 0);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return false;
-	}
+	submit_command_buffer( handle );
 	
 	vkQueueWaitIdle( queue );
 	
@@ -1500,7 +1565,7 @@ uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex )
 	return ret;
 }
 
-void* vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
+uint32_t vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 {
 	// Queue a trivial rendering operation referencing the texture, then wait for it
 	// This lets us simulate a "fence" for implicit-sync surfaces maybe
@@ -1509,28 +1574,12 @@ void* vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 
 	if ( pTex == nullptr )
 	{
-		return nullptr;
+		assert( 0 );
 	}
 	
-	VkResult res = vkResetCommandBuffer( scratchCommandBuffer, 0 );
-	
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-	
-	VkCommandBufferBeginInfo commandBufferBeginInfo =
-	{
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-	};
-	
-	res = vkBeginCommandBuffer( scratchCommandBuffer, &commandBufferBeginInfo);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
+	VkCommandBuffer commandBuffer;
+	VkFence fence;
+	uint32_t handle = get_command_buffer( commandBuffer, fence );
 	
 	VkBufferImageCopy region = {};
 	
@@ -1545,55 +1594,16 @@ void* vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 		.depth = 1
 	};
 	
-	vkCmdCopyImageToBuffer( scratchCommandBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, uploadBuffer, 1, &region );
+	vkCmdCopyImageToBuffer( commandBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, uploadBuffer, 1, &region );
 	
-	res = vkEndCommandBuffer( scratchCommandBuffer );
+	submit_command_buffer( handle );
 	
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-	
-	VkSubmitInfo submitInfo = {
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		0,
-		0,
-		0,
-		0,
-		1,
-		&scratchCommandBuffer,
-		0,
-		0
-	};
-	
-	VkFenceCreateInfo fenceCreateInfo =
-	{
-		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
-	};
-	
-	VkFence waitFence;
-		
-	res = vkCreateFence( device, &fenceCreateInfo, nullptr, &waitFence );
-	
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-	
-	res = vkQueueSubmit(queue, 1, &submitInfo, waitFence);
-	
-	if ( res != VK_SUCCESS )
-	{
-		return nullptr;
-	}
-	
-	return waitFence;
+	return handle;
 }
 
-void vulkan_wait_for_fence( void *fence )
+void vulkan_wait_for_fence( uint32_t handle )
 {
-	VkFence vkfence = (VkFence)fence;
-	vkWaitForFences( device, 1, &vkfence, VK_TRUE, ~0 );
+	vkWaitForFences( device, 1, &g_scratchCommandBuffers[ handle ].fence, VK_TRUE, ~0 );
 }
 
 

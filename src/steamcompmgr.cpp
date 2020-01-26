@@ -251,14 +251,15 @@ private:
 
 sem waitListSem;
 std::mutex waitListLock;
-std::vector< void * > waitList;
+std::vector< uint32_t > waitList;
 
 void imageWaitThreadRun( void )
 {
 wait:
 	waitListSem.wait();
 	
-	void *fence = nullptr;
+	bool bFound = false;
+	uint32_t fence;
 	
 retry:
 	{
@@ -270,10 +271,11 @@ retry:
 		}
 		
 		fence = waitList[ 0 ];
+		bFound = true;
 		waitList.erase( waitList.begin() );
 	}
 	
-	assert( fence != nullptr );
+	assert( bFound == true );
 	
 	vulkan_wait_for_fence( fence );
 	gpuvis_trace_printf( "wait fence ended\n" );
@@ -1854,7 +1856,7 @@ again:
 		
 		ensure_win_resources( w );
 		
-		void *fence = vulkan_get_texture_fence( w->vulkanTex );
+		uint32_t fence = vulkan_get_texture_fence( w->vulkanTex );
 		
 		{
 			std::unique_lock< std::mutex > lock( waitListLock );
@@ -2345,6 +2347,8 @@ steamcompmgr_main (int argc, char **argv)
 		
 		if (doRender)
 		{
+			vulkan_garbage_collect();
+
 			// Pick our width/height for this potential frame, regardless of how it might change later
 			// At some point we might even add proper locking so we get real updates atomically instead
 			// of whatever jumble of races the below might cause over a couple of frames
