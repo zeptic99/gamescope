@@ -33,7 +33,6 @@
 #include <condition_variable>
 #include <mutex>
 #include <vector>
-#include <set>
 
 #include <assert.h> 
 #include <stdlib.h>
@@ -77,12 +76,24 @@ typedef struct _ignore {
 	unsigned long	sequence;
 } ignore;
 
+uint64_t maxCommmitID;
+
+struct commit_t
+{
+	uint32_t fb_id;
+	VulkanTexture_t vulkanTex;
+	uint64_t commitID;
+	bool done;
+};
+
+std::mutex listCommitsDoneLock;
+std::vector< uint64_t > listCommitsDone;
+
 typedef struct _win {
 	struct _win		*next;
 	Window		id;
 	XWindowAttributes	a;
 	int			mode;
-	int			damaged;
 	Damage		damage;
 	unsigned int	opacity;
 	unsigned long	map_sequence;
@@ -100,17 +111,13 @@ typedef struct _win {
 	unsigned int requestedHeight;
 	Bool nudged;
 	Bool ignoreOverrideRedirect;
-	Bool validContents;
-	Bool committed;
 	
 	Bool mouseMoved;
 	
 	long int WLsurfaceID;
 	struct wlr_surface *wlrsurface;
-	Bool dmabuf_attribs_valid;
-	struct wlr_dmabuf_attributes dmabuf_attribs;
-	uint32_t fb_id;
-	VulkanTexture_t vulkanTex;
+	
+	std::vector< commit_t > commit_queue;
 } win;
 
 static win		*list;
@@ -158,6 +165,7 @@ static bool		cursorImageEmpty;
 
 
 Bool			focusDirty = False;
+bool			hasRepaint = false;
 
 unsigned long	damageSequence = 0;
 
@@ -251,7 +259,7 @@ private:
 
 sem waitListSem;
 std::mutex waitListLock;
-std::vector< uint32_t > waitList;
+std::vector< std::pair< uint32_t, uint64_t > > waitList;
 
 void imageWaitThreadRun( void )
 {
@@ -260,6 +268,7 @@ wait:
 	
 	bool bFound = false;
 	uint32_t fence;
+	uint64_t commitID;
 	
 retry:
 	{
@@ -270,7 +279,8 @@ retry:
 			goto wait;
 		}
 		
-		fence = waitList[ 0 ];
+		fence = waitList[ 0 ].first;
+		commitID = waitList[ 0 ].second;
 		bFound = true;
 		waitList.erase( waitList.begin() );
 	}
@@ -280,8 +290,17 @@ retry:
 	vulkan_wait_for_fence( fence );
 	gpuvis_trace_printf( "wait fence ended\n" );
 	
-	goto retry;
+	{
+		std::unique_lock< std::mutex > lock( listCommitsDoneLock );
+		
+		listCommitsDone.push_back( commitID );
+	}
 	
+	static Display *threadDPY = XOpenDisplay ( wlserver_get_nested_display() );
+	XSendEvent( threadDPY, ourWindow, True, SubstructureRedirectMask, &nudgeEvent );
+	XFlush( threadDPY );
+	
+	goto retry;
 }
 
 sem statsThreadSem;
@@ -480,60 +499,68 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 }
 
 static void
-teardown_win_resources ( win *w)
+release_commit ( commit_t &commit )
 {
-	if (!w)
-		return;
-
-	if ( w->fb_id != 0 )
+	if ( commit.fb_id != 0 )
 	{
-		drm_free_fbid( &g_DRM, w->fb_id );
-		w->fb_id = 0;
+		drm_free_fbid( &g_DRM, commit.fb_id );
+		commit.fb_id = 0;
 	}
 	
-	if ( w->vulkanTex != 0 )
+	if ( commit.vulkanTex != 0 )
 	{
-		vulkan_free_texture( w->vulkanTex );
-		w->vulkanTex = 0;
+		vulkan_free_texture( commit.vulkanTex );
+		commit.vulkanTex = 0;
 	}
 }
 
-static void
-ensure_win_resources ( win *w)
+static bool
+import_commit ( struct wlr_dmabuf_attributes *dmabuf, commit_t &commit )
 {
-	if (!w)
-		return;
-	
-	if (w->dmabuf_attribs_valid == True)
+	if ( BIsNested() == False )
 	{
-		teardown_win_resources( w );
-
-		if ( BIsNested() == False )
+		// We'll also need a copy for Vulkan to consume below.
+		
+		int fdCopy = dup( dmabuf->fd[0] );
+		
+		if ( fdCopy == -1 )
 		{
-			// We'll also need a copy for Vulkan to consume below.
-			
-			int fdCopy = dup( w->dmabuf_attribs.fd[0] );
-			
-			if ( fdCopy == -1 )
-			{
-				w->dmabuf_attribs_valid = False;
-				close( w->dmabuf_attribs.fd[0] );
-				return;
-			}
-
-			w->fb_id = drm_fbid_from_dmabuf( &g_DRM, &w->dmabuf_attribs );
-			assert( w->fb_id != 0 );
-			
-			close( w->dmabuf_attribs.fd[0] );
-			w->dmabuf_attribs.fd[0] = fdCopy;
+			close( dmabuf->fd[0] );
+			return false;
 		}
+
+		commit.fb_id = drm_fbid_from_dmabuf( &g_DRM, dmabuf );
+		assert( commit.fb_id != 0 );
 		
-		w->vulkanTex = vulkan_create_texture_from_dmabuf( &w->dmabuf_attribs );
-		assert( w->vulkanTex != 0 );
-		
-		// Only consume once
-		w->dmabuf_attribs_valid = False;
+		close( dmabuf->fd[0] );
+		dmabuf->fd[0] = fdCopy;
 	}
+	
+	commit.vulkanTex = vulkan_create_texture_from_dmabuf( dmabuf );
+	assert( commit.vulkanTex != 0 );
+	
+	return true;
+}
+
+static bool
+get_window_last_done_commit( win *w, commit_t &commit )
+{
+	int32_t lastCommit = -1;
+	for ( uint32_t i = 0; i < w->commit_queue.size(); i++ )
+	{
+		if ( w->commit_queue[ i ].done == true )
+		{
+			lastCommit = i;
+		}
+	}
+	
+	if ( lastCommit == -1 )
+	{
+		return false;
+	}
+	
+	commit = w->commit_queue[ lastCommit ];
+	return true;
 }
 
 static void
@@ -550,7 +577,17 @@ handle_mouse_movement(Display *dpy, int posX, int posY)
 	
 	if (w && gameFocused)
 	{
-		w->damaged = 1;
+		// If mouse moved and we're on the hook for showing the cursor, repaint
+		if ( !hideCursorForMovement && !cursorImageEmpty )
+		{
+			hasRepaint = true;
+		}
+
+		// If mouse moved and screen is magnified, repaint
+		if ( zoomScaleRatio != 1.0 )
+		{
+			hasRepaint = true;
+		}
 	}
 	
 	// Ignore the first events as it's likely to be non-user-initiated warps
@@ -693,11 +730,13 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	uint32_t sourceWidth, sourceHeight;
 	int drawXOffset = 0, drawYOffset = 0;
 	float currentScaleRatio = 1.0;
+	commit_t lastCommit;
+	bool validContents = get_window_last_done_commit( w, lastCommit );
 	
 	if (!w) 
 		return;
 	
-	if (w->isOverlay && !w->validContents)
+	if (w->isOverlay && !validContents)
 		return;
 	
 	win *mainOverlayWindow = find_win(dpy, currentOverlayWindow);
@@ -768,8 +807,8 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	
 	pPipeline->layerBindings[ curLayer ].zpos = w->isOverlay ? 1 : 0;
 	
-	pPipeline->layerBindings[ curLayer ].tex = w->vulkanTex;
-	pPipeline->layerBindings[ curLayer ].fbid = w->fb_id;
+	pPipeline->layerBindings[ curLayer ].tex = lastCommit.vulkanTex;
+	pPipeline->layerBindings[ curLayer ].fbid = lastCommit.fb_id;
 	
 	pPipeline->layerBindings[ curLayer ].bFilter = w->isOverlay ? true : g_bFilterGameWindow;
 	pPipeline->layerBindings[ curLayer ].bBlackBorder = notificationMode ? false : true;
@@ -842,8 +881,6 @@ paint_all (Display *dpy)
 	win	*overlay;
 	win	*notification;
 	
-	Bool overlayDamaged = False;
-	
 	unsigned int currentTime = get_time_in_milliseconds();
 	Bool fadingOut = ((currentTime - fadeOutStartTime) < FADE_OUT_DURATION && fadeOutWindow.id != None);
 	
@@ -851,22 +888,10 @@ paint_all (Display *dpy)
 	overlay = find_win(dpy, currentOverlayWindow);
 	notification = find_win(dpy, currentNotificationWindow);
 	
-	if (gamesRunningCount)
-	{
-		if (overlay && overlay->damaged)
-			overlayDamaged = True;
-		if (notification && notification->damaged)
-			overlayDamaged = True;
-	}
-	
 	if ( !w )
 	{
 		return;
 	}
-	
-	// Don't pump new frames if no animation on the focus window, unless we're fading
-	if (!w->damaged && !overlayDamaged && !fadeOutWindow.id)
-		return;
 	
 	frameCounter++;
 	
@@ -892,10 +917,6 @@ paint_all (Display *dpy)
 		}
 	}
 	
-	ensure_win_resources( w );
-	ensure_win_resources( overlay );
-	ensure_win_resources( notification );
-	
 	struct Composite_t composite = {};
 	struct VulkanPipeline_t pipeline = {};
 	
@@ -909,7 +930,6 @@ paint_all (Display *dpy)
 		paint_window(dpy, &fadeOutWindow, &composite, &pipeline, False);
 		
 		w = find_win(dpy, currentFocusWindow);
-		ensure_win_resources( w );
 		
 		// Blend new window on top with linear crossfade
 		w->opacity = newOpacity * OPAQUE;
@@ -919,7 +939,6 @@ paint_all (Display *dpy)
 	else
 	{
 		w = find_win(dpy, currentFocusWindow);
-		ensure_win_resources( w );
 		// Just draw focused window as normal, be it Steam or the game
 		paint_window(dpy, w, &composite, &pipeline, False);
 		
@@ -928,7 +947,6 @@ paint_all (Display *dpy)
 			if (fadeOutWindowGone)
 			{
 				// This is the only reference to these resources now.
-				teardown_win_resources( &fadeOutWindow );
 				fadeOutWindowGone = False;
 			}
 			fadeOutWindow.id = None;
@@ -957,8 +975,10 @@ paint_all (Display *dpy)
 	// Draw cursor if we need to
 	if (w && gameFocused)
 	{
-		if (!hideCursorForMovement)
+		if ( !hideCursorForMovement && !cursorImageEmpty )
+		{
 			paint_cursor( dpy, w, &composite, &pipeline );
+		}
 	}
 	
 	if (drawDebugInfo)
@@ -1017,10 +1037,6 @@ paint_all (Display *dpy)
 		
 		drm_atomic_commit( &g_DRM, &composite, &pipeline );
 	}
-	
-	w->damaged = 0;
-	if ( overlay ) overlay->damaged = 0;
-	if ( notification ) notification->damaged = 0;
 	
 	gpuvis_trace_printf( "paint_all end_ctx=%llu\n", paintID );
 	gpuvis_trace_printf( "paint_all %i layers, composite %i\n", (int)composite.nLayerCount, bDoComposite );
@@ -1354,11 +1370,8 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	
 	get_size_hints(dpy, w);
 	
-	w->damaged = 0;
 	w->damage_sequence = 0;
 	w->map_sequence = sequence;
-	
-	w->validContents = False;
 	
 	focusDirty = True;
 }
@@ -1366,13 +1379,11 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 static void
 finish_unmap_win (Display *dpy, win *w)
 {
-	w->damaged = 0;
-	w->validContents = False;
-	
-	if (fadeOutWindow.id != w->id)
-	{
-		teardown_win_resources( w );
-	}
+	// TODO clear done commits here?
+// 	if (fadeOutWindow.id != w->id)
+// 	{
+// 		teardown_win_resources( w );
+// 	}
 	
 	if (fadeOutWindow.id == w->id)
 	{
@@ -1402,7 +1413,7 @@ unmap_win (Display *dpy, Window id, Bool fade)
 static void
 add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 {
-	win				*new_win = (win*)malloc (sizeof (win));
+	win				*new_win = new win;
 	win				**p;
 	
 	if (!new_win)
@@ -1422,12 +1433,6 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 		free (new_win);
 		return;
 	}
-	new_win->damaged = 0;
-	new_win->validContents = False;
-	new_win->committed = False;
-	
-	new_win->fb_id = 0;
-	new_win->vulkanTex = 0;
 
 	new_win->damage_sequence = 0;
 	new_win->map_sequence = 0;
@@ -1464,7 +1469,6 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	
 	new_win->WLsurfaceID = 0;
 	new_win->wlrsurface = NULL;
-	new_win->dmabuf_attribs_valid = False;
 	
 	new_win->next = *p;
 	*p = new_win;
@@ -1525,10 +1529,6 @@ configure_win (Display *dpy, XConfigureEvent *ce)
 	
 	w->a.x = ce->x;
 	w->a.y = ce->y;
-	if (w->a.width != ce->width || w->a.height != ce->height)
-	{
-		teardown_win_resources( w );
-	}
 	w->a.width = ce->width;
 	w->a.height = ce->height;
 	w->a.border_width = ce->border_width;
@@ -1802,10 +1802,72 @@ register_cm (Display *dpy)
 	return True;
 }
 
-void check_new_wayland_res( Display *dpy )
+void handle_done_commits( void )
+{
+	std::lock_guard<std::mutex> lock( listCommitsDoneLock );
+	
+	// very fast loop yes
+	for ( uint32_t i = 0; i < listCommitsDone.size(); i++ )
+	{
+		bool bFoundWindow = false;
+		for ( win *w = list; w; w = w->next )
+		{
+			uint32_t j;
+			for ( j = 0; j < w->commit_queue.size(); j++ )
+			{
+				if ( w->commit_queue[ j ].commitID == listCommitsDone[ i ] )
+				{
+					w->commit_queue[ j ].done = true;
+					bFoundWindow = true;
+					
+					// Window just got a new available commit, determine if that's worth a repaint
+					
+					// If this is an overlay that we're presenting, repaint
+					if ( gameFocused )
+					{
+						if ( w->id == currentOverlayWindow && w->opacity != TRANSLUCENT )
+						{
+							hasRepaint = true;
+						}
+						
+						if ( w->id == currentNotificationWindow && w->opacity != TRANSLUCENT )
+						{
+							hasRepaint = true;
+						}
+					}
+					
+					// If this is the main plane, repaint
+					if ( w->id == currentFocusWindow )
+					{
+						hasRepaint = true;
+					}
+					
+					break;
+				}
+			}
+			
+			if ( bFoundWindow == true )
+			{
+				if ( j > 0 )
+				{
+					// we can release all commits prior to done ones
+					for ( uint32_t k = 0; k < j; k++ )
+					{
+						release_commit( w->commit_queue[ k ] );
+					}
+					w->commit_queue.erase( w->commit_queue.begin(), w->commit_queue.begin() + j );
+				}
+				break;
+			}
+		}
+	}
+	
+	listCommitsDone.clear();
+}
+
+void check_new_wayland_res( void )
 {
 	std::lock_guard<std::mutex> lock( wayland_commit_lock );
-	std::set< win * > already_committed;
 	
 again:
 	for ( uint32_t i = 0; i < wayland_commit_queue.size(); i++ )
@@ -1819,60 +1881,45 @@ again:
 			goto again;
 		}
 		
-		auto it = already_committed.find( w );
-		
-		if ( it != already_committed.end() )
-		{
-			// Just skip over, we'd need a real deferred free handler to kick off fences on several pending frames here
-			continue;
-		}
-		
-		if ( w->dmabuf_attribs_valid == True )
-		{
-			// Existing data here hasn't been consumed - need to consume the dma-buf fd
-			close(w->dmabuf_attribs.fd[0]);
-		}
-		
 		assert( wayland_commit_queue[ i ].attribs.fd[0] != -1 );
 		
-		w->dmabuf_attribs = wayland_commit_queue[ i ].attribs;
-		w->dmabuf_attribs_valid = True;
+		commit_t newCommit = {};
 		
-		w->damaged = 1;
-		w->validContents = True;
+		bool bSuccess = import_commit( &wayland_commit_queue[ i ].attribs, newCommit );
 		
-		if ( w->committed == True )
+// 		w->damaged = 1;
+		
+// 		if ( w->committed == True )
+// 		{
+// 			// Got another commit without having consumed the previous one
+// 			// Acknowledge previous one, seems we can get hangs if we don't.
+// 			struct timespec now;
+// 			clock_gettime(CLOCK_MONOTONIC, &now);
+// 			wlserver_lock();
+// 			wlserver_send_frame_done(w->wlrsurface, &now);
+// 			wlserver_unlock();
+// 		}
+		
+		if ( bSuccess == true )
 		{
-			// Got another commit without having consumed the previous one
-			// Acknowledge previous one, seems we can get hangs if we don't.
-			struct timespec now;
-			clock_gettime(CLOCK_MONOTONIC, &now);
-			wlserver_lock();
-			wlserver_send_frame_done(w->wlrsurface, &now);
-			wlserver_unlock();
+			newCommit.commitID = ++maxCommmitID;
+			w->commit_queue.push_back( newCommit );
 		}
 		
-		w->committed = True;
-		
-		ensure_win_resources( w );
-		
-		uint32_t fence = vulkan_get_texture_fence( w->vulkanTex );
+		uint32_t fence = vulkan_get_texture_fence( newCommit.vulkanTex );
 		
 		{
 			std::unique_lock< std::mutex > lock( waitListLock );
 			
-			waitList.push_back( fence );
+			waitList.push_back( std::make_pair( fence, newCommit.commitID ) );
 		}
 		
 		// Wake up commit wait thread if chilling
 		waitListSem.signal();
 		
-		already_committed.insert( w );
-		
 		wayland_commit_queue.erase( wayland_commit_queue.begin() + i );
 		goto again;
 	}
-
 }
 
 int
@@ -2187,8 +2234,12 @@ steamcompmgr_main (int argc, char **argv)
 							
 							if (newOpacity != w->opacity)
 							{
-								w->damaged = 1;
 								w->opacity = newOpacity;
+								
+								if ( gameFocused && ( w->id == currentOverlayWindow || w->id == currentNotificationWindow ) )
+								{
+									hasRepaint = true;
+								}
 							}
 							
 							if (w->isOverlay)
@@ -2271,7 +2322,9 @@ steamcompmgr_main (int argc, char **argv)
 						win *w;
 						
 						if ((w = find_win(dpy, currentFocusWindow)))
-							w->damaged = 1;
+						{
+							hasRepaint = true;
+						}
 						
 						focusDirty = True;
 					}
@@ -2284,7 +2337,9 @@ steamcompmgr_main (int argc, char **argv)
 						win *w;
 						
 						if ((w = find_win(dpy, currentFocusWindow)))
-							w->damaged = 1;
+						{
+							hasRepaint = true;
+						}
 						
 						focusDirty = True;
 					}
@@ -2337,6 +2392,8 @@ steamcompmgr_main (int argc, char **argv)
 						else if (ev.type == xfixes_event + XFixesCursorNotify)
 						{
 							cursorImageDirty = True;
+							// We can't prove it's empty until checking again
+							cursorImageEmpty = false;
 						}
 						break;
 			}
@@ -2383,10 +2440,19 @@ steamcompmgr_main (int argc, char **argv)
 					}
 				}
 			}
-
-			check_new_wayland_res( dpy );
 			
-			paint_all(dpy);
+			handle_done_commits();
+
+			check_new_wayland_res();
+			
+			bool bDidRepaint = false;
+			
+			if ( hasRepaint == true )
+			{
+				paint_all(dpy);
+				bDidRepaint = true;
+				hasRepaint = false;
+			}
 			
 			struct timespec now;
 			clock_gettime(CLOCK_MONOTONIC, &now);
@@ -2418,7 +2484,6 @@ steamcompmgr_main (int argc, char **argv)
 			{
 				hideCursorForMovement = True;
 				
-				// We're hiding the cursor, force redraw by marking focused window damaged
 				win *w = find_win(dpy, currentFocusWindow);
 				
 				// Rearm warp count
@@ -2427,23 +2492,27 @@ steamcompmgr_main (int argc, char **argv)
 					w->mouseMoved = 0;
 				}
 				
-				if (w && gameFocused)
+				// We're hiding the cursor, force redraw if we were showing it
+				if ( w && gameFocused && !cursorImageEmpty )
 				{
-					w->damaged = 1;
+					hasRepaint = true;
+					XSendEvent(dpy, ourWindow, True, SubstructureRedirectMask, &nudgeEvent);
 				}
 			}
 			
 			// Send frame done event to all Wayland surfaces
-			for (win *w = list; w; w = w->next)
+			
+			if ( bDidRepaint == true )
 			{
-				if ( w->wlrsurface && w->committed == True )
+				for (win *w = list; w; w = w->next)
 				{
-					// Acknowledge commit once.
-					wlserver_lock();
-					wlserver_send_frame_done(w->wlrsurface, &now);
-					wlserver_unlock();
-					
-					w->committed = False;
+					if ( w->wlrsurface )
+					{
+						// Acknowledge commit once.
+						wlserver_lock();
+						wlserver_send_frame_done(w->wlrsurface, &now);
+						wlserver_unlock();
+					}
 				}
 			}
 
