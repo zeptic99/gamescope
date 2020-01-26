@@ -1238,8 +1238,6 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	
 	submit_command_buffer( handle, refs );
 	
-	vkQueueWaitIdle( queue );
-	
 	ret = ++g_nMaxVulkanTexHandle;
 	g_mapVulkanTextures[ ret ] = pTex;
 	
