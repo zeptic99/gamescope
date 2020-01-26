@@ -74,6 +74,10 @@ public:
 	
 	wlr_dmabuf_attributes m_DMA = {};
 	uint32_t m_FBID = 0;
+	
+	int32_t nRefCount = 1;
+	
+	VulkanTexture_t handle = 0;
 };
 
 extern std::vector< const char * > g_vecSDLInstanceExts;

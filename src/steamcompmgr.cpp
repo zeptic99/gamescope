@@ -2347,8 +2347,6 @@ steamcompmgr_main (int argc, char **argv)
 		
 		if (doRender)
 		{
-			vulkan_garbage_collect();
-
 			// Pick our width/height for this potential frame, regardless of how it might change later
 			// At some point we might even add proper locking so we get real updates atomically instead
 			// of whatever jumble of races the below might cause over a couple of frames
@@ -2448,6 +2446,8 @@ steamcompmgr_main (int argc, char **argv)
 					w->committed = False;
 				}
 			}
+
+			vulkan_garbage_collect();
 		}
 	}
 }

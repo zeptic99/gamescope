@@ -81,6 +81,8 @@ struct scratchCmdBuffer_t
 	VkCommandBuffer cmdBuf;
 	VkFence fence;
 	
+	std::vector<CVulkanTexture *> refs;
+	
 	std::atomic<bool> busy;
 };
 
@@ -1101,6 +1103,8 @@ static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence &fen
 				break;
 			}
 			
+			g_scratchCommandBuffers[ i ].refs.clear();
+			
 			g_scratchCommandBuffers[ i ].busy = true;
 			
 			return i;
@@ -1111,7 +1115,7 @@ static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence &fen
 	return 0;
 }
 
-static inline void submit_command_buffer( uint32_t handle )
+static inline void submit_command_buffer( uint32_t handle, std::vector<CVulkanTexture *> &vecRefs )
 {
 	VkCommandBuffer cmdBuf = g_scratchCommandBuffers[ handle ].cmdBuf;
 	VkFence fence = g_scratchCommandBuffers[ handle ].fence;
@@ -1135,6 +1139,12 @@ static inline void submit_command_buffer( uint32_t handle )
 	{
 		assert( 0 );
 	}
+	
+	for( uint32_t i = 0; i < vecRefs.size(); i++ )
+	{
+		vecRefs[ i ]->nRefCount++;
+		g_scratchCommandBuffers[ handle ].refs.push_back( vecRefs[ i ] );
+	}
 }
 
 void vulkan_garbage_collect( void )
@@ -1151,6 +1161,18 @@ void vulkan_garbage_collect( void )
 			{
 				vkResetCommandBuffer( g_scratchCommandBuffers[ i ].cmdBuf, 0 );
 				vkResetFences( device, 1, &g_scratchCommandBuffers[ i ].fence );
+				
+				for ( uint32_t ref = 0; ref < g_scratchCommandBuffers[ i ].refs.size(); ref++ )
+				{
+					CVulkanTexture *pTex = g_scratchCommandBuffers[ i ].refs[ ref ];
+					pTex->nRefCount--;
+					
+					if ( pTex->nRefCount == 0 )
+					{
+						g_mapVulkanTextures[ pTex->handle ] = nullptr;
+						delete pTex;
+					}
+				}
 
 				g_scratchCommandBuffers[ i ].busy = false;
 			}
@@ -1172,6 +1194,8 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 	
 	ret = ++g_nMaxVulkanTexHandle;
 	g_mapVulkanTextures[ ret ] = pTex;
+	
+	pTex->handle = ret;
 	
 	return ret;
 }
@@ -1209,12 +1233,17 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	
 	vkCmdCopyBufferToImage( commandBuffer, uploadBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
 	
-	submit_command_buffer( handle );
+	std::vector<CVulkanTexture *> refs;
+	refs.push_back( pTex );
+	
+	submit_command_buffer( handle, refs );
 	
 	vkQueueWaitIdle( queue );
 	
 	ret = ++g_nMaxVulkanTexHandle;
 	g_mapVulkanTextures[ ret ] = pTex;
+	
+	pTex->handle = ret;
 	
 	return ret;
 }
@@ -1223,13 +1252,19 @@ void vulkan_free_texture( VulkanTexture_t vulkanTex )
 {
 	if ( vulkanTex == 0 )
 		return;
-
-	assert( g_mapVulkanTextures[ vulkanTex ] != nullptr );
 	
-	// we'll just free it here for now because we WaitIdle immediately after drawing
-	// TODO move this into deferred free at some point
-	delete g_mapVulkanTextures[ vulkanTex ];
-	g_mapVulkanTextures[ vulkanTex ] = nullptr;
+	CVulkanTexture *pTex = g_mapVulkanTextures[ vulkanTex ];
+
+	assert( pTex != nullptr );
+	assert( pTex->handle == vulkanTex );
+	
+	pTex->nRefCount--;
+	
+	if ( pTex->nRefCount == 0 )
+	{
+		delete pTex;
+		g_mapVulkanTextures[ vulkanTex ] = nullptr;
+	}
 }
 
 bool operator==(const struct VulkanPipeline_t::LayerBinding_t& lhs, struct VulkanPipeline_t::LayerBinding_t& rhs)
@@ -1596,7 +1631,10 @@ uint32_t vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 	
 	vkCmdCopyImageToBuffer( commandBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, uploadBuffer, 1, &region );
 	
-	submit_command_buffer( handle );
+	std::vector<CVulkanTexture *> refs;
+	refs.push_back( pTex );
+
+	submit_command_buffer( handle, refs );
 	
 	return handle;
 }
