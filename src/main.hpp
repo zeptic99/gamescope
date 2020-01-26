@@ -15,11 +15,6 @@ void startSteamCompMgr(void);
 
 void register_signal(void);
 
-struct ResListEntry_t {
-	struct wlr_surface *surf;
-	struct wlr_dmabuf_attributes attribs;
-};
-
 void wayland_commit(struct wlr_surface *surf, struct wlr_dmabuf_attributes *attribs);
 
 extern int g_nNestedWidth;
@@ -28,6 +23,7 @@ extern int g_nNestedRefresh;
 
 extern uint32_t g_nOutputWidth;
 extern uint32_t g_nOutputHeight;
+extern int g_nOutputRefresh;
 
 extern bool g_bFilterGameWindow;
 

@@ -332,6 +332,18 @@ static inline int SDLButtonToLinuxButton( int SDLButton )
 	}
 }
 
+void updateOutputRefresh( void )
+{
+	int display_index = 0;
+	SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
+	
+	display_index = SDL_GetWindowDisplayIndex( window );
+	if ( SDL_GetDesktopDisplayMode( display_index, &mode ) == 0 )
+	{
+		g_nOutputRefresh = mode.refresh_rate;
+	}
+}
+
 void inputSDLThreadRun( void )
 {
 	// see wlroots xwayland startup and how wl_event_loop_add_signal works
@@ -404,17 +416,22 @@ client:
 				{
 					default:
 						break;
+					case SDL_WINDOWEVENT_MOVED:
+					case SDL_WINDOWEVENT_SHOWN:
+						updateOutputRefresh();
+						break;
 					case SDL_WINDOWEVENT_SIZE_CHANGED:
 						g_nOutputWidth = event.window.data1;
 						g_nOutputHeight = event.window.data2;
+						
+						updateOutputRefresh();
+						
 						break;
 				}
 				break;
 			default:
 				break;
 		}
-		
-
 	}
 }
 

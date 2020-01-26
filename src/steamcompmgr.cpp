@@ -65,6 +65,7 @@
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 #include "steamcompmgr.hpp"
+#include "vblankmanager.hpp"
 
 #define GPUVIS_TRACE_IMPLEMENTATION
 #include "gpuvis_trace_utils.h"
@@ -2059,6 +2060,8 @@ steamcompmgr_main (int argc, char **argv)
 		fprintf (stderr, "alarm!!!\n");
 	}
 	
+	vblank_init();
+	
 	currentOutputWidth = g_nOutputWidth;
 	currentOutputHeight = g_nOutputHeight;
 	
@@ -2142,6 +2145,7 @@ steamcompmgr_main (int argc, char **argv)
 	for (;;)
 	{
 		focusDirty = False;
+		bool vblank = false;
 		
 		do {
 			XNextEvent (dpy, &ev);
@@ -2363,6 +2367,13 @@ steamcompmgr_main (int argc, char **argv)
 								}
 							}
 						}
+						
+						if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
+						{
+							// Message from vblankmanager
+							vblank = true;
+						}
+						
 						break;
 					}
 					case LeaveNotify:
@@ -2447,7 +2458,7 @@ steamcompmgr_main (int argc, char **argv)
 			
 			bool bDidRepaint = false;
 			
-			if ( hasRepaint == true )
+			if ( hasRepaint == true && vblank == true )
 			{
 				paint_all(dpy);
 				bDidRepaint = true;
@@ -2517,6 +2528,8 @@ steamcompmgr_main (int argc, char **argv)
 			}
 
 			vulkan_garbage_collect();
+			
+			vblank = false;
 		}
 	}
 }

@@ -25,6 +25,7 @@ int g_nNestedRefresh = 60;
 
 uint32_t g_nOutputWidth = 1280;
 uint32_t g_nOutputHeight = 720;
+int g_nOutputRefresh = 60;
 
 bool g_bIsNested = false;
 
