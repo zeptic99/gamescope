@@ -2371,6 +2371,7 @@ steamcompmgr_main (int argc, char **argv)
 						if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
 						{
 							// Message from vblankmanager
+							gpuvis_trace_printf( "got vblank\n" );
 							vblank = true;
 						}
 						
@@ -2456,12 +2457,11 @@ steamcompmgr_main (int argc, char **argv)
 
 			check_new_wayland_res();
 			
-			bool bDidRepaint = false;
-			
 			if ( hasRepaint == true && vblank == true )
 			{
 				paint_all(dpy);
-				bDidRepaint = true;
+				
+				// Consumed the need to repaint here
 				hasRepaint = false;
 			}
 			
@@ -2511,9 +2511,8 @@ steamcompmgr_main (int argc, char **argv)
 				}
 			}
 			
-			// Send frame done event to all Wayland surfaces
-			
-			if ( bDidRepaint == true )
+			// Ask for a new surface every vblank
+			if ( vblank == true )
 			{
 				for (win *w = list; w; w = w->next)
 				{

@@ -15,6 +15,7 @@
 
 #include "drm.hpp"
 #include "main.hpp"
+#include "vblankmanager.hpp"
 
 #include "gpuvis_trace_utils.h"
 
@@ -191,6 +192,8 @@ static int get_plane_id(struct drm_t *drm)
 static void page_flip_handler(int fd, unsigned int frame,
 							  unsigned int sec, unsigned int usec, void *data)
 {
+	vblank_mark_possible_vblank();
+
 	// TODO: get the fbids_in_req instance from data if we ever have more than one in flight
 	
 	if ( s_drm_log != 0 )
@@ -444,6 +447,8 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	
 	g_nOutputWidth = drm->mode->hdisplay;
 	g_nOutputHeight = drm->mode->vdisplay;
+	
+	g_nOutputRefresh = drm->mode->vrefresh;
 
 	if ( g_nOutputWidth < g_nOutputHeight )
 	{
