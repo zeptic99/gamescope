@@ -731,14 +731,18 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite, struct Vulka
 	uint32_t sourceWidth, sourceHeight;
 	int drawXOffset = 0, drawYOffset = 0;
 	float currentScaleRatio = 1.0;
-	commit_t lastCommit;
+	commit_t lastCommit = {};
 	bool validContents = get_window_last_done_commit( w, lastCommit );
 	
-	if (!w) 
+	if (!w)
 		return;
 	
+	// Don't add a layer at all if it's an overlay without contents
 	if (w->isOverlay && !validContents)
 		return;
+
+	// Base plane will stay as tex=0 if we don't have contents yet, which will
+	// make us fall back to compositing and use the Vulkan null texture
 	
 	win *mainOverlayWindow = find_win(dpy, currentOverlayWindow);
 	
