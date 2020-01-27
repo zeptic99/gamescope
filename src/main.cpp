@@ -101,9 +101,14 @@ int main(int argc, char **argv)
 	
 	XInitThreads();
 	
-	initOutput();
-	
+	if ( getenv("DISPLAY") != NULL )
+	{
+		g_bIsNested = true;
+	}
+
 	wlserver_init(argc, argv, g_bIsNested == true );
+	
+	initOutput();
 	
 	wlserver_run();
 }
@@ -123,11 +128,6 @@ void startSteamCompMgr(void)
 
 void initOutput(void)
 {
-	if ( getenv("DISPLAY") != NULL )
-	{
-		g_bIsNested = true;
-	}
-
 	if ( g_bIsNested == true )
 	{
 		inputsdl_init();

@@ -112,6 +112,8 @@ const struct wlr_surface_role xwayland_surface_role = {
 
 static void xwayland_ready(struct wl_listener *listener, void *data)
 {
+	setenv("DISPLAY", wlserver.wlr.xwayland->display_name, true);
+	
 	startSteamCompMgr();
 }
 
@@ -406,8 +408,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	
 	wlserver.wlr.xwayland = wlr_xwayland_create(wlserver.wl_display, wlserver.wlr.compositor, False);
 	
-	setenv("DISPLAY", wlserver.wlr.xwayland->display_name, true);
-
 	const char *socket = wl_display_add_socket_auto(wlserver.wl_display);
 	if (!socket)
 	{
