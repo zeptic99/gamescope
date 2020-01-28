@@ -532,7 +532,7 @@ int init_device()
 	VkCommandPoolCreateInfo commandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.pNext = nullptr,
-		.flags = 0,
+		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = queueFamilyIndex,
 	};
 
@@ -567,7 +567,7 @@ int init_device()
 		nullptr,
 		.flags = 0,
 		.maxSets = k_nMaxSets,
-		.poolSizeCount = 3,
+		.poolSizeCount = 4,
 		descriptorPoolSize
 	};
 	
