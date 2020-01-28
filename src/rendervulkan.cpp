@@ -83,6 +83,7 @@ struct scratchCmdBuffer_t
 	
 	std::vector<CVulkanTexture *> refs;
 	
+	std::atomic<bool> haswaiter;
 	std::atomic<bool> busy;
 };
 
@@ -1082,14 +1083,17 @@ int vulkan_init(void)
 	return 1;
 }
 
-static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence &fence )
+static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence *pFence )
 {
 	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
 	{
 		if ( g_scratchCommandBuffers[ i ].busy == false )
 		{
 			cmdBuf = g_scratchCommandBuffers[ i ].cmdBuf;
-			fence = g_scratchCommandBuffers[ i ].fence;
+			if ( pFence != nullptr )
+			{
+				*pFence = g_scratchCommandBuffers[ i ].fence;
+			}
 			
 			VkCommandBufferBeginInfo commandBufferBeginInfo = {
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1104,6 +1108,8 @@ static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence &fen
 			}
 			
 			g_scratchCommandBuffers[ i ].refs.clear();
+			
+			g_scratchCommandBuffers[ i ].haswaiter = pFence != nullptr;
 			
 			g_scratchCommandBuffers[ i ].busy = true;
 			
@@ -1153,7 +1159,8 @@ void vulkan_garbage_collect( void )
 	// Probably just differentiate "busy" and "submitted"
 	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
 	{
-		if ( g_scratchCommandBuffers[ i ].busy == true )
+		if ( g_scratchCommandBuffers[ i ].busy == true &&
+			g_scratchCommandBuffers[ i ].haswaiter == false )
 		{
 			VkResult res = vkGetFenceStatus( device, g_scratchCommandBuffers[ i ].fence );
 			
@@ -1215,8 +1222,7 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	memcpy( pUploadBuffer, bits, width * height * 4 );
 	
 	VkCommandBuffer commandBuffer;
-	VkFence fence;
-	uint32_t handle = get_command_buffer( commandBuffer, fence );
+	uint32_t handle = get_command_buffer( commandBuffer, nullptr );
 	
 	VkBufferImageCopy region = {};
 	
@@ -1612,7 +1618,7 @@ uint32_t vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 	
 	VkCommandBuffer commandBuffer;
 	VkFence fence;
-	uint32_t handle = get_command_buffer( commandBuffer, fence );
+	uint32_t handle = get_command_buffer( commandBuffer, &fence );
 	
 	VkBufferImageCopy region = {};
 	
@@ -1639,7 +1645,11 @@ uint32_t vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 
 void vulkan_wait_for_fence( uint32_t handle )
 {
+	assert( g_scratchCommandBuffers[ handle ].busy == true &&
+			g_scratchCommandBuffers[ handle ].haswaiter == true );
 	vkWaitForFences( device, 1, &g_scratchCommandBuffers[ handle ].fence, VK_TRUE, ~0 );
+	
+	g_scratchCommandBuffers[ handle ].haswaiter = false;
 }
 
 
