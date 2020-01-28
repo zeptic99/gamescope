@@ -1880,13 +1880,14 @@ void check_new_wayland_res( void )
 	{
 		win	*w = find_win( wayland_commit_queue[ i ].surf );
 		
+		assert( wayland_commit_queue[ i ].attribs.fd[0] != -1 );
+		
 		if ( w == nullptr )
 		{
+			close( wayland_commit_queue[ i ].attribs.fd[0] );
 			fprintf (stderr, "waylandres but no win\n");
 			continue;
 		}
-		
-		assert( wayland_commit_queue[ i ].attribs.fd[0] != -1 );
 		
 		commit_t newCommit = {};
 		
