@@ -520,7 +520,7 @@ int init_device()
 	
 	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
 	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleCreateInfo.codeSize = composite_spv_len;
+	shaderModuleCreateInfo.codeSize = sizeof(composite_spv);
 	shaderModuleCreateInfo.pCode = (const uint32_t*)composite_spv;
 	
 	VkResult res = vkCreateShaderModule( device, &shaderModuleCreateInfo, nullptr, &shaderModule );
