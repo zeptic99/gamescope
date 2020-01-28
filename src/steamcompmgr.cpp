@@ -1876,7 +1876,6 @@ void check_new_wayland_res( void )
 {
 	std::lock_guard<std::mutex> lock( wayland_commit_lock );
 	
-again:
 	for ( uint32_t i = 0; i < wayland_commit_queue.size(); i++ )
 	{
 		win	*w = find_win( wayland_commit_queue[ i ].surf );
@@ -1884,8 +1883,7 @@ again:
 		if ( w == nullptr )
 		{
 			fprintf (stderr, "waylandres but no win\n");
-			wayland_commit_queue.erase( wayland_commit_queue.begin() + i );
-			goto again;
+			continue;
 		}
 		
 		assert( wayland_commit_queue[ i ].attribs.fd[0] != -1 );
@@ -1893,19 +1891,6 @@ again:
 		commit_t newCommit = {};
 		
 		bool bSuccess = import_commit( &wayland_commit_queue[ i ].attribs, newCommit );
-		
-// 		w->damaged = 1;
-		
-// 		if ( w->committed == True )
-// 		{
-// 			// Got another commit without having consumed the previous one
-// 			// Acknowledge previous one, seems we can get hangs if we don't.
-// 			struct timespec now;
-// 			clock_gettime(CLOCK_MONOTONIC, &now);
-// 			wlserver_lock();
-// 			wlserver_send_frame_done(w->wlrsurface, &now);
-// 			wlserver_unlock();
-// 		}
 		
 		if ( bSuccess == true )
 		{
@@ -1924,10 +1909,9 @@ again:
 		
 		// Wake up commit wait thread if chilling
 		waitListSem.signal();
-		
-		wayland_commit_queue.erase( wayland_commit_queue.begin() + i );
-		goto again;
 	}
+	
+	wayland_commit_queue.clear();
 }
 
 int
