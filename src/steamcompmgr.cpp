@@ -1186,10 +1186,13 @@ determine_and_apply_focus (Display *dpy)
 	{
 		set_win_hidden( dpy, find_win(dpy, currentFocusWindow), True );
 
-		wlserver_lock();
-		wlserver_keyboardfocus( focus->wlrsurface );
-		wlserver_mousefocus( focus->wlrsurface );
-		wlserver_unlock();
+		if ( focus->wlrsurface != nullptr )
+		{
+			wlserver_lock();
+			wlserver_keyboardfocus( focus->wlrsurface );
+			wlserver_mousefocus( focus->wlrsurface );
+			wlserver_unlock();
+		}
 		
 		gpuvis_trace_printf( "determine_and_apply_focus focus %lu\n", focus->id );
 	}
