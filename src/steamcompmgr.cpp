@@ -288,8 +288,9 @@ retry:
 	
 	assert( bFound == true );
 	
+	gpuvis_trace_printf( "wait fence begin_ctx=%lu\n", commitID );
 	vulkan_wait_for_fence( fence );
-	gpuvis_trace_printf( "wait fence ended\n" );
+	gpuvis_trace_printf( "wait fence end_ctx=%lu\n", commitID );
 	
 	{
 		std::unique_lock< std::mutex > lock( listCommitsDoneLock );
@@ -1822,6 +1823,7 @@ void handle_done_commits( void )
 			{
 				if ( w->commit_queue[ j ].commitID == listCommitsDone[ i ] )
 				{
+					gpuvis_trace_printf( "commit %lu done\n", w->commit_queue[ j ].commitID );
 					w->commit_queue[ j ].done = true;
 					bFoundWindow = true;
 					
@@ -1913,6 +1915,7 @@ again:
 		
 		uint32_t fence = vulkan_get_texture_fence( newCommit.vulkanTex );
 		
+		gpuvis_trace_printf( "pushing wait for commit %lu\n", newCommit.commitID );
 		{
 			std::unique_lock< std::mutex > lock( waitListLock );
 			
