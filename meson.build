@@ -31,13 +31,14 @@ wlroots_proj = subproject('wlroots')
 wlroots_static_dep = wlroots_proj.get_variable('wlroots_static_dep')
 
 shadercompiler = find_program('glslangValidator')
-extratool = find_program('xxd')
-shaderbuilder = find_program('src/shaderbuild.sh')
 
 spirv_shader = custom_target('shader_target',
   output : 'composite.h',
   input : 'src/composite.comp.hlsl',
-  command : [shaderbuilder, '@INPUT@', '@OUTPUT@'],
+  command : [
+    shadercompiler, '-V', '-e', 'main', '--vn',
+    'composite_spv', '@INPUT@', '-o', '@OUTPUT@'
+  ],
   install : false,
 )
 
