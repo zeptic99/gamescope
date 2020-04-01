@@ -52,7 +52,8 @@ private:
 	void warp(int x, int y);
 	void checkSuspension();
 
-	void queryRelativePosition(int &winX, int &winY);
+	void queryGlobalPosition(int &x, int &y);
+	void queryPositions(int &rootX, int &rootY, int &winX, int &winY);
 	void queryButtonMask(unsigned int &mask);
 
 	bool getTexture();
