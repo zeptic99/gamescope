@@ -71,8 +71,6 @@ extern "C" {
 #endif
 	
 extern bool run;
-extern int pointerX;
-extern int pointerY;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 
