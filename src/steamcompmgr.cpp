@@ -566,6 +566,16 @@ MouseCursor::MouseCursor(_XDisplay *display)
 {
 }
 
+void MouseCursor::queryRelativePosition(int &winX, int &winY)
+{
+	Window window, child;
+	int rootX, rootY;
+	unsigned int mask;
+
+	XQueryPointer(m_display, DefaultRootWindow(m_display), &window, &child,
+				  &rootX, &rootY, &winX, &winY, &mask);
+}
+
 void MouseCursor::queryButtonMask(unsigned int &mask)
 {
 	Window window, child;
@@ -771,9 +781,9 @@ void MouseCursor::paint(win *window, struct Composite_t *pComposite,
 		return;
 	}
 
-	// We assume 'window' is as a fullscreen window always positioned at (0,0).
-	const int winX = pointerX;
-	const int winY = pointerY;
+	int winX, winY;
+	queryRelativePosition(winX, winY);
+	move(pointerX, pointerY);
 
 	// Also need new texture
 	if (!getTexture()) {
