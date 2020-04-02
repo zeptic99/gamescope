@@ -39,6 +39,8 @@ Display *g_XWLDpy;
 
 bool run = true;
 
+int g_nTouchClickMode = 1;
+
 void sig_handler(int signal)
 {
 	wlr_log(WLR_DEBUG, "Received kill signal. Terminating!");
@@ -186,6 +188,22 @@ static void wlserver_handle_pointer_button(struct wl_listener *listener, void *d
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
 
+static inline uint32_t steamcompmgr_button_to_wlserver_button( int button )
+{
+	switch ( button )
+	{
+		default:
+		case 0:
+			return 0;
+		case 1:
+			return BTN_LEFT;
+		case 2:
+			return BTN_RIGHT;
+		case 3:
+			return BTN_MIDDLE;
+	}
+}
+
 static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, down );
@@ -195,20 +213,22 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 	{
 		double x = g_bRotated ? event->y : event->x;
 		double y = g_bRotated ? 1.0 - event->x : event->y;
-
-		wlserver.touchdown_x = x * wlserver.mouse_focus_surface->current.width;
-		wlserver.touchdown_y = y * wlserver.mouse_focus_surface->current.height;
 		
 		wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
 		wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
-
-		wlserver.dragging = false;
-		wlserver.candrag = true;
-		
-		wlserver.touchdown_time_ms = get_time_in_milliseconds();
 		
 		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		
+		uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
+		
+		if ( button != 0 && g_nTouchClickMode < WLSERVER_BUTTON_COUNT )
+		{
+			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_PRESSED );
+			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+			
+			wlserver.button_held[ g_nTouchClickMode ] = true;
+		}
 	}
 }
 
@@ -219,27 +239,23 @@ static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 	
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
-		unsigned int now = get_time_in_milliseconds();
-
-		if ( fabs( wlserver.mouse_surface_cursorx - wlserver.touchdown_x ) < 50 &&
-			fabs( wlserver.mouse_surface_cursory - wlserver.touchdown_y ) < 50 &&
-			now - wlserver.touchdown_time_ms < 100 )
+		bool bReleasedAny = false;
+		for ( int i = 0; i < WLSERVER_BUTTON_COUNT; i++ )
 		{
-			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.touchdown_x, wlserver.touchdown_y );
-			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_PRESSED );
-			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_RELEASED );
-			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+			if ( wlserver.button_held[ i ] == true )
+			{
+				uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
+				wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_RELEASED );
+				
+				bReleasedAny = true;
+				wlserver.button_held[ i ] = false;
+			}
 		}
 		
-		if ( wlserver.dragging == true )
+		if ( bReleasedAny == true )
 		{
-			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_RELEASED );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 		}
-
-		wlserver.dragging = false;
 	}
 }
 
@@ -250,40 +266,14 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 	
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
-		unsigned int now = get_time_in_milliseconds();
-		unsigned int sincedown = now - wlserver.touchdown_time_ms;
-
 		double x = g_bRotated ? event->y : event->x;
 		double y = g_bRotated ? 1.0 - event->x : event->y;
 		
-		if ( sincedown > 200 || wlserver.candrag == false )
-		{
-			if ( wlserver.candrag == true )
-			{
-				wlserver.candrag = false;
-				wlserver.dragging = true;
-				
-				wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.touchdown_x, wlserver.touchdown_y );
-				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-				wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, BTN_LEFT, WLR_BUTTON_PRESSED );
-				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-			}
-			wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
-			wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
+		wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
+		wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
 
-			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-		}
-		else
-		{
-			double posx = x * wlserver.mouse_focus_surface->current.width;
-			double posy = y * wlserver.mouse_focus_surface->current.height;
-			
-			if ( fabs( posx - wlserver.touchdown_x ) > 100 || fabs( posy - wlserver.touchdown_y ) > 100 )
-			{
-				wlserver.candrag = false;
-			}
-		}
+		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 	}
 }
 

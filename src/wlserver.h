@@ -11,6 +11,8 @@
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/xwayland.h>
 
+#define WLSERVER_BUTTON_COUNT 4
+
 struct wlserver_t {
 	struct wl_display *wl_display;
 	struct wl_event_loop *wl_event_loop;
@@ -33,11 +35,7 @@ struct wlserver_t {
 	double mouse_surface_cursorx;
 	double mouse_surface_cursory;
 	
-	double touchdown_x;
-	double touchdown_y;
-	unsigned int touchdown_time_ms;
-	bool dragging;
-	bool candrag;
+	bool button_held[ WLSERVER_BUTTON_COUNT ];
 };
 
 struct wlserver_keyboard {
@@ -71,6 +69,8 @@ extern "C" {
 #endif
 	
 extern bool run;
+
+extern int g_nTouchClickMode;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 

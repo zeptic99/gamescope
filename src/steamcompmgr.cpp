@@ -191,6 +191,7 @@ static Atom		WMStateAtom;
 static Atom		WMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
 static Atom		steamUnfocusAtom;
+static Atom		steamTouchClickModeAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -2102,6 +2103,7 @@ steamcompmgr_main (int argc, char **argv)
 	/* get atoms */
 	steamAtom = XInternAtom (dpy, STEAM_PROP, False);
 	steamUnfocusAtom = XInternAtom (dpy, "STEAM_UNFOCUS", False);
+	steamTouchClickModeAtom = XInternAtom (dpy, "STEAM_TOUCH_CLICK_MODE", False);
 	gameAtom = XInternAtom (dpy, GAME_PROP, False);
 	overlayAtom = XInternAtom (dpy, OVERLAY_PROP, False);
 	opacityAtom = XInternAtom (dpy, OPACITY_PROP, False);
@@ -2356,6 +2358,11 @@ steamcompmgr_main (int argc, char **argv)
 							w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 1);
 							focusDirty = True;
 						}
+					}
+					if (ev.xproperty.atom == steamTouchClickModeAtom )
+					{
+						// Default to 1, left click
+						g_nTouchClickMode = get_prop(dpy, root, steamTouchClickModeAtom, 1 );
 					}
 					if (ev.xproperty.atom == gameAtom)
 					{
