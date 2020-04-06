@@ -896,13 +896,13 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite,
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 		currentScaleRatio *= globalScaleRatio;
 
-		drawXOffset = (currentOutputWidth - sourceWidth * currentScaleRatio) / 2.0f;
-		drawYOffset = (currentOutputHeight - sourceHeight * currentScaleRatio) / 2.0f;
+		drawXOffset = ((int)currentOutputWidth - (int)sourceWidth * currentScaleRatio) / 2.0f;
+		drawYOffset = ((int)currentOutputHeight - (int)sourceHeight * currentScaleRatio) / 2.0f;
 
 		if ( zoomScaleRatio != 1.0 )
 		{
-			drawXOffset += ((sourceWidth / 2) - cursor->x()) * currentScaleRatio;
-			drawYOffset += ((sourceHeight / 2) - cursor->y()) * currentScaleRatio;
+			drawXOffset += (((int)sourceWidth / 2) - cursor->x()) * currentScaleRatio;
+			drawYOffset += (((int)sourceHeight / 2) - cursor->y()) * currentScaleRatio;
 		}
 	}
 
