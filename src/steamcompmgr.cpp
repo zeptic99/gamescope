@@ -110,6 +110,9 @@ typedef struct _win {
 	Bool sizeHintsSpecified;
 	unsigned int requestedWidth;
 	unsigned int requestedHeight;
+	
+	Window transientFor;
+	
 	Bool nudged;
 	Bool ignoreOverrideRedirect;
 
@@ -188,6 +191,7 @@ static Atom		winNormalAtom;
 static Atom		sizeHintsAtom;
 static Atom		fullscreenAtom;
 static Atom		WMStateAtom;
+static Atom		WMTransientForAtom;
 static Atom		WMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
 static Atom		steamUnfocusAtom;
@@ -1184,6 +1188,8 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	Bool usingOverrideRedirectWindow = False;
 
 	unsigned int maxOpacity = 0;
+	
+	std::vector< win* > vecPossibleFocusGameWindows;
 
 	for (w = list; w; w = w->next)
 	{
@@ -1201,17 +1207,21 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		// a choice between two windows we always prefer the non-override redirect one.
 		Bool windowIsOverrideRedirect = w->a.override_redirect && !w->ignoreOverrideRedirect;
 
-		if (w->gameID && w->a.map_state == IsViewable && w->a.c_class == InputOutput &&
-			(w->damage_sequence >= maxDamageSequence) &&
-			(!windowIsOverrideRedirect || !usingOverrideRedirectWindow))
+		if ( w->gameID && w->a.map_state == IsViewable && w->a.c_class == InputOutput &&
+			( !windowIsOverrideRedirect || !usingOverrideRedirectWindow ) )
 		{
-			focus = w;
-			gameFocused = True;
-			maxDamageSequence = w->damage_sequence;
-
-			if (windowIsOverrideRedirect)
+			vecPossibleFocusGameWindows.push_back( w );
+			
+			if ( w->damage_sequence >= maxDamageSequence )
 			{
-				usingOverrideRedirectWindow = True;
+				focus = w;
+				gameFocused = True;
+				maxDamageSequence = w->damage_sequence;
+
+				if (windowIsOverrideRedirect)
+				{
+					usingOverrideRedirectWindow = True;
+				}
 			}
 		}
 
@@ -1246,6 +1256,31 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	{
 		currentFocusWindow = None;
 		return;
+	}
+	
+	if ( gameFocused )
+	{
+		// Do some searches through game windows to follow transient links if needed
+		while ( true )
+		{
+			bool bFoundTransient = false;
+			
+			for ( uint32_t i = 0; i < vecPossibleFocusGameWindows.size(); i++ )
+			{
+				win* candidate = vecPossibleFocusGameWindows[ i ];
+				
+				if ( candidate != focus && candidate->transientFor == focus->id )
+				{
+					bFoundTransient = true;
+					focus = candidate;
+					break;
+				}
+			}
+			
+			// Hopefully we can't have transient cycles or we'll have to maintain a list of visited windows here
+			if ( bFoundTransient == false )
+				break;
+		}
 	}
 
 // 	if (fadeOutWindow.id == None && currentFocusWindow != focus->id)
@@ -1458,6 +1493,16 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 
 	get_size_hints(dpy, w);
+	
+	Window transientFor = None;
+	if ( XGetTransientForHint( dpy, w->id, &transientFor ) )
+	{
+		w->transientFor = transientFor;
+	}
+	else
+	{
+		w->transientFor = None;
+	}
 
 	w->damage_sequence = 0;
 	w->map_sequence = sequence;
@@ -1546,6 +1591,17 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	{
 		new_win->gameID = id;
 	}
+	
+	Window transientFor = None;
+	if ( XGetTransientForHint( dpy, id, &transientFor ) )
+	{
+		new_win->transientFor = transientFor;
+	}
+	else
+	{
+		new_win->transientFor = None;
+	}
+	
 	new_win->isFullscreen = False;
 	new_win->isHidden = False;
 	new_win->sizeHintsSpecified = False;
@@ -2122,6 +2178,7 @@ steamcompmgr_main (int argc, char **argv)
 	sizeHintsAtom = XInternAtom (dpy, "WM_NORMAL_HINTS", False);
 	fullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", False);
 	WMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", False);
+	WMTransientForAtom = XInternAtom (dpy, "WM_TRANSIENT_FOR", False);
 	WMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
 	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", False);
 
@@ -2426,6 +2483,23 @@ steamcompmgr_main (int argc, char **argv)
 						}
 
 						focusDirty = True;
+					}
+					if (ev.xproperty.atom == WMTransientForAtom)
+					{
+						win * w = find_win(dpy, ev.xproperty.window);
+						if (w)
+						{
+							Window transientFor = None;
+							if ( XGetTransientForHint( dpy, ev.xproperty.window, &transientFor ) )
+							{
+								w->transientFor = transientFor;
+							}
+							else
+							{
+								w->transientFor = None;
+							}
+							focusDirty = True;
+						}
 					}
 					break;
 					case ClientMessage:
