@@ -98,6 +98,7 @@ typedef struct _win {
 	Damage		damage;
 	unsigned int	opacity;
 	unsigned long	map_sequence;
+	unsigned long	damage_sequence;
 
 	Bool isSteam;
 	Bool isSteamPopup;
@@ -158,7 +159,7 @@ float			globalScaleRatio = 1.0f;
 Bool			focusDirty = False;
 bool			hasRepaint = false;
 
-unsigned long	mapSequence = 0;
+unsigned long	damageSequence = 0;
 
 #define			CURSOR_HIDE_TIME 10000
 
@@ -1183,7 +1184,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	gameFocused = False;
 
-	unsigned long maxMapSequence = 0;
+	unsigned long maxDamageSequence = 0;
 	Bool usingOverrideRedirectWindow = False;
 
 	unsigned int maxOpacity = 0;
@@ -1211,11 +1212,11 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		{
 			vecPossibleFocusGameWindows.push_back( w );
 			
-			if ( w->map_sequence >= maxMapSequence )
+			if ( w->damage_sequence >= maxDamageSequence )
 			{
 				focus = w;
 				gameFocused = True;
-				maxMapSequence = w->map_sequence;
+				maxDamageSequence = w->damage_sequence;
 
 				if (windowIsOverrideRedirect)
 				{
@@ -1503,7 +1504,8 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 		w->transientFor = None;
 	}
 
-	w->map_sequence = mapSequence++;
+	w->damage_sequence = 0;
+	w->map_sequence = sequence;
 
 	focusDirty = True;
 }
@@ -1566,6 +1568,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 		return;
 	}
 
+	new_win->damage_sequence = 0;
 	new_win->map_sequence = 0;
 	if (new_win->a.c_class == InputOnly)
 		new_win->damage = None;
@@ -1763,12 +1766,25 @@ static void
 damage_win (Display *dpy, XDamageNotifyEvent *de)
 {
 	win	*w = find_win (dpy, de->drawable);
+	win *focus = find_win(dpy, currentFocusWindow);
 
 	if (!w)
 		return;
 
 	if (w->isOverlay && !w->opacity)
 		return;
+
+	// First damage event we get, compute focus; we only want to focus damaged
+	// windows to have meaningful frames.
+	if (w->gameID && w->damage_sequence == 0)
+		focusDirty = True;
+
+	w->damage_sequence = damageSequence++;
+
+	// If we just passed the focused window, we might be eliglible to take over
+	if (focus && focus != w && w->gameID &&
+		w->damage_sequence > focus->damage_sequence)
+		focusDirty = True;
 
 	if (w->damage)
 		XDamageSubtract(dpy, w->damage, None, None);
