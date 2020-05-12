@@ -111,7 +111,11 @@ int main(int argc, char **argv)
 
 	wlserver_init(argc, argv, g_bIsNested == true );
 	
-	initOutput();
+	if ( initOutput() != 0 )
+	{
+		fprintf( stderr, "Failed to initialize output\n" );
+		return 1;
+	}
 	
 	wlserver_run();
 }
@@ -129,7 +133,7 @@ void startSteamCompMgr(void)
 	return;
 }
 
-void initOutput(void)
+int initOutput(void)
 {
 	if ( g_bIsNested == true )
 	{
@@ -151,7 +155,7 @@ void initOutput(void)
 		if ( window == nullptr )
 		{
 			fprintf(stderr, "Failed to create SDL window\n");
-			exit(1);
+			return -1;
 		}
 
 		unsigned int extCount = 0;
@@ -160,10 +164,11 @@ void initOutput(void)
 		g_vecSDLInstanceExts.resize( extCount );
 
 		SDL_Vulkan_GetInstanceExtensions( window, &extCount, g_vecSDLInstanceExts.data() );
+		return 0;
 	}
 	else
 	{
-		init_drm( &g_DRM, nullptr, nullptr, 0 );
+		return init_drm( &g_DRM, nullptr, nullptr, 0 );
 	}
 }
 

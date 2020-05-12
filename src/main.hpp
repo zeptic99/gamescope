@@ -9,8 +9,8 @@ extern SDL_Window *window;
 
 #include "wlr/render/dmabuf.h"
 
-void initOutput(void);
-	
+int initOutput(void);
+
 void startSteamCompMgr(void);
 
 void register_signal(void);
