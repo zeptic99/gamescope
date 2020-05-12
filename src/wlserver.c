@@ -133,7 +133,16 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 {
 	struct wlserver_keyboard *keyboard = wl_container_of( listener, keyboard, key );
 	struct wlr_event_keyboard_key *event = data;
-	
+
+	xkb_keycode_t keycode = event->keycode + 8;
+	xkb_keysym_t keysym = xkb_state_key_get_one_sym(keyboard->device->keyboard->xkb_state, keycode);
+
+	if (wlserver.wlr.session && event->state == WLR_KEY_PRESSED && keysym >= XKB_KEY_XF86Switch_VT_1 && keysym <= XKB_KEY_XF86Switch_VT_12) {
+		unsigned vt = keysym - XKB_KEY_XF86Switch_VT_1 + 1;
+		wlr_session_change_vt(wlserver.wlr.session, vt);
+		return;
+	}
+
 	wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard->device);
 	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, event->time_msec, event->keycode, event->state );
 }
