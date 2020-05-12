@@ -148,13 +148,17 @@ void initOutput(void)
 								   g_nOutputWidth,
 								   g_nOutputHeight,
 								   nSDLWindowFlags );
-		
-		
-		unsigned int extCount;
+		if ( window == nullptr )
+		{
+			fprintf(stderr, "Failed to create SDL window\n");
+			exit(1);
+		}
+
+		unsigned int extCount = 0;
 		SDL_Vulkan_GetInstanceExtensions( window, &extCount, nullptr );
-		
+
 		g_vecSDLInstanceExts.resize( extCount );
-		
+
 		SDL_Vulkan_GetInstanceExtensions( window, &extCount, g_vecSDLInstanceExts.data() );
 	}
 	else
