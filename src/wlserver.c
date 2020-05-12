@@ -406,6 +406,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlserver.wlr.compositor = wlr_compositor_create(wlserver.wl_display, wlserver.wlr.renderer);
 	
 	wlserver.wlr.xwayland = wlr_xwayland_create(wlserver.wl_display, wlserver.wlr.compositor, False);
+	wl_signal_add(&wlserver.wlr.xwayland->events.ready, &xwayland_ready_listener);
 	
 	const char *socket = wl_display_add_socket_auto(wlserver.wl_display);
 	if (!socket)
@@ -414,13 +415,12 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
 		return 1;
 	}
-	
+
 	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
 	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD );
 	wlr_xwayland_set_seat(wlserver.wlr.xwayland, wlserver.wlr.seat);
 
 	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", socket);
-	setenv("_WAYLAND_DISPLAY", socket, true);
 
 	if (!wlr_backend_start( wlserver.wlr.multi_backend ))
 	{
@@ -429,10 +429,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wl_display_destroy(wlserver.wl_display);
 		return 1;
 	}
-
-	setenv("WAYLAND_DISPLAY", socket, true);
-	
-	wl_signal_add(&wlserver.wlr.xwayland->events.ready, &xwayland_ready_listener);
 
 	return 0;
 }
