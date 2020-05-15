@@ -627,6 +627,8 @@ out:
 
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *dma_buf )
 {
+	assert( dma_buf->n_planes == 1);
+
 	uint32_t ret = 0;
 	uint32_t handles[4] = { 0 };
 	drmPrimeFDToHandle( drm->fd, dma_buf->fd[0], &handles[0] );
