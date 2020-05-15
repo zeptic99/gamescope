@@ -9,7 +9,12 @@ add_project_arguments([
 	'-DWLR_USE_UNSTABLE',
 ], language: ['c','cpp'])
 
+cc = meson.get_compiler('c')
 cppc = meson.get_compiler('cpp')
+
+add_project_arguments(cc.get_supported_arguments([
+  '-Wno-unused-parameter',
+]), language: 'c')
 
 add_project_arguments(cppc.get_supported_arguments([
   '-Wno-unused-parameter',
