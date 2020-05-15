@@ -1,8 +1,20 @@
-project('gamescope', ['c','cpp'], meson_version: '>=0.54.0')
+project(
+  'gamescope',
+  ['c','cpp'],
+  meson_version: '>=0.54.0',
+  default_options: ['warning_level=2'],
+)
 
 add_project_arguments([
 	'-DWLR_USE_UNSTABLE',
 ], language: ['c','cpp'])
+
+cppc = meson.get_compiler('cpp')
+
+add_project_arguments(cppc.get_supported_arguments([
+  '-Wno-unused-parameter',
+  '-Wno-missing-field-initializers',
+]), language: 'cpp')
 
 dep_x11 = dependency('x11')
 dep_xdamage = dependency('xdamage')
