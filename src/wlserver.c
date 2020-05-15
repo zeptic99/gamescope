@@ -82,16 +82,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	struct wlr_dmabuf_attributes dmabuf_attribs = {};
 	bool result = False;
 	result = wlr_texture_to_dmabuf( tex, &dmabuf_attribs );
-	
 	assert( result == true );
-	if ( result == false || dmabuf_attribs.fd[0] == -1 )
-	{
-		struct timespec now;
-		clock_gettime(CLOCK_MONOTONIC, &now);
-		
-		wlr_surface_send_frame_done( wlr_surface, &now );
-		return;
-	}
 	
 	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p\n", wlr_surface );
 
