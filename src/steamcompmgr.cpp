@@ -514,21 +514,8 @@ import_commit ( struct wlr_dmabuf_attributes *dmabuf, commit_t &commit )
 {
 	if ( BIsNested() == False )
 	{
-		// We'll also need a copy for Vulkan to consume below.
-
-		int fdCopy = dup( dmabuf->fd[0] );
-
-		if ( fdCopy == -1 )
-		{
-			close( dmabuf->fd[0] );
-			return false;
-		}
-
 		commit.fb_id = drm_fbid_from_dmabuf( &g_DRM, dmabuf );
 		assert( commit.fb_id != 0 );
-
-		close( dmabuf->fd[0] );
-		dmabuf->fd[0] = fdCopy;
 	}
 
 	commit.vulkanTex = vulkan_create_texture_from_dmabuf( dmabuf );
@@ -2031,6 +2018,7 @@ void check_new_wayland_res( void )
 		commit_t newCommit = {};
 
 		bool bSuccess = import_commit( &wayland_commit_queue[ i ].attribs, newCommit );
+		wlr_dmabuf_attributes_finish( &wayland_commit_queue[ i ].attribs );
 
 		if ( bSuccess == true )
 		{

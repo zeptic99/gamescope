@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -306,6 +307,16 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	
 	if ( pDMA != nullptr )
 	{
+		assert( pDMA->n_planes == 1 );
+
+		// Importing memory from a FD transfers ownership of the FD
+		int fd = dup( pDMA->fd[0] );
+		if ( fd < 0 )
+		{
+			perror( "dup failed" );
+			return false;
+		}
+
 		// We're importing WSI buffers from GL or Vulkan, set implicit_sync
 		wsiAllocInfo.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA;
 		wsiAllocInfo.implicit_sync = true;
@@ -316,7 +327,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		// Memory already provided by pDMA
 		importMemoryInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
 		importMemoryInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
-		importMemoryInfo.fd = pDMA->fd[0];
+		importMemoryInfo.fd = fd;
 		importMemoryInfo.pNext = allocInfo.pNext;
 		
 		allocInfo.pNext = &importMemoryInfo;
