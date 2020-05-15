@@ -2023,7 +2023,7 @@ void check_new_wayland_res( void )
 
 		if ( w == nullptr )
 		{
-			close( wayland_commit_queue[ i ].attribs.fd[0] );
+			wlr_dmabuf_attributes_finish( &wayland_commit_queue[ i ].attribs );
 			fprintf (stderr, "waylandres but no win\n");
 			continue;
 		}
