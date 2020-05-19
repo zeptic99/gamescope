@@ -498,7 +498,7 @@ release_commit ( commit_t &commit )
 {
 	if ( commit.fb_id != 0 )
 	{
-		drm_free_fbid( &g_DRM, commit.fb_id );
+		drm_drop_fbid( &g_DRM, commit.fb_id );
 		commit.fb_id = 0;
 	}
 

@@ -207,11 +207,11 @@ static void page_flip_handler(int fd, unsigned int frame,
 	{
 		uint32_t previous_fbid = g_DRM.fbids_on_screen[ i ];
 		assert( previous_fbid != 0 );
-		assert( g_DRM.map_fbid_inflightflips[ previous_fbid ].second > 0 );
+		assert( g_DRM.map_fbid_inflightflips[ previous_fbid ].n_refs > 0 );
 		
-		g_DRM.map_fbid_inflightflips[ previous_fbid ].second--;
+		g_DRM.map_fbid_inflightflips[ previous_fbid ].n_refs--;
 		
-		if ( g_DRM.map_fbid_inflightflips[ previous_fbid ].second == 0 )
+		if ( g_DRM.map_fbid_inflightflips[ previous_fbid ].n_refs == 0 )
 		{
 			// we flipped away from this previous fbid, now safe to delete
 			std::lock_guard<std::mutex> lock( g_DRM.free_queue_lock );
@@ -575,8 +575,8 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	// potentially beat us to the refcount checks.
 	for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
 	{
-		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].first == true );
-		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second++;
+		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].held == true );
+		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].n_refs++;
 	}
 	
 	g_DRM.flipcount++;
@@ -597,7 +597,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		// Undo refcount if the commit didn't actually work
 		for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
 		{
-			g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].second--;
+			g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].n_refs--;
 		}
 		
 		g_DRM.flipcount--;
@@ -647,21 +647,22 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *
 	{
 		printf("make fbid %u\n", fb_id);
 	}
-	assert( drm->map_fbid_inflightflips[ fb_id ].first == false );
+	assert( drm->map_fbid_inflightflips[ fb_id ].held == false );
 
-	drm->map_fbid_inflightflips[ fb_id ].first = true;
-	drm->map_fbid_inflightflips[ fb_id ].second = 0;
+	drm->map_fbid_inflightflips[ fb_id ].held = true;
+	drm->map_fbid_inflightflips[ fb_id ].n_refs = 0;
 	
 	return fb_id;
 }
 
-void drm_free_fbid( struct drm_t *drm, uint32_t fbid )
+void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 {
-	assert( drm->map_fbid_inflightflips[ fbid ].first == true );
-	drm->map_fbid_inflightflips[ fbid ].first = false;
+	assert( drm->map_fbid_inflightflips[ fbid ].held == true );
+	drm->map_fbid_inflightflips[ fbid ].held = false;
 
-	if ( drm->map_fbid_inflightflips[ fbid ].second == 0 )
+	if ( drm->map_fbid_inflightflips[ fbid ].n_refs == 0 )
 	{
+		/* FB isn't being used in any page-flip, free it immediately */
 		if ( s_drm_log != 0 )
 		{
 			printf("free fbid %u\n", fbid);

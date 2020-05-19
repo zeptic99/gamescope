@@ -428,7 +428,7 @@ CVulkanTexture::~CVulkanTexture( void )
 	
 	if ( m_FBID != 0 )
 	{
-		drm_free_fbid( &g_DRM, m_FBID );
+		drm_drop_fbid( &g_DRM, m_FBID );
 		m_FBID = 0;
 	}
 	
