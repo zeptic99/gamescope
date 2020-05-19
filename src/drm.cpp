@@ -190,6 +190,8 @@ static int get_plane_id(struct drm_t *drm)
 	return ret;
 }
 
+static void drm_free_fb( struct drm_t *drm, struct fb *fb );
+
 static void page_flip_handler(int fd, unsigned int frame,
 							  unsigned int sec, unsigned int usec, void *data)
 {
@@ -224,7 +226,7 @@ static void page_flip_handler(int fd, unsigned int frame,
 					{
 						printf("deferred free %u\n", previous_fbid);
 					}
-					drmModeRmFB( g_DRM.fd, previous_fbid );
+					drm_free_fb( &g_DRM, &g_DRM.map_fbid_inflightflips[ previous_fbid ] );
 					
 					g_DRM.fbid_free_queue.erase( g_DRM.fbid_free_queue.begin() + i );
 					break;
@@ -649,10 +651,24 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *
 	}
 	assert( drm->map_fbid_inflightflips[ fb_id ].held == false );
 
+	drm->map_fbid_inflightflips[ fb_id ].id = fb_id;
 	drm->map_fbid_inflightflips[ fb_id ].held = true;
 	drm->map_fbid_inflightflips[ fb_id ].n_refs = 0;
 	
 	return fb_id;
+}
+
+static void drm_free_fb( struct drm_t *drm, struct fb *fb )
+{
+	assert( !fb->held );
+	assert( fb->n_refs == 0 );
+
+	if ( drmModeRmFB( drm->fd, fb->id ) != 0 )
+	{
+		perror( "drmModeRmFB failed" );
+	}
+
+	fb = {};
 }
 
 void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
@@ -667,7 +683,7 @@ void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 		{
 			printf("free fbid %u\n", fbid);
 		}
-		drmModeRmFB( drm->fd, fbid );
+		drm_free_fb( drm, &drm->map_fbid_inflightflips[ fbid ] );
 	}
 	else
 	{

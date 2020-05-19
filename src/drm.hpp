@@ -38,6 +38,7 @@ struct connector {
 };
 
 struct fb {
+	uint32_t id;
 	/* A FB is held if it's being used by steamcompmgr */
 	bool held;
 	/* Number of page-flips using the FB */
