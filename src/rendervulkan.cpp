@@ -452,7 +452,7 @@ CVulkanTexture::~CVulkanTexture( void )
 
 int init_device()
 {
-	uint32_t physicalDeviceCount;
+	uint32_t physicalDeviceCount = 0;
 	VkPhysicalDevice deviceHandles[MAX_DEVICE_COUNT];
 	VkQueueFamilyProperties queueFamilyProperties[MAX_QUEUE_COUNT];
 	
@@ -480,6 +480,12 @@ int init_device()
 		{
 			break;
 		}
+	}
+
+	if (!physicalDevice)
+	{
+		fprintf(stderr, "Failed to find physical device\n");
+		return false;
 	}
 	
 	vkGetPhysicalDeviceMemoryProperties( physicalDevice, &memoryProperties );
