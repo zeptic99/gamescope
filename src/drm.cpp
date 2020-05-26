@@ -89,7 +89,7 @@ static int find_drm_device(drmModeRes **resources)
 	
 	num_devices = drmGetDevices2(0, devices, MAX_DRM_DEVICES);
 	if (num_devices < 0) {
-		printf("drmGetDevices2 failed: %s\n", strerror(-num_devices));
+		perror("drmGetDevices2 failed");
 		return -1;
 	}
 	
@@ -115,7 +115,7 @@ static int find_drm_device(drmModeRes **resources)
 	drmFreeDevices(devices, num_devices);
 	
 	if (fd < 0)
-		printf("no drm device found!\n");
+		fprintf(stderr, "no drm device found!\n");
 	return fd;
 }
 
@@ -134,7 +134,7 @@ static int get_plane_id(struct drm_t *drm)
 	
 	plane_resources = drmModeGetPlaneResources(drm->fd);
 	if (!plane_resources) {
-		printf("drmModeGetPlaneResources failed: %s\n", strerror(errno));
+		perror("drmModeGetPlaneResources failed");
 		return -1;
 	}
 	
@@ -142,7 +142,7 @@ static int get_plane_id(struct drm_t *drm)
 		uint32_t id = plane_resources->planes[i];
 		drmModePlanePtr plane = drmModeGetPlane(drm->fd, id);
 		if (!plane) {
-			printf("drmModeGetPlane(%u) failed: %s\n", id, strerror(errno));
+			fprintf(stderr, "drmModeGetPlane(%u) failed: %s\n", id, strerror(errno));
 			continue;
 		}
 		
@@ -201,7 +201,7 @@ static void page_flip_handler(int fd, unsigned int frame,
 
 	if ( s_drm_log != 0 )
 	{
-		printf("page_flip_handler %p\n", data);
+		fprintf(stderr, "page_flip_handler %p\n", data);
 	}
 	gpuvis_trace_printf("page_flip_handler %p\n", data);
 
@@ -224,7 +224,7 @@ static void page_flip_handler(int fd, unsigned int frame,
 				{
 					if ( s_drm_log != 0 )
 					{
-						printf("deferred free %u\n", previous_fbid);
+						fprintf(stderr, "deferred free %u\n", previous_fbid);
 					}
 					drm_free_fb( &g_DRM, &g_DRM.map_fbid_inflightflips[ previous_fbid ] );
 
@@ -283,18 +283,18 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		drm->fd = open(device, O_RDWR);
 		ret = get_resources(drm->fd, &resources);
 		if (ret < 0 && errno == EOPNOTSUPP)
-			printf("%s does not look like a modeset device\n", device);
+			fprintf(stderr, "%s does not look like a modeset device\n", device);
 	} else {
 		drm->fd = find_drm_device(&resources);
 	}
 	
 	if (drm->fd < 0) {
-		printf("could not open drm device\n");
+		fprintf(stderr, "could not open drm device\n");
 		return -1;
 	}
 	
 	if (!resources) {
-		printf("drmModeGetResources failed: %s\n", strerror(errno));
+		fprintf(stderr, "drmModeGetResources failed: %s\n", strerror(errno));
 		return -1;
 	}
 	
@@ -313,7 +313,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
 		 */
-		printf("no connected connector!\n");
+		fprintf(stderr, "no connected connector!\n");
 		return -1;
 	}
 	
@@ -330,7 +330,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 			}
 		}
 		if (!drm->mode)
-			printf("requested mode not found, using default mode!\n");
+			fprintf(stderr, "requested mode not found, using default mode!\n");
 	}
 	
 	/* find preferred mode or the highest resolution mode: */
@@ -352,7 +352,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	}
 	
 	if (!drm->mode) {
-		printf("could not find mode!\n");
+		fprintf(stderr, "could not find mode!\n");
 		return -1;
 	}
 
@@ -373,7 +373,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	} else {
 		uint32_t crtc_id = find_crtc_for_connector(drm, resources, connector);
 		if (crtc_id == 0) {
-			printf("no crtc found!\n");
+			fprintf(stderr, "no crtc found!\n");
 			return -1;
 		}
 		
@@ -398,7 +398,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	
 	if ( drm->plane_id == 0 )
 	{
-		printf("could not find a suitable plane\n");
+		fprintf(stderr, "could not find a suitable plane\n");
 		return -1;
 	}
 	
@@ -409,7 +409,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 #define get_resource(type, Type, id) do { 					\
 		drm->type->type = drmModeGet##Type(drm->fd, id);			\
 		if (!drm->type->type) {						\
-			printf("could not get %s %i: %s\n",			\
+			fprintf(stderr, "could not get %s %i: %s\n",			\
 					#type, id, strerror(errno));		\
 			return -1;						\
 		}								\
@@ -424,7 +424,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		drm->type->props = drmModeObjectGetProperties(drm->fd,		\
 				id, DRM_MODE_OBJECT_##TYPE);			\
 		if (!drm->type->props) {						\
-			printf("could not get %s %u properties: %s\n", 		\
+			fprintf(stderr, "could not get %s %u properties: %s\n", 		\
 					#type, id, strerror(errno));		\
 			return -1;						\
 		}								\
@@ -495,7 +495,7 @@ static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
 	}
 	
 	if (prop_id < 0) {
-		printf("no connector property: %s\n", name);
+		fprintf(stderr, "no connector property: %s\n", name);
 		return -EINVAL;
 	}
 	
@@ -518,7 +518,7 @@ static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
 	}
 	
 	if (prop_id < 0) {
-		printf("no crtc property: %s\n", name);
+		fprintf(stderr, "no crtc property: %s\n", name);
 		return -EINVAL;
 	}
 	
@@ -542,7 +542,7 @@ static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
 
 
        if (prop_id < 0) {
-               printf("no plane property: %s\n", name);
+               fprintf(stderr, "no plane property: %s\n", name);
                return -EINVAL;
        }
 
@@ -566,7 +566,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	
 	if ( s_drm_log != 0 )
 	{
-		printf("flipping\n");
+		fprintf(stderr, "flipping\n");
 	}
 	drm->flip_lock.lock();
 
@@ -651,7 +651,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *
 	
 	if ( s_drm_log != 0 )
 	{
-		printf("make fbid %u\n", fb_id);
+		fprintf(stderr, "make fbid %u\n", fb_id);
 	}
 	assert( drm->map_fbid_inflightflips[ fb_id ].held == false );
 
@@ -685,7 +685,7 @@ void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 		/* FB isn't being used in any page-flip, free it immediately */
 		if ( s_drm_log != 0 )
 		{
-			printf("free fbid %u\n", fbid);
+			fprintf(stderr, "free fbid %u\n", fbid);
 		}
 		drm_free_fb( drm, &drm->map_fbid_inflightflips[ fbid ] );
 	}
