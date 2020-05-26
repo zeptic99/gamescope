@@ -485,7 +485,7 @@ static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
 {
 	struct connector *obj = drm->connector;
 	unsigned int i;
-	int prop_id = 0;
+	int prop_id = -1;
 	
 	for (i = 0 ; i < obj->props->count_props ; i++) {
 		if (strcmp(obj->props_info[i]->name, name) == 0) {
