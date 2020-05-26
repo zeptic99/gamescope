@@ -729,7 +729,6 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 
 	if ( g_bUseLayers == true )
 	{
-
 		for ( int i = 0; i < k_nMaxLayers; i++ )
 		{
 			if ( i < nLayerCount )
@@ -785,7 +784,6 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 				liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", 0 );
 			}
 		}
-
 	}
 	
 	assert( drm->req == nullptr );
@@ -805,15 +803,14 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
 	
 	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
-		if (add_connector_property(drm, drm->req, drm->connector_id, "CRTC_ID",
-			drm->crtc_id) < 0)
-			return -1;
+		if (add_connector_property(drm, drm->req, drm->connector_id, "CRTC_ID", drm->crtc_id) < 0)
+			return false;
 		
 		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", drm->mode_id) < 0)
-			return -1;
+			return false;
 		
 		if (add_crtc_property(drm, drm->req, drm->crtc_id, "ACTIVE", 1) < 0)
-			return -1;
+			return false;
 	}
 	
 	drm->flags = flags;
