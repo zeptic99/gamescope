@@ -197,27 +197,27 @@ static void page_flip_handler(int fd, unsigned int frame,
 {
 	vblank_mark_possible_vblank();
 
-	// TODO: get the fbids_in_req instance from data if we ever have more than one in flight
-	
+	// TODO: get the fbids_queued instance from data if we ever have more than one in flight
+
 	if ( s_drm_log != 0 )
 	{
 		printf("page_flip_handler %p\n", data);
 	}
 	gpuvis_trace_printf("page_flip_handler %p\n", data);
-	
+
 	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
 	{
 		uint32_t previous_fbid = g_DRM.fbids_on_screen[ i ];
 		assert( previous_fbid != 0 );
 		assert( g_DRM.map_fbid_inflightflips[ previous_fbid ].n_refs > 0 );
-		
+
 		g_DRM.map_fbid_inflightflips[ previous_fbid ].n_refs--;
-		
+
 		if ( g_DRM.map_fbid_inflightflips[ previous_fbid ].n_refs == 0 )
 		{
 			// we flipped away from this previous fbid, now safe to delete
 			std::lock_guard<std::mutex> lock( g_DRM.free_queue_lock );
-			
+
 			for ( uint32_t i = 0; i < g_DRM.fbid_free_queue.size(); i++ )
 			{
 				if ( g_DRM.fbid_free_queue[ i ] == previous_fbid )
@@ -227,23 +227,23 @@ static void page_flip_handler(int fd, unsigned int frame,
 						printf("deferred free %u\n", previous_fbid);
 					}
 					drm_free_fb( &g_DRM, &g_DRM.map_fbid_inflightflips[ previous_fbid ] );
-					
+
 					g_DRM.fbid_free_queue.erase( g_DRM.fbid_free_queue.begin() + i );
 					break;
 				}
 			}
 		}
 	}
-	
+
 	g_DRM.fbids_on_screen.clear();
-	
-	for ( uint32_t i = 0; i < g_DRM.fbids_in_req.size(); i++ )
+
+	for ( uint32_t i = 0; i < g_DRM.fbids_queued.size(); i++ )
 	{
-		g_DRM.fbids_on_screen.push_back( g_DRM.fbids_in_req[ i ] );
+		g_DRM.fbids_on_screen.push_back( g_DRM.fbids_queued[ i ] );
 	}
-	
-	g_DRM.fbids_in_req.clear();
-	
+
+	g_DRM.fbids_queued.clear();
+
 	g_DRM.flip_lock.unlock();
 }
 
@@ -570,7 +570,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 // 	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
 // 					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
 	
-	if ( s_drm_log != 0 ) 
+	if ( s_drm_log != 0 )
 	{
 		printf("flipping\n");
 	}
@@ -583,7 +583,10 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		assert( g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].held == true );
 		g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].n_refs++;
 	}
-	
+
+	assert( drm->fbids_queued.size() == 0 );
+	drm->fbids_queued = drm->fbids_in_req;
+
 	g_DRM.flipcount++;
 	gpuvis_trace_printf ( "legacy flip commit %lu\n", (uint64_t)g_DRM.flipcount );
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
@@ -604,29 +607,33 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		{
 			g_DRM.map_fbid_inflightflips[ drm->fbids_in_req[ i ] ].n_refs--;
 		}
-		
+
+		drm->fbids_queued.clear();
+
 		g_DRM.flipcount--;
 
 		drm->flip_lock.unlock();
 
 		goto out;
+	} else {
+		drm->fbids_in_req.clear();
 	}
-	
+
 	// Wait for flip handler to unlock
 	drm->flip_lock.lock();
 	drm->flip_lock.unlock();
-	
+
 // 	if (drm->kms_in_fence_fd != -1) {
 // 		close(drm->kms_in_fence_fd);
 // 		drm->kms_in_fence_fd = -1;
 // 	}
 // 	
 // 	drm->kms_in_fence_fd = drm->kms_out_fence_fd;
-	
+
 out:
 	drmModeAtomicFree( drm->req );
 	drm->req = nullptr;
-	
+
 	return ret;
 }
 
@@ -819,24 +826,35 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 	
 	if ( g_bUseLayers == true )
 	{
-		if ( liftoff_output_apply( drm->lo_output, drm->req ) == true )
+		bool ret = liftoff_output_apply( drm->lo_output, drm->req );
+
+		int scanoutLayerCount = 0;
+		if ( ret )
 		{
-			if ( s_drm_log != 0 )
+			for ( int i = 0; i < k_nMaxLayers; i++ )
 			{
-				fprintf( stderr, "can drm present %i layers\n", nLayerCount );
+				if ( liftoff_layer_get_plane_id( drm->lo_layers[ i ] ) != 0 )
+					scanoutLayerCount++;
 			}
-			return true;
+			ret = scanoutLayerCount == nLayerCount;
 		}
-		
+
 		if ( s_drm_log != 0 )
 		{
-			fprintf( stderr, "can NOT drm present %i layers\n", nLayerCount );
+			if ( ret )
+				fprintf( stderr, "can drm present %i layers\n", nLayerCount );
+			else
+				fprintf( stderr, "can NOT drm present %i layers\n", nLayerCount );
 		}
-		
-		drmModeAtomicFree( drm->req );
-		drm->req = nullptr;
-		
-		return false;
+
+		if ( !ret ) {
+			drmModeAtomicFree( drm->req );
+			drm->req = nullptr;
+
+			drm->fbids_in_req.clear();
+		}
+
+		return ret;
 	}
 	else
 	{

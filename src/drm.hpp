@@ -69,8 +69,12 @@ struct drm_t {
 	struct liftoff_device *lo_device;
 	struct liftoff_output *lo_output;
 	struct liftoff_layer *lo_layers[ k_nMaxLayers ];
-	
+
+	/* FBs in the atomic request, but not yet submitted to KMS */
 	std::vector < uint32_t > fbids_in_req;
+	/* FBs submitted to KMS, but not yet displayed on screen */
+	std::vector < uint32_t > fbids_queued;
+	/* FBs currently on screen */
 	std::vector < uint32_t > fbids_on_screen;
 	
 	std::unordered_map< uint32_t, struct fb > map_fbid_inflightflips;
