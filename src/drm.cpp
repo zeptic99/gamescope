@@ -361,6 +361,9 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		printf("could not find mode!\n");
 		return -1;
 	}
+
+	if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode), &drm->mode_id) != 0)
+		return -1;
 	
 	/* find encoder: */
 	for (i = 0; i < resources->count_encoders; i++) {
@@ -789,7 +792,6 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 	
 	static bool bFirstSwap = true;
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
-	uint32_t blob_id;
 	
 	// Temporary hack until we figure out what AMDGPU DC expects when changing the dest rect
 	if ( 1 || bFirstSwap == true )
@@ -806,11 +808,7 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 			drm->crtc_id) < 0)
 			return -1;
 		
-		if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode),
-			&blob_id) != 0)
-			return -1;
-		
-		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", blob_id) < 0)
+		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", drm->mode_id) < 0)
 			return -1;
 		
 		if (add_crtc_property(drm, drm->req, drm->crtc_id, "ACTIVE", 1) < 0)

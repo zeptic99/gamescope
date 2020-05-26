@@ -57,6 +57,7 @@ struct drm_t {
 	int kms_out_fence_fd;
 	
 	drmModeModeInfo *mode;
+	uint32_t mode_id;
 	uint32_t crtc_id;
 	uint32_t connector_id;
 	
