@@ -235,13 +235,7 @@ static void page_flip_handler(int fd, unsigned int frame,
 		}
 	}
 
-	g_DRM.fbids_on_screen.clear();
-
-	for ( uint32_t i = 0; i < g_DRM.fbids_queued.size(); i++ )
-	{
-		g_DRM.fbids_on_screen.push_back( g_DRM.fbids_queued[ i ] );
-	}
-
+	g_DRM.fbids_on_screen = g_DRM.fbids_queued;
 	g_DRM.fbids_queued.clear();
 
 	g_DRM.flip_lock.unlock();
