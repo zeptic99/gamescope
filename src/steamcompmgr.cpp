@@ -1166,8 +1166,6 @@ static void
 determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 {
 	win *w, *focus = NULL;
-	win *steam = nullptr;
-	win *steampopup = nullptr;
 
 	gameFocused = False;
 
@@ -1177,37 +1175,34 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	unsigned int maxOpacity = 0;
 	
 	std::vector< win* > vecPossibleFocusGameWindows;
+	std::vector< win* > vecPossibleFocusAnyWindows;
 
 	for (w = list; w; w = w->next)
 	{
-		if ( w->isSteam == True )
-		{
-			steam = w;
-		}
-
-		if ( w->isSteamPopup == True )
-		{
-			steampopup = w;
-		}
 
 		// We allow using an override redirect window in some cases, but if we have
 		// a choice between two windows we always prefer the non-override redirect one.
 		Bool windowIsOverrideRedirect = w->a.override_redirect && !w->ignoreOverrideRedirect;
 
-		if ( w->gameID && w->a.map_state == IsViewable && w->a.c_class == InputOutput &&
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput &&
 			( !windowIsOverrideRedirect || !usingOverrideRedirectWindow ) )
 		{
-			vecPossibleFocusGameWindows.push_back( w );
-			
-			if ( w->damage_sequence >= maxDamageSequence )
-			{
-				focus = w;
-				gameFocused = True;
-				maxDamageSequence = w->damage_sequence;
+			vecPossibleFocusAnyWindows.push_back( w );
 
-				if (windowIsOverrideRedirect)
+			if ( w->gameID )
+			{
+				vecPossibleFocusGameWindows.push_back( w );
+				
+				if ( w->damage_sequence >= maxDamageSequence )
 				{
-					usingOverrideRedirectWindow = True;
+					focus = w;
+					gameFocused = True;
+					maxDamageSequence = w->damage_sequence;
+					
+					if (windowIsOverrideRedirect)
+					{
+						usingOverrideRedirectWindow = True;
+					}
 				}
 			}
 		}
@@ -1228,14 +1223,15 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	if ( !gameFocused )
 	{
-		if ( steampopup && ( ( steam && steam->wantsUnfocus ) || !steam ) )
+		// just try to obey stacking order here
+		if ( vecPossibleFocusAnyWindows.size() > 0 )
 		{
-			focus = steampopup;
-		}
-
-		if ( !focus && steam )
-		{
-			focus = steam;
+			focus = vecPossibleFocusAnyWindows[ 0 ];
+			
+			if ( focus->wantsUnfocus && vecPossibleFocusAnyWindows.size() >= 2 )
+			{
+				focus = vecPossibleFocusAnyWindows[ 1 ];
+			}
 		}
 	}
 
@@ -1467,7 +1463,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 		w->isSteamPopup = False;
 	}
 
-	w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 1);
+	w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
 
 	if ( steamMode == True )
 	{
@@ -1568,7 +1564,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new_win->isOverlay = False;
 	new_win->isSteam = False;
 	new_win->isSteamPopup = False;
-	new_win->wantsUnfocus = True;
+	new_win->wantsUnfocus = False;
 
 	if ( steamMode == True )
 	{
@@ -2057,7 +2053,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 
-	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NSvVecslnb")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NSvVecsdlnb")) != -1)
 	{
 		switch (o) {
 			case 'R':
@@ -2400,7 +2396,7 @@ steamcompmgr_main (int argc, char **argv)
 						win * w = find_win(dpy, ev.xproperty.window);
 						if (w)
 						{
-							w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 1);
+							w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
 							focusDirty = True;
 						}
 					}
