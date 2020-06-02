@@ -1184,7 +1184,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		// a choice between two windows we always prefer the non-override redirect one.
 		Bool windowIsOverrideRedirect = w->a.override_redirect && !w->ignoreOverrideRedirect;
 
-		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput &&
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False &&
 			( !windowIsOverrideRedirect || !usingOverrideRedirectWindow ) )
 		{
 			vecPossibleFocusAnyWindows.push_back( w );
