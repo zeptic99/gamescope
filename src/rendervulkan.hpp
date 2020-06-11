@@ -42,20 +42,16 @@ struct Composite_t
 
 #include "drm.hpp"
 
-#ifndef C_SIDE
-
 #include <unordered_map>
 #include <vector>
 
 extern "C" {
-#endif
-	
-#include <vulkan/vulkan.h>
 #include <wlr/render/dmabuf.h>
+}
+
+#include <vulkan/vulkan.h>
 #include <drm_fourcc.h>
 
-#ifndef C_SIDE
-	
 class CVulkanTexture
 {
 public:
@@ -82,8 +78,6 @@ public:
 
 extern std::vector< const char * > g_vecSDLInstanceExts;
 
-#endif
-
 int vulkan_init(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
@@ -103,7 +97,3 @@ void vulkan_present_to_window( void );
 
 void vulkan_garbage_collect( void );
 bool vulkan_remake_swapchain( void );
-
-#ifndef C_SIDE
-}
-#endif

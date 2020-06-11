@@ -1,15 +1,8 @@
-//  Wayland stuff
+// Wayland stuff
 
 #pragma once
 
-// Only define wlserver_t on the C side, as wlroots can't build as C++
-#ifdef C_SIDE
-
 #include <wayland-server-core.h>
-#include <wlr/backend.h>
-#include <wlr/backend/session.h>
-#include <wlr/render/wlr_renderer.h>
-#include <wlr/xwayland.h>
 
 #define WLSERVER_BUTTON_COUNT 4
 
@@ -62,12 +55,6 @@ struct wlserver_touch {
 
 extern struct wlserver_t wlserver;
 
-#endif
-
-#ifndef C_SIDE
-extern "C" {
-#endif
-	
 extern bool run;
 
 extern int g_nTouchClickMode;
@@ -95,7 +82,3 @@ void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *
 struct wlr_surface *wlserver_get_surface( long surfaceID );
 
 const char *wlserver_get_nested_display( void );
-
-#ifndef C_SIDE
-}
-#endif

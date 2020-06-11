@@ -1,5 +1,4 @@
-#define _POSIX_C_SOURCE 200112L
-#define _GNU_SOURCE
+#define _GNU_SOURCE 1
 
 #include <assert.h>
 #include <signal.h>
@@ -16,18 +15,23 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include <wayland-server-core.h>
+
+extern "C" {
+#define static
+#define class class_
 #include <wlr/backend.h>
 #include <wlr/backend/headless.h>
 #include <wlr/backend/multi.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/interfaces/wlr_pointer.h>
 #include <wlr/render/wlr_renderer.h>
+#include <wlr/xwayland.h>
 #include <wlr/util/log.h>
+#undef static
+#undef class
+}
 
-#define C_SIDE
-
-#include "steamcompmgr.hpp"
-#include "wlserver.h"
+#include "wlserver.hpp"
 #include "drm.hpp"
 #include "main.hpp"
 
@@ -67,7 +71,7 @@ void nudge_steamcompmgr(void)
 	XFlush( g_XWLDpy );
 }
 
-const struct wlr_surface_role xwayland_surface_role;
+extern const struct wlr_surface_role xwayland_surface_role;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
@@ -91,7 +95,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
-	struct wlr_xwayland_surface *surface = wlr_surface->role_data;
+	struct wlr_xwayland_surface *surface = (struct wlr_xwayland_surface *) wlr_surface->role_data;
 	if (surface == NULL) {
 		return;
 	}
@@ -123,7 +127,7 @@ static void wlserver_handle_modifiers(struct wl_listener *listener, void *data)
 static void wlserver_handle_key(struct wl_listener *listener, void *data)
 {
 	struct wlserver_keyboard *keyboard = wl_container_of( listener, keyboard, key );
-	struct wlr_event_keyboard_key *event = data;
+	struct wlr_event_keyboard_key *event = (struct wlr_event_keyboard_key *) data;
 
 	xkb_keycode_t keycode = event->keycode + 8;
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym(keyboard->device->keyboard->xkb_state, keycode);
@@ -168,7 +172,7 @@ static void wlserver_movecursor( int x, int y )
 static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *data)
 {
 	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, motion );
-	struct wlr_event_pointer_motion *event = data;
+	struct wlr_event_pointer_motion *event = (struct wlr_event_pointer_motion *) data;
 	
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
@@ -182,7 +186,7 @@ static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *d
 static void wlserver_handle_pointer_button(struct wl_listener *listener, void *data)
 {
 	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, button );
-	struct wlr_event_pointer_button *event = data;
+	struct wlr_event_pointer_button *event = (struct wlr_event_pointer_button *) data;
 	
 	wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, event->button, event->state );
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
@@ -207,7 +211,7 @@ static inline uint32_t steamcompmgr_button_to_wlserver_button( int button )
 static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, down );
-	struct wlr_event_touch_down *event = data;
+	struct wlr_event_touch_down *event = (struct wlr_event_touch_down *) data;
 	
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
@@ -235,7 +239,7 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, up );
-	struct wlr_event_touch_up *event = data;
+	struct wlr_event_touch_up *event = (struct wlr_event_touch_up *) data;
 
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
@@ -262,7 +266,7 @@ static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 static void wlserver_handle_touch_motion(struct wl_listener *listener, void *data)
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, motion );
-	struct wlr_event_touch_motion *event = data;
+	struct wlr_event_touch_motion *event = (struct wlr_event_touch_motion *) data;
 	
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
@@ -279,13 +283,13 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 
 static void wlserver_new_input(struct wl_listener *listener, void *data)
 {
-	struct wlr_input_device *device = data;
+	struct wlr_input_device *device = (struct wlr_input_device *) data;
 
 	switch ( device->type )
 	{
 		case WLR_INPUT_DEVICE_KEYBOARD:
 		{
-			struct wlserver_keyboard *pKB = calloc( 1, sizeof( struct wlserver_keyboard ) );
+			struct wlserver_keyboard *pKB = (struct wlserver_keyboard *) calloc( 1, sizeof( struct wlserver_keyboard ) );
 			
 			pKB->device = device;
 			
@@ -310,7 +314,7 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 		break;
 		case WLR_INPUT_DEVICE_POINTER:
 		{
-			struct wlserver_pointer *pointer = calloc( 1, sizeof( struct wlserver_pointer ) );
+			struct wlserver_pointer *pointer = (struct wlserver_pointer *) calloc( 1, sizeof( struct wlserver_pointer ) );
 			
 			pointer->device = device;
 
@@ -322,7 +326,7 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 		break;
 		case WLR_INPUT_DEVICE_TOUCH:
 		{
-			struct wlserver_touch *touch = calloc( 1, sizeof( struct wlserver_touch ) );
+			struct wlserver_touch *touch = (struct wlserver_touch *) calloc( 1, sizeof( struct wlserver_touch ) );
 			
 			touch->device = device;
 			

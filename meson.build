@@ -68,7 +68,7 @@ executable(
     'gamescope',
     'src/steamcompmgr.cpp',
     'src/main.cpp',
-	'src/wlserver.c',
+	'src/wlserver.cpp',
 	'src/drm.cpp',
 	'src/inputsdl.cpp',
 	'src/vblankmanager.cpp',

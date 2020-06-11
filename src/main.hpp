@@ -1,13 +1,7 @@
-#ifndef C_SIDE
-extern "C" {
-#endif
-	
 #include <SDL.h>
 #include <SDL_vulkan.h>
-	
-extern SDL_Window *window;
 
-#include "wlr/render/dmabuf.h"
+extern SDL_Window *window;
 
 int initOutput(void);
 
@@ -30,7 +24,3 @@ extern bool g_bFilterGameWindow;
 extern uint32_t g_nSubCommandArg;
 
 int BIsNested( void );
-
-#ifndef C_SIDE
-}
-#endif

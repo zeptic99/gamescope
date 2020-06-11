@@ -12,7 +12,7 @@
 
 #include "vblankmanager.hpp"
 #include "steamcompmgr.hpp"
-#include "wlserver.h"
+#include "wlserver.hpp"
 #include "main.hpp"
 
 static Display *g_nestedDpy;

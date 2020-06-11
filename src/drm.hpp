@@ -7,11 +7,12 @@
 #include <assert.h>
 #include <drm_fourcc.h>
 
+extern "C" {
+#include <libliftoff.h>
 #include <wlr/render/dmabuf.h>
+}
 
 #include "rendervulkan.hpp"
-
-#ifndef C_SIDE
 
 #include <unordered_map>
 #include <utility>
@@ -85,13 +86,6 @@ struct drm_t {
 	
 	std::atomic < uint64_t > flipcount;
 };
-#endif
-
-#ifndef C_SIDE
-extern "C" {
-#endif
-	
-#include "libliftoff.h"
 
 extern struct drm_t g_DRM;
 
@@ -106,7 +100,3 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_dmabuf_attributes *dma_buf );
 void drm_drop_fbid( struct drm_t *drm, uint32_t fbid );
 bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );
-
-#ifndef C_SIDE
-}
-#endif

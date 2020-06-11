@@ -6,13 +6,12 @@
 
 #include <unistd.h>
 
-#include "wlserver.h"
-
 #include "main.hpp"
 #include "steamcompmgr.hpp"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 #include "inputsdl.hpp"
+#include "wlserver.hpp"
 
 int ac;
 char **av;

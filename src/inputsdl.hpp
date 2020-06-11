@@ -2,12 +2,4 @@
 
 #pragma once
 
-#ifndef C_SIDE
-extern "C" {
-#endif
-
 bool inputsdl_init( void );
-
-#ifndef C_SIDE
-}
-#endif

@@ -9,7 +9,7 @@
 #include <SDL.h>
 
 #include "inputsdl.hpp"
-#include "wlserver.h"
+#include "wlserver.hpp"
 #include "main.hpp"
 
 std::mutex g_SDLInitLock;

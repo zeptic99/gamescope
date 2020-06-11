@@ -61,7 +61,7 @@
 #include <X11/extensions/xf86vmode.h>
 
 #include "main.hpp"
-#include "wlserver.h"
+#include "wlserver.hpp"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
 #include "steamcompmgr.hpp"
