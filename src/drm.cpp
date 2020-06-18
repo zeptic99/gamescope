@@ -894,7 +894,17 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 								  (int)(pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->layers[ 0 ].flScaleX) );
 		}
 		
-		
-		return true;
+		unsigned test_flags = (drm->flags & DRM_MODE_ATOMIC_ALLOW_MODESET) | DRM_MODE_ATOMIC_TEST_ONLY;
+		int ret = drmModeAtomicCommit( drm->fd, drm->req, test_flags, NULL );
+
+		if ( ret != 0 )
+		{
+			drmModeAtomicFree( drm->req );
+			drm->req = nullptr;
+
+			drm->fbids_in_req.clear();
+		}
+
+		return ret == 0;
 	}
 }
