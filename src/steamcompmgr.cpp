@@ -1547,7 +1547,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	set_ignore (dpy, NextRequest (dpy));
 	if (!XGetWindowAttributes (dpy, id, &new_win->a))
 	{
-		free (new_win);
+		delete new_win;
 		return;
 	}
 
