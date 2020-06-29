@@ -605,7 +605,7 @@ void MouseCursor::checkSuspension()
 		}
 
 		// We're hiding the cursor, force redraw if we were showing it
-		if (window && gameFocused && !m_imageEmpty ) {
+		if (window && !m_imageEmpty ) {
 			hasRepaint = true;
 			XSendEvent(m_display, ourWindow, true, SubstructureRedirectMask, &nudgeEvent);
 		}
@@ -642,10 +642,6 @@ void MouseCursor::constrainPosition()
 		}
 	}
 
-	if (!gameFocused) {
-		return;
-	}
-
 	auto barricade = [this](int x1, int y1, int x2, int y2) {
 		return XFixesCreatePointerBarrier(m_display, DefaultRootWindow(m_display),
 										  x1, y1, x2, y2, 0, 0, NULL);
@@ -680,7 +676,7 @@ void MouseCursor::move(int x, int y)
 
 	win *window = find_win(m_display, currentFocusWindow);
 
-	if (window && gameFocused) {
+	if (window) {
 		// If mouse moved and we're on the hook for showing the cursor, repaint
 		if (!m_hideForMovement && !m_imageEmpty) {
 			hasRepaint = true;
@@ -1097,7 +1093,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	}
 
 	// Draw cursor if we need to
-	if (w && gameFocused) {
+	if (w) {
 		cursor->paint(w, &composite, &pipeline );
 	}
 
