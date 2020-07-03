@@ -376,6 +376,15 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 
 struct wl_listener new_input_listener = { .notify = wlserver_new_input };
 
+static void wlserver_surface_destroy( struct wl_listener *listener, void *data )
+{
+	wlr_surface *surf = (wlr_surface*)data;
+	wayland_surfaces_deleted.push_back( surf );
+
+	delete listener;
+	surf->data = nullptr;
+}
+
 int wlserver_init(int argc, char **argv, bool bIsNested) {
 	bool bIsDRM = bIsNested == false;
 	
@@ -602,6 +611,14 @@ struct wlr_surface *wlserver_get_surface( long surfaceID )
 		fprintf (stderr, "Failed to set xwayland surface role");
 		return NULL;
 	}
+
+	struct wl_listener *pListener = new struct wl_listener;
+	pListener->notify = wlserver_surface_destroy;
+	pListener->link.next = nullptr;
+	pListener->link.prev = nullptr;
+
+	wl_signal_add( &ret->events.destroy, pListener );
+	ret->data = pListener;
 	
 	return ret;
 }

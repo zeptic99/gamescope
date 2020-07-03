@@ -230,6 +230,8 @@ static Bool		alwaysComposite = False;
 std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
 
+std::vector< wlr_surface * > wayland_surfaces_deleted;
+
 // poor man's semaphore
 class sem
 {
@@ -1171,6 +1173,21 @@ paint_all(Display *dpy, MouseCursor *cursor)
 }
 
 static void
+check_wlr_surface_deleted ( win *w )
+{
+	for ( uint32_t i = 0; i < wayland_surfaces_deleted.size(); i++ )
+	{
+		if ( wayland_surfaces_deleted[ i ] == w->wlrsurface )
+		{
+			wayland_surfaces_deleted.erase( wayland_surfaces_deleted.begin() + i );
+			w->wlrsurface = nullptr;
+
+			break;
+		}
+	}
+}
+
+static void
 determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 {
 	win *w, *focus = NULL;
@@ -1299,8 +1316,15 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		if ( focus->wlrsurface != nullptr )
 		{
 			wlserver_lock();
-			wlserver_keyboardfocus( focus->wlrsurface );
-			wlserver_mousefocus( focus->wlrsurface );
+
+			check_wlr_surface_deleted( focus );
+
+			if ( focus->wlrsurface != nullptr )
+			{
+				wlserver_keyboardfocus( focus->wlrsurface );
+				wlserver_mousefocus( focus->wlrsurface );
+			}
+
 			wlserver_unlock();
 		}
 
@@ -1750,6 +1774,16 @@ finish_destroy_win (Display *dpy, Window id, Bool gone)
 				XDamageDestroy (dpy, w->damage);
 				w->damage = None;
 			}
+
+			if ( w->wlrsurface != nullptr )
+			{
+				wlserver_lock();
+
+				check_wlr_surface_deleted( w );
+
+				wlserver_unlock();
+			}
+
 			delete w;
 			break;
 		}
@@ -1815,6 +1849,15 @@ handle_wl_surface_id(win *w, long surfaceID)
 
 		wlserver_unlock();
 		return;
+	}
+
+	for ( uint32_t i = 0; i < wayland_surfaces_deleted.size(); i++ )
+	{
+		if ( wayland_surfaces_deleted[ i ] == surface )
+		{
+			wayland_surfaces_deleted.erase( wayland_surfaces_deleted.begin() + i );
+			w->WLsurfaceID = 0;
+		}
 	}
 
 	// If we already focused on our side and are handling this late,
@@ -2648,11 +2691,18 @@ steamcompmgr_main (int argc, char **argv)
 			{
 				for (win *w = list; w; w = w->next)
 				{
-					if ( w->wlrsurface )
+					if ( w->wlrsurface != nullptr )
 					{
 						// Acknowledge commit once.
 						wlserver_lock();
-						wlserver_send_frame_done(w->wlrsurface, &now);
+
+						check_wlr_surface_deleted( w );
+
+						if ( w->wlrsurface != nullptr )
+						{
+							wlserver_send_frame_done(w->wlrsurface, &now);
+						}
+
 						wlserver_unlock();
 					}
 				}

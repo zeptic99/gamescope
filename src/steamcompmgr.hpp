@@ -72,6 +72,8 @@ private:
 extern std::mutex wayland_commit_lock;
 extern std::vector<ResListEntry_t> wayland_commit_queue;
 
+extern std::vector< wlr_surface * > wayland_surfaces_deleted;
+
 extern float focusedWindowScaleX;
 extern float focusedWindowScaleY;
 extern float focusedWindowOffsetX;
