@@ -34,6 +34,7 @@ extern "C" {
 #include "wlserver.hpp"
 #include "drm.hpp"
 #include "main.hpp"
+#include "steamcompmgr.hpp"
 
 #include "gpuvis_trace_utils.h"
 
@@ -218,8 +219,23 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 		double x = g_bRotated ? event->y : event->x;
 		double y = g_bRotated ? 1.0 - event->x : event->y;
 		
-		wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
-		wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
+		x *= g_nOutputWidth;
+		y *= g_nOutputHeight;
+
+		x += focusedWindowOffsetX;
+		y += focusedWindowOffsetY;
+
+		x *= focusedWindowScaleX;
+		y *= focusedWindowScaleY;
+
+		if ( x < 0.0f ) x = 0.0f;
+		if ( y < 0.0f ) y = 0.0f;
+
+		if ( x > wlserver.mouse_focus_surface->current.width ) x = wlserver.mouse_focus_surface->current.width;
+		if ( y > wlserver.mouse_focus_surface->current.height ) y = wlserver.mouse_focus_surface->current.height;
+
+		wlserver.mouse_surface_cursorx = x;
+		wlserver.mouse_surface_cursory = y;
 		
 		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
@@ -272,9 +288,24 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 	{
 		double x = g_bRotated ? event->y : event->x;
 		double y = g_bRotated ? 1.0 - event->x : event->y;
-		
-		wlserver.mouse_surface_cursorx = x * wlserver.mouse_focus_surface->current.width;
-		wlserver.mouse_surface_cursory = y * wlserver.mouse_focus_surface->current.height;
+
+		x *= g_nOutputWidth;
+		y *= g_nOutputHeight;
+
+		x += focusedWindowOffsetX;
+		y += focusedWindowOffsetY;
+
+		x *= focusedWindowScaleX;
+		y *= focusedWindowScaleY;
+
+		if ( x < 0.0f ) x = 0.0f;
+		if ( y < 0.0f ) y = 0.0f;
+
+		if ( x > wlserver.mouse_focus_surface->current.width ) x = wlserver.mouse_focus_surface->current.width;
+		if ( y > wlserver.mouse_focus_surface->current.height ) y = wlserver.mouse_focus_surface->current.height;
+
+		wlserver.mouse_surface_cursorx = x;
+		wlserver.mouse_surface_cursory = y;
 
 		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );

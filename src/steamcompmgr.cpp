@@ -156,6 +156,11 @@ float			overscanScaleRatio = 1.0;
 float			zoomScaleRatio = 1.0;
 float			globalScaleRatio = 1.0f;
 
+float			focusedWindowScaleX = 1.0f;
+float			focusedWindowScaleY = 1.0f;
+float			focusedWindowOffsetX = 0.0f;
+float			focusedWindowOffsetY = 0.0f;
+
 Bool			focusDirty = False;
 bool			hasRepaint = false;
 
@@ -1075,6 +1080,12 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			set_win_hidden(dpy, &fadeOutWindow, True);
 		}
 	}
+
+	int mainLayer = composite.nLayerCount - 1;
+	focusedWindowScaleX = composite.layers[ mainLayer ].flScaleX;
+	focusedWindowScaleY = composite.layers[ mainLayer ].flScaleY;
+	focusedWindowOffsetX = composite.layers[ mainLayer ].flOffsetX;
+	focusedWindowOffsetY = composite.layers[ mainLayer ].flOffsetY;
 
 	if (gamesRunningCount && overlay)
 	{
