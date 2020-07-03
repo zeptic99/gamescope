@@ -195,6 +195,7 @@ static Atom		winDialogAtom;
 static Atom		winNormalAtom;
 static Atom		sizeHintsAtom;
 static Atom		fullscreenAtom;
+static Atom		activeWindowAtom;
 static Atom		WMStateAtom;
 static Atom		WMTransientForAtom;
 static Atom		WMStateHiddenAtom;
@@ -1931,9 +1932,13 @@ register_cm (Display *dpy)
 					XA_WINDOW, 32, PropModeReplace, (unsigned char *)&w, 1);
 
 
-	Atom fullScreenSupported = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
+	Atom supportedAtoms[2];
+
+	supportedAtoms[0] = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
+	supportedAtoms[1] = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+
 	XChangeProperty(dpy, root, XInternAtom(dpy, "_NET_SUPPORTED", False),
-					XA_ATOM, 32, PropModeAppend, (unsigned char *)&fullScreenSupported, 1);
+					XA_ATOM, 32, PropModeAppend, (const unsigned char *)supportedAtoms, 2);
 
 	XSetSelectionOwner (dpy, a, w, 0);
 
@@ -2177,6 +2182,7 @@ steamcompmgr_main (int argc, char **argv)
 	winNormalAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
 	sizeHintsAtom = XInternAtom (dpy, "WM_NORMAL_HINTS", False);
 	fullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", False);
+	activeWindowAtom = XInternAtom (dpy, "_NET_ACTIVE_WINDOW", False);
 	WMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", False);
 	WMTransientForAtom = XInternAtom (dpy, "WM_TRANSIENT_FOR", False);
 	WMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
@@ -2510,6 +2516,10 @@ steamcompmgr_main (int argc, char **argv)
 							if (ev.xclient.message_type == WLSurfaceIDAtom)
 							{
 								handle_wl_surface_id( w, ev.xclient.data.l[0]);
+							}
+							else if ( ev.xclient.message_type == activeWindowAtom )
+							{
+								XRaiseWindow( dpy, w->id );
 							}
 							else
 							{
