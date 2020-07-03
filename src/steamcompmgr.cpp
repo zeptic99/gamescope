@@ -1186,17 +1186,21 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	for (w = list; w; w = w->next)
 	{
-
 		// We allow using an override redirect window in some cases, but if we have
 		// a choice between two windows we always prefer the non-override redirect one.
 		Bool windowIsOverrideRedirect = w->a.override_redirect && !w->ignoreOverrideRedirect;
 
-		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False &&
-			( !windowIsOverrideRedirect || !usingOverrideRedirectWindow ) )
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False )
 		{
-			vecPossibleFocusAnyWindows.push_back( w );
+			// Hack, there's lots of transient windows we don't want to show when randomly focusing
+			// stuff according to the stacking order. This filters most of the noise while we figure
+			// out real rules. At least embed systray windows can be detected properly, maybe others.
+			if ( !windowIsOverrideRedirect && w->a.width >= 128 && w->a.height >= 128 )
+			{
+				vecPossibleFocusAnyWindows.push_back( w );
+			}
 
-			if ( w->gameID )
+			if ( w->gameID && ( !windowIsOverrideRedirect || !usingOverrideRedirectWindow ) )
 			{
 				vecPossibleFocusGameWindows.push_back( w );
 				
@@ -1496,6 +1500,11 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	w->damage_sequence = 0;
 	w->map_sequence = sequence;
+
+	// Hack - pretty sure there's a higher-level thing to look for for new top-level windows
+	// that want to be activated. This puts a lot of noise in the foreground during an Origin
+	// launch, but also puts the Origin window itself on top, which doesn't happen without that.
+	XRaiseWindow( dpy, w->id );
 
 	focusDirty = True;
 }
