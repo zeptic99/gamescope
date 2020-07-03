@@ -1488,6 +1488,18 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 
 	get_size_hints(dpy, w);
+
+	XWMHints *wmHints = XGetWMHints( dpy, w->id );
+
+	if ( wmHints != nullptr )
+	{
+		if ( wmHints->flags & (InputHint | StateHint ) && wmHints->input == True && wmHints->initial_state == NormalState )
+		{
+			XRaiseWindow( dpy, w->id );
+		}
+
+		XFree( wmHints );
+	}
 	
 	Window transientFor = None;
 	if ( XGetTransientForHint( dpy, w->id, &transientFor ) )
@@ -1501,11 +1513,6 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	w->damage_sequence = 0;
 	w->map_sequence = sequence;
-
-	// Hack - pretty sure there's a higher-level thing to look for for new top-level windows
-	// that want to be activated. This puts a lot of noise in the foreground during an Origin
-	// launch, but also puts the Origin window itself on top, which doesn't happen without that.
-	XRaiseWindow( dpy, w->id );
 
 	focusDirty = True;
 }
