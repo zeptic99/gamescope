@@ -17,12 +17,12 @@ If running RadeonSI clients, currently have to set R600_DEBUG=nodcc, or corrupti
 
 ## Keyboard shortcuts
 
-**Meta + F** : Toggle fullscreen
-**Meta + N** : Toggle integer scaling
+**Super + F** : Toggle fullscreen
+**Super + N** : Toggle integer scaling
 
 ## Examples
 
-On any X11 or Wayland desktop running Mesa with commit [3746ee91](https://gitlab.freedesktop.org/mesa/mesa/commit/3746ee912f4d068479c46ff18cb072b7624c60b0), you can set the Steam launch arguments of your game as follows:
+On any X11 or Wayland desktop running Mesa with [this PR applied](https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/4885), you can set the Steam launch arguments of your game as follows:
 
 
 ```
@@ -31,7 +31,7 @@ gamescope -w 1280 -h 720 -W 1920 -H 1080 -n -- %command%
 ```
 
 ```
-// Limit a vsynced game to 30 FPS:
+// Limit a vsynced game to 30 FPS (currently broken):
 gamescope -r 30 -- %command%
 ```
 
