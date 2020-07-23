@@ -387,22 +387,24 @@ static void wlserver_surface_destroy( struct wl_listener *listener, void *data )
 
 int wlserver_init(int argc, char **argv, bool bIsNested) {
 	bool bIsDRM = bIsNested == false;
-	
+
 	wlr_log_init(WLR_DEBUG, NULL);
 	wlserver.wl_display = wl_display_create();
 
 	signal(SIGTERM, sig_handler);
 	signal(SIGINT, sig_handler);
-	
+
 	wlserver.wlr.session = ( bIsDRM == True ) ? wlr_session_create(wlserver.wl_display) : NULL;
-	
+
 	wlserver.wl_event_loop = wl_display_get_event_loop(wlserver.wl_display);
 	wlserver.wl_event_loop_fd = wl_event_loop_get_fd( wlserver.wl_event_loop );
-	
+
 	wlserver.wlr.multi_backend = wlr_multi_backend_create(wlserver.wl_display);
-	
+
 	assert( wlserver.wl_display && wlserver.wl_event_loop && wlserver.wlr.multi_backend );
 	assert( !bIsDRM || wlserver.wlr.session );
+
+	wl_signal_add( &wlserver.wlr.multi_backend->events.new_input, &new_input_listener );
 
 	wlserver.wlr.headless_backend = wlr_headless_backend_create( wlserver.wl_display, NULL );
 	if ( wlserver.wlr.headless_backend == NULL )
@@ -410,12 +412,12 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		return 1;
 	}
 	wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.headless_backend );
-	
+
 	wlserver.wlr.output = wlr_headless_add_output( wlserver.wlr.headless_backend, g_nNestedWidth, g_nNestedHeight );
 	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nNestedRefresh * 1000 );
-	
+
 	wlr_output_create_global( wlserver.wlr.output );
-	
+
 	if ( bIsDRM == True )
 	{
 		wlserver.wlr.libinput_backend = wlr_libinput_backend_create( wlserver.wl_display, wlserver.wlr.session );
@@ -423,17 +425,15 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		{
 			return 1;
 		}
-		wl_signal_add( &wlserver.wlr.libinput_backend->events.new_input, &new_input_listener );
 		wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.libinput_backend );
 	}
-	else
+	else if ( wlr_backend_is_headless(wlserver.wlr.headless_backend) )
 	{
-		wl_signal_add( &wlserver.wlr.headless_backend->events.new_input, &new_input_listener );
 		wlr_headless_add_input_device( wlserver.wlr.headless_backend, WLR_INPUT_DEVICE_KEYBOARD );
 	}
-	
+
 	wlserver.wlr.renderer = wlr_backend_get_renderer( wlserver.wlr.multi_backend );
-	
+
 	assert(wlserver.wlr.renderer);
 
 	wlr_renderer_init_wl_display(wlserver.wlr.renderer, wlserver.wl_display);
