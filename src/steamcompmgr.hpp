@@ -1,10 +1,5 @@
 #include <stdint.h>
 
-extern "C" {
-#include <wlr/types/wlr_buffer.h>
-#include <wlr/render/wlr_texture.h>
-}
-
 extern uint32_t currentOutputWidth;
 extern uint32_t currentOutputHeight;
 
@@ -23,7 +18,7 @@ int steamcompmgr_main(int argc, char **argv);
 
 struct ResListEntry_t {
 	struct wlr_surface *surf;
-	struct wlr_buffer *buf;
+	struct wlr_dmabuf_attributes attribs;
 };
 
 struct _XDisplay;
