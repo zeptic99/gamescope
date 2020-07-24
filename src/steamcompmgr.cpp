@@ -529,7 +529,7 @@ import_commit ( struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dmabuf, co
 
 	if ( BIsNested() == False )
 	{
-		commit.fb_id = drm_fbid_from_dmabuf( &g_DRM, buf, dmabuf );
+		commit.fb_id = drm_fbid_from_dmabuf( &g_DRM, dmabuf );
 		assert( commit.fb_id != 0 );
 	}
 
