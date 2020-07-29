@@ -222,6 +222,7 @@ unsigned int	lastSampledFrameTime;
 float			currentFrameRate;
 
 static Bool		doRender = True;
+static Bool		debugFocus = False;
 static Bool		drawDebugInfo = False;
 static Bool		debugEvents = False;
 static Bool		steamMode = False;
@@ -1329,6 +1330,14 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		}
 
 		gpuvis_trace_printf( "determine_and_apply_focus focus %lu\n", focus->id );
+
+		if ( debugFocus == True )
+		{
+			fprintf( stderr, "determine_and_apply_focus focus %lu\n", focus->id );
+			char buf[512];
+			sprintf( buf,  "xwininfo -id 0x%lx; xprop -id 0x%lx; xwininfo -root -tree", focus->id, focus->id );
+			system( buf );
+		}
 	}
 
 	currentFocusWindow = focus->id;
@@ -2124,7 +2133,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 
-	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NSvVecsdlnb")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NFSvVecsdlnb")) != -1)
 	{
 		switch (o) {
 			case 'R':
@@ -2139,6 +2148,9 @@ steamcompmgr_main (int argc, char **argv)
 				break;
 			case 'N':
 				doRender = False;
+				break;
+			case 'F':
+				debugFocus = True;
 				break;
 			case 'S':
 				synchronize = True;
