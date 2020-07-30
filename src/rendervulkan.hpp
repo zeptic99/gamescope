@@ -68,7 +68,6 @@ public:
 	
 	bool m_bFlippable = false;
 	
-	wlr_dmabuf_attributes m_DMA = {};
 	uint32_t m_FBID = 0;
 	
 	int32_t nRefCount = 1;
