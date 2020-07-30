@@ -344,14 +344,16 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	if ( bFlippable == true )
 	{
 		// We assume we own the memory when doing this right now.
-		// We could support the import scenario as well if needed
+		// We could support the import scenario as well if needed (but we
+		// already have a DMA-BUF in that case).
 // 		assert( bTextureable == false );
 
-		m_DMA.modifier = DRM_FORMAT_MOD_INVALID;
-		m_DMA.n_planes = 1;
-		m_DMA.width = width;
-		m_DMA.height = height;
-		m_DMA.format = VulkanFormatToDRM( format );
+		struct wlr_dmabuf_attributes dmabuf = {};
+		dmabuf.modifier = DRM_FORMAT_MOD_INVALID;
+		dmabuf.n_planes = 1;
+		dmabuf.width = width;
+		dmabuf.height = height;
+		dmabuf.format = VulkanFormatToDRM( format );
 
 		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
@@ -359,7 +361,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 			.memory = m_vkImageMemory,
 			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
 		};
-		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &m_DMA.fd[0]);
+		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &dmabuf.fd[0]);
 		
 		if ( res != VK_SUCCESS )
 			return false;
@@ -371,14 +373,15 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		};
 		VkSubresourceLayout image_layout;
 		vkGetImageSubresourceLayout(device, m_vkImage, &image_subresource, &image_layout);
-		
 
-		m_DMA.stride[0] = image_layout.rowPitch;
+		dmabuf.stride[0] = image_layout.rowPitch;
 		
-		m_FBID = drm_fbid_from_dmabuf( &g_DRM, &m_DMA );
+		m_FBID = drm_fbid_from_dmabuf( &g_DRM, &dmabuf );
 		
 		if ( m_FBID == 0 )
 			return false;
+
+		wlr_dmabuf_attributes_finish( &dmabuf );
 	}
 	
 	
