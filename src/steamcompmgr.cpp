@@ -1197,6 +1197,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	unsigned long maxDamageSequence = 0;
 	Bool usingOverrideRedirectWindow = False;
+	Bool allowNonGameOverrideRedirectWindow = True;
 
 	unsigned int maxOpacity = 0;
 	
@@ -1214,9 +1215,20 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			// Hack, there's lots of transient windows we don't want to show when randomly focusing
 			// stuff according to the stacking order. This filters most of the noise while we figure
 			// out real rules. At least embed systray windows can be detected properly, maybe others.
-			if ( !windowIsOverrideRedirect && w->a.width >= 128 && w->a.height >= 128 )
+			if ( w->a.width >= 128 && w->a.height >= 128 )
 			{
-				vecPossibleFocusAnyWindows.push_back( w );
+				// On the first eligible non-OverrideRedirect window found, flip our criteria and clear
+				// eligible ones so far (which must have been all OverrideRedirect)
+				if ( !windowIsOverrideRedirect && allowNonGameOverrideRedirectWindow )
+				{
+					allowNonGameOverrideRedirectWindow = False;
+					vecPossibleFocusAnyWindows.clear();
+				}
+
+				if ( !windowIsOverrideRedirect || allowNonGameOverrideRedirectWindow )
+				{
+					vecPossibleFocusAnyWindows.push_back( w );
+				}
 			}
 
 			if ( w->gameID && ( !windowIsOverrideRedirect || !usingOverrideRedirectWindow ) )
