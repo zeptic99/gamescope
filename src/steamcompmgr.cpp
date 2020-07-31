@@ -1210,7 +1210,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		// a choice between two windows we always prefer the non-override redirect one.
 		Bool windowIsOverrideRedirect = w->a.override_redirect && !w->ignoreOverrideRedirect;
 
-		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False )
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False && w->opacity > TRANSLUCENT )
 		{
 			// Hack, there's lots of transient windows we don't want to show when randomly focusing
 			// stuff according to the stacking order. This filters most of the noise while we figure
@@ -1504,7 +1504,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	PointerMotionMask | LeaveWindowMask);
 
 	/* This needs to be here since we don't get PropertyNotify when unmapped */
-	w->opacity = get_prop (dpy, w->id, opacityAtom, TRANSLUCENT);
+	w->opacity = get_prop (dpy, w->id, opacityAtom, OPAQUE);
 
 	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
 
@@ -1628,7 +1628,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	{
 		new_win->damage = XDamageCreate (dpy, id, XDamageReportRawRectangles);
 	}
-	new_win->opacity = TRANSLUCENT;
+	new_win->opacity = OPAQUE;
 
 	new_win->isOverlay = False;
 	new_win->isSteam = False;
@@ -2446,7 +2446,7 @@ steamcompmgr_main (int argc, char **argv)
 						win * w = find_win(dpy, ev.xproperty.window);
 						if (w && w->isOverlay)
 						{
-							unsigned int newOpacity = get_prop(dpy, w->id, opacityAtom, TRANSLUCENT);
+							unsigned int newOpacity = get_prop(dpy, w->id, opacityAtom, OPAQUE);
 
 							if (newOpacity != w->opacity)
 							{
