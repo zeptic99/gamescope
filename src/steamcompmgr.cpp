@@ -2003,13 +2003,14 @@ register_cm (Display *dpy)
 					XA_WINDOW, 32, PropModeReplace, (unsigned char *)&w, 1);
 
 
-	Atom supportedAtoms[2];
-
-	supportedAtoms[0] = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
-	supportedAtoms[1] = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+	Atom supportedAtoms[] = {
+		XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False),
+		XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False),
+	};
 
 	XChangeProperty(dpy, root, XInternAtom(dpy, "_NET_SUPPORTED", False),
-					XA_ATOM, 32, PropModeAppend, (const unsigned char *)supportedAtoms, 2);
+					XA_ATOM, 32, PropModeAppend, (unsigned char *)supportedAtoms,
+					sizeof(supportedAtoms) / sizeof(supportedAtoms[0]));
 
 	XSetSelectionOwner (dpy, a, w, 0);
 
