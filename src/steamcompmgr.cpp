@@ -194,11 +194,11 @@ static Atom		winSplashAtom;
 static Atom		winDialogAtom;
 static Atom		winNormalAtom;
 static Atom		sizeHintsAtom;
-static Atom		fullscreenAtom;
+static Atom		netWMStateFullscreenAtom;
 static Atom		activeWindowAtom;
-static Atom		WMStateAtom;
+static Atom		netWMStateAtom;
 static Atom		WMTransientForAtom;
-static Atom		WMStateHiddenAtom;
+static Atom		netWMStateHiddenAtom;
 static Atom		WLSurfaceIDAtom;
 static Atom		steamUnfocusAtom;
 static Atom		steamTouchClickModeAtom;
@@ -490,12 +490,12 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 
 	if (hidden == True)
 	{
-		XChangeProperty(dpy, w->id, WMStateAtom, XA_ATOM, 32,
-						PropModeReplace, (unsigned char *)&WMStateHiddenAtom, 1);
+		XChangeProperty(dpy, w->id, netWMStateAtom, XA_ATOM, 32,
+						PropModeReplace, (unsigned char *)&netWMStateHiddenAtom, 1);
 	}
 	else
 	{
-		XChangeProperty(dpy, w->id, WMStateAtom, XA_ATOM, 32,
+		XChangeProperty(dpy, w->id, netWMStateAtom, XA_ATOM, 32,
 						PropModeReplace, (unsigned char *)NULL, 0);
 	}
 
@@ -2256,11 +2256,11 @@ steamcompmgr_main (int argc, char **argv)
 	winDialogAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
 	winNormalAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
 	sizeHintsAtom = XInternAtom (dpy, "WM_NORMAL_HINTS", False);
-	fullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", False);
+	netWMStateFullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", False);
 	activeWindowAtom = XInternAtom (dpy, "_NET_ACTIVE_WINDOW", False);
-	WMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", False);
+	netWMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", False);
 	WMTransientForAtom = XInternAtom (dpy, "WM_TRANSIENT_FOR", False);
-	WMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
+	netWMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
 	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", False);
 
 	root_width = DisplayWidth (dpy, scr);
@@ -2598,7 +2598,7 @@ steamcompmgr_main (int argc, char **argv)
 							}
 							else
 							{
-								if ((unsigned)ev.xclient.data.l[1] == fullscreenAtom)
+								if ((unsigned)ev.xclient.data.l[1] == netWMStateFullscreenAtom)
 								{
 									w->isFullscreen = ev.xclient.data.l[0];
 
