@@ -22,7 +22,7 @@ If running RadeonSI clients, currently have to set R600_DEBUG=nodcc, or corrupti
 
 ## Examples
 
-On any X11 or Wayland desktop running Mesa with [this PR applied](https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/4885), you can set the Steam launch arguments of your game as follows:
+On any X11 or Wayland desktop running Mesa commit [d19bc94e4eb9](https://gitlab.freedesktop.org/mesa/mesa/-/commit/d19bc94e4eb94a2c8cbdb328c9eaa2faf1ba424c), you can set the Steam launch arguments of your game as follows:
 
 
 ```
