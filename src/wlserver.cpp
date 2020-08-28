@@ -389,6 +389,7 @@ static void wlserver_surface_destroy( struct wl_listener *listener, void *data )
 	wlr_surface *surf = (wlr_surface*)data;
 	wayland_surfaces_deleted.push_back( surf );
 
+	wl_list_remove( &listener->link );
 	delete listener;
 	surf->data = nullptr;
 }
