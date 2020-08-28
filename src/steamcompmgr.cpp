@@ -1450,7 +1450,7 @@ static void
 get_size_hints(Display *dpy, win *w)
 {
 	XSizeHints hints;
-	long hintsSpecified;
+	long hintsSpecified = 0;
 
 	XGetWMNormalHints(dpy, w->id, &hints, &hintsSpecified);
 
