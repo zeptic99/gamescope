@@ -51,18 +51,18 @@ private:
 
 	bool getTexture();
 
-	int m_x, m_y;
-	int m_hotspotX, m_hotspotY;
-	int m_width, m_height;
+	int m_x = 0, m_y = 0;
+	int m_hotspotX = 0, m_hotspotY = 0;
+	int m_width = 0, m_height = 0;
 
-	VulkanTexture_t m_texture;
+	VulkanTexture_t m_texture = 0;
 	bool m_dirty;
 	bool m_imageEmpty;
 
-	unsigned int m_lastMovedTime;
+	unsigned int m_lastMovedTime = 0;
 	bool m_hideForMovement;
 
-	PointerBarrier m_scaledFocusBarriers[4];
+	PointerBarrier m_scaledFocusBarriers[4] = { None };
 
 	bool m_hasPlane;
 
