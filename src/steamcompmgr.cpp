@@ -2370,7 +2370,74 @@ steamcompmgr_main (int argc, char **argv)
 		// (Don't Lose) The Children
 		prctl( PR_SET_CHILD_SUBREAPER );
 
-		posix_spawnp( &pid, argv[ g_nSubCommandArg ], NULL, &attr, &argv[ g_nSubCommandArg ], environ );
+		std::vector< char * > vecNewEnviron;
+		char ** oldEnviron = environ;
+
+		while ( *oldEnviron != nullptr )
+		{
+			size_t envLength = strlen( *oldEnviron ) + 1;
+			char *envVar = new char[ envLength ];
+			bool bFirst = true;
+
+			strcpy( envVar, *oldEnviron );
+
+			if ( strstr( envVar, "LD_PRELOAD=" ) == envVar )
+			{
+				std::string strNewPreload = "LD_PRELOAD=";
+
+				// First replace all the separators in our temporary copy with terminators
+				for ( char *c = &envVar[ 11 ]; c < envVar + envLength; c++ )
+				{
+					if ( *c == ' ' || *c == ':' )
+					{
+						*c = '\0';
+					}
+				}
+
+				// Then walk it again and find all the substrings
+				for ( char *c = &envVar[ 11 ]; c < envVar + envLength; c++ )
+				{
+					// If there's a string and it's not gameoverlayrenderer, append it to our new LD_PRELOAD
+					if ( *c != '\0' )
+					{
+						if ( strstr( c, "gameoverlayrenderer.so" ) == nullptr )
+						{
+							if ( bFirst == false )
+							{
+								strNewPreload.append( ":" );
+							}
+							else
+							{
+								bFirst = false;
+							}
+
+							strNewPreload.append( c );
+						}
+
+						c += strlen ( c );
+					}
+				}
+
+				// Then copy back to our allocated string, it has to be strictly larger than the original
+				strcpy( envVar, strNewPreload.c_str() );
+			}
+
+			vecNewEnviron.push_back( envVar );
+
+			oldEnviron++;
+		}
+
+		vecNewEnviron.push_back( nullptr ) ;
+
+		posix_spawnp( &pid, argv[ g_nSubCommandArg ], NULL, &attr, &argv[ g_nSubCommandArg ], vecNewEnviron.data() );
+
+		for ( uint32_t i = 0; i < vecNewEnviron.size(); i++ )
+		{
+			if ( vecNewEnviron[ i ] != nullptr )
+			{
+				delete vecNewEnviron[ i ];
+			}
+		}
 
 		std::thread waitThread([](){
 			while( wait( nullptr ) >= 0 )
