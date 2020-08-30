@@ -222,7 +222,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 
 	if ( flags.bTransferSrc == true )
 	{
-		usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	}
 
 	if ( flags.bTransferDst == true )
@@ -742,7 +742,7 @@ int init_device()
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.pNext = nullptr;
 	bufferCreateInfo.size = 512 * 512 * 4;
-	bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	
 	result = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &uploadBuffer );
 	
@@ -1263,6 +1263,7 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 
 	CVulkanTexture::createFlags texCreateFlags;
 	texCreateFlags.bTextureable = true;
+	texCreateFlags.bTransferSrc = true;
 	
 	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), texCreateFlags, pDMA ) == false )
 	{
