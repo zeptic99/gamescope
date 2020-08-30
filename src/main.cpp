@@ -32,6 +32,8 @@ bool g_bFilterGameWindow = true;
 
 bool g_bBorderlessOutputWindow = false;
 
+bool g_bTakeScreenshot = false;
+
 uint32_t g_nSubCommandArg = 0;
 
 int BIsNested()

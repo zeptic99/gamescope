@@ -233,6 +233,7 @@ static Bool		drawDebugInfo = False;
 static Bool		debugEvents = False;
 static Bool		steamMode = False;
 static Bool		alwaysComposite = False;
+static Bool		takeScreenshot = False;
 
 std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
@@ -1135,7 +1136,14 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 	bool bDoComposite = true;
 
-	if ( BIsNested() == false && alwaysComposite == False )
+	// Handoff from whatever thread to this one since we check ours twice
+	if ( g_bTakeScreenshot == true )
+	{
+		takeScreenshot = true;
+		g_bTakeScreenshot = false;
+	}
+
+	if ( BIsNested() == false && alwaysComposite == False && takeScreenshot == False )
 	{
 		if ( drm_can_avoid_composite( &g_DRM, &composite, &pipeline ) == true )
 		{
@@ -1145,7 +1153,9 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 	if ( bDoComposite == true )
 	{
-		bool bResult = vulkan_composite( &composite, &pipeline );
+		bool bResult = vulkan_composite( &composite, &pipeline, takeScreenshot );
+
+		takeScreenshot = False;
 
 		if ( bResult != true )
 		{
@@ -2770,6 +2780,7 @@ steamcompmgr_main (int argc, char **argv)
 				currentOutputWidth = g_nOutputWidth;
 				currentOutputHeight = g_nOutputHeight;
 			}
+
 			// See if we have surfaceIDs we need to handle late
 			for (win *w = list; w; w = w->next)
 			{

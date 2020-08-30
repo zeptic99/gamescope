@@ -55,8 +55,26 @@ extern "C" {
 class CVulkanTexture
 {
 public:
-	bool BInit(uint32_t width, uint32_t height, VkFormat format, bool bFlippable, bool bTextureable, wlr_dmabuf_attributes *pDMA = nullptr );
-	
+	struct createFlags {
+
+		createFlags( void )
+		{
+			bFlippable = false;
+			bTextureable = false;
+			bMappable = false;
+			bTransferSrc = false;
+			bTransferDst = false;
+		}
+
+		bool bFlippable : 1;
+		bool bTextureable : 1;
+		bool bMappable : 1;
+		bool bTransferSrc : 1;
+		bool bTransferDst : 1;
+	};
+
+	bool BInit( uint32_t width, uint32_t height, VkFormat format, createFlags flags, wlr_dmabuf_attributes *pDMA = nullptr );
+
 	~CVulkanTexture( void );
 	
 	bool m_bInitialized = false;
@@ -65,14 +83,16 @@ public:
 	VkDeviceMemory m_vkImageMemory = VK_NULL_HANDLE;
 	
 	VkImageView m_vkImageView = VK_NULL_HANDLE;
-	
-	bool m_bFlippable = false;
+
+	uint32_t m_unRowPitch = 0;
 	
 	uint32_t m_FBID = 0;
 	
 	int32_t nRefCount = 1;
 	
 	VulkanTexture_t handle = 0;
+
+	void *m_pMappedData = nullptr;
 };
 
 extern std::vector< const char * > g_vecSDLInstanceExts;
@@ -89,7 +109,7 @@ uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex );
 
 void vulkan_free_texture( VulkanTexture_t vulkanTex );
 
-bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );
+bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, bool bScreenshot );
 uint32_t vulkan_get_last_composite_fbid( void );
 
 void vulkan_present_to_window( void );

@@ -400,6 +400,9 @@ void inputSDLThreadRun( void )
 						case KEY_N:
 							g_bFilterGameWindow = !g_bFilterGameWindow;
 							break;
+						case KEY_S:
+							g_bTakeScreenshot = true;
+							break;
 						default:
 							goto client;
 						

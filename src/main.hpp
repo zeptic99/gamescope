@@ -21,6 +21,8 @@ extern int g_nOutputRefresh;
 
 extern bool g_bFilterGameWindow;
 
+extern bool g_bTakeScreenshot;
+
 extern uint32_t g_nSubCommandArg;
 
 int BIsNested( void );

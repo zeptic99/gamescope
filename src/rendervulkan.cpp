@@ -45,15 +45,19 @@ struct VulkanOutput_t
 	int nOutImage; // ping/pong between two RTs
 	CVulkanTexture outputImage[2];
 
+	VkFormat outputFormat;
+
 	int nCurCmdBuffer;
 	VkCommandBuffer commandBuffers[2]; // ping/pong command buffers as well
 	
 	VkBuffer constantBuffer;
 	VkDeviceMemory bufferMemory;
 	Composite_t *pCompositeBuffer;
-	
+
 	VkFence fence;
 	int fenceFD;
+
+	CVulkanTexture *pScreenshotImage;
 };
 
 
@@ -208,20 +212,32 @@ int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeB
 	return -1;
 }
 
-bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bool bFlippable, bool bTextureable, wlr_dmabuf_attributes *pDMA /* = nullptr */ )
+bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, createFlags flags, wlr_dmabuf_attributes *pDMA /* = nullptr */ )
 {
 	VkResult res = VK_ERROR_INITIALIZATION_FAILED;
 
-	VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
-	VkImageUsageFlags usage = bTextureable ? VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_STORAGE_BIT;
-	
-	if ( bTextureable == true && pDMA == nullptr )
+	VkImageTiling tiling = flags.bMappable ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+	VkImageUsageFlags usage = flags.bTextureable ? VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_STORAGE_BIT;
+	VkMemoryPropertyFlags properties;
+
+	if ( flags.bTransferSrc == true )
 	{
-		// If we're not importing it, we'll need to copy bits into it later 
 		usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	}
 
-	VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	if ( flags.bTransferDst == true )
+	{
+		usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	}
+
+	if ( flags.bMappable == true )
+	{
+		properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+	}
+	else
+	{
+		properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	}
 	
 	// Possible extensions for below
 	wsi_image_create_info wsiImageCreateInfo = {};
@@ -247,7 +263,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		assert( format == DRMFormatToVulkan( pDMA->format ) );
 	}
 	
-	if ( bFlippable == true )
+	if ( flags.bFlippable == true )
 	{
 		// We want to scan-out the image
 		wsiImageCreateInfo.sType = VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA;
@@ -284,7 +300,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = findMemoryType(properties, memRequirements.memoryTypeBits );
 	
-	if ( bFlippable == true || pDMA != nullptr )
+	if ( flags.bFlippable == true || pDMA != nullptr )
 	{
 		memory_dedicated_info.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
 		memory_dedicated_info.image = m_vkImage;
@@ -294,7 +310,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		allocInfo.pNext = &memory_dedicated_info;
 	}
 	
-	if ( bFlippable == true && pDMA == nullptr )
+	if ( flags.bFlippable == true && pDMA == nullptr )
 	{
 		// We'll export it to DRM
 		memory_export_info.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
@@ -340,8 +356,21 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	
 	if ( res != VK_SUCCESS )
 		return false;
+
+	if ( flags.bFlippable == true || flags.bMappable == true )
+	{
+		const VkImageSubresource image_subresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.arrayLayer = 0,
+		};
+		VkSubresourceLayout image_layout;
+		vkGetImageSubresourceLayout(device, m_vkImage, &image_subresource, &image_layout);
+
+		m_unRowPitch = image_layout.rowPitch;
+	}
 	
-	if ( bFlippable == true )
+	if ( flags.bFlippable == true )
 	{
 		// We assume we own the memory when doing this right now.
 		// We could support the import scenario as well if needed (but we
@@ -365,16 +394,8 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 		
 		if ( res != VK_SUCCESS )
 			return false;
-		
-		const VkImageSubresource image_subresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.arrayLayer = 0,
-		};
-		VkSubresourceLayout image_layout;
-		vkGetImageSubresourceLayout(device, m_vkImage, &image_subresource, &image_layout);
 
-		dmabuf.stride[0] = image_layout.rowPitch;
+		dmabuf.stride[0] = m_unRowPitch;
 		
 		m_FBID = drm_fbid_from_dmabuf( &g_DRM, &dmabuf );
 		
@@ -391,7 +412,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	if ( bSwapChannels || !bHasAlpha )
 	{
 		// Right now this implies no storage bit - check it now as that's incompatible with swizzle
-		assert ( bTextureable == true );
+		assert ( flags.bTextureable == true );
 	}
 	
 	VkImageViewCreateInfo createInfo = {};
@@ -413,41 +434,56 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, bo
 	res = vkCreateImageView(device, &createInfo, nullptr, &m_vkImageView);
 	if ( res != VK_SUCCESS )
 		return false;
+
+	if ( flags.bMappable )
+	{
+		vkMapMemory( device, g_output.pScreenshotImage->m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &m_pMappedData );
+
+		if ( m_pMappedData == nullptr )
+		{
+			return false;
+		}
+	}
 	
 	m_bInitialized = true;
-	m_bFlippable = bFlippable;
 	
 	return true;
 }
 
 CVulkanTexture::~CVulkanTexture( void )
 {
+	if ( m_pMappedData != nullptr )
+	{
+		vkUnmapMemory( device, g_output.pScreenshotImage->m_vkImageMemory );
+		m_pMappedData = nullptr;
+	}
+
 	if ( m_vkImageView != VK_NULL_HANDLE )
 	{
 		vkDestroyImageView( device, m_vkImageView, nullptr );
 		m_vkImageView = VK_NULL_HANDLE;
 	}
-	
+
 	if ( m_FBID != 0 )
 	{
 		drm_drop_fbid( &g_DRM, m_FBID );
 		m_FBID = 0;
 	}
-	
-	
+
+
 	if ( m_vkImage != VK_NULL_HANDLE )
 	{
 		vkDestroyImage( device, m_vkImage, nullptr );
 		m_vkImage = VK_NULL_HANDLE;
 	}
-	
-	
+
+
 	if ( m_vkImageMemory != VK_NULL_HANDLE )
 	{
-		vkFreeMemory( device, m_vkImageMemory, nullptr );	
+		vkFreeMemory( device, m_vkImageMemory, nullptr );
 		m_vkImageMemory = VK_NULL_HANDLE;
 	}
-	
+
 	m_bInitialized = false;
 }
 
@@ -819,17 +855,19 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 	
 	if ( surfaceFormat == formatCount )
 		return false;
+
+	pOutput->outputFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
 	
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	createInfo.surface = pOutput->surface;
 	
 	createInfo.minImageCount = imageCount;
-	createInfo.imageFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
+	createInfo.imageFormat = pOutput->outputFormat;
 	createInfo.imageColorSpace = pOutput->surfaceFormats[surfaceFormat ].colorSpace;
 	createInfo.imageExtent = { g_nOutputWidth, g_nOutputHeight };
 	createInfo.imageArrayLayers = 1;
-	createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
+	createInfo.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	
 	createInfo.preTransform = pOutput->surfaceCaps.currentTransform;
@@ -854,7 +892,7 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		createInfo.image = pOutput->swapChainImages[ i ];
 		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		createInfo.format = pOutput->surfaceFormats[ surfaceFormat ].format;
+		createInfo.format = pOutput->outputFormat;
 		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -892,6 +930,13 @@ bool vulkan_remake_swapchain( void )
 	vkDestroySwapchainKHR( device, pOutput->swapChain, nullptr );
 	
 	pOutput->nSwapChainImageIndex = 0;
+
+	// Delete screenshot image to be remade if needed
+	if ( pOutput->pScreenshotImage != nullptr )
+	{
+		delete pOutput->pScreenshotImage;
+		pOutput->pScreenshotImage = nullptr;
+	}
 	
 	return ( vulkan_make_swapchain( &g_output ) );
 }
@@ -946,19 +991,23 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	}
 	else
 	{
-		VkFormat imageFormat = DRMFormatToVulkan( g_nDRMFormat );
+		pOutput->outputFormat = DRMFormatToVulkan( g_nDRMFormat );
 		
-		if ( imageFormat == VK_FORMAT_UNDEFINED )
+		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{
 			return false;
 		}
+
+		CVulkanTexture::createFlags outputImageflags;
+		outputImageflags.bFlippable = true;
+		outputImageflags.bTransferSrc = true; // for screenshots
 		
-		bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
+		bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
 		
 		if ( bSuccess != true )
 			return false;
 		
-		bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, imageFormat, true, false );
+		bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
 		
 		if ( bSuccess != true )
 			return false;
@@ -1211,8 +1260,11 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 	VulkanTexture_t ret = 0;
 
 	CVulkanTexture *pTex = new CVulkanTexture();
+
+	CVulkanTexture::createFlags texCreateFlags;
+	texCreateFlags.bTextureable = true;
 	
-	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), false, true, pDMA ) == false )
+	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), texCreateFlags, pDMA ) == false )
 	{
 		delete pTex;
 		return ret;
@@ -1231,8 +1283,13 @@ VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height
 	VulkanTexture_t ret = 0;
 	
 	CVulkanTexture *pTex = new CVulkanTexture();
+
+	CVulkanTexture::createFlags texCreateFlags;
+	texCreateFlags.bFlippable = BIsNested() == false;
+	texCreateFlags.bTextureable = true;
+	texCreateFlags.bTransferDst = true;
 	
-	if ( pTex->BInit( width, height, format, BIsNested() == false, true, nullptr ) == false )
+	if ( pTex->BInit( width, height, format, texCreateFlags ) == false )
 	{
 		delete pTex;
 		return ret;
@@ -1439,11 +1496,22 @@ void vulkan_update_descriptor( struct VulkanPipeline_t *pPipeline )
 	}
 }
 
-bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
+bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, bool bScreenshot )
 {
-	if ( BIsNested() == false && DRMFormatNeedsSwizzle( g_nDRMFormat ) )
+	VkImage compositeImage;
+
+	if ( BIsNested() == true )
 	{
-		pComposite->nSwapChannels = 1;
+		compositeImage = g_output.swapChainImages[ g_output.nSwapChainImageIndex ];
+	}
+	else
+	{
+		compositeImage = g_output.outputImage[ g_output.nOutImage ].m_vkImage;
+
+		if ( DRMFormatNeedsSwizzle( g_nDRMFormat ) )
+		{
+			pComposite->nSwapChannels = 1;
+		}
 	}
 	
 	// Sample a bit closer to texel centers in most cases
@@ -1512,23 +1580,74 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		.newLayout = VK_IMAGE_LAYOUT_GENERAL, // does it flush more to transntion to PRESENT_SRC?
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE, // fill below
+		.image = compositeImage,
 		.subresourceRange = subResRange
 	};
 	
-	if ( BIsNested() == true )
-	{
-		memoryBarrier.image = g_output.swapChainImages[ g_output.nSwapChainImageIndex ];
-	}
-	else
-	{
-		memoryBarrier.image = g_output.outputImage[ g_output.nOutImage ].m_vkImage;
-	}
-	
 	vkCmdPipelineBarrier( curCommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 						  0, 0, nullptr, 0, nullptr, 1, &memoryBarrier );
+
+	if ( bScreenshot == true )
+	{
+		if ( g_output.pScreenshotImage == nullptr )
+		{
+			g_output.pScreenshotImage = new CVulkanTexture;
+
+			CVulkanTexture::createFlags screenshotImageFlags;
+			screenshotImageFlags.bMappable = true;
+			screenshotImageFlags.bTransferDst = true;
+
+			bool bSuccess = g_output.pScreenshotImage->BInit( currentOutputWidth, currentOutputHeight, g_output.outputFormat, screenshotImageFlags );
+
+			assert( bSuccess );
+
+			// Transition it to GENERAL
+			VkImageSubresourceRange subResRange =
+			{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.levelCount = 1,
+				.layerCount = 1
+			};
+
+			VkImageMemoryBarrier memoryBarrier =
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = 0,
+				.dstAccessMask = 0,
+				.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.newLayout = VK_IMAGE_LAYOUT_GENERAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = g_output.pScreenshotImage->m_vkImage,
+				.subresourceRange = subResRange
+			};
+
+			vkCmdPipelineBarrier( curCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+								  0, 0, nullptr, 0, nullptr, 1, &memoryBarrier );
+		}
+
+		VkImageCopy region = {};
+
+		region.srcSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.layerCount = 1
+		};
+
+		region.dstSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.layerCount = 1
+		};
+
+		region.extent = {
+			.width = currentOutputWidth,
+			.height = currentOutputHeight,
+			.depth = 1
+		};
+
+		vkCmdCopyImage( curCommandBuffer, compositeImage, VK_IMAGE_LAYOUT_GENERAL, g_output.pScreenshotImage->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, 1, &region );
+	}
 	
-	res = vkEndCommandBuffer(curCommandBuffer);
+	res = vkEndCommandBuffer( curCommandBuffer );
 	
 	if ( res != VK_SUCCESS )
 	{
@@ -1593,6 +1712,27 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 	}
 	
 	vkQueueWaitIdle( queue );
+
+	if ( bScreenshot )
+	{
+		uint32_t redMask = 0x00ff0000;
+		uint32_t greenMask = 0x0000ff00;
+		uint32_t blueMask = 0x000000ff;
+		uint32_t alphaMask = 0;
+
+		SDL_Surface *pSDLSurface = SDL_CreateRGBSurfaceFrom( g_output.pScreenshotImage->m_pMappedData, currentOutputWidth, currentOutputHeight, 32,
+															 g_output.pScreenshotImage->m_unRowPitch, redMask, greenMask, blueMask, alphaMask );
+
+		static char pTimeBuffer[1024];
+
+		time_t currentTime = time(0);
+		struct tm *localTime = localtime( &currentTime );
+		strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.bmp", localTime );
+
+		SDL_SaveBMP( pSDLSurface, pTimeBuffer );
+
+		SDL_FreeSurface( pSDLSurface );
+	}
 	
 	if ( BIsNested() == false )
 	{

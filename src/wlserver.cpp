@@ -48,6 +48,12 @@ int g_nTouchClickMode = 1;
 
 void sig_handler(int signal)
 {
+	if ( signal == SIGUSR2 )
+	{
+		g_bTakeScreenshot = true;
+		return;
+	}
+
 	wlr_log(WLR_DEBUG, "Received kill signal. Terminating!");
 	run = false;
 }
@@ -402,6 +408,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	signal(SIGTERM, sig_handler);
 	signal(SIGINT, sig_handler);
+	signal(SIGUSR2, sig_handler);
 
 	wlserver.wlr.session = ( bIsDRM == True ) ? wlr_session_create(wlserver.wl_display) : NULL;
 
