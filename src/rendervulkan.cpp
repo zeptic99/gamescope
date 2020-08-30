@@ -346,6 +346,14 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		importMemoryInfo.pNext = allocInfo.pNext;
 		
 		allocInfo.pNext = &importMemoryInfo;
+
+		// Take another copy to poll for implicit sync completion
+		m_FD = dup( pDMA->fd[0] );
+		if ( m_FD < 0 )
+		{
+			perror( "dup failed" );
+			return false;
+		}
 	}
 	
 	if (vkAllocateMemory(device, &allocInfo, nullptr, &m_vkImageMemory) != VK_SUCCESS) {
@@ -452,6 +460,12 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 
 CVulkanTexture::~CVulkanTexture( void )
 {
+	if ( m_FD >= 0 )
+	{
+		close( m_FD );
+		m_FD = -1;
+	}
+
 	if ( m_pMappedData != nullptr )
 	{
 		vkUnmapMemory( device, g_output.pScreenshotImage->m_vkImageMemory );
@@ -742,7 +756,7 @@ int init_device()
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.pNext = nullptr;
 	bufferCreateInfo.size = 512 * 512 * 4;
-	bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	
 	result = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &uploadBuffer );
 	
@@ -1263,7 +1277,6 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 
 	CVulkanTexture::createFlags texCreateFlags;
 	texCreateFlags.bTextureable = true;
-	texCreateFlags.bTransferSrc = true;
 	
 	if ( pTex->BInit( pDMA->width, pDMA->height, DRMFormatToVulkan( pDMA->format ), texCreateFlags, pDMA ) == false )
 	{
@@ -1764,55 +1777,18 @@ uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex )
 	return ret;
 }
 
-uint32_t vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
+int vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
 {
-	// Queue a trivial rendering operation referencing the texture, then wait for it
-	// This lets us simulate a "fence" for implicit-sync surfaces maybe
-	
 	CVulkanTexture *pTex = g_mapVulkanTextures[ vulkanTex ];
 
 	if ( pTex == nullptr )
 	{
 		assert( 0 );
+		return -1;
 	}
-	
-	VkCommandBuffer commandBuffer;
-	VkFence fence;
-	uint32_t handle = get_command_buffer( commandBuffer, &fence );
-	
-	VkBufferImageCopy region = {};
-	
-	region.imageSubresource = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.layerCount = 1
-	};
-	
-	region.imageExtent = {
-		.width = 1,
-		.height = 1,
-		.depth = 1
-	};
-	
-	vkCmdCopyImageToBuffer( commandBuffer, pTex->m_vkImage, VK_IMAGE_LAYOUT_GENERAL, uploadBuffer, 1, &region );
-	
-	std::vector<CVulkanTexture *> refs;
-	refs.push_back( pTex );
 
-	submit_command_buffer( handle, refs );
-	
-	return handle;
+	return pTex->m_FD;
 }
-
-void vulkan_wait_for_fence( uint32_t handle )
-{
-	assert( g_scratchCommandBuffers[ handle ].busy == true &&
-			g_scratchCommandBuffers[ handle ].haswaiter == true );
-	vkWaitForFences( device, 1, &g_scratchCommandBuffers[ handle ].fence, VK_TRUE, ~0 );
-	
-	g_scratchCommandBuffers[ handle ].haswaiter = false;
-}
-
-
 
 
 

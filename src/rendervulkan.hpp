@@ -87,6 +87,8 @@ public:
 	uint32_t m_unRowPitch = 0;
 	
 	uint32_t m_FBID = 0;
+
+	int m_FD = -1;
 	
 	int32_t nRefCount = 1;
 	
@@ -102,8 +104,7 @@ int vulkan_init(void);
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
 VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, void *bits );
 
-uint32_t vulkan_get_texture_fence( VulkanTexture_t vulkanTex );
-void vulkan_wait_for_fence( uint32_t );
+int vulkan_get_texture_fence( VulkanTexture_t vulkanTex );
 
 uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex );
 

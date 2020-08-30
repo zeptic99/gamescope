@@ -269,7 +269,7 @@ private:
 
 sem waitListSem;
 std::mutex waitListLock;
-std::vector< std::pair< uint32_t, uint64_t > > waitList;
+std::vector< std::pair< int, uint64_t > > waitList;
 
 void imageWaitThreadRun( void )
 {
@@ -277,7 +277,7 @@ wait:
 	waitListSem.wait();
 
 	bool bFound = false;
-	uint32_t fence;
+	int fence;
 	uint64_t commitID;
 
 retry:
@@ -298,7 +298,8 @@ retry:
 	assert( bFound == true );
 
 	gpuvis_trace_printf( "wait fence begin_ctx=%lu\n", commitID );
-	vulkan_wait_for_fence( fence );
+	struct pollfd fd = { fence, POLLOUT, 0 };
+	poll( &fd, 1, -1 );
 	gpuvis_trace_printf( "wait fence end_ctx=%lu\n", commitID );
 
 	{
@@ -2155,7 +2156,13 @@ void check_new_wayland_res( void )
 			w->commit_queue.push_back( newCommit );
 		}
 
-		uint32_t fence = vulkan_get_texture_fence( newCommit.vulkanTex );
+		int fence = vulkan_get_texture_fence( newCommit.vulkanTex );
+
+		if ( fence < 0 )
+		{
+			fprintf (stderr, "no fence for texture\n");
+			continue;
+		}
 
 		gpuvis_trace_printf( "pushing wait for commit %lu\n", newCommit.commitID );
 		{
