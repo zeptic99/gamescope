@@ -1540,7 +1540,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	XTextProperty tp;
 	XGetTextProperty ( dpy, id, &tp, XA_WM_NAME );
 
-	if ( tp.value && strcmp( (const char*)tp.value, "SP" ) == 0 )
+	if ( tp.value && strncmp( (char *)tp.value, "SP", tp.nitems ) == 0 )
 	{
 		w->isSteamPopup = True;
 	}
