@@ -1937,6 +1937,153 @@ handle_net_wm_state(Display *dpy, win *w, XEvent *ev)
 	}
 }
 
+static void
+handle_property_notify(Display *dpy, XPropertyEvent *ev)
+{
+	/* check if Trans property was changed */
+	if (ev->atom == opacityAtom)
+	{
+		/* reset mode and redraw window */
+		win * w = find_win(dpy, ev->window);
+		if (w && w->isOverlay)
+		{
+			unsigned int newOpacity = get_prop(dpy, w->id, opacityAtom, OPAQUE);
+
+			if (newOpacity != w->opacity)
+			{
+				w->opacity = newOpacity;
+
+				if ( gameFocused && ( w->id == currentOverlayWindow || w->id == currentNotificationWindow ) )
+				{
+					hasRepaint = true;
+				}
+			}
+
+			if (w->isOverlay)
+			{
+				set_win_hidden(dpy, w, w->opacity == TRANSLUCENT);
+			}
+
+			unsigned int maxOpacity = 0;
+
+			for (w = list; w; w = w->next)
+			{
+				if (w->isOverlay)
+				{
+					if (w->a.width == 1920 && w->opacity >= maxOpacity)
+					{
+						currentOverlayWindow = w->id;
+						maxOpacity = w->opacity;
+					}
+				}
+			}
+		}
+	}
+	if (ev->atom == steamAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			w->isSteam = get_prop(dpy, w->id, steamAtom, 0);
+			focusDirty = True;
+		}
+	}
+	if (ev->atom == steamUnfocusAtom )
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
+			focusDirty = True;
+		}
+	}
+	if (ev->atom == steamTouchClickModeAtom )
+	{
+		// Default to 1, left click
+		g_nTouchClickMode = get_prop(dpy, root, steamTouchClickModeAtom, 1 );
+	}
+	if (ev->atom == gameAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			w->gameID = get_prop(dpy, w->id, gameAtom, 0);
+			focusDirty = True;
+		}
+	}
+	if (ev->atom == overlayAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			w->isOverlay = get_prop(dpy, w->id, overlayAtom, 0);
+			focusDirty = True;
+		}
+	}
+	if (ev->atom == sizeHintsAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			get_size_hints(dpy, w);
+			focusDirty = True;
+		}
+	}
+	if (ev->atom == gamesRunningAtom)
+	{
+		gamesRunningCount = get_prop(dpy, root, gamesRunningAtom, 0);
+
+		focusDirty = True;
+	}
+	if (ev->atom == screenScaleAtom)
+	{
+		overscanScaleRatio = get_prop(dpy, root, screenScaleAtom, 0xFFFFFFFF) / (double)0xFFFFFFFF;
+
+		globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
+
+		win *w;
+
+		if ((w = find_win(dpy, currentFocusWindow)))
+		{
+			hasRepaint = true;
+		}
+
+		focusDirty = True;
+	}
+	if (ev->atom == screenZoomAtom)
+	{
+		zoomScaleRatio = get_prop(dpy, root, screenZoomAtom, 0xFFFF) / (double)0xFFFF;
+
+		globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
+
+		win *w;
+
+		if ((w = find_win(dpy, currentFocusWindow)))
+		{
+			hasRepaint = true;
+		}
+
+		focusDirty = True;
+	}
+	if (ev->atom == WMTransientForAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			Window transientFor = None;
+			if ( XGetTransientForHint( dpy, ev->window, &transientFor ) )
+			{
+				w->transientFor = transientFor;
+			}
+			else
+			{
+				w->transientFor = None;
+			}
+			focusDirty = True;
+		}
+	}
+}
+
 static int
 error (Display *dpy, XErrorEvent *ev)
 {
@@ -2556,150 +2703,9 @@ steamcompmgr_main (int argc, char **argv)
 				case Expose:
 					break;
 				case PropertyNotify:
-					/* check if Trans property was changed */
-					if (ev.xproperty.atom == opacityAtom)
-					{
-						/* reset mode and redraw window */
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w && w->isOverlay)
-						{
-							unsigned int newOpacity = get_prop(dpy, w->id, opacityAtom, OPAQUE);
-
-							if (newOpacity != w->opacity)
-							{
-								w->opacity = newOpacity;
-
-								if ( gameFocused && ( w->id == currentOverlayWindow || w->id == currentNotificationWindow ) )
-								{
-									hasRepaint = true;
-								}
-							}
-
-							if (w->isOverlay)
-							{
-								set_win_hidden(dpy, w, w->opacity == TRANSLUCENT);
-							}
-
-							unsigned int maxOpacity = 0;
-
-							for (w = list; w; w = w->next)
-							{
-								if (w->isOverlay)
-								{
-									if (w->a.width == 1920 && w->opacity >= maxOpacity)
-									{
-										currentOverlayWindow = w->id;
-										maxOpacity = w->opacity;
-									}
-								}
-							}
-						}
-					}
-					if (ev.xproperty.atom == steamAtom)
-					{
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w)
-						{
-							w->isSteam = get_prop(dpy, w->id, steamAtom, 0);
-							focusDirty = True;
-						}
-					}
-					if (ev.xproperty.atom == steamUnfocusAtom )
-					{
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w)
-						{
-							w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
-							focusDirty = True;
-						}
-					}
-					if (ev.xproperty.atom == steamTouchClickModeAtom )
-					{
-						// Default to 1, left click
-						g_nTouchClickMode = get_prop(dpy, root, steamTouchClickModeAtom, 1 );
-					}
-					if (ev.xproperty.atom == gameAtom)
-					{
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w)
-						{
-							w->gameID = get_prop(dpy, w->id, gameAtom, 0);
-							focusDirty = True;
-						}
-					}
-					if (ev.xproperty.atom == overlayAtom)
-					{
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w)
-						{
-							w->isOverlay = get_prop(dpy, w->id, overlayAtom, 0);
-							focusDirty = True;
-						}
-					}
-					if (ev.xproperty.atom == sizeHintsAtom)
-					{
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w)
-						{
-							get_size_hints(dpy, w);
-							focusDirty = True;
-						}
-					}
-					if (ev.xproperty.atom == gamesRunningAtom)
-					{
-						gamesRunningCount = get_prop(dpy, root, gamesRunningAtom, 0);
-
-						focusDirty = True;
-					}
-					if (ev.xproperty.atom == screenScaleAtom)
-					{
-						overscanScaleRatio = get_prop(dpy, root, screenScaleAtom, 0xFFFFFFFF) / (double)0xFFFFFFFF;
-
-						globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
-
-						win *w;
-
-						if ((w = find_win(dpy, currentFocusWindow)))
-						{
-							hasRepaint = true;
-						}
-
-						focusDirty = True;
-					}
-					if (ev.xproperty.atom == screenZoomAtom)
-					{
-						zoomScaleRatio = get_prop(dpy, root, screenZoomAtom, 0xFFFF) / (double)0xFFFF;
-
-						globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
-
-						win *w;
-
-						if ((w = find_win(dpy, currentFocusWindow)))
-						{
-							hasRepaint = true;
-						}
-
-						focusDirty = True;
-					}
-					if (ev.xproperty.atom == WMTransientForAtom)
-					{
-						win * w = find_win(dpy, ev.xproperty.window);
-						if (w)
-						{
-							Window transientFor = None;
-							if ( XGetTransientForHint( dpy, ev.xproperty.window, &transientFor ) )
-							{
-								w->transientFor = transientFor;
-							}
-							else
-							{
-								w->transientFor = None;
-							}
-							focusDirty = True;
-						}
-					}
+					handle_property_notify(dpy, &ev.xproperty);
 					break;
-					case ClientMessage:
+				case ClientMessage:
 					{
 						win * w = find_win(dpy, ev.xclient.window);
 						if (w)
