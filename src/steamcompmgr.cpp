@@ -2452,7 +2452,7 @@ steamcompmgr_main (int argc, char **argv)
 		{
 			if ( vecNewEnviron[ i ] != nullptr )
 			{
-				delete vecNewEnviron[ i ];
+				delete[] vecNewEnviron[ i ];
 			}
 		}
 
