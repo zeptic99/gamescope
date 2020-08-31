@@ -1927,13 +1927,38 @@ handle_wl_surface_id(win *w, long surfaceID)
 }
 
 static void
-handle_net_wm_state(Display *dpy, win *w, XEvent *ev)
+handle_net_wm_state(Display *dpy, win *w, XClientMessageEvent *ev)
 {
-	if ((unsigned)ev->xclient.data.l[1] == netWMStateFullscreenAtom)
+	if ((unsigned)ev->data.l[1] == netWMStateFullscreenAtom)
 	{
-		w->isFullscreen = ev->xclient.data.l[0];
+		w->isFullscreen = ev->data.l[0];
 
 		focusDirty = True;
+	}
+}
+
+static void
+handle_client_message(Display *dpy, XClientMessageEvent *ev)
+{
+	win *w = find_win(dpy, ev->window);
+	if (w)
+	{
+		if (ev->message_type == WLSurfaceIDAtom)
+		{
+			handle_wl_surface_id( w, ev->data.l[0]);
+		}
+		else if ( ev->message_type == activeWindowAtom )
+		{
+			XRaiseWindow( dpy, w->id );
+		}
+		else if ( ev->message_type == netWMStateAtom )
+		{
+			handle_net_wm_state( dpy, w, ev );
+		}
+		else if ( ev->message_type != 0 )
+		{
+			fprintf( stderr, "Unhandled client message: %s\n", XGetAtomName( dpy, ev->message_type ) );
+		}
 	}
 }
 
@@ -2706,47 +2731,25 @@ steamcompmgr_main (int argc, char **argv)
 					handle_property_notify(dpy, &ev.xproperty);
 					break;
 				case ClientMessage:
+					handle_client_message(dpy, &ev.xclient);
+
+					if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
 					{
-						win * w = find_win(dpy, ev.xclient.window);
-						if (w)
-						{
-							if (ev.xclient.message_type == WLSurfaceIDAtom)
-							{
-								handle_wl_surface_id( w, ev.xclient.data.l[0]);
-							}
-							else if ( ev.xclient.message_type == activeWindowAtom )
-							{
-								XRaiseWindow( dpy, w->id );
-							}
-							else if ( ev.xclient.message_type == netWMStateAtom )
-							{
-								handle_net_wm_state( dpy, w, &ev );
-							}
-							else if ( ev.xclient.message_type != 0 )
-							{
-								fprintf( stderr, "Unhandled client message: %s\n", XGetAtomName( dpy, ev.xclient.message_type ) );
-							}
-						}
-
-						if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
-						{
-							// Message from vblankmanager
-							gpuvis_trace_printf( "got vblank\n" );
-							vblank = true;
-						}
-
-						break;
+						// Message from vblankmanager
+						gpuvis_trace_printf( "got vblank\n" );
+						vblank = true;
 					}
-					case LeaveNotify:
-						if (ev.xcrossing.window == currentFocusWindow)
-						{
-							// This shouldn't happen due to our pointer barriers,
-							// but there is a known X server bug; warp to last good
-							// position.
-							cursor->resetPosition();
-						}
-						break;
-					case MotionNotify:
+					break;
+				case LeaveNotify:
+					if (ev.xcrossing.window == currentFocusWindow)
+					{
+						// This shouldn't happen due to our pointer barriers,
+						// but there is a known X server bug; warp to last good
+						// position.
+						cursor->resetPosition();
+					}
+					break;
+				case MotionNotify:
 					{
 						win * w = find_win(dpy, ev.xmotion.window);
 						if (w && w->id == currentFocusWindow)
@@ -2755,16 +2758,16 @@ steamcompmgr_main (int argc, char **argv)
 						}
 						break;
 					}
-					default:
-						if (ev.type == damage_event + XDamageNotify)
-						{
-							damage_win (dpy, (XDamageNotifyEvent *) &ev);
-						}
-						else if (ev.type == xfixes_event + XFixesCursorNotify)
-						{
-							cursor->setDirty();
-						}
-						break;
+				default:
+					if (ev.type == damage_event + XDamageNotify)
+					{
+						damage_win (dpy, (XDamageNotifyEvent *) &ev);
+					}
+					else if (ev.type == xfixes_event + XFixesCursorNotify)
+					{
+						cursor->setDirty();
+					}
+					break;
 			}
 		} while (QLength (dpy));
 
