@@ -100,6 +100,9 @@ typedef struct _win {
 	unsigned long	map_sequence;
 	unsigned long	damage_sequence;
 
+	char *title;
+	bool utf8_title;
+
 	Bool isSteam;
 	Bool isSteamPopup;
 	Bool wantsUnfocus;
@@ -204,6 +207,8 @@ static Atom		WLSurfaceIDAtom;
 static Atom		WMStateAtom;
 static Atom		steamUnfocusAtom;
 static Atom		steamTouchClickModeAtom;
+static Atom		utf8StringAtom;
+static Atom		netWMNameAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -1519,6 +1524,39 @@ get_size_hints(Display *dpy, win *w)
 }
 
 static void
+get_win_title(Display *dpy, win *w, Atom atom)
+{
+	assert(atom == XA_WM_NAME || atom == netWMNameAtom);
+
+	XTextProperty tp;
+	XGetTextProperty ( dpy, w->id, &tp, atom );
+
+	bool is_utf8;
+	if (tp.encoding == utf8StringAtom) {
+		is_utf8 = true;
+	} else if (tp.encoding == XA_STRING) {
+		is_utf8 = false;
+	} else {
+		return;
+	}
+
+	if (!is_utf8 && w->utf8_title) {
+		/* Clients usually set both the non-UTF8 title and the UTF8 title
+		 * properties. If the client has set the UTF8 title prop, ignore the
+		 * non-UTF8 one. */
+		return;
+	}
+
+	free(w->title);
+	if (tp.nitems > 0) {
+		w->title = strndup((char *)tp.value, tp.nitems);
+	} else {
+		w->title = NULL;
+	}
+	w->utf8_title = is_utf8;
+}
+
+static void
 map_win (Display *dpy, Window id, unsigned long sequence)
 {
 	win		*w = find_win (dpy, id);
@@ -1530,12 +1568,16 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	/* This needs to be here or else we lose transparency messages */
 	XSelectInput (dpy, id, PropertyChangeMask | SubstructureNotifyMask |
-	PointerMotionMask | LeaveWindowMask);
+		PointerMotionMask | LeaveWindowMask);
 
 	/* This needs to be here since we don't get PropertyNotify when unmapped */
 	w->opacity = get_prop (dpy, w->id, opacityAtom, OPAQUE);
 
 	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
+
+	/* First try to read the UTF8 title prop, then fallback to the non-UTF8 one */
+	get_win_title( dpy, w, netWMNameAtom );
+	get_win_title( dpy, w, XA_WM_NAME );
 
 	XTextProperty tp;
 	XGetTextProperty ( dpy, id, &tp, XA_WM_NAME );
@@ -1574,7 +1616,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 		XFree( wmHints );
 	}
-	
+
 	Window transientFor = None;
 	if ( XGetTransientForHint( dpy, w->id, &transientFor ) )
 	{
@@ -1682,6 +1724,9 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	{
 		new_win->transientFor = None;
 	}
+
+	new_win->title = NULL;
+	new_win->utf8_title = False;
 	
 	new_win->isFullscreen = False;
 	new_win->isHidden = False;
@@ -1834,6 +1879,7 @@ finish_destroy_win (Display *dpy, Window id, Bool gone)
 				wlserver_unlock();
 			}
 
+			free(w->title);
 			delete w;
 			break;
 		}
@@ -2105,6 +2151,13 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 				w->transientFor = None;
 			}
 			focusDirty = True;
+		}
+	}
+	if (ev->atom == XA_WM_NAME || ev->atom == netWMNameAtom)
+	{
+		win *w = find_win(dpy, ev->window);
+		if (w) {
+			get_win_title(dpy, w, ev->atom);
 		}
 	}
 }
@@ -2483,6 +2536,8 @@ steamcompmgr_main (int argc, char **argv)
 	netWMStateFocusedAtom = XInternAtom (dpy, "_NET_WM_STATE_FOCUSED", False);
 	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", False);
 	WMStateAtom = XInternAtom (dpy, "WM_STATE", False);
+	utf8StringAtom = XInternAtom (dpy, "UTF8_STRING", False);
+	netWMNameAtom = XInternAtom (dpy, "_NET_WM_NAME", False);
 
 	root_width = DisplayWidth (dpy, scr);
 	root_height = DisplayHeight (dpy, scr);
