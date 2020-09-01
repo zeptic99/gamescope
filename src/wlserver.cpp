@@ -463,8 +463,18 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlserver.wlr.xwayland_server = wlr_xwayland_server_create(wlserver.wl_display, &xwayland_options);
 	wl_signal_add(&wlserver.wlr.xwayland_server->events.ready, &xwayland_ready_listener);
 	
-	const char *socket = wl_display_add_socket_auto(wlserver.wl_display);
-	if (!socket)
+	char wayland_display_name[32];
+	int result = -1;
+	int display_slot = 0;
+
+	while ( result != 0 && display_slot < 128 )
+	{
+		sprintf( wayland_display_name, "gamescope-%d", display_slot );
+		result = wl_display_add_socket( wlserver.wl_display, wayland_display_name );
+		display_slot++;
+	}
+
+	if ( result != 0 )
 	{
 		wlr_log_errno(WLR_ERROR, "Unable to open wayland socket");
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
@@ -474,7 +484,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
 	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD );
 
-	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", socket);
+	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wayland_display_name);
 
 	if (!wlr_backend_start( wlserver.wlr.multi_backend ))
 	{
