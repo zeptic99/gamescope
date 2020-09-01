@@ -919,6 +919,7 @@ bool drm_can_avoid_composite( struct drm_t *drm, struct Composite_t *pComposite,
 
 		if ( ret != 0 )
 		{
+			gpuvis_trace_printf( "legacy flip not possible, %d\n", ret );
 			drmModeAtomicFree( drm->req );
 			drm->req = nullptr;
 
