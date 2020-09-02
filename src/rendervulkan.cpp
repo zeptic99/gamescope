@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/capability.h>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -561,23 +560,9 @@ int init_device()
 		.pQueuePriorities = &queuePriorities
 	};
 
-	cap_t caps;
-	caps = cap_get_proc();
-	cap_flag_value_t nicecapvalue = CAP_CLEAR;
-
-	if ( caps != nullptr )
+	if ( g_bNiceCap == true )
 	{
-		cap_get_flag( caps, CAP_SYS_NICE, CAP_EFFECTIVE, &nicecapvalue );
-
-		if ( nicecapvalue == CAP_SET )
-		{
-			queueCreateInfo.pNext = &queueCreateInfoEXT;
-		}
-	}
-
-	if ( nicecapvalue == CAP_CLEAR )
-	{
-		fprintf( stderr, "no CAP_SYS_NICE, falling back to regular-priority compute.\n" );
+		queueCreateInfo.pNext = &queueCreateInfoEXT;
 	}
 	
 	std::vector< const char * > vecEnabledDeviceExtensions;

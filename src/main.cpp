@@ -4,6 +4,7 @@
 #include <mutex>
 #include <vector>
 #include <cstring>
+#include <sys/capability.h>
 
 #include <unistd.h>
 
@@ -32,6 +33,8 @@ bool g_bFilterGameWindow = true;
 bool g_bBorderlessOutputWindow = false;
 
 bool g_bTakeScreenshot = false;
+
+bool g_bNiceCap = false;
 
 uint32_t g_nSubCommandArg = 0;
 
@@ -113,6 +116,25 @@ int main(int argc, char **argv)
 			setenv( "R600_DEBUG", strPreviousR600Debug.c_str(), 1 );
 		}
 
+	}
+
+	cap_t caps;
+	caps = cap_get_proc();
+	cap_flag_value_t nicecapvalue = CAP_CLEAR;
+
+	if ( caps != nullptr )
+	{
+		cap_get_flag( caps, CAP_SYS_NICE, CAP_EFFECTIVE, &nicecapvalue );
+
+		if ( nicecapvalue == CAP_SET )
+		{
+			g_bNiceCap = true;
+		}
+	}
+
+	if ( g_bNiceCap == false )
+	{
+		fprintf( stderr, "No CAP_SYS_NICE, falling back to regular-priority compute and threads.\nPerformance will be affected.\n" );
 	}
 	
 	if ( bSleepAtStartup == true )

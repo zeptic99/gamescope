@@ -41,10 +41,11 @@
 #include <math.h>
 #include <sys/poll.h>
 #include <sys/time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/prctl.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/prctl.h>
+#include <sys/socket.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -2647,8 +2648,13 @@ steamcompmgr_main (int argc, char **argv)
 		posix_spawnattr_t attr;
 
 		posix_spawnattr_init( &attr );
+
 		posix_spawnattr_setflags( &attr, POSIX_SPAWN_SETSIGDEF );
 		posix_spawnattr_setsigdefault( &attr, &fullset );
+
+		// Put the children in their own thread group to avoid setpriority below
+		posix_spawnattr_setflags( &attr, POSIX_SPAWN_SETPGROUP );
+		posix_spawnattr_setpgroup( &attr, 0 );
 
 		// (Don't Lose) The Children
 		prctl( PR_SET_CHILD_SUBREAPER );
@@ -2736,6 +2742,11 @@ steamcompmgr_main (int argc, char **argv)
 
 	std::thread imageWaitThread( imageWaitThreadRun );
 	imageWaitThread.detach();
+
+	if ( g_bNiceCap == true )
+	{
+		setpriority( PRIO_PGRP, getpid(), -20 );
+	}
 
 	for (;;)
 	{

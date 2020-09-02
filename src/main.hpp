@@ -24,4 +24,6 @@ extern bool g_bTakeScreenshot;
 
 extern uint32_t g_nSubCommandArg;
 
+extern bool g_bNiceCap;
+
 int BIsNested( void );
