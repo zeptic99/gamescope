@@ -35,6 +35,8 @@ bool g_bBorderlessOutputWindow = false;
 bool g_bTakeScreenshot = false;
 
 bool g_bNiceCap = false;
+int g_nOldNice = 0;
+int g_nNewNice = 0;
 
 uint32_t g_nSubCommandArg = 0;
 
@@ -115,7 +117,6 @@ int main(int argc, char **argv)
 			strPreviousR600Debug.append( ",nodcc" );
 			setenv( "R600_DEBUG", strPreviousR600Debug.c_str(), 1 );
 		}
-
 	}
 
 	cap_t caps;
@@ -129,6 +130,20 @@ int main(int argc, char **argv)
 		if ( nicecapvalue == CAP_SET )
 		{
 			g_bNiceCap = true;
+
+			errno = 0;
+			int nOldNice = nice( 0 );
+			if ( nOldNice != -1 && errno == 0 )
+			{
+				g_nOldNice = nOldNice;
+			}
+
+			errno = 0;
+			int nNewNice = nice( -20 );
+			if ( nNewNice != -1 && errno == 0 )
+			{
+				g_nNewNice = nNewNice;
+			}
 		}
 	}
 

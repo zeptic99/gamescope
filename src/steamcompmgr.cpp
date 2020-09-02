@@ -2640,92 +2640,77 @@ steamcompmgr_main (int argc, char **argv)
 
 	if ( g_nSubCommandArg != 0 )
 	{
-		pid_t pid;
-
-		sigset_t fullset;
-		sigfillset( &fullset );
-
-		posix_spawnattr_t attr;
-
-		posix_spawnattr_init( &attr );
-
-		posix_spawnattr_setflags( &attr, POSIX_SPAWN_SETSIGDEF );
-		posix_spawnattr_setsigdefault( &attr, &fullset );
-
-		// Put the children in their own thread group to avoid setpriority below
-		posix_spawnattr_setflags( &attr, POSIX_SPAWN_SETPGROUP );
-		posix_spawnattr_setpgroup( &attr, 0 );
-
 		// (Don't Lose) The Children
 		prctl( PR_SET_CHILD_SUBREAPER );
 
-		std::vector< char * > vecNewEnviron;
-		char ** oldEnviron = environ;
+		std::string strNewPreload;
+		char *pchPreloadCopy = nullptr;
+		const char *pchCurrentPreload = getenv( "LD_PRELOAD" );
+		bool bFirst = true;
 
-		while ( *oldEnviron != nullptr )
+		if ( pchCurrentPreload != nullptr )
 		{
-			size_t envLength = strlen( *oldEnviron ) + 1;
-			char *envVar = new char[ envLength ];
-			bool bFirst = true;
+			pchPreloadCopy = strdup( pchCurrentPreload );
 
-			strcpy( envVar, *oldEnviron );
-
-			if ( strstr( envVar, "LD_PRELOAD=" ) == envVar )
+			// First replace all the separators in our copy with terminators
+			for ( uint32_t i = 0; i < strlen( pchCurrentPreload ); i++ )
 			{
-				std::string strNewPreload = "LD_PRELOAD=";
-
-				// First replace all the separators in our temporary copy with terminators
-				for ( char *c = &envVar[ 11 ]; c < envVar + envLength; c++ )
+				if ( pchPreloadCopy[ i ] == ' ' || pchPreloadCopy[ i ] == ':' )
 				{
-					if ( *c == ' ' || *c == ':' )
-					{
-						*c = '\0';
-					}
+					pchPreloadCopy[ i ] = '\0';
 				}
+			}
 
-				// Then walk it again and find all the substrings
-				for ( char *c = &envVar[ 11 ]; c < envVar + envLength; c++ )
+			// Then walk it again and find all the substrings
+			uint32_t i = 0;
+			while ( i < strlen( pchCurrentPreload ) )
+			{
+				// If there's a string and it's not gameoverlayrenderer, append it to our new LD_PRELOAD
+				if ( pchPreloadCopy[ i ] != '\0' )
 				{
-					// If there's a string and it's not gameoverlayrenderer, append it to our new LD_PRELOAD
-					if ( *c != '\0' )
+					if ( strstr( pchPreloadCopy + i, "gameoverlayrenderer.so" ) == nullptr )
 					{
-						if ( strstr( c, "gameoverlayrenderer.so" ) == nullptr )
+						if ( bFirst == false )
 						{
-							if ( bFirst == false )
-							{
-								strNewPreload.append( ":" );
-							}
-							else
-							{
-								bFirst = false;
-							}
-
-							strNewPreload.append( c );
+							strNewPreload.append( ":" );
+						}
+						else
+						{
+							bFirst = false;
 						}
 
-						c += strlen ( c );
+						strNewPreload.append( pchPreloadCopy + i );
 					}
-				}
 
-				// Then copy back to our allocated string, it has to be strictly larger than the original
-				strcpy( envVar, strNewPreload.c_str() );
+					i += strlen ( pchPreloadCopy + i );
+				}
+				else
+				{
+					i++;
+				}
 			}
 
-			vecNewEnviron.push_back( envVar );
-
-			oldEnviron++;
+			free( pchPreloadCopy );
 		}
 
-		vecNewEnviron.push_back( nullptr ) ;
+		pid_t pid = fork();
 
-		posix_spawnp( &pid, argv[ g_nSubCommandArg ], NULL, &attr, &argv[ g_nSubCommandArg ], vecNewEnviron.data() );
-
-		for ( uint32_t i = 0; i < vecNewEnviron.size(); i++ )
+		// Are we in the child?
+		if ( pid == 0 )
 		{
-			if ( vecNewEnviron[ i ] != nullptr )
+			// Try to snap back to old priority
+			if ( g_bNiceCap == true )
 			{
-				delete[] vecNewEnviron[ i ];
+				nice( g_nOldNice - g_nNewNice );
 			}
+
+			// Set modified LD_PRELOAD
+			if ( strNewPreload.empty() == false )
+			{
+				setenv( "LD_PRELOAD", strNewPreload.c_str(), 1 );
+			}
+
+			execvp( argv[ g_nSubCommandArg ], &argv[ g_nSubCommandArg ] );
 		}
 
 		std::thread waitThread([](){
@@ -2742,11 +2727,6 @@ steamcompmgr_main (int argc, char **argv)
 
 	std::thread imageWaitThread( imageWaitThreadRun );
 	imageWaitThread.detach();
-
-	if ( g_bNiceCap == true )
-	{
-		setpriority( PRIO_PGRP, getpid(), -20 );
-	}
 
 	for (;;)
 	{
