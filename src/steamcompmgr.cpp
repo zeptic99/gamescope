@@ -2585,7 +2585,8 @@ steamcompmgr_main (int argc, char **argv)
 
 	if ( vulkan_init() != True )
 	{
-		fprintf (stderr, "alarm!!!\n");
+		fprintf (stderr, "Failed to initialize Vulkan device!\n");
+		exit( 0 );
 	}
 
 	vblank_init();
