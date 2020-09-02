@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/capability.h>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -545,13 +546,39 @@ int init_device()
 	vkGetPhysicalDeviceMemoryProperties( physicalDevice, &memoryProperties );
 	
 	float queuePriorities = 1.0f;
+
+	VkDeviceQueueGlobalPriorityCreateInfoEXT queueCreateInfoEXT = {
+		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
+		.pNext = nullptr,
+		.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_REALTIME_EXT
+	};
 	
 	VkDeviceQueueCreateInfo queueCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+		.pNext = nullptr,
 		.queueFamilyIndex = queueFamilyIndex,
 		.queueCount = 1,
 		.pQueuePriorities = &queuePriorities
 	};
+
+	cap_t caps;
+	caps = cap_get_proc();
+	cap_flag_value_t nicecapvalue = CAP_CLEAR;
+
+	if ( caps != nullptr )
+	{
+		cap_get_flag( caps, CAP_SYS_NICE, CAP_EFFECTIVE, &nicecapvalue );
+
+		if ( nicecapvalue == CAP_SET )
+		{
+			queueCreateInfo.pNext = &queueCreateInfoEXT;
+		}
+	}
+
+	if ( nicecapvalue == CAP_CLEAR )
+	{
+		fprintf( stderr, "no CAP_SYS_NICE, falling back to regular-priority compute.\n" );
+	}
 	
 	std::vector< const char * > vecEnabledDeviceExtensions;
 	

@@ -42,6 +42,7 @@ libinput       = dependency('libinput')
 xkbcommon      = dependency('xkbcommon')
 math           = cc.find_library('m')
 thread_dep = dependency('threads')
+cap_dep = cc.find_library('cap')
 sdl_dep = dependency('SDL2')
 
 wlroots_proj = subproject('wlroots', default_options:
@@ -77,7 +78,7 @@ executable(
         dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext,
         dep_xxf86vm, pixman_dep, drm_dep, wayland_server, wayland_protos,
         libinput, xkbcommon, math, thread_dep, sdl_dep, wlroots_static_dep,
-        vulkan_dep, libftoff_dep, dep_xtst
+        vulkan_dep, libftoff_dep, dep_xtst, cap_dep
     ],
     install: true,
 )
