@@ -1,7 +1,4 @@
-#include <SDL.h>
-#include <SDL_vulkan.h>
-
-extern SDL_Window *window;
+#pragma once
 
 int initOutput(void);
 
@@ -20,6 +17,8 @@ extern uint32_t g_nOutputHeight;
 extern int g_nOutputRefresh;
 
 extern bool g_bFilterGameWindow;
+
+extern bool g_bBorderlessOutputWindow;
 
 extern bool g_bTakeScreenshot;
 

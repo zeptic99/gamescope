@@ -7,6 +7,7 @@
 #include "rendervulkan.hpp"
 #include "main.hpp"
 #include "steamcompmgr.hpp"
+#include "sdlwindow.hpp"
 
 #include "composite.h"
 
@@ -962,7 +963,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	
 	if ( BIsNested() == true )
 	{
-		SDL_Vulkan_CreateSurface( window, instance, &pOutput->surface );
+		SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &pOutput->surface );
 		
 		if ( pOutput->surface == VK_NULL_HANDLE )
 			return false;

@@ -3,6 +3,7 @@
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <cstring>
 
 #include <unistd.h>
 
@@ -10,13 +11,11 @@
 #include "steamcompmgr.hpp"
 #include "drm.hpp"
 #include "rendervulkan.hpp"
-#include "inputsdl.hpp"
+#include "sdlwindow.hpp"
 #include "wlserver.hpp"
 
 int ac;
 char **av;
-
-SDL_Window *window;
 
 int g_nNestedWidth = 1280;
 int g_nNestedHeight = 720;
@@ -156,34 +155,7 @@ int initOutput(void)
 {
 	if ( g_bIsNested == true )
 	{
-		inputsdl_init();
-		
-		uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
-		
-		if ( g_bBorderlessOutputWindow == true )
-		{
-			nSDLWindowFlags |= SDL_WINDOW_BORDERLESS;
-		}
-
-		window = SDL_CreateWindow( "gamescope",
-								   SDL_WINDOWPOS_UNDEFINED,
-								   SDL_WINDOWPOS_UNDEFINED,
-								   g_nOutputWidth,
-								   g_nOutputHeight,
-								   nSDLWindowFlags );
-		if ( window == nullptr )
-		{
-			fprintf(stderr, "Failed to create SDL window\n");
-			return -1;
-		}
-
-		unsigned int extCount = 0;
-		SDL_Vulkan_GetInstanceExtensions( window, &extCount, nullptr );
-
-		g_vecSDLInstanceExts.resize( extCount );
-
-		SDL_Vulkan_GetInstanceExtensions( window, &extCount, g_vecSDLInstanceExts.data() );
-		return 0;
+		return sdlwindow_init() == false;
 	}
 	else
 	{
