@@ -594,7 +594,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		if ( ret != -EBUSY && ret != -ENOSPC )
 		{
 			fprintf( stderr, "flip error %d\n", ret);
-			exit( 0 );
+			exit( 1 );
 		}
 		else
 		{
