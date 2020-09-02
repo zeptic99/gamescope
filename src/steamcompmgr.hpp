@@ -83,3 +83,5 @@ extern float focusedWindowScaleX;
 extern float focusedWindowScaleY;
 extern float focusedWindowOffsetX;
 extern float focusedWindowOffsetY;
+
+void mark_vblank_message_time( void );

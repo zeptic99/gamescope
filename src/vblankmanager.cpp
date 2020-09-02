@@ -46,7 +46,11 @@ void vblankThreadRun( void )
 		}
 		
 		std::this_thread::sleep_until( targetPoint );
+
+		// give the time of vblank to steamcompmgr
+		mark_vblank_message_time();
 		
+		// send a message to nudge it out of its event loop
 		XSendEvent( g_nestedDpy , DefaultRootWindow( g_nestedDpy ), True, SubstructureRedirectMask, &repaintMsg);
 		XFlush( g_nestedDpy );
 		

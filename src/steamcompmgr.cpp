@@ -403,6 +403,16 @@ get_time_in_milliseconds (void)
 	return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
+struct timeval lastvblankmsgtv;
+std::mutex lastvblankmsgtv_lock;
+
+void mark_vblank_message_time ( void )
+{
+	std::lock_guard<std::mutex> lock( lastvblankmsgtv_lock );
+
+	gettimeofday( &lastvblankmsgtv, NULL );
+}
+
 static void
 discard_ignore (Display *dpy, unsigned long sequence)
 {
@@ -2819,8 +2829,25 @@ steamcompmgr_main (int argc, char **argv)
 					if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
 					{
 						// Message from vblankmanager
-						gpuvis_trace_printf( "got vblank\n" );
-						vblank = true;
+						std::lock_guard<std::mutex> lock( lastvblankmsgtv_lock );
+
+						struct timeval vblankmsgreceivedtv = {};
+						gettimeofday( &vblankmsgreceivedtv, nullptr );
+
+						struct timeval timediff = {};
+
+						timersub( &vblankmsgreceivedtv, &lastvblankmsgtv, &timediff );
+
+						// give it 1 ms of slack.. maybe too long
+						if ( timediff.tv_sec != 0 || timediff.tv_usec > 1000 )
+						{
+							gpuvis_trace_printf( "ignored stale vblank\n" );
+						}
+						else
+						{
+							gpuvis_trace_printf( "got vblank\n" );
+							vblank = true;
+						}
 					}
 					break;
 				case LeaveNotify:
