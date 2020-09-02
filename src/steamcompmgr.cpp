@@ -2419,7 +2419,7 @@ void check_new_wayland_res( void )
 			continue;
 		}
 
-		gpuvis_trace_printf( "pushing wait for commit %lu\n", newCommit.commitID );
+		gpuvis_trace_printf( "pushing wait for commit %lu win %lx\n", newCommit.commitID, w->id );
 		{
 			std::unique_lock< std::mutex > lock( waitListLock );
 
