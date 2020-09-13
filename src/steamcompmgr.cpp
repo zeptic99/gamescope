@@ -2592,6 +2592,12 @@ steamcompmgr_main (int argc, char **argv)
 		}
 	}
 
+	const char *pchEnableVkBasalt = getenv( "ENABLE_VKBASALT" );
+	if ( pchEnableVkBasalt != nullptr && pchEnableVkBasalt[0] == '1' )
+	{
+		alwaysComposite = True;
+	}
+
 	dpy = XOpenDisplay ( wlserver_get_nested_display() );
 	if (!dpy)
 	{

@@ -514,7 +514,17 @@ int init_device()
 	vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, 0);
 	physicalDeviceCount = physicalDeviceCount > MAX_DEVICE_COUNT ? MAX_DEVICE_COUNT : physicalDeviceCount;
 	vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, deviceHandles);
+
+	bool bTryComputeOnly = true;
+
+	// In theory vkBasalt might want to filter out compute-only queue families to force our hand here
+	const char *pchEnableVkBasalt = getenv( "ENABLE_VKBASALT" );
+	if ( pchEnableVkBasalt != nullptr && pchEnableVkBasalt[0] == '1' )
+	{
+		bTryComputeOnly = false;
+	}
 	
+retry:
 	for (uint32_t i = 0; i < physicalDeviceCount; ++i)
 	{
 		uint32_t queueFamilyCount = 0;
@@ -524,7 +534,8 @@ int init_device()
 		
 		for (uint32_t j = 0; j < queueFamilyCount; ++j) {
 			if ( queueFamilyProperties[j].queueFlags & VK_QUEUE_COMPUTE_BIT &&
-				!(queueFamilyProperties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT ) )
+				( bTryComputeOnly == false || !(queueFamilyProperties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT ) ) &&
+				( bTryComputeOnly == true || queueFamilyProperties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT ) )
 			{
 				queueFamilyIndex = j;
 				physicalDevice = deviceHandles[i];
@@ -535,6 +546,12 @@ int init_device()
 		{
 			break;
 		}
+	}
+
+	if ( bTryComputeOnly == true && physicalDevice == VK_NULL_HANDLE )
+	{
+		bTryComputeOnly = false;
+		goto retry;
 	}
 
 	if (!physicalDevice)
