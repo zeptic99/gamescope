@@ -346,7 +346,9 @@ std::vector< std::string > statsEventQueue;
 std::string statsThreadPath;
 int			statsPipeFD = -1;
 
-void statsThreadRun( void )
+bool statsThreadRun;
+
+void statsThreadMain( void )
 {
 	signal(SIGPIPE, SIG_IGN);
 
@@ -362,6 +364,11 @@ void statsThreadRun( void )
 
 wait:
 	statsThreadSem.wait();
+
+	if ( statsThreadRun == false )
+	{
+		return;
+	}
 
 	std::string event;
 
@@ -2300,6 +2307,12 @@ handle_io_error(Display *dpy)
 	imageWaitThreadRun = false;
 	waitListSem.signal();
 
+	if ( statsThreadRun == true )
+	{
+		statsThreadRun = false;
+		statsThreadSem.signal();
+	}
+
 	pthread_exit(NULL);
 }
 
@@ -2548,7 +2561,8 @@ steamcompmgr_main (int argc, char **argv)
 			case 'T':
 				statsThreadPath = optarg;
 				{
-					std::thread statsThreads( statsThreadRun );
+					statsThreadRun = true;
+					std::thread statsThreads( statsThreadMain );
 					statsThreads.detach();
 				}
 				break;
@@ -3064,4 +3078,10 @@ steamcompmgr_main (int argc, char **argv)
 
 	imageWaitThreadRun = false;
 	waitListSem.signal();
+
+	if ( statsThreadRun == true )
+	{
+		statsThreadRun = false;
+		statsThreadSem.signal();
+	}
 }
