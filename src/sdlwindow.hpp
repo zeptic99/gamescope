@@ -7,7 +7,9 @@
 
 bool sdlwindow_init( void );
 
-// called from other threads with interesting things have happened with clients that might warrant updating the nested window
 void sdlwindow_update( void );
+
+// called from other threads with interesting things have happened with clients that might warrant updating the nested window
+void sdlwindow_pushupdate( void );
 
 extern SDL_Window *g_SDLWindow;

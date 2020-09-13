@@ -10,11 +10,14 @@
 #include "wlserver.hpp"
 #include "sdlwindow.hpp"
 #include "rendervulkan.hpp"
+#include "steamcompmgr.hpp"
 
 #include "sdlscancodetable.hpp"
 
 bool g_bSDLInitOK = false;
 std::mutex g_SDLInitLock;
+
+bool g_bWindowShown = false;
 
 SDL_Window *g_SDLWindow;
 uint32_t g_unSDLUserEventID;
@@ -76,7 +79,7 @@ void inputSDLThreadRun( void )
 	g_SDLUserEvent.type = g_unSDLUserEventID;
 	g_SDLUserEvent.user.code = 32;
 
-	uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
+	uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
 
 	if ( g_bBorderlessOutputWindow == true )
 	{
@@ -184,6 +187,10 @@ client:
 				}
 				break;
 			default:
+				if ( event.type == g_unSDLUserEventID )
+				{
+					sdlwindow_update();
+				}
 				break;
 		}
 	}
@@ -203,6 +210,23 @@ bool sdlwindow_init( void )
 }
 
 void sdlwindow_update( void )
+{
+	if ( g_bWindowShown != hasFocusWindow )
+	{
+		g_bWindowShown = hasFocusWindow;
+
+		if ( g_bWindowShown )
+		{
+			SDL_ShowWindow( g_SDLWindow );
+		}
+		else
+		{
+			SDL_HideWindow( g_SDLWindow );
+		}
+	}
+}
+
+void sdlwindow_pushupdate( void )
 {
 	SDL_PushEvent( &g_SDLUserEvent );
 }

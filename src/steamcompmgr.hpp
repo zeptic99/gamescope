@@ -82,6 +82,8 @@ extern std::vector<ResListEntry_t> wayland_commit_queue;
 
 extern std::vector< wlr_surface * > wayland_surfaces_deleted;
 
+extern bool hasFocusWindow;
+
 extern float focusedWindowScaleX;
 extern float focusedWindowScaleY;
 extern float focusedWindowOffsetX;

@@ -68,6 +68,7 @@
 #include "rendervulkan.hpp"
 #include "steamcompmgr.hpp"
 #include "vblankmanager.hpp"
+#include "sdlwindow.hpp"
 
 #define GPUVIS_TRACE_IMPLEMENTATION
 #include "gpuvis_trace_utils.h"
@@ -151,6 +152,8 @@ uint32_t		currentOutputWidth, currentOutputHeight;
 static Window	currentFocusWindow;
 static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
+
+bool hasFocusWindow;
 
 static Window	ourWindow;
 static XEvent	nudgeEvent;
@@ -2942,7 +2945,13 @@ steamcompmgr_main (int argc, char **argv)
 		} while (QLength (dpy));
 
 		if (focusDirty == True)
+		{
 			determine_and_apply_focus(dpy, cursor.get());
+
+			hasFocusWindow = currentFocusWindow != None;
+
+			sdlwindow_pushupdate();
+		}
 
 		if (doRender)
 		{
