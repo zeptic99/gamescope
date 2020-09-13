@@ -13,7 +13,7 @@ uint64_t get_time_in_nanos();
 void sleep_for_nanos(uint64_t nanos);
 void sleep_until_nanos(uint64_t nanos);
 
-int steamcompmgr_main(int argc, char **argv);
+void steamcompmgr_main(int argc, char **argv);
 
 #include "rendervulkan.hpp"
 

@@ -288,10 +288,17 @@ sem waitListSem;
 std::mutex waitListLock;
 std::vector< std::pair< int, uint64_t > > waitList;
 
-void imageWaitThreadRun( void )
+bool imageWaitThreadRun = true;
+
+void imageWaitThreadMain( void )
 {
 wait:
 	waitListSem.wait();
+
+	if ( imageWaitThreadRun == false )
+	{
+		return;
+	}
 
 	bool bFound = false;
 	int fence;
@@ -2289,6 +2296,10 @@ static int
 handle_io_error(Display *dpy)
 {
 	fprintf(stderr, "X11 I/O error\n");
+
+	imageWaitThreadRun = false;
+	waitListSem.signal();
+
 	pthread_exit(NULL);
 }
 
@@ -2513,7 +2524,7 @@ void check_new_wayland_res( void )
 	}
 }
 
-int
+void
 steamcompmgr_main (int argc, char **argv)
 {
 	Display	   *dpy;
@@ -2800,7 +2811,7 @@ steamcompmgr_main (int argc, char **argv)
 		waitThread.detach();
 	}
 
-	std::thread imageWaitThread( imageWaitThreadRun );
+	std::thread imageWaitThread( imageWaitThreadMain );
 	imageWaitThread.detach();
 
 	for (;;)
@@ -2944,6 +2955,11 @@ steamcompmgr_main (int argc, char **argv)
 			}
 		} while (QLength (dpy));
 
+		if ( run == false )
+		{
+			break;
+		}
+
 		if (focusDirty == True)
 		{
 			determine_and_apply_focus(dpy, cursor.get());
@@ -3045,4 +3061,7 @@ steamcompmgr_main (int argc, char **argv)
 			vblank = false;
 		}
 	}
+
+	imageWaitThreadRun = false;
+	waitListSem.signal();
 }
