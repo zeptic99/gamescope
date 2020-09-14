@@ -2816,6 +2816,8 @@ steamcompmgr_main (int argc, char **argv)
 				setenv( "LD_PRELOAD", strNewPreload.c_str(), 1 );
 			}
 
+			unsetenv( "ENABLE_VKBASALT" );
+
 			execvp( argv[ g_nSubCommandArg ], &argv[ g_nSubCommandArg ] );
 		}
 
