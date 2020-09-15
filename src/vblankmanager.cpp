@@ -28,6 +28,11 @@ void vblankThreadRun( void )
 		uint64_t lastVblank = g_lastVblank - g_uVblankDrawBufferNS;
 		uint64_t nsecInterval = 1'000'000'000ul / g_nOutputRefresh;
 
+		if ( g_nNestedRefresh != 0 )
+		{
+			nsecInterval = 1'000'000'000ul / g_nNestedRefresh;
+		}
+
 		uint64_t now = get_time_in_nanos();
 		uint64_t targetPoint = lastVblank + nsecInterval;
 		while ( targetPoint < now )

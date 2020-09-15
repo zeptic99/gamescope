@@ -417,7 +417,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.headless_backend );
 
 	wlserver.wlr.output = wlr_headless_add_output( wlserver.wlr.headless_backend, g_nNestedWidth, g_nNestedHeight );
-	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nNestedRefresh * 1000 );
+	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
 
 	wlr_output_create_global( wlserver.wlr.output );
 

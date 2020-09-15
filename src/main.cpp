@@ -20,7 +20,7 @@ char **av;
 
 int g_nNestedWidth = 1280;
 int g_nNestedHeight = 720;
-int g_nNestedRefresh = 60;
+int g_nNestedRefresh = 0;
 
 uint32_t g_nOutputWidth = 1280;
 uint32_t g_nOutputHeight = 720;
