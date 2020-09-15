@@ -2810,10 +2810,17 @@ steamcompmgr_main (int argc, char **argv)
 				nice( g_nOldNice - g_nNewNice );
 			}
 
-			// Set modified LD_PRELOAD
-			if ( strNewPreload.empty() == false )
+			// Set modified LD_PRELOAD if needed
+			if ( pchCurrentPreload != nullptr )
 			{
-				setenv( "LD_PRELOAD", strNewPreload.c_str(), 1 );
+				if ( strNewPreload.empty() == false )
+				{
+					setenv( "LD_PRELOAD", strNewPreload.c_str(), 1 );
+				}
+				else
+				{
+					unsetenv( "LD_PRELOAD" );
+				}
 			}
 
 			unsetenv( "ENABLE_VKBASALT" );
