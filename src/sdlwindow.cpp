@@ -19,6 +19,9 @@ std::mutex g_SDLInitLock;
 
 bool g_bWindowShown = false;
 
+int g_nOldNestedRefresh = 0;
+bool g_bWindowFocused = true;
+
 SDL_Window *g_SDLWindow;
 uint32_t g_unSDLUserEventID;
 SDL_Event g_SDLUserEvent;
@@ -112,6 +115,8 @@ void inputSDLThreadRun( void )
 	SDL_Vulkan_GetInstanceExtensions( g_SDLWindow, &extCount, g_vecSDLInstanceExts.data() );
 
 	SDL_SetRelativeMouseMode(SDL_TRUE);
+
+	g_nOldNestedRefresh = g_nNestedRefresh;
 	
 	g_bSDLInitOK = true;
 	g_SDLInitLock.unlock();
@@ -183,6 +188,14 @@ client:
 						
 						updateOutputRefresh();
 						
+						break;
+					case SDL_WINDOWEVENT_FOCUS_LOST:
+						g_nNestedRefresh = g_nNestedUnfocusedRefresh;
+						g_bWindowFocused = false;
+						break;
+					case SDL_WINDOWEVENT_FOCUS_GAINED:
+						g_nNestedRefresh = g_nOldNestedRefresh;
+						g_bWindowFocused = true;
 						break;
 				}
 				break;

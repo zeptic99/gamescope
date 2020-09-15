@@ -11,6 +11,7 @@ void wayland_commit(struct wlr_surface *surf, struct wlr_buffer *buf);
 extern int g_nNestedWidth;
 extern int g_nNestedHeight;
 extern int g_nNestedRefresh;
+extern int g_nNestedUnfocusedRefresh;
 
 extern uint32_t g_nOutputWidth;
 extern uint32_t g_nOutputHeight;

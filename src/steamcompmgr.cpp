@@ -2552,7 +2552,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 
-	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NFSvVecsdlnbf")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:o:NFSvVecsdlnbf")) != -1)
 	{
 		switch (o) {
 			case 'R':

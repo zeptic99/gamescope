@@ -21,6 +21,7 @@ char **av;
 int g_nNestedWidth = 1280;
 int g_nNestedHeight = 720;
 int g_nNestedRefresh = 0;
+int g_nNestedUnfocusedRefresh = 0;
 
 uint32_t g_nOutputWidth = 1280;
 uint32_t g_nOutputHeight = 720;
@@ -66,7 +67,7 @@ int main(int argc, char **argv)
 	
 	bool bSleepAtStartup = false;
 	
-	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:NFSvVecsdlnbf")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:o:NFSvVecsdlnbf")) != -1)
 	{
 		switch (o) {
 			case 'w':
@@ -83,6 +84,9 @@ int main(int argc, char **argv)
 				break;
 			case 'r':
 				g_nNestedRefresh = atoi( optarg );
+				break;
+			case 'o':
+				g_nNestedUnfocusedRefresh = atoi( optarg );
 				break;
 			case 's':
 				bSleepAtStartup = true;
