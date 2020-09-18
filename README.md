@@ -18,7 +18,10 @@ If running RadeonSI clients, currently have to set R600_DEBUG=nodcc, or corrupti
 ## Keyboard shortcuts
 
 **Super + F** : Toggle fullscreen
+
 **Super + N** : Toggle integer scaling
+
+**Super + S** : Take screenshot (currently goes to /tmp/gamescope_$DATE.bmp)
 
 ## Examples
 
@@ -31,7 +34,7 @@ gamescope -w 1280 -h 720 -W 1920 -H 1080 -n -- %command%
 ```
 
 ```
-// Limit a vsynced game to 30 FPS (currently broken):
+// Limit a vsynced game to 30 FPS:
 gamescope -r 30 -- %command%
 ```
 
