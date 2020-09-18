@@ -237,18 +237,31 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
-		
-		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-		
+
 		uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
-		
-		if ( button != 0 && g_nTouchClickMode < WLSERVER_BUTTON_COUNT )
+
+		if ( button == 0 )
 		{
-			wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_PRESSED );
+			if ( event->touch_id >= 0 && event->touch_id < WLSERVER_TOUCH_COUNT )
+			{
+				wlr_seat_touch_notify_down( wlserver.wlr.seat, wlserver.mouse_focus_surface, event->time_msec, event->touch_id,
+											wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+
+				wlserver.touch_down[ event->touch_id ] = true;
+			}
+		}
+		else
+		{
+			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-			
-			wlserver.button_held[ g_nTouchClickMode ] = true;
+
+			if ( button != 0 && g_nTouchClickMode < WLSERVER_BUTTON_COUNT )
+			{
+				wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_PRESSED );
+				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+
+				wlserver.button_held[ g_nTouchClickMode ] = true;
+			}
 		}
 	}
 }
@@ -267,15 +280,21 @@ static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 			{
 				uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
 				wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_RELEASED );
-				
+
 				bReleasedAny = true;
 				wlserver.button_held[ i ] = false;
 			}
 		}
-		
+
 		if ( bReleasedAny == true )
 		{
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		}
+
+		if ( event->touch_id >= 0 && event->touch_id < WLSERVER_TOUCH_COUNT && wlserver.touch_down[ event->touch_id ] == true )
+		{
+			wlr_seat_touch_notify_up( wlserver.wlr.seat, event->time_msec, event->touch_id );
+			wlserver.touch_down[ event->touch_id ] = false;
 		}
 	}
 }
@@ -308,8 +327,17 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
 
-		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-		wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
+
+		if ( button == 0 )
+		{
+			wlr_seat_touch_notify_motion( wlserver.wlr.seat, event->time_msec, event->touch_id, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+		}
+		else
+		{
+			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+		}
 	}
 }
 
@@ -469,7 +497,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	}
 
 	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
-	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD );
+	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_TOUCH );
 
 	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wayland_display_name);
 

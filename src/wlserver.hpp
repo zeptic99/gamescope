@@ -5,6 +5,7 @@
 #include <wayland-server-core.h>
 
 #define WLSERVER_BUTTON_COUNT 4
+#define WLSERVER_TOUCH_COUNT 11 // Ten fingers + nose ought to be enough for anyone
 
 struct wlserver_t {
 	struct wl_display *wl_display;
@@ -29,6 +30,7 @@ struct wlserver_t {
 	double mouse_surface_cursory;
 	
 	bool button_held[ WLSERVER_BUTTON_COUNT ];
+	bool touch_down[ WLSERVER_TOUCH_COUNT ];
 };
 
 struct wlserver_keyboard {
