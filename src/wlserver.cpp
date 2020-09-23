@@ -44,6 +44,7 @@ Display *g_XWLDpy;
 
 bool run = true;
 
+// O = hover, 1/2/3 = left/right/middle, 4 = touch passthrough
 int g_nTouchClickMode = 1;
 
 void sig_handler(int signal)
@@ -238,9 +239,7 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
 
-		uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
-
-		if ( button == 0 )
+		if ( g_nTouchClickMode == 4 )
 		{
 			if ( event->touch_id >= 0 && event->touch_id < WLSERVER_TOUCH_COUNT )
 			{
@@ -254,6 +253,8 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 		{
 			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+
+			uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
 
 			if ( button != 0 && g_nTouchClickMode < WLSERVER_BUTTON_COUNT )
 			{
@@ -278,10 +279,14 @@ static void wlserver_handle_touch_up(struct wl_listener *listener, void *data)
 		{
 			if ( wlserver.button_held[ i ] == true )
 			{
-				uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
-				wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_RELEASED );
+				uint32_t button = steamcompmgr_button_to_wlserver_button( i );
 
-				bReleasedAny = true;
+				if ( button != 0 )
+				{
+					wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, button, WLR_BUTTON_RELEASED );
+					bReleasedAny = true;
+				}
+
 				wlserver.button_held[ i ] = false;
 			}
 		}
@@ -327,9 +332,7 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
 
-		uint32_t button = steamcompmgr_button_to_wlserver_button( g_nTouchClickMode );
-
-		if ( button == 0 )
+		if ( g_nTouchClickMode == 4 )
 		{
 			wlr_seat_touch_notify_motion( wlserver.wlr.seat, event->time_msec, event->touch_id, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		}
