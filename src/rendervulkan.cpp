@@ -1180,6 +1180,7 @@ int vulkan_init(void)
 	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 	
 	std::vector< const char * > vecEnabledInstanceExtensions;
+	vecEnabledInstanceExtensions.push_back( VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME );
 	vecEnabledInstanceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME );
 	vecEnabledInstanceExtensions.push_back( VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME );
 	
