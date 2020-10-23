@@ -1024,7 +1024,16 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	{
 		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &pOutput->surface ) )
 		{
-			fprintf(stderr, "SDL_Vulkan_CreateSurface failed\n");
+			fprintf( stderr, "SDL_Vulkan_CreateSurface failed\n" );
+			return false;
+		}
+
+		// TODO: check this when selecting the physical device and queue family
+		VkBool32 canPresent = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR( physicalDevice, queueFamilyIndex, pOutput->surface, &canPresent );
+		if ( !canPresent )
+		{
+			fprintf( stderr, "Physical device queue doesn't support presenting on our surface\n" );
 			return false;
 		}
 
