@@ -74,8 +74,13 @@ void inputSDLThreadRun( void )
 	SDL_Event event;
 	SDL_Keymod mod;
 	uint32_t key;
-	
-	SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS );
+
+	if ( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS ) != 0 )
+	{
+		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+		g_SDLInitLock.unlock();
+		return;
+	}
 
 	g_unSDLUserEventID = SDL_RegisterEvents( 1 );
 
@@ -103,6 +108,7 @@ void inputSDLThreadRun( void )
 
 	if ( g_SDLWindow == nullptr )
 	{
+		fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
 		g_SDLInitLock.unlock();
 		return;
 	}
