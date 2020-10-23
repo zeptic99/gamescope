@@ -1022,11 +1022,12 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	
 	if ( BIsNested() == true )
 	{
-		SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &pOutput->surface );
-		
-		if ( pOutput->surface == VK_NULL_HANDLE )
+		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &pOutput->surface ) )
+		{
+			fprintf(stderr, "SDL_Vulkan_CreateSurface failed\n");
 			return false;
-		
+		}
+
 		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physicalDevice, pOutput->surface, &pOutput->surfaceCaps );
 		
 		if ( result != VK_SUCCESS )
