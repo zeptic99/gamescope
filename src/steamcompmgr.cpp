@@ -2051,12 +2051,14 @@ static void
 handle_net_wm_state(Display *dpy, win *w, XClientMessageEvent *ev)
 {
 	uint32_t action = (uint32_t)ev->data.l[0];
-
-	if ((uint32_t)ev->data.l[1] == netWMStateFullscreenAtom)
-	{
-		update_net_wm_state(action, &w->isFullscreen);
-
-		focusDirty = True;
+	Atom *props = (Atom *)&ev->data.l[1];
+	for (size_t i = 0; i < 2; i++) {
+		if (props[i] == netWMStateFullscreenAtom) {
+			update_net_wm_state(action, &w->isFullscreen);
+			focusDirty = True;
+		} else if (props[i] != None) {
+			fprintf(stderr, "Unhandled NET_WM_STATE property change: %s\n", XGetAtomName(dpy, props[i]));
+		}
 	}
 }
 
