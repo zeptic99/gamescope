@@ -1613,6 +1613,31 @@ get_win_title(Display *dpy, win *w, Atom atom)
 }
 
 static void
+get_net_wm_state(Display *dpy, win *w)
+{
+	Atom type;
+	int format;
+	unsigned long nitems;
+	unsigned long bytesAfter;
+	unsigned char *data;
+	if (XGetWindowProperty(dpy, w->id, netWMStateAtom, 0, 2048, False,
+			AnyPropertyType, &type, &format, &nitems, &bytesAfter, &data) != Success) {
+		return;
+	}
+
+	Atom *props = (Atom *)data;
+	for (size_t i = 0; i < nitems; i++) {
+		if (props[i] == netWMStateFullscreenAtom) {
+			w->isFullscreen = True;
+		} else {
+			fprintf(stderr, "Unhandled initial NET_WM_STATE property: %s\n", XGetAtomName(dpy, props[i]));
+		}
+	}
+
+	XFree(data);
+}
+
+static void
 map_win (Display *dpy, Window id, unsigned long sequence)
 {
 	win		*w = find_win (dpy, id);
@@ -1660,6 +1685,8 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 
 	get_size_hints(dpy, w);
+
+	get_net_wm_state(dpy, w);
 
 	XWMHints *wmHints = XGetWMHints( dpy, w->id );
 
