@@ -235,6 +235,10 @@ static Atom		netSystemTrayOpcodeAtom;
 #define ICCCM_NORMAL_STATE 1
 #define ICCCM_ICONIC_STATE 3
 
+#define NET_WM_STATE_REMOVE 0
+#define NET_WM_STATE_ADD 1
+#define NET_WM_STATE_TOGGLE 2
+
 #define SYSTEM_TRAY_REQUEST_DOCK 0
 #define SYSTEM_TRAY_BEGIN_MESSAGE 1
 #define SYSTEM_TRAY_CANCEL_MESSAGE 2
@@ -2026,11 +2030,31 @@ handle_wl_surface_id(win *w, long surfaceID)
 }
 
 static void
+update_net_wm_state(uint32_t action, Bool *value)
+{
+	switch (action) {
+	case NET_WM_STATE_REMOVE:
+		*value = false;
+		break;
+	case NET_WM_STATE_ADD:
+		*value = true;
+		break;
+	case NET_WM_STATE_TOGGLE:
+		*value = !*value;
+		break;
+	default:
+		fprintf(stderr, "Unknown NET_WM_STATE action: %" PRIu32 "\n", action);
+	}
+}
+
+static void
 handle_net_wm_state(Display *dpy, win *w, XClientMessageEvent *ev)
 {
-	if ((unsigned)ev->data.l[1] == netWMStateFullscreenAtom)
+	uint32_t action = (uint32_t)ev->data.l[0];
+
+	if ((uint32_t)ev->data.l[1] == netWMStateFullscreenAtom)
 	{
-		w->isFullscreen = ev->data.l[0];
+		update_net_wm_state(action, &w->isFullscreen);
 
 		focusDirty = True;
 	}
