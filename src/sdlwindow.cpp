@@ -202,6 +202,7 @@ client:
 					case SDL_WINDOWEVENT_FOCUS_GAINED:
 						g_nNestedRefresh = g_nOldNestedRefresh;
 						g_bWindowFocused = true;
+						SDL_SetWindowGrab( g_SDLWindow, SDL_TRUE );
 						break;
 				}
 				break;
