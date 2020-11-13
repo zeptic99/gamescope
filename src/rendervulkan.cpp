@@ -761,7 +761,7 @@ retry:
 				uint32_t layerCount;
 				VkBool32 swapChannels;
 			} specializationData = {
-				.layerCount   = layerCount,
+				.layerCount   = layerCount + 1,
 				.swapChannels = swapChannels
 			};
 
@@ -1639,7 +1639,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		return false;
 	}
 	
-	vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines[pComposite->nLayerCount][pComposite->nSwapChannels]);
+	vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines[pComposite->nLayerCount - 1][pComposite->nSwapChannels]);
 	
 	vkCmdBindDescriptorSets(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
