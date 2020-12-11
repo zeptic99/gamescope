@@ -33,7 +33,7 @@ build/gamescope -- <game>
 
 ## Examples
 
-On any X11 or Wayland desktop running Mesa commit [d19bc94e4eb9](https://gitlab.freedesktop.org/mesa/mesa/-/commit/d19bc94e4eb94a2c8cbdb328c9eaa2faf1ba424c), you can set the Steam launch arguments of your game as follows:
+On any X11 or Wayland desktop running Mesa 20.3+, you can set the Steam launch arguments of your game as follows:
 
 ```
 // Upscale a 720p game to 1440p with integer scaling
