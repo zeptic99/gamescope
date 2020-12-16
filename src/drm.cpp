@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/select.h>
-#include <signal.h>
 
 extern "C" {
 #include <wlr/types/wlr_buffer.h>
@@ -248,12 +247,6 @@ static void page_flip_handler(int fd, unsigned int frame,
 
 void flip_handler_thread_run(void)
 {
-	// see wlroots xwayland startup and how wl_event_loop_add_signal works
-	sigset_t mask;
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGUSR1);
-	sigprocmask(SIG_BLOCK, &mask, NULL);
-
 	fd_set fds;
 	int ret;
 	drmEventContext evctx = {
