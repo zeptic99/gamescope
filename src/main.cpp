@@ -160,27 +160,30 @@ int main(int argc, char **argv)
 	{
 		fprintf( stderr, "No CAP_SYS_NICE, falling back to regular-priority compute and threads.\nPerformance will be affected.\n" );
 	}
-	
+
 	if ( bSleepAtStartup == true )
 	{
 	 	sleep( 2 );
 	}
-	
+
 	XInitThreads();
-	
-	if ( getenv("DISPLAY") != NULL )
+
+	if ( getenv("DISPLAY") != NULL || getenv("WAYLAND_DISPLAY") != NULL )
 	{
 		g_bIsNested = true;
 	}
 
 	wlserver_init(argc, argv, g_bIsNested == true );
-	
+
 	if ( initOutput() != 0 )
 	{
 		fprintf( stderr, "Failed to initialize output\n" );
 		return 1;
 	}
-	
+
+	// Prevent our clients from connecting to the parent compositor
+	unsetenv("WAYLAND_DISPLAY");
+
 	wlserver_run();
 }
 
