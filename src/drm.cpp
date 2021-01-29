@@ -396,8 +396,10 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		drm->cursor_height = 64;
 	}
 	
-	drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1);
-	drmSetClientCap(drm->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
+		fprintf(stderr, "drmSetClientCap(ATOMIC) failed\n");
+		return -1;
+	}
 	
 	drm->plane_id = get_plane_id( &g_DRM );
 	
