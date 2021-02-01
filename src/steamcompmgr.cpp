@@ -609,7 +609,6 @@ import_commit ( struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dmabuf, co
 	if ( BIsNested() == False )
 	{
 		commit.fb_id = drm_fbid_from_dmabuf( &g_DRM, buf, dmabuf );
-		assert( commit.fb_id != 0 );
 	}
 
 	commit.vulkanTex = vulkan_create_texture_from_dmabuf( dmabuf );
