@@ -148,7 +148,7 @@ static uint32_t get_plane_id(struct drm_t *drm)
 	drmModePlaneResPtr plane_resources;
 	uint32_t i;
 	uint32_t ret = 0;
-	int found_primary = 0;
+	bool found_primary = false;
 	
 	plane_resources = drmModeGetPlaneResources(drm->fd);
 	if (!plane_resources) {
@@ -192,7 +192,7 @@ static uint32_t get_plane_id(struct drm_t *drm)
 					}
 				}
 
-				found_primary = 1;
+				found_primary = true;
 			}
 			
 			drmModeFreeObjectProperties(props);
