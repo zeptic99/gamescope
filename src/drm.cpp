@@ -684,14 +684,14 @@ out:
 
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf )
 {
-	assert( dma_buf->n_planes == 1);
-
 	uint32_t fb_id = 0;
 	uint32_t handles[4] = { 0 };
-	if ( drmPrimeFDToHandle( drm->fd, dma_buf->fd[0], &handles[0] ) != 0 )
-	{
-		perror("drmPrimeFDToHandle failed");
-		return 0;
+	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
+		if ( drmPrimeFDToHandle( drm->fd, dma_buf->fd[i], &handles[i] ) != 0 )
+		{
+			perror("drmPrimeFDToHandle failed");
+			return 0;
+		}
 	}
 	
 	if ( drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &fb_id, 0 ) != 0 )
