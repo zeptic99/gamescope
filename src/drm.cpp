@@ -690,19 +690,44 @@ out:
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf )
 {
 	uint32_t fb_id = 0;
-	uint32_t handles[4] = { 0 };
+
+	uint32_t handles[4];
+	uint64_t modifiers[4];
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
 		if ( drmPrimeFDToHandle( drm->fd, dma_buf->fd[i], &handles[i] ) != 0 )
 		{
 			perror("drmPrimeFDToHandle failed");
 			return 0;
 		}
+
+		/* KMS requires all planes to have the same modifier */
+		modifiers[i] = dma_buf->modifier;
 	}
-	
-	if ( drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &fb_id, 0 ) != 0 )
+
+	if ( dma_buf->modifier != DRM_FORMAT_MOD_INVALID )
 	{
-		perror("drmModeAddFB2 failed");
-		return 0;
+		if ( !drm->allow_modifiers )
+		{
+			if ( s_drm_log != 0 )
+			{
+				fprintf(stderr, "Canot import DMA-BUF: has a modifier (0x%" PRIX64 ", but KMS doesn't support them\n", dma_buf->modifier);
+			}
+			return 0;
+		}
+
+		if ( drmModeAddFB2WithModifiers( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, modifiers, &fb_id, 0 ) != 0 )
+		{
+			perror("drmModeAddFB2WithModifiers failed");
+			return 0;
+		}
+	}
+	else
+	{
+		if ( drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &fb_id, 0 ) != 0 )
+		{
+			perror("drmModeAddFB2 failed");
+			return 0;
+		}
 	}
 	
 	if ( s_drm_log != 0 )
