@@ -439,6 +439,11 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_HEIGHT, &drm->cursor_height) != 0) {
 		drm->cursor_height = 64;
 	}
+
+	uint64_t cap;
+	if (drmGetCap(drm->fd, DRM_CAP_ADDFB2_MODIFIERS, &cap) == 0 && cap != 0) {
+		drm->allow_modifiers = true;
+	}
 	
 	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
 		fprintf(stderr, "drmSetClientCap(ATOMIC) failed\n");
