@@ -178,9 +178,9 @@ static int get_plane_id(struct drm_t *drm)
 					}
 					
 					found_primary = 1;
-					}
-					
-					drmModeFreeProperty(p);
+				}
+
+				drmModeFreeProperty(p);
 			}
 			
 			drmModeFreeObjectProperties(props);
