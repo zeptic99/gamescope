@@ -123,16 +123,30 @@ static int find_drm_device(drmModeRes **resources)
 	return fd;
 }
 
+/* Seems like there is some room for a drmModeObjectGetNamedProperty()
+ * type helper in libdrm..
+ */
+static bool get_prop_value(struct drm_t *drm, drmModeObjectProperties *props, const char *name, uint64_t *out) {
+	for (uint32_t i = 0; i < props->count_props; i++) {
+		drmModePropertyRes *p = drmModeGetProperty(drm->fd, props->props[i]);
+		bool found = strcmp(p->name, name) == 0;
+		drmModeFreeProperty(p);
+
+		if (found) {
+			*out = props->prop_values[i];
+			return true;
+		}
+	}
+	return false;
+}
+
 /* Pick a plane.. something that at a minimum can be connected to
  * the chosen crtc, but prefer primary plane.
- *
- * Seems like there is some room for a drmModeObjectGetNamedProperty()
- * type helper in libdrm..
  */
 static int get_plane_id(struct drm_t *drm)
 {
 	drmModePlaneResPtr plane_resources;
-	uint32_t i, j;
+	uint32_t i;
 	int ret = -EINVAL;
 	int found_primary = 0;
 	
@@ -152,35 +166,28 @@ static int get_plane_id(struct drm_t *drm)
 		
 		if (plane->possible_crtcs & (1 << drm->crtc_index)) {
 			drmModeObjectPropertiesPtr props =
-			drmModeObjectGetProperties(drm->fd, id, DRM_MODE_OBJECT_PLANE);
-			
+				drmModeObjectGetProperties(drm->fd, id, DRM_MODE_OBJECT_PLANE);
+
 			/* primary or not, this plane is good enough to use: */
 			ret = id;
-			
-			for (j = 0; j < props->count_props; j++) {
-				drmModePropertyPtr p =
-				drmModeGetProperty(drm->fd, props->props[j]);
-				
-				if ((strcmp(p->name, "type") == 0) &&
-					(props->prop_values[j] == DRM_PLANE_TYPE_PRIMARY)) {
-					/* found our primary plane, lets use that: */
-					
-					for (uint32_t k = 0; k < plane->count_formats; k++)
-					{
-						uint32_t fmt = plane->formats[k];
-						if (fmt == DRM_FORMAT_XRGB8888) {
-							// Prefer formats without alpha channel for main plane
-							g_nDRMFormat = fmt;
-							break;
-						} else if (fmt == DRM_FORMAT_ARGB8888) {
-							g_nDRMFormat = fmt;
-						}
+
+			uint64_t plane_type;
+			if (get_prop_value(drm, props, "type", &plane_type) && plane_type == DRM_PLANE_TYPE_PRIMARY) {
+				/* found our primary plane, lets use that: */
+
+				for (uint32_t k = 0; k < plane->count_formats; k++)
+				{
+					uint32_t fmt = plane->formats[k];
+					if (fmt == DRM_FORMAT_XRGB8888) {
+						// Prefer formats without alpha channel for main plane
+						g_nDRMFormat = fmt;
+						break;
+					} else if (fmt == DRM_FORMAT_ARGB8888) {
+						g_nDRMFormat = fmt;
 					}
-					
-					found_primary = 1;
 				}
 
-				drmModeFreeProperty(p);
+				found_primary = 1;
 			}
 			
 			drmModeFreeObjectProperties(props);
