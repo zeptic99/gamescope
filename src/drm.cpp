@@ -107,7 +107,7 @@ static int find_drm_device(drmModeRes **resources)
 		 * drmModeResources, it means it's also a
 		 * KMS-capable device.
 		 */
-		fd = open(device->nodes[DRM_NODE_PRIMARY], O_RDWR);
+		fd = open(device->nodes[DRM_NODE_PRIMARY], O_RDWR | O_CLOEXEC);
 		if (fd < 0)
 			continue;
 		ret = get_resources(fd, resources);
@@ -287,7 +287,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	int i, ret, area;
 	
 	if (device) {
-		drm->fd = open(device, O_RDWR);
+		drm->fd = open(device, O_RDWR | O_CLOEXEC);
 		ret = get_resources(drm->fd, &resources);
 		if (ret < 0 && errno == EOPNOTSUPP)
 			fprintf(stderr, "%s does not look like a modeset device\n", device);
