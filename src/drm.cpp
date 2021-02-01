@@ -27,7 +27,7 @@ extern "C" {
 
 struct drm_t g_DRM;
 
-uint32_t g_nDRMFormat;
+uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
 bool g_bRotated;
 
 bool g_bUseLayers;
@@ -185,6 +185,10 @@ static uint32_t get_plane_id(struct drm_t *drm)
 					} else if (fmt == DRM_FORMAT_ARGB8888) {
 						g_nDRMFormat = fmt;
 					}
+				}
+				if (g_nDRMFormat == DRM_FORMAT_INVALID) {
+					fprintf(stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888");
+					return 0;
 				}
 			}
 			
