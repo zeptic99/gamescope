@@ -25,13 +25,13 @@ extern "C" {
 
 #include <thread>
 
-struct drm_t g_DRM;
+struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
-bool g_bRotated;
+bool g_bRotated = false;
 
-bool g_bUseLayers;
-bool g_bDebugLayers;
+bool g_bUseLayers = false;
+bool g_bDebugLayers = false;
 
 static int s_drm_log = 0;
 
