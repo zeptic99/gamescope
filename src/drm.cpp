@@ -140,15 +140,12 @@ static bool get_prop_value(struct drm_t *drm, drmModeObjectProperties *props, co
 	return false;
 }
 
-/* Pick a plane.. something that at a minimum can be connected to
- * the chosen crtc, but prefer primary plane.
- */
+/* Pick a primary plane that can be connected to the chosen CRTC. */
 static uint32_t get_plane_id(struct drm_t *drm)
 {
 	drmModePlaneResPtr plane_resources;
 	uint32_t i;
 	uint32_t ret = 0;
-	bool found_primary = false;
 	
 	plane_resources = drmModeGetPlaneResources(drm->fd);
 	if (!plane_resources) {
@@ -156,7 +153,7 @@ static uint32_t get_plane_id(struct drm_t *drm)
 		return 0;
 	}
 	
-	for (i = 0; (i < plane_resources->count_planes) && !found_primary; i++) {
+	for (i = 0; (i < plane_resources->count_planes) && ret == 0; i++) {
 		uint32_t id = plane_resources->planes[i];
 		drmModePlanePtr plane = drmModeGetPlane(drm->fd, id);
 		if (!plane) {
@@ -168,9 +165,6 @@ static uint32_t get_plane_id(struct drm_t *drm)
 			drmModeObjectPropertiesPtr props =
 				drmModeObjectGetProperties(drm->fd, id, DRM_MODE_OBJECT_PLANE);
 
-			/* primary or not, this plane is good enough to use: */
-			ret = id;
-
 			uint64_t plane_type;
 			if (!get_prop_value(drm, props, "type", &plane_type)) {
 				fprintf(stderr, "Plane %" PRIu32 " is missing the type property", id);
@@ -178,7 +172,8 @@ static uint32_t get_plane_id(struct drm_t *drm)
 			}
 
 			if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
-				/* found our primary plane, lets use that: */
+				/* found our primary plane, let's use that */
+				ret = id;
 
 				for (uint32_t k = 0; k < plane->count_formats; k++)
 				{
@@ -191,8 +186,6 @@ static uint32_t get_plane_id(struct drm_t *drm)
 						g_nDRMFormat = fmt;
 					}
 				}
-
-				found_primary = true;
 			}
 			
 			drmModeFreeObjectProperties(props);
