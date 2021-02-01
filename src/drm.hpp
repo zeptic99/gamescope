@@ -10,6 +10,7 @@
 extern "C" {
 #include <libliftoff.h>
 #include <wlr/render/dmabuf.h>
+#include <wlr/render/drm_format_set.h>
 }
 
 #include "rendervulkan.hpp"
@@ -67,6 +68,7 @@ struct drm_t {
 	uint32_t connector_id;
 	
 	uint32_t plane_id;
+	struct wlr_drm_format_set plane_formats;
 	
 	drmModeAtomicReq *req;
 	uint32_t flags;

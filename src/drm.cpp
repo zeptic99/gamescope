@@ -126,7 +126,7 @@ static int find_drm_device(drmModeRes **resources)
 /* Seems like there is some room for a drmModeObjectGetNamedProperty()
  * type helper in libdrm..
  */
-static bool get_prop_value(struct drm_t *drm, drmModeObjectProperties *props, const char *name, uint64_t *out) {
+static bool get_prop_value(struct drm_t *drm, const drmModeObjectProperties *props, const char *name, uint64_t *out) {
 	for (uint32_t i = 0; i < props->count_props; i++) {
 		drmModePropertyRes *p = drmModeGetProperty(drm->fd, props->props[i]);
 		bool found = strcmp(p->name, name) == 0;
@@ -138,6 +138,53 @@ static bool get_prop_value(struct drm_t *drm, drmModeObjectProperties *props, co
 		}
 	}
 	return false;
+}
+
+static bool get_plane_formats(struct drm_t *drm, const drmModePlane *plane, const drmModeObjectProperties *props) {
+	for (uint32_t k = 0; k < plane->count_formats; k++) {
+		uint32_t fmt = plane->formats[k];
+
+		wlr_drm_format_set_add(&drm->plane_formats, fmt, DRM_FORMAT_MOD_INVALID);
+
+		if (fmt == DRM_FORMAT_XRGB8888) {
+			// Prefer formats without alpha channel for main plane
+			g_nDRMFormat = fmt;
+		} else if (g_nDRMFormat == DRM_FORMAT_INVALID && fmt == DRM_FORMAT_ARGB8888) {
+			g_nDRMFormat = fmt;
+		}
+	}
+
+	if (g_nDRMFormat == DRM_FORMAT_INVALID) {
+		fprintf(stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888");
+		return false;
+	}
+
+	uint64_t blob_id;
+	if (get_prop_value(drm, props, "IN_FORMATS", &blob_id)) {
+		drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
+		if (!blob) {
+			perror("drmModeGetPropertyBlob(IN_FORMATS) failed");
+			return false;
+		}
+
+		struct drm_format_modifier_blob *data =
+			(struct drm_format_modifier_blob *)blob->data;
+		uint32_t *fmts = (uint32_t *)((char *)data + data->formats_offset);
+		struct drm_format_modifier *mods = (struct drm_format_modifier *)
+			((char *)data + data->modifiers_offset);
+		for (uint32_t i = 0; i < data->count_modifiers; ++i) {
+			for (int j = 0; j < 64; ++j) {
+				if (mods[i].formats & ((uint64_t)1 << j)) {
+					wlr_drm_format_set_add(&drm->plane_formats,
+						fmts[j + mods[i].offset], mods[i].modifier);
+				}
+			}
+		}
+
+		drmModeFreePropertyBlob(blob);
+	}
+
+	return true;
 }
 
 /* Pick a primary plane that can be connected to the chosen CRTC. */
@@ -175,19 +222,7 @@ static uint32_t get_plane_id(struct drm_t *drm)
 				/* found our primary plane, let's use that */
 				ret = id;
 
-				for (uint32_t k = 0; k < plane->count_formats; k++)
-				{
-					uint32_t fmt = plane->formats[k];
-					if (fmt == DRM_FORMAT_XRGB8888) {
-						// Prefer formats without alpha channel for main plane
-						g_nDRMFormat = fmt;
-						break;
-					} else if (fmt == DRM_FORMAT_ARGB8888) {
-						g_nDRMFormat = fmt;
-					}
-				}
-				if (g_nDRMFormat == DRM_FORMAT_INVALID) {
-					fprintf(stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888");
+				if (!get_plane_formats(drm, plane, props)) {
 					return 0;
 				}
 			}
