@@ -172,7 +172,12 @@ static int get_plane_id(struct drm_t *drm)
 			ret = id;
 
 			uint64_t plane_type;
-			if (get_prop_value(drm, props, "type", &plane_type) && plane_type == DRM_PLANE_TYPE_PRIMARY) {
+			if (!get_prop_value(drm, props, "type", &plane_type)) {
+				fprintf(stderr, "Plane %" PRIu32 " is missing the type property", id);
+				return -1;
+			}
+
+			if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
 				/* found our primary plane, lets use that: */
 
 				for (uint32_t k = 0; k < plane->count_formats; k++)
