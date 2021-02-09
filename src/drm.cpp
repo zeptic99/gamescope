@@ -710,7 +710,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 		{
 			if ( s_drm_log != 0 )
 			{
-				fprintf(stderr, "Canot import DMA-BUF: has a modifier (0x%" PRIX64 ", but KMS doesn't support them\n", dma_buf->modifier);
+				fprintf(stderr, "Cannot import DMA-BUF: has a modifier (0x%" PRIX64 "), but KMS doesn't support them\n", dma_buf->modifier);
 			}
 			return 0;
 		}
