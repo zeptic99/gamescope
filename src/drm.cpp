@@ -691,8 +691,8 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 {
 	uint32_t fb_id = 0;
 
-	uint32_t handles[4];
-	uint64_t modifiers[4];
+	uint32_t handles[4] = {0};
+	uint64_t modifiers[4] = {0};
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
 		if ( drmPrimeFDToHandle( drm->fd, dma_buf->fd[i], &handles[i] ) != 0 )
 		{
