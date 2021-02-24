@@ -470,6 +470,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		dmabuf.width = width;
 		dmabuf.height = height;
 		dmabuf.format = VulkanFormatToDRM( format );
+		assert( dmabuf.format != DRM_FORMAT_INVALID );
 
 		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
