@@ -841,27 +841,28 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 						 pPipeline->layerBindings[ 0 ].surfaceWidth,
 						 pPipeline->layerBindings[ 0 ].surfaceHeight );
 
+	int64_t crtcX = pComposite->data.layers[ 0 ].flOffsetX * -1;
+	int64_t crtcY = pComposite->data.layers[ 0 ].flOffsetY * -1;
+	int64_t crtcW = pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->data.layers[ 0 ].flScaleX;
+	int64_t crtcH = pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->data.layers[ 0 ].flScaleY;
+
 	if ( g_bRotated )
 	{
-		add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->data.layers[ 0 ].flOffsetY * -1);
-		add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->data.layers[ 0 ].flOffsetX * -1);
-		
-		add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->data.layers[ 0 ].flScaleX);
-		add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->data.layers[ 0 ].flScaleY);
-	}
-	else
-	{
-		add_plane_property(drm, req, plane_id, "CRTC_X", pComposite->data.layers[ 0 ].flOffsetX * -1);
-		add_plane_property(drm, req, plane_id, "CRTC_Y", pComposite->data.layers[ 0 ].flOffsetY * -1);
-		
-		add_plane_property(drm, req, plane_id, "CRTC_W", pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->data.layers[ 0 ].flScaleX);
-		add_plane_property(drm, req, plane_id, "CRTC_H", pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->data.layers[ 0 ].flScaleY);
+		int64_t tmp = crtcX;
+		crtcX = crtcY;
+		crtcY = tmp;
 
-		gpuvis_trace_printf ( "crtc %i+%i@%ix%i\n",
-							  (int)pComposite->data.layers[ 0 ].flOffsetX * -1, (int)pComposite->data.layers[ 0 ].flOffsetY * -1,
-							  (int)(pPipeline->layerBindings[ 0 ].surfaceWidth / pComposite->data.layers[ 0 ].flScaleX),
-							  (int)(pPipeline->layerBindings[ 0 ].surfaceHeight / pComposite->data.layers[ 0 ].flScaleX) );
+		tmp = crtcW;
+		crtcW = crtcH;
+		crtcH = tmp;
 	}
+
+	add_plane_property(drm, req, plane_id, "CRTC_X", crtcX);
+	add_plane_property(drm, req, plane_id, "CRTC_Y", crtcY);
+	add_plane_property(drm, req, plane_id, "CRTC_W", crtcW);
+	add_plane_property(drm, req, plane_id, "CRTC_H", crtcH);
+
+	gpuvis_trace_printf ( "crtc %li,%li %lix%li\n", crtcX, crtcY, crtcW, crtcH );
 
 	unsigned test_flags = (drm->flags & DRM_MODE_ATOMIC_ALLOW_MODESET) | DRM_MODE_ATOMIC_TEST_ONLY;
 	int ret = drmModeAtomicCommit( drm->fd, drm->req, test_flags, NULL );
