@@ -812,7 +812,7 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 	{
 		return false;
 	}
-	
+
 	if ( pPipeline->layerBindings[ 0 ].fbid == 0 )
 	{
 		return false;
@@ -822,7 +822,6 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 	uint32_t plane_id = drm->plane->plane->plane_id;
 	uint32_t fb_id = pPipeline->layerBindings[ 0 ].fbid;
 
-	assert( fb_id != 0 );
 	drm->fbids_in_req.push_back( fb_id );
 
 	if ( g_bRotated )
