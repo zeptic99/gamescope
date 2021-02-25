@@ -805,14 +805,6 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 		return false;
 	}
 
-	// Getting EINVAL trying to flip a 1x1 window, so does liftoff
-	// TODO: get liftoff and/or amdgpuo bug fixed, workaround below
-	if ( pPipeline->layerBindings[ 0 ].surfaceWidth < 64 ||
-		 pPipeline->layerBindings[ 0 ].surfaceHeight < 64 )
-	{
-		return false;
-	}
-
 	if ( pPipeline->layerBindings[ 0 ].fbid == 0 )
 	{
 		return false;
