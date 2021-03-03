@@ -14,6 +14,7 @@
 #include "rendervulkan.hpp"
 #include "sdlwindow.hpp"
 #include "wlserver.hpp"
+#include "gpuvis_trace_utils.h"
 
 int ac;
 char **av;
@@ -159,6 +160,11 @@ int main(int argc, char **argv)
 	if ( g_bNiceCap == false )
 	{
 		fprintf( stderr, "No CAP_SYS_NICE, falling back to regular-priority compute and threads.\nPerformance will be affected.\n" );
+	}
+
+	if ( gpuvis_trace_init() != -1 )
+	{
+		fprintf( stderr, "Tracing is enabled\n");
 	}
 
 	if ( bSleepAtStartup == true )
