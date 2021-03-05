@@ -52,6 +52,7 @@ struct drm_t {
 
 	uint64_t cursor_width, cursor_height;
 	bool allow_modifiers;
+	struct wlr_drm_format_set formats;
 	
 	/* only used for atomic: */
 	struct plane *plane;

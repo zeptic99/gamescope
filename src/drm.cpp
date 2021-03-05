@@ -140,23 +140,10 @@ static bool get_prop_value(struct drm_t *drm, const drmModeObjectProperties *pro
 	return false;
 }
 
-static bool get_plane_formats(struct drm_t *drm, const drmModePlane *plane, const drmModeObjectProperties *props) {
+static bool get_plane_formats(struct drm_t *drm, const drmModePlane *plane, const drmModeObjectProperties *props, struct wlr_drm_format_set *formats) {
 	for (uint32_t k = 0; k < plane->count_formats; k++) {
 		uint32_t fmt = plane->formats[k];
-
-		wlr_drm_format_set_add(&drm->plane_formats, fmt, DRM_FORMAT_MOD_INVALID);
-
-		if (fmt == DRM_FORMAT_XRGB8888) {
-			// Prefer formats without alpha channel for main plane
-			g_nDRMFormat = fmt;
-		} else if (g_nDRMFormat == DRM_FORMAT_INVALID && fmt == DRM_FORMAT_ARGB8888) {
-			g_nDRMFormat = fmt;
-		}
-	}
-
-	if (g_nDRMFormat == DRM_FORMAT_INVALID) {
-		fprintf(stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888");
-		return false;
+		wlr_drm_format_set_add(formats, fmt, DRM_FORMAT_MOD_INVALID);
 	}
 
 	uint64_t blob_id;
@@ -175,7 +162,7 @@ static bool get_plane_formats(struct drm_t *drm, const drmModePlane *plane, cons
 		for (uint32_t i = 0; i < data->count_modifiers; ++i) {
 			for (int j = 0; j < 64; ++j) {
 				if (mods[i].formats & ((uint64_t)1 << j)) {
-					wlr_drm_format_set_add(&drm->plane_formats,
+					wlr_drm_format_set_add(formats,
 						fmts[j + mods[i].offset], mods[i].modifier);
 				}
 			}
@@ -185,6 +172,21 @@ static bool get_plane_formats(struct drm_t *drm, const drmModePlane *plane, cons
 	}
 
 	return true;
+}
+
+static uint32_t pick_plane_format( const struct wlr_drm_format_set *formats )
+{
+	uint32_t result = DRM_FORMAT_INVALID;
+	for ( size_t i = 0; i < formats->len; i++ ) {
+		uint32_t fmt = formats->formats[i]->format;
+		if ( fmt == DRM_FORMAT_XRGB8888 ) {
+			// Prefer formats without alpha channel for main plane
+			result = fmt;
+		} else if ( result == DRM_FORMAT_INVALID && fmt == DRM_FORMAT_ARGB8888 ) {
+			result = fmt;
+		}
+	}
+	return result;
 }
 
 /* Pick a primary plane that can be connected to the chosen CRTC. */
@@ -218,11 +220,15 @@ static uint32_t get_plane_id(struct drm_t *drm)
 				return 0;
 			}
 
+			if (!get_plane_formats(drm, plane, props, &drm->formats)) {
+				return 0;
+			}
+
 			if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
 				/* found our primary plane, let's use that */
 				ret = id;
 
-				if (!get_plane_formats(drm, plane, props)) {
+				if (!get_plane_formats(drm, plane, props, &drm->plane_formats)) {
 					return 0;
 				}
 			}
@@ -234,6 +240,12 @@ static uint32_t get_plane_id(struct drm_t *drm)
 	}
 
 	drmModeFreePlaneResources(plane_resources);
+
+	g_nDRMFormat = pick_plane_format( &drm->plane_formats );
+	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
+		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
+		return false;
+	}
 
 	return ret;
 }
