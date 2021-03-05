@@ -90,17 +90,17 @@ static int find_drm_device(drmModeRes **resources)
 {
 	drmDevicePtr devices[MAX_DRM_DEVICES] = { NULL };
 	int num_devices, fd = -1;
-	
+
 	num_devices = drmGetDevices2(0, devices, MAX_DRM_DEVICES);
 	if (num_devices < 0) {
 		perror("drmGetDevices2 failed");
 		return -1;
 	}
-	
+
 	for (int i = 0; i < num_devices; i++) {
 		drmDevicePtr device = devices[i];
 		int ret;
-		
+
 		if (!(device->available_nodes & (1 << DRM_NODE_PRIMARY)))
 			continue;
 		/* OK, it's a primary device. If we can get the
@@ -117,7 +117,7 @@ static int find_drm_device(drmModeRes **resources)
 		fd = -1;
 	}
 	drmFreeDevices(devices, num_devices);
-	
+
 	if (fd < 0)
 		fprintf(stderr, "no drm device found!\n");
 	return fd;
@@ -193,13 +193,13 @@ static uint32_t get_plane_id(struct drm_t *drm)
 	drmModePlaneResPtr plane_resources;
 	uint32_t i;
 	uint32_t ret = 0;
-	
+
 	plane_resources = drmModeGetPlaneResources(drm->fd);
 	if (!plane_resources) {
 		perror("drmModeGetPlaneResources failed");
 		return 0;
 	}
-	
+
 	for (i = 0; (i < plane_resources->count_planes) && ret == 0; i++) {
 		uint32_t id = plane_resources->planes[i];
 		drmModePlanePtr plane = drmModeGetPlane(drm->fd, id);
@@ -207,7 +207,7 @@ static uint32_t get_plane_id(struct drm_t *drm)
 			fprintf(stderr, "drmModeGetPlane(%u) failed: %s\n", id, strerror(errno));
 			continue;
 		}
-		
+
 		if (plane->possible_crtcs & (1 << drm->crtc_index)) {
 			drmModeObjectPropertiesPtr props =
 				drmModeObjectGetProperties(drm->fd, id, DRM_MODE_OBJECT_PLANE);
@@ -226,15 +226,15 @@ static uint32_t get_plane_id(struct drm_t *drm)
 					return 0;
 				}
 			}
-			
+
 			drmModeFreeObjectProperties(props);
 		}
-		
+
 		drmModeFreePlane(plane);
 	}
-	
+
 	drmModeFreePlaneResources(plane_resources);
-	
+
 	return ret;
 }
 
@@ -301,7 +301,7 @@ void flip_handler_thread_run(void)
 	FD_ZERO(&fds);
 	FD_SET(0, &fds);
 	FD_SET(g_DRM.fd, &fds);
-	
+
 	while ( true )
 	{
 		ret = select(g_DRM.fd + 1, &fds, NULL, NULL, NULL);
@@ -320,7 +320,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	drmModeConnector *connector = NULL;
 	drmModeEncoder *encoder = NULL;
 	int i, ret, area;
-	
+
 	if (device) {
 		drm->fd = open(device, O_RDWR | O_CLOEXEC);
 		ret = get_resources(drm->fd, &resources);
@@ -329,17 +329,17 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	} else {
 		drm->fd = find_drm_device(&resources);
 	}
-	
+
 	if (drm->fd < 0) {
 		fprintf(stderr, "could not open drm device\n");
 		return -1;
 	}
-	
+
 	if (!resources) {
 		fprintf(stderr, "drmModeGetResources failed: %s\n", strerror(errno));
 		return -1;
 	}
-	
+
 	/* find a connected connector: */
 	for (i = 0; i < resources->count_connectors; i++) {
 		connector = drmModeGetConnector(drm->fd, resources->connectors[i]);
@@ -350,7 +350,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		drmModeFreeConnector(connector);
 		connector = NULL;
 	}
-	
+
 	if (!connector) {
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
@@ -358,12 +358,12 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		fprintf(stderr, "no connected connector!\n");
 		return -1;
 	}
-	
+
 	/* find user requested mode: */
 	if (mode_str && *mode_str) {
 		for (i = 0; i < connector->count_modes; i++) {
 			drmModeModeInfo *current_mode = &connector->modes[i];
-			
+
 			if (strcmp(current_mode->name, mode_str) == 0) {
 				if (vrefresh == 0 || current_mode->vrefresh == vrefresh) {
 					drm->mode = current_mode;
@@ -374,17 +374,17 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		if (!drm->mode)
 			fprintf(stderr, "requested mode not found, using default mode!\n");
 	}
-	
+
 	/* find preferred mode or the highest resolution mode: */
 	if (!drm->mode) {
 		for (i = 0, area = 0; i < connector->count_modes; i++) {
 			drmModeModeInfo *current_mode = &connector->modes[i];
-			
+
 			if (current_mode->type & DRM_MODE_TYPE_PREFERRED) {
 				drm->mode = current_mode;
 				break;
 			}
-			
+
 			int current_area = current_mode->hdisplay * current_mode->vdisplay;
 			if (current_area > area) {
 				drm->mode = current_mode;
@@ -392,7 +392,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 			}
 		}
 	}
-	
+
 	if (!drm->mode) {
 		fprintf(stderr, "could not find mode!\n");
 		return -1;
@@ -400,7 +400,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 
 	if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode), &drm->mode_id) != 0)
 		return -1;
-	
+
 	/* find encoder: */
 	for (i = 0; i < resources->count_encoders; i++) {
 		encoder = drmModeGetEncoder(drm->fd, resources->encoders[i]);
@@ -409,7 +409,7 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		drmModeFreeEncoder(encoder);
 		encoder = NULL;
 	}
-	
+
 	if (encoder) {
 		drm->crtc_id = encoder->crtc_id;
 	} else {
@@ -418,19 +418,19 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 			fprintf(stderr, "no crtc found!\n");
 			return -1;
 		}
-		
+
 		drm->crtc_id = crtc_id;
 	}
-	
+
 	for (i = 0; i < resources->count_crtcs; i++) {
 		if (resources->crtcs[i] == drm->crtc_id) {
 			drm->crtc_index = i;
 			break;
 		}
 	}
-	
+
 	drmModeFreeResources(resources);
-	
+
 	drm->connector_id = connector->connector_id;
 
 	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_WIDTH, &drm->cursor_width) != 0) {
@@ -444,20 +444,20 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	if (drmGetCap(drm->fd, DRM_CAP_ADDFB2_MODIFIERS, &cap) == 0 && cap != 0) {
 		drm->allow_modifiers = true;
 	}
-	
+
 	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
 		fprintf(stderr, "drmSetClientCap(ATOMIC) failed\n");
 		return -1;
 	}
-	
+
 	drm->plane_id = get_plane_id( &g_DRM );
-	
+
 	if ( drm->plane_id == 0 )
 	{
 		fprintf(stderr, "could not find a suitable plane\n");
 		return -1;
 	}
-	
+
 	drm->plane = (struct plane*)calloc(1, sizeof(*drm->plane));
 	drm->crtc = (struct crtc*)calloc(1, sizeof(*drm->crtc));
 	drm->connector = (struct connector*)calloc(1, sizeof(*drm->connector));
@@ -495,15 +495,15 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	get_properties(plane, PLANE, drm->plane_id);
 	get_properties(crtc, CRTC, drm->crtc_id);
 	get_properties(connector, CONNECTOR, drm->connector_id);
-	
+
 	drm->kms_in_fence_fd = -1;
-	
+
 	std::thread flip_handler_thread( flip_handler_thread_run );
 	flip_handler_thread.detach();
-	
+
 	g_nOutputWidth = drm->mode->hdisplay;
 	g_nOutputHeight = drm->mode->vdisplay;
-	
+
 	g_nOutputRefresh = drm->mode->vrefresh;
 
 	if ( g_nOutputWidth < g_nOutputHeight )
@@ -518,20 +518,20 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	if (g_bUseLayers) {
 		liftoff_log_init(g_bDebugLayers ? LIFTOFF_DEBUG : LIFTOFF_ERROR, NULL);
 	}
-	
+
 	drm->lo_device = liftoff_device_create( drm->fd );
 	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc_id );
-	
+
 	assert( drm->lo_device && drm->lo_output );
-	
+
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
 		drm->lo_layers[ i ] = liftoff_layer_create( drm->lo_output );
 		assert( drm->lo_layers[ i ] );
 	}
-	
+
 	drm->flipcount = 0;
-	
+
 	return 0;
 }
 
@@ -542,19 +542,19 @@ static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
 	struct connector *obj = drm->connector;
 	unsigned int i;
 	int prop_id = -1;
-	
+
 	for (i = 0 ; i < obj->props->count_props ; i++) {
 		if (strcmp(obj->props_info[i]->name, name) == 0) {
 			prop_id = obj->props_info[i]->prop_id;
 			break;
 		}
 	}
-	
+
 	if (prop_id < 0) {
 		fprintf(stderr, "no connector property: %s\n", name);
 		return -EINVAL;
 	}
-	
+
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
@@ -565,61 +565,59 @@ static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
 	struct crtc *obj = drm->crtc;
 	unsigned int i;
 	int prop_id = -1;
-	
+
 	for (i = 0 ; i < obj->props->count_props ; i++) {
 		if (strcmp(obj->props_info[i]->name, name) == 0) {
 			prop_id = obj->props_info[i]->prop_id;
 			break;
 		}
 	}
-	
+
 	if (prop_id < 0) {
 		fprintf(stderr, "no crtc property: %s\n", name);
 		return -EINVAL;
 	}
-	
+
 	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
 static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
-                                                         uint32_t obj_id, const      char* name,
-                                                         uint64_t value)
+							uint32_t obj_id, const char *name, uint64_t value)
 {
-       struct plane *obj = drm->plane;
-       unsigned int i;
-       int prop_id = -1;
+	struct plane *obj = drm->plane;
+	unsigned int i;
+	int prop_id = -1;
 
-       for (i = 0 ; i < obj->props->count_props ; i++) {
-               if (strcmp(obj->props_info[i]->name, name) == 0) {
-                       prop_id = obj->props_info[i]->prop_id;
-                       break;
-               }
-       }
+	for (i = 0 ; i < obj->props->count_props ; i++) {
+		if (strcmp(obj->props_info[i]->name, name) == 0) {
+			prop_id = obj->props_info[i]->prop_id;
+			break;
+		}
+	}
 
+	if (prop_id < 0) {
+		fprintf(stderr, "no plane property: %s\n", name);
+		return -EINVAL;
+	}
 
-       if (prop_id < 0) {
-               fprintf(stderr, "no plane property: %s\n", name);
-               return -EINVAL;
-       }
-
-       return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
 int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
 	int ret;
-	
+
 	assert( drm->req != nullptr );
-	
+
 // 	if (drm->kms_in_fence_fd != -1) {
 // 		add_plane_property(drm, req, plane_id, "IN_FENCE_FD", drm->kms_in_fence_fd);
 // 	}
-	
+
 // 	drm->kms_out_fence_fd = -1;
-	
+
 // 	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
 // 					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
-	
+
 	if ( s_drm_log != 0 )
 	{
 		fprintf(stderr, "flipping\n");
@@ -677,7 +675,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 // 		close(drm->kms_in_fence_fd);
 // 		drm->kms_in_fence_fd = -1;
 // 	}
-// 	
+//
 // 	drm->kms_in_fence_fd = drm->kms_out_fence_fd;
 
 out:
@@ -726,7 +724,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 			return 0;
 		}
 	}
-	
+
 	if ( s_drm_log != 0 )
 	{
 		fprintf(stderr, "make fbid %u\n", fb_id);
@@ -744,7 +742,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 	drm->map_fbid_inflightflips[ fb_id ].buf = buf;
 	drm->map_fbid_inflightflips[ fb_id ].held = true;
 	drm->map_fbid_inflightflips[ fb_id ].n_refs = 0;
-	
+
 	return fb_id;
 }
 
@@ -785,7 +783,7 @@ void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 	else
 	{
 		std::lock_guard<std::mutex> lock( drm->free_queue_lock );
-		
+
 		drm->fbid_free_queue.push_back( fbid );
 	}
 }
@@ -953,7 +951,7 @@ bool drm_prepare( struct drm_t *drm, struct Composite_t *pComposite, struct Vulk
 
 	assert( drm->req == nullptr );
 	drm->req = drmModeAtomicAlloc();
-	
+
 	static bool bFirstSwap = true;
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
 
@@ -964,14 +962,14 @@ bool drm_prepare( struct drm_t *drm, struct Composite_t *pComposite, struct Vulk
 
 	// We do internal refcounting with these events
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
-	
+
 	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
 		if (add_connector_property(drm, drm->req, drm->connector_id, "CRTC_ID", drm->crtc_id) < 0)
 			return false;
-		
+
 		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", drm->mode_id) < 0)
 			return false;
-		
+
 		if (add_crtc_property(drm, drm->req, drm->crtc_id, "ACTIVE", 1) < 0)
 			return false;
 	}
