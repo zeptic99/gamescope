@@ -709,6 +709,15 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 {
 	uint32_t fb_id = 0;
 
+	if ( !wlr_drm_format_set_has( &drm->formats, dma_buf->format, dma_buf->modifier ) )
+	{
+		if ( s_drm_log != 0 )
+		{
+			fprintf( stderr, "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out\n", dma_buf->format, dma_buf->modifier );
+		}
+		return 0;
+	}
+
 	uint32_t handles[4] = {0};
 	uint64_t modifiers[4] = {0};
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
