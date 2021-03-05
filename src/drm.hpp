@@ -18,25 +18,23 @@ extern "C" {
 #include <unordered_map>
 #include <utility>
 #include <atomic>
+#include <map>
 #include <mutex>
 #include <vector>
 
 struct plane {
 	drmModePlane *plane;
-	drmModeObjectProperties *props;
-	drmModePropertyRes **props_info;
+	std::map<std::string, drmModePropertyRes *> props;
 };
 
 struct crtc {
 	drmModeCrtc *crtc;
-	drmModeObjectProperties *props;
-	drmModePropertyRes **props_info;
+	std::map<std::string, drmModePropertyRes *> props;
 };
 
 struct connector {
 	drmModeConnector *connector;
-	drmModeObjectProperties *props;
-	drmModePropertyRes **props_info;
+	std::map<std::string, drmModePropertyRes *> props;
 };
 
 struct fb {

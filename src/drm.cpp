@@ -312,7 +312,7 @@ void flip_handler_thread_run(void)
 	}
 }
 
-static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, drmModeObjectProperties **props_ptr, drmModePropertyRes ***props_info_ptr)
+static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, std::map<std::string, drmModePropertyRes *> &map)
 {
 	drmModeObjectProperties *props = drmModeObjectGetProperties(drm->fd, obj_id, obj_type);
 	if (!props) {
@@ -320,17 +320,18 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 		return false;
 	}
 
-	drmModePropertyRes **props_info = (drmModePropertyRes **)calloc(props->count_props, sizeof(drmModePropertyRes *));
+	map = {};
+
 	for (uint32_t i = 0; i < props->count_props; i++) {
-		props_info[i] = drmModeGetProperty(drm->fd, props->props[i]);
-		if (!props_info[i]) {
+		drmModePropertyRes *prop = drmModeGetProperty(drm->fd, props->props[i]);
+		if (!prop) {
 			perror("drmModeGetProperty failed");
 			return false;
 		}
+		map[prop->name] = prop;
 	}
 
-	*props_ptr = props;
-	*props_info_ptr = props_info;
+	drmModeFreeObjectProperties(props);
 	return true;
 }
 
@@ -496,13 +497,13 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		return -1;
 	}
 
-	if (!get_properties(drm, drm->plane_id, DRM_MODE_OBJECT_PLANE, &drm->plane->props, &drm->plane->props_info)) {
+	if (!get_properties(drm, drm->plane_id, DRM_MODE_OBJECT_PLANE, drm->plane->props)) {
 		return -1;
 	}
-	if (!get_properties(drm, drm->crtc_id, DRM_MODE_OBJECT_CRTC, &drm->crtc->props, &drm->crtc->props_info)) {
+	if (!get_properties(drm, drm->crtc_id, DRM_MODE_OBJECT_CRTC, drm->crtc->props)) {
 		return -1;
 	}
-	if (!get_properties(drm, drm->connector_id, DRM_MODE_OBJECT_CONNECTOR, &drm->connector->props, &drm->connector->props_info)) {
+	if (!get_properties(drm, drm->connector_id, DRM_MODE_OBJECT_CONNECTOR, drm->connector->props)) {
 		return -1;
 	}
 
@@ -550,22 +551,21 @@ static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
 								  uint64_t value)
 {
 	struct connector *obj = drm->connector;
-	unsigned int i;
-	int prop_id = -1;
 
-	for (i = 0 ; i < obj->props->count_props ; i++) {
-		if (strcmp(obj->props_info[i]->name, name) == 0) {
-			prop_id = obj->props_info[i]->prop_id;
-			break;
-		}
-	}
-
-	if (prop_id < 0) {
+	if ( obj->props.count( name ) == 0 )
+	{
 		fprintf(stderr, "no connector property: %s\n", name);
 		return -EINVAL;
 	}
 
-	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+	const drmModePropertyRes *prop = obj->props[ name ];
+
+	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
+	if ( ret < 0 )
+	{
+		perror( "drmModeAtomicAddProperty failed" );
+	}
+	return ret;
 }
 
 static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
@@ -573,44 +573,42 @@ static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
 							 uint64_t value)
 {
 	struct crtc *obj = drm->crtc;
-	unsigned int i;
-	int prop_id = -1;
 
-	for (i = 0 ; i < obj->props->count_props ; i++) {
-		if (strcmp(obj->props_info[i]->name, name) == 0) {
-			prop_id = obj->props_info[i]->prop_id;
-			break;
-		}
-	}
-
-	if (prop_id < 0) {
-		fprintf(stderr, "no crtc property: %s\n", name);
+	if ( obj->props.count( name ) == 0 )
+	{
+		fprintf(stderr, "no CRTC property: %s\n", name);
 		return -EINVAL;
 	}
 
-	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+	const drmModePropertyRes *prop = obj->props[ name ];
+
+	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
+	if ( ret < 0 )
+	{
+		perror( "drmModeAtomicAddProperty failed" );
+	}
+	return ret;
 }
 
 static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
 							uint32_t obj_id, const char *name, uint64_t value)
 {
 	struct plane *obj = drm->plane;
-	unsigned int i;
-	int prop_id = -1;
 
-	for (i = 0 ; i < obj->props->count_props ; i++) {
-		if (strcmp(obj->props_info[i]->name, name) == 0) {
-			prop_id = obj->props_info[i]->prop_id;
-			break;
-		}
-	}
-
-	if (prop_id < 0) {
+	if ( obj->props.count( name ) == 0 )
+	{
 		fprintf(stderr, "no plane property: %s\n", name);
 		return -EINVAL;
 	}
 
-	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+	const drmModePropertyRes *prop = obj->props[ name ];
+
+	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
+	if ( ret < 0 )
+	{
+		perror( "drmModeAtomicAddProperty failed" );
+	}
+	return ret;
 }
 
 int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
