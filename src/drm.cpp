@@ -312,6 +312,27 @@ void flip_handler_thread_run(void)
 	}
 }
 
+static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, drmModeObjectProperties **props_ptr, drmModePropertyRes ***props_info_ptr)
+{
+	drmModeObjectProperties *props = drmModeObjectGetProperties(drm->fd, obj_id, obj_type);
+	if (!props) {
+		perror("drmModeObjectGetProperties failed");
+		return false;
+	}
+
+	drmModePropertyRes **props_info = (drmModePropertyRes **)calloc(props->count_props, sizeof(drmModePropertyRes *));
+	for (uint32_t i = 0; i < props->count_props; i++) {
+		props_info[i] = drmModeGetProperty(drm->fd, props->props[i]);
+		if (!props_info[i]) {
+			perror("drmModeGetProperty failed");
+			return false;
+		}
+	}
+
+	*props_ptr = props;
+	*props_info_ptr = props_info;
+	return true;
+}
 
 
 int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh)
@@ -462,39 +483,28 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	drm->crtc = (struct crtc*)calloc(1, sizeof(*drm->crtc));
 	drm->connector = (struct connector*)calloc(1, sizeof(*drm->connector));
 
-#define get_resource(type, Type, id) do { 					\
-		drm->type->type = drmModeGet##Type(drm->fd, id);			\
-		if (!drm->type->type) {						\
-			fprintf(stderr, "could not get %s %i: %s\n",			\
-					#type, id, strerror(errno));		\
-			return -1;						\
-		}								\
-	} while (0)
+	if (!(drm->plane->plane = drmModeGetPlane(drm->fd, drm->plane_id))) {
+		perror("drmModeGetPlane failed");
+		return -1;
+	}
+	if (!(drm->crtc->crtc = drmModeGetCrtc(drm->fd, drm->crtc_id))) {
+		perror("drmModeGetCrtc failed");
+		return -1;
+	}
+	if (!(drm->connector->connector = drmModeGetConnector(drm->fd, drm->connector_id))) {
+		perror("drmModeGetConnector failed");
+		return -1;
+	}
 
-	get_resource(plane, Plane, drm->plane_id);
-	get_resource(crtc, Crtc, drm->crtc_id);
-	get_resource(connector, Connector, drm->connector_id);
-
-#define get_properties(type, TYPE, id) do {					\
-		uint32_t i;							\
-		drm->type->props = drmModeObjectGetProperties(drm->fd,		\
-				id, DRM_MODE_OBJECT_##TYPE);			\
-		if (!drm->type->props) {						\
-			fprintf(stderr, "could not get %s %u properties: %s\n", 		\
-					#type, id, strerror(errno));		\
-			return -1;						\
-		}								\
-		drm->type->props_info = (drmModePropertyRes**)calloc(drm->type->props->count_props,	\
-				sizeof(*drm->type->props_info));			\
-		for (i = 0; i < drm->type->props->count_props; i++) {		\
-			drm->type->props_info[i] = drmModeGetProperty(drm->fd,	\
-					drm->type->props->props[i]);		\
-		}								\
-	} while (0)
-
-	get_properties(plane, PLANE, drm->plane_id);
-	get_properties(crtc, CRTC, drm->crtc_id);
-	get_properties(connector, CONNECTOR, drm->connector_id);
+	if (!get_properties(drm, drm->plane_id, DRM_MODE_OBJECT_PLANE, &drm->plane->props, &drm->plane->props_info)) {
+		return -1;
+	}
+	if (!get_properties(drm, drm->crtc_id, DRM_MODE_OBJECT_CRTC, &drm->crtc->props, &drm->crtc->props_info)) {
+		return -1;
+	}
+	if (!get_properties(drm, drm->connector_id, DRM_MODE_OBJECT_CONNECTOR, &drm->connector->props, &drm->connector->props_info)) {
+		return -1;
+	}
 
 	drm->kms_in_fence_fd = -1;
 
@@ -600,7 +610,7 @@ static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
 		return -EINVAL;
 	}
 
-return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
+	return drmModeAtomicAddProperty(req, obj_id, prop_id, value);
 }
 
 int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
