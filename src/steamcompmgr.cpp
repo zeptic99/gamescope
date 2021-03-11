@@ -336,10 +336,10 @@ retry:
 
 	assert( bFound == true );
 
-	gpuvis_trace_printf( "wait fence begin_ctx=%lu\n", commitID );
+	gpuvis_trace_begin_ctx_printf( commitID, "wait fence" );
 	struct pollfd fd = { fence, POLLOUT, 0 };
 	poll( &fd, 1, 100 );
-	gpuvis_trace_printf( "wait fence end_ctx=%lu\n", commitID );
+	gpuvis_trace_end_ctx_printf( commitID, "wait fence" );
 
 	{
 		std::unique_lock< std::mutex > lock( listCommitsDoneLock );
@@ -1112,7 +1112,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	static long long int paintID = 0;
 
 	paintID++;
-	gpuvis_trace_printf( "paint_all begin_ctx=%llu\n", paintID );
+	gpuvis_trace_begin_ctx_printf( paintID, "paint_all" );
 	win	*w;
 	win	*overlay;
 	win	*notification;
@@ -1287,8 +1287,8 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		drm_atomic_commit( &g_DRM, &composite, &pipeline );
 	}
 
-	gpuvis_trace_printf( "paint_all end_ctx=%llu\n", paintID );
-	gpuvis_trace_printf( "paint_all %i layers, composite %i\n", (int)composite.nLayerCount, bDoComposite );
+	gpuvis_trace_end_ctx_printf( paintID, "paint_all" );
+	gpuvis_trace_printf( "paint_all %i layers, composite %i", (int)composite.nLayerCount, bDoComposite );
 }
 
 static void
@@ -1477,7 +1477,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			set_win_hidden( dpy, find_win(dpy, currentFocusWindow), True );
 		}
 
-		gpuvis_trace_printf( "determine_and_apply_focus focus %lu\n", focus->id );
+		gpuvis_trace_printf( "determine_and_apply_focus focus %lu", focus->id );
 
 		if ( debugFocus == True )
 		{
@@ -2120,7 +2120,7 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 	if (w->damage)
 		XDamageSubtract(dpy, w->damage, None, None);
 
-	gpuvis_trace_printf( "damage_win win %lx gameID %llu\n", w->id, w->gameID );
+	gpuvis_trace_printf( "damage_win win %lx gameID %llu", w->id, w->gameID );
 }
 
 static void
@@ -2597,7 +2597,7 @@ void handle_done_commits( void )
 			{
 				if ( w->commit_queue[ j ].commitID == listCommitsDone[ i ] )
 				{
-					gpuvis_trace_printf( "commit %lu done\n", w->commit_queue[ j ].commitID );
+					gpuvis_trace_printf( "commit %lu done", w->commit_queue[ j ].commitID );
 					w->commit_queue[ j ].done = true;
 					bFoundWindow = true;
 
@@ -2705,7 +2705,7 @@ void check_new_wayland_res( void )
 			continue;
 		}
 
-		gpuvis_trace_printf( "pushing wait for commit %lu win %lx\n", newCommit.commitID, w->id );
+		gpuvis_trace_printf( "pushing wait for commit %lu win %lx", newCommit.commitID, w->id );
 		{
 			std::unique_lock< std::mutex > lock( waitListLock );
 
@@ -3042,7 +3042,7 @@ steamcompmgr_main (int argc, char **argv)
 				discard_ignore (dpy, ev.xany.serial);
 			if (debugEvents)
 			{
-				gpuvis_trace_printf ("event %d\n", ev.type);
+				gpuvis_trace_printf ("event %d", ev.type);
 				printf ("event %d\n", ev.type);
 			}
 			switch (ev.type) {
@@ -3132,11 +3132,11 @@ steamcompmgr_main (int argc, char **argv)
 						// give it 1 ms of slack.. maybe too long
 						if ( diff > 1'000'000ul )
 						{
-							gpuvis_trace_printf( "ignored stale vblank\n" );
+							gpuvis_trace_printf( "ignored stale vblank" );
 						}
 						else
 						{
-							gpuvis_trace_printf( "got vblank\n" );
+							gpuvis_trace_printf( "got vblank" );
 							vblank = true;
 						}
 					}

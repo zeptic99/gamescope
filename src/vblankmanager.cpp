@@ -58,7 +58,7 @@ void vblankThreadRun( void )
 		XSendEvent( g_nestedDpy , DefaultRootWindow( g_nestedDpy ), True, SubstructureRedirectMask, &repaintMsg);
 		XFlush( g_nestedDpy );
 		
-		gpuvis_trace_printf( "sent vblank\n" );
+		gpuvis_trace_printf( "sent vblank" );
 		
 		// Get on the other side of it now
 		sleep_for_nanos( g_uVblankDrawBufferNS + 1'000'000 );

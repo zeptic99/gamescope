@@ -94,7 +94,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 
 	struct wlr_buffer *buf = wlr_buffer_lock( &wlr_surface->buffer->base );
 
-	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p\n", wlr_surface );
+	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p", wlr_surface );
 
 	wayland_commit( wlr_surface, buf );
 }

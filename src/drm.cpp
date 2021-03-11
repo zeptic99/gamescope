@@ -263,7 +263,7 @@ static void page_flip_handler(int fd, unsigned int frame,
 	{
 		fprintf(stderr, "page_flip_handler %p\n", data);
 	}
-	gpuvis_trace_printf("page_flip_handler %p\n", data);
+	gpuvis_trace_printf("page_flip_handler %p", data);
 
 	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
 	{
@@ -656,7 +656,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	drm->fbids_queued = drm->fbids_in_req;
 
 	g_DRM.flipcount++;
-	gpuvis_trace_printf ( "legacy flip commit %lu\n", (uint64_t)g_DRM.flipcount );
+	gpuvis_trace_printf ( "legacy flip commit %lu", (uint64_t)g_DRM.flipcount );
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
 	if (ret)
 	{
@@ -852,7 +852,7 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 	add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
 	add_plane_property(drm, req, plane_id, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
 
-	gpuvis_trace_printf ( "legacy flip fb_id %u src %ix%i\n", fb_id,
+	gpuvis_trace_printf ( "legacy flip fb_id %u src %ix%i", fb_id,
 						 pPipeline->layerBindings[ 0 ].surfaceWidth,
 						 pPipeline->layerBindings[ 0 ].surfaceHeight );
 
@@ -877,7 +877,7 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 	add_plane_property(drm, req, plane_id, "CRTC_W", crtcW);
 	add_plane_property(drm, req, plane_id, "CRTC_H", crtcH);
 
-	gpuvis_trace_printf ( "crtc %li,%li %lix%li\n", crtcX, crtcY, crtcW, crtcH );
+	gpuvis_trace_printf ( "crtc %li,%li %lix%li", crtcX, crtcY, crtcW, crtcH );
 
 	unsigned test_flags = (drm->flags & DRM_MODE_ATOMIC_ALLOW_MODESET) | DRM_MODE_ATOMIC_TEST_ONLY;
 	int ret = drmModeAtomicCommit( drm->fd, drm->req, test_flags, NULL );
