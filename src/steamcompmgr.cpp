@@ -338,7 +338,11 @@ retry:
 
 	gpuvis_trace_begin_ctx_printf( commitID, "wait fence" );
 	struct pollfd fd = { fence, POLLOUT, 0 };
-	poll( &fd, 1, 100 );
+	int ret = poll( &fd, 1, 100 );
+	if ( ret < 0 )
+	{
+		perror( "failed to poll fence FD" );
+	}
 	gpuvis_trace_end_ctx_printf( commitID, "wait fence" );
 
 	{
