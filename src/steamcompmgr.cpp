@@ -184,7 +184,7 @@ bool			hasRepaint = false;
 
 unsigned long	damageSequence = 0;
 
-#define			CURSOR_HIDE_TIME 10'000
+unsigned int	cursorHideTime = 10'000;
 
 Bool			gotXError = False;
 
@@ -705,7 +705,7 @@ void MouseCursor::checkSuspension()
 		m_lastMovedTime = get_time_in_milliseconds();
 	}
 
-	const bool suspended = get_time_in_milliseconds() - m_lastMovedTime > CURSOR_HIDE_TIME;
+	const bool suspended = get_time_in_milliseconds() - m_lastMovedTime > cursorHideTime;
 	if (!m_hideForMovement && suspended) {
 		m_hideForMovement = true;
 
@@ -2737,7 +2737,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 
-	while ((o = getopt (argc, argv, ":R:T:w:h:W:H:r:o:NFSvVecsdlnbf")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:C:w:h:W:H:r:o:NFSvVecsdlnbf")) != -1)
 	{
 		switch (o) {
 			case 'R':
@@ -2750,6 +2750,9 @@ steamcompmgr_main (int argc, char **argv)
 					std::thread statsThreads( statsThreadMain );
 					statsThreads.detach();
 				}
+				break;
+			case 'C':
+				cursorHideTime = atoi( optarg );
 				break;
 			case 'N':
 				doRender = False;
