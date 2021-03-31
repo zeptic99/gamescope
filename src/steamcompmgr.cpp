@@ -266,6 +266,7 @@ static Bool		debugEvents = False;
 static Bool		steamMode = False;
 static Bool		alwaysComposite = False;
 static Bool		takeScreenshot = False;
+static Bool		useXRes = False;
 
 std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
@@ -1891,7 +1892,14 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	}
 	new_win->opacity = OPAQUE;
 
-	new_win->pid = get_win_pid (dpy, id);
+	if ( useXRes == True )
+	{
+		new_win->pid = get_win_pid (dpy, id);
+	}
+	else
+	{
+		new_win->pid = -1;
+	}
 
 	new_win->isOverlay = False;
 	new_win->isSteam = False;
@@ -2737,7 +2745,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 
-	while ((o = getopt (argc, argv, ":R:T:C:w:h:W:H:r:o:NFSvVecsdlnbf")) != -1)
+	while ((o = getopt (argc, argv, ":R:T:C:w:h:W:H:r:o:NFSvVecsdlnbfx")) != -1)
 	{
 		switch (o) {
 			case 'R':
@@ -2774,6 +2782,9 @@ steamcompmgr_main (int argc, char **argv)
 				break;
 			case 'c':
 				alwaysComposite = True;
+				break;
+			case 'x':
+				useXRes = True;
 				break;
 			default:
 				break;
