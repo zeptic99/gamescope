@@ -118,6 +118,7 @@ std::vector< VulkanSamplerCacheEntry_t > g_vecVulkanSamplerCache;
 
 VulkanTexture_t g_emptyTex;
 
+static std::map< VkFormat, std::map< uint64_t, VkDrmFormatModifierPropertiesEXT > > DRMModifierProps = {};
 static struct wlr_drm_format_set sampledDRMFormats = {};
 
 #define MAX_DEVICE_COUNT 8
@@ -515,11 +516,21 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		assert( pDMA == nullptr );
 
 		struct wlr_dmabuf_attributes dmabuf = {};
-		dmabuf.n_planes = 1; // TODO: query from VkDrmFormatModifierPropertiesEXT::drmFormatModifierPlaneCount
 		dmabuf.width = width;
 		dmabuf.height = height;
 		dmabuf.format = VulkanFormatToDRM( format );
 		assert( dmabuf.format != DRM_FORMAT_INVALID );
+
+		// TODO: disjoint planes support
+		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+			.pNext = NULL,
+			.memory = m_vkImageMemory,
+			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+		};
+		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &dmabuf.fd[0]);
+		if ( res != VK_SUCCESS )
+			return false;
 
 		if ( tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT )
 		{
@@ -531,36 +542,49 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 				return false;
 			dmabuf.modifier = imgModifierProps.drmFormatModifier;
 
-			// TODO: support multi-planar DMA-BUFs
-			VkImageSubresource subresource = {
-				.aspectMask = VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT,
-				.mipLevel = 0,
-				.arrayLayer = 0,
+			assert( DRMModifierProps.count( format ) > 0);
+			assert( DRMModifierProps[ format ].count( dmabuf.modifier ) > 0);
+
+			dmabuf.n_planes = DRMModifierProps[ format ][ dmabuf.modifier ].drmFormatModifierPlaneCount;
+
+			const VkImageAspectFlagBits planeAspects[] = {
+				VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT,
+				VK_IMAGE_ASPECT_MEMORY_PLANE_1_BIT_EXT,
+				VK_IMAGE_ASPECT_MEMORY_PLANE_2_BIT_EXT,
+				VK_IMAGE_ASPECT_MEMORY_PLANE_3_BIT_EXT,
 			};
-			VkSubresourceLayout subresourceLayout = {};
-			vkGetImageSubresourceLayout( device, m_vkImage, &subresource, &subresourceLayout );
-			dmabuf.offset[0] = subresourceLayout.offset;
-			dmabuf.stride[0] = subresourceLayout.rowPitch;
+			assert( dmabuf.n_planes <= 4 );
+
+			for ( int i = 0; i < dmabuf.n_planes; i++ )
+			{
+				VkImageSubresource subresource = {
+					.aspectMask = planeAspects[i],
+					.mipLevel = 0,
+					.arrayLayer = 0,
+				};
+				VkSubresourceLayout subresourceLayout = {};
+				vkGetImageSubresourceLayout( device, m_vkImage, &subresource, &subresourceLayout );
+				dmabuf.offset[0] = subresourceLayout.offset;
+				dmabuf.stride[0] = subresourceLayout.rowPitch;
+			}
+
+			// Copy the first FD to all other planes
+			for ( int i = 1; i < dmabuf.n_planes; i++ )
+			{
+				dmabuf.fd[i] = dup( dmabuf.fd[0] );
+				if ( dmabuf.fd[i] < 0 )
+					return false;
+			}
 		}
 		else
 		{
+			dmabuf.n_planes = 1;
 			dmabuf.modifier = DRM_FORMAT_MOD_INVALID;
+			dmabuf.offset[0] = 0;
 			dmabuf.stride[0] = m_unRowPitch;
 		}
 
-		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
-			.pNext = NULL,
-			.memory = m_vkImageMemory,
-			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-		};
-		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &dmabuf.fd[0]);
-
-		if ( res != VK_SUCCESS )
-			return false;
-
 		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &dmabuf );
-
 		if ( m_FBID == 0 )
 			return false;
 
@@ -710,8 +734,12 @@ void init_formats()
 		modifierPropList.pDrmFormatModifierProperties = modifierProps.data();
 		vkGetPhysicalDeviceFormatProperties2( physicalDevice, format, &formatProps );
 
+		std::map< uint64_t, VkDrmFormatModifierPropertiesEXT > map = {};
+
 		for ( size_t j = 0; j < modifierProps.size(); j++ )
 		{
+			map[ modifierProps[j].drmFormatModifier ] = modifierProps[j];
+
 			if ( ( modifierProps[j].drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT ) == 0 )
 			{
 				continue;
@@ -722,6 +750,8 @@ void init_formats()
 			}
 			wlr_drm_format_set_add( &sampledDRMFormats, drmFormat, modifierProps[j].drmFormatModifier );
 		}
+
+		DRMModifierProps[ format ] = map;
 	}
 }
 
