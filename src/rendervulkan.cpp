@@ -15,6 +15,7 @@
 #include "composite.h"
 
 PFN_vkGetMemoryFdKHR dyn_vkGetMemoryFdKHR;
+PFN_vkGetImageDrmFormatModifierPropertiesEXT dyn_vkGetImageDrmFormatModifierPropertiesEXT;
 PFN_vkGetFenceFdKHR dyn_vkGetFenceFdKHR;
 
 const VkApplicationInfo appInfo = {
@@ -514,12 +515,26 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		assert( pDMA == nullptr );
 
 		struct wlr_dmabuf_attributes dmabuf = {};
-		dmabuf.modifier = DRM_FORMAT_MOD_INVALID;
 		dmabuf.n_planes = 1;
 		dmabuf.width = width;
 		dmabuf.height = height;
 		dmabuf.format = VulkanFormatToDRM( format );
 		assert( dmabuf.format != DRM_FORMAT_INVALID );
+
+		if ( tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT )
+		{
+			assert( dyn_vkGetImageDrmFormatModifierPropertiesEXT != nullptr );
+			VkImageDrmFormatModifierPropertiesEXT imgModifierProps = {};
+			imgModifierProps.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT;
+			res = dyn_vkGetImageDrmFormatModifierPropertiesEXT( device, m_vkImage, &imgModifierProps );
+			if ( res != VK_SUCCESS )
+				return false;
+			dmabuf.modifier = imgModifierProps.drmFormatModifier;
+		}
+		else
+		{
+			dmabuf.modifier = DRM_FORMAT_MOD_INVALID;
+		}
 
 		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
@@ -1438,6 +1453,8 @@ int vulkan_init(void)
 	dyn_vkGetFenceFdKHR = (PFN_vkGetFenceFdKHR)vkGetDeviceProcAddr( device, "vkGetFenceFdKHR" );
 	if ( dyn_vkGetFenceFdKHR == nullptr )
 		return 0;
+
+	dyn_vkGetImageDrmFormatModifierPropertiesEXT = (PFN_vkGetImageDrmFormatModifierPropertiesEXT)vkGetDeviceProcAddr( device, "vkGetImageDrmFormatModifierPropertiesEXT" );
 	
 	if ( vulkan_make_output( &g_output ) == false )
 	{
