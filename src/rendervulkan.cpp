@@ -515,7 +515,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		assert( pDMA == nullptr );
 
 		struct wlr_dmabuf_attributes dmabuf = {};
-		dmabuf.n_planes = 1;
+		dmabuf.n_planes = 1; // TODO: query from VkDrmFormatModifierPropertiesEXT::drmFormatModifierPlaneCount
 		dmabuf.width = width;
 		dmabuf.height = height;
 		dmabuf.format = VulkanFormatToDRM( format );
@@ -530,10 +530,22 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			if ( res != VK_SUCCESS )
 				return false;
 			dmabuf.modifier = imgModifierProps.drmFormatModifier;
+
+			// TODO: support multi-planar DMA-BUFs
+			VkImageSubresource subresource = {
+				.aspectMask = VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT,
+				.mipLevel = 0,
+				.arrayLayer = 0,
+			};
+			VkSubresourceLayout subresourceLayout = {};
+			vkGetImageSubresourceLayout( device, m_vkImage, &subresource, &subresourceLayout );
+			dmabuf.offset[0] = subresourceLayout.offset;
+			dmabuf.stride[0] = subresourceLayout.rowPitch;
 		}
 		else
 		{
 			dmabuf.modifier = DRM_FORMAT_MOD_INVALID;
+			dmabuf.stride[0] = m_unRowPitch;
 		}
 
 		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
@@ -543,24 +555,21 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
 		};
 		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &dmabuf.fd[0]);
-		
+
 		if ( res != VK_SUCCESS )
 			return false;
 
-		dmabuf.stride[0] = m_unRowPitch;
-		
 		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &dmabuf );
-		
+
 		if ( m_FBID == 0 )
 			return false;
 
 		wlr_dmabuf_attributes_finish( &dmabuf );
 	}
-	
-	
+
 	bool bSwapChannels = pDMA ? DRMFormatNeedsSwizzle( pDMA->format ) : false;
 	bool bHasAlpha = pDMA ? DRMFormatHasAlpha( pDMA->format ) : true;
-	
+
 	if ( bSwapChannels || !bHasAlpha )
 	{
 		// Right now this implies no storage bit - check it now as that's incompatible with swizzle
