@@ -48,13 +48,11 @@ wlroots_proj = subproject('wlroots', required: false, default_options:
   ['default_library=static', 'examples=false'])
 if wlroots_proj.found()
   wlroots_dep = wlroots_proj.get_variable('wlroots')
-  wlroots_conf = wlroots_proj.get_variable('conf_data')
-  wlroots_has_xwayland = wlroots_conf.get('WLR_HAS_XWAYLAND') == 1
 else
   wlroots_dep = dependency('wlroots', version: '>= 0.11.0')
-  wlroots_has_xwayland = cc.get_define('WLR_HAS_XWAYLAND', prefix: '#include <wlr/config.h>', dependencies: wlroots_dep) == '1'
 endif
 
+wlroots_has_xwayland = wlroots_dep.get_variable(pkgconfig: 'have_xwayland', internal: 'have_xwayland') == 'true'
 if not wlroots_has_xwayland
   error('Cannot use wlroots built without Xwayland support')
 endif
