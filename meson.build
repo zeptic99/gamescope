@@ -49,7 +49,7 @@ wlroots_proj = subproject('wlroots', required: false, default_options:
 if wlroots_proj.found()
   wlroots_dep = wlroots_proj.get_variable('wlroots')
 else
-  wlroots_dep = dependency('wlroots', version: '>= 0.11.0')
+  wlroots_dep = dependency('wlroots', version: ['>= 0.13.0', '< 0.14.0'])
 endif
 
 wlroots_has_xwayland = wlroots_dep.get_variable(pkgconfig: 'have_xwayland', internal: 'have_xwayland') == 'true'
