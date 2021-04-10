@@ -45,7 +45,7 @@ cap_dep = cc.find_library('cap')
 sdl_dep = dependency('SDL2')
 
 wlroots_proj = subproject('wlroots', required: false, default_options:
-  ['default_library=static', 'examples=false'])
+  ['default_library=static', 'examples=false', 'xwayland=enabled'])
 if wlroots_proj.found()
   wlroots_dep = wlroots_proj.get_variable('wlroots')
 else
