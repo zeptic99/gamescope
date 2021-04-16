@@ -25,11 +25,9 @@ build/gamescope -- <game>
 
 ## Keyboard shortcuts
 
-**Super + F** : Toggle fullscreen
-
-**Super + N** : Toggle integer scaling
-
-**Super + S** : Take screenshot (currently goes to `/tmp/gamescope_$DATE.bmp`)
+* **Super + F** : Toggle fullscreen
+* **Super + N** : Toggle integer scaling
+* **Super + S** : Take screenshot (currently goes to `/tmp/gamescope_$DATE.bmp`)
 
 ## Examples
 
