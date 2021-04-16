@@ -33,14 +33,14 @@ build/gamescope -- <game>
 
 On any X11 or Wayland desktop running Mesa 20.3+, you can set the Steam launch arguments of your game as follows:
 
-```
-// Upscale a 720p game to 1440p with integer scaling
+```sh
+# Upscale a 720p game to 1440p with integer scaling
 gamescope -w 1280 -h 720 -W 2560 -H 1440 -n -- %command%
 
-// Limit a vsynced game to 30 FPS:
+# Limit a vsynced game to 30 FPS
 gamescope -r 30 -- %command%
 
-// Run the game at 1080p, but scale output to a fullscreen 3440×1440 pillarboxed ultrawide window
+# Run the game at 1080p, but scale output to a fullscreen 3440×1440 pillarboxed ultrawide window
 gamescope -w 1920 -h 1080 -W 3440 -H 1440 -b -- %command%
 ```
 
