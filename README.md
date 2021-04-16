@@ -49,3 +49,13 @@ gamescope -r 30 -- %command%
 // Run the game at 1080p, but scale output to a fullscreen 3440×1440 pillarboxed ultrawide window
 gamescope -w 1920 -h 1080 -W 3440 -H 1440 -b -- %command%
 ```
+
+## Options
+
+* `-W`, `-H`: set the resolution used by gamescope. Resizing the gamescope window will update these settings. Defaults to 1280x720.
+* `-w`, `-h`: set the resolution used by the game. Defaults to the values specified in `-W` and `-H`.
+* `-r`: set a frame-rate limit for the game. Specified in frames per second. Defaults to unlimited.
+* `-o`: set a frame-rate limit for the game when unfocused. Specified in frames per second. Defaults to unlimited.
+* `-n`: use integer scaling.
+* `-b`: create a border-less window.
+* `-f`: create a full-screen window.
