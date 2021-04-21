@@ -2706,7 +2706,7 @@ steamcompmgr_main (int argc, char **argv)
 	// :/
 	optind = 1;
 
-	while ((o = getopt (argc, argv, ":R:T:C:w:h:W:H:r:o:NFSvVecsdlnbfx")) != -1)
+	while ((o = getopt (argc, argv, GAMESCOPE_OPTIONS)) != -1)
 	{
 		switch (o) {
 			case 'R':

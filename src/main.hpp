@@ -1,5 +1,7 @@
 #pragma once
 
+#define GAMESCOPE_OPTIONS ":R:T:C:w:h:W:H:r:o:NFSvVecsdlnbfx"
+
 int initOutput(void);
 
 void startSteamCompMgr(void);
