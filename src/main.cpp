@@ -112,23 +112,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// If we're going to execute something monolithic, might as well set this since it'll extend to our clients
-	if ( g_nSubCommandArg != 0 )
-	{
-		const char *pchR600Debug = getenv( "R600_DEBUG" );
-
-		if ( pchR600Debug == nullptr )
-		{
-			setenv( "R600_DEBUG", "nodcc", 1 );
-		}
-		else if ( strstr( pchR600Debug, "nodcc" ) == nullptr )
-		{
-			std::string strPreviousR600Debug = pchR600Debug;
-			strPreviousR600Debug.append( ",nodcc" );
-			setenv( "R600_DEBUG", strPreviousR600Debug.c_str(), 1 );
-		}
-	}
-
 	cap_t caps;
 	caps = cap_get_proc();
 	cap_flag_value_t nicecapvalue = CAP_CLEAR;
@@ -193,6 +176,24 @@ int main(int argc, char **argv)
 
 	// Prevent our clients from connecting to the parent compositor
 	unsetenv("WAYLAND_DISPLAY");
+
+	// If DRM format modifiers aren't supported, prevent our clients from using
+	// DCC, as this can cause tiling artifacts.
+	if ( g_nSubCommandArg != 0 && !g_vulkanSupportsModifiers )
+	{
+		const char *pchR600Debug = getenv( "R600_DEBUG" );
+
+		if ( pchR600Debug == nullptr )
+		{
+			setenv( "R600_DEBUG", "nodcc", 1 );
+		}
+		else if ( strstr( pchR600Debug, "nodcc" ) == nullptr )
+		{
+			std::string strPreviousR600Debug = pchR600Debug;
+			strPreviousR600Debug.append( ",nodcc" );
+			setenv( "R600_DEBUG", strPreviousR600Debug.c_str(), 1 );
+		}
+	}
 
 	if ( g_nNestedWidth == 0 )
 		g_nNestedWidth = g_nOutputWidth;

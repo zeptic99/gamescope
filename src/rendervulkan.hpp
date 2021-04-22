@@ -115,6 +115,7 @@ public:
 };
 
 extern std::vector< const char * > g_vecSDLInstanceExts;
+extern bool g_vulkanSupportsModifiers;
 
 int vulkan_init(void);
 
