@@ -1372,6 +1372,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 		
 		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{
+			fprintf( stderr, "Failed to find Vulkan format suitable for KMS\n" );
 			return false;
 		}
 
@@ -1382,7 +1383,10 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 		bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
 		
 		if ( bSuccess != true )
+		{
+			fprintf( stderr, "Failed to allocate buffer for KMS\n" );
 			return false;
+		}
 		
 		bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
 		
@@ -1517,6 +1521,7 @@ int vulkan_init(void)
 	
 	if ( vulkan_make_output( &g_output ) == false )
 	{
+		fprintf( stderr, "vulkan_make_output failed\n" );
 		return 0;
 	}
 
