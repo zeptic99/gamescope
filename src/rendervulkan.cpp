@@ -565,8 +565,8 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 				};
 				VkSubresourceLayout subresourceLayout = {};
 				vkGetImageSubresourceLayout( device, m_vkImage, &subresource, &subresourceLayout );
-				dmabuf.offset[0] = subresourceLayout.offset;
-				dmabuf.stride[0] = subresourceLayout.rowPitch;
+				dmabuf.offset[i] = subresourceLayout.offset;
+				dmabuf.stride[i] = subresourceLayout.rowPitch;
 			}
 
 			// Copy the first FD to all other planes
