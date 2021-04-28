@@ -349,7 +349,7 @@ retry:
 		listCommitsDone.push_back( commitID );
 	}
 
-	static Display *threadDPY = XOpenDisplay ( wlserver_get_nested_display() );
+	static Display *threadDPY = XOpenDisplay ( wlserver_get_nested_display_name() );
 	XSendEvent( threadDPY, ourWindow, True, SubstructureRedirectMask, &nudgeEvent );
 	XFlush( threadDPY );
 
@@ -2758,7 +2758,7 @@ steamcompmgr_main (int argc, char **argv)
 		alwaysComposite = True;
 	}
 
-	dpy = XOpenDisplay ( wlserver_get_nested_display() );
+	dpy = XOpenDisplay ( wlserver_get_nested_display_name() );
 	if (!dpy)
 	{
 		fprintf (stderr, "Can't open display\n");
@@ -2906,7 +2906,7 @@ steamcompmgr_main (int argc, char **argv)
 
 	if ( readyPipeFD != -1 )
 	{
-		dprintf( readyPipeFD, "%s\n", wlserver_get_nested_display() );
+		dprintf( readyPipeFD, "%s %s\n", wlserver_get_nested_display_name(), wlserver_get_wl_display_name() );
 		close( readyPipeFD );
 		readyPipeFD = -1;
 	}

@@ -12,6 +12,7 @@ struct wlserver_t {
 	struct wl_display *wl_display;
 	struct wl_event_loop *wl_event_loop;
 	int wl_event_loop_fd;
+	char wl_display_name[32];
 
 	struct {
 		struct wlr_backend *multi_backend;
@@ -84,7 +85,8 @@ void wlserver_mousewheel( int x, int y, uint32_t time );
 
 void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when );
 
-const char *wlserver_get_nested_display( void );
+const char *wlserver_get_nested_display_name( void );
+const char *wlserver_get_wl_display_name( void );
 
 struct wlserver_surface
 {

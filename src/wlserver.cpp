@@ -563,15 +563,14 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	};
 	wlserver.wlr.xwayland_server = wlr_xwayland_server_create(wlserver.wl_display, &xwayland_options);
 	wl_signal_add(&wlserver.wlr.xwayland_server->events.ready, &xwayland_ready_listener);
-	
-	char wayland_display_name[32];
+
 	int result = -1;
 	int display_slot = 0;
 
 	while ( result != 0 && display_slot < 128 )
 	{
-		sprintf( wayland_display_name, "gamescope-%d", display_slot );
-		result = wl_display_add_socket( wlserver.wl_display, wayland_display_name );
+		sprintf( wlserver.wl_display_name, "gamescope-%d", display_slot );
+		result = wl_display_add_socket( wlserver.wl_display, wlserver.wl_display_name );
 		display_slot++;
 	}
 
@@ -585,9 +584,9 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
 	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_TOUCH );
 
-	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wayland_display_name);
+	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wlserver.wl_display_name);
 
-	setenv("GAMESCOPE_WAYLAND_DISPLAY", wayland_display_name, 1);
+	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver.wl_display_name, 1);
 
 	if (!wlr_backend_start( wlserver.wlr.multi_backend ))
 	{
@@ -727,9 +726,14 @@ void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *
 	wlr_surface_send_frame_done( surf, when );
 }
 
-const char *wlserver_get_nested_display( void )
+const char *wlserver_get_nested_display_name( void )
 {
 	return wlserver.wlr.xwayland_server->display_name;
+}
+
+const char *wlserver_get_wl_display_name( void )
+{
+	return wlserver.wl_display_name;
 }
 
 static void handle_surface_destroy( struct wl_listener *l, void *data )

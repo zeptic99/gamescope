@@ -67,7 +67,7 @@ void vblankThreadRun( void )
 
 void vblank_init( void )
 {
-	g_nestedDpy = XOpenDisplay( wlserver_get_nested_display() );
+	g_nestedDpy = XOpenDisplay( wlserver_get_nested_display_name() );
 	assert( g_nestedDpy != nullptr );
 	
 	g_lastVblank = get_time_in_nanos();
