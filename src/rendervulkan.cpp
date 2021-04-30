@@ -360,12 +360,27 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	{
 		uint32_t drmFormat = VulkanFormatToDRM( format );
 		assert( drmFormat != DRM_FORMAT_INVALID );
-		const struct wlr_drm_format *drmFormatDesc = wlr_drm_format_set_get( &g_DRM.plane_formats, drmFormat );
-		assert( drmFormatDesc != nullptr );
 
-		for ( size_t i = 0; i < drmFormatDesc->len; i++ )
+		uint64_t linear = DRM_FORMAT_MOD_LINEAR;
+
+		const uint64_t *possibleModifiers;
+		size_t numPossibleModifiers;
+		if ( flags.bLinear )
 		{
-			uint64_t modifier = drmFormatDesc->modifiers[i];
+			possibleModifiers = &linear;
+			numPossibleModifiers = 1;
+		}
+		else
+		{
+			const struct wlr_drm_format *drmFormatDesc = wlr_drm_format_set_get( &g_DRM.plane_formats, drmFormat );
+			assert( drmFormatDesc != nullptr );
+			possibleModifiers = drmFormatDesc->modifiers;
+			numPossibleModifiers = drmFormatDesc->len;
+		}
+
+		for ( size_t i = 0; i < numPossibleModifiers; i++ )
+		{
+			uint64_t modifier = possibleModifiers[i];
 
 			VkExternalImageFormatProperties externalFormatProps = {};
 			externalFormatProps.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES;
