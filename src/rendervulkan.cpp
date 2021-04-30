@@ -329,8 +329,11 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		VkExternalImageFormatProperties externalImageProperties = {};
 		externalImageProperties.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES;
 		res = getModifierProps( &imageInfo, pDMA->modifier, &externalImageProperties );
-		if ( res != VK_SUCCESS && res != VK_ERROR_FORMAT_NOT_SUPPORTED )
+		if ( res != VK_SUCCESS && res != VK_ERROR_FORMAT_NOT_SUPPORTED ) {
+			fprintf( stderr, "getModifierProps failed\n" );
 			return false;
+		}
+
 		if ( res == VK_SUCCESS &&
 		     ( externalImageProperties.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT ) )
 		{
@@ -369,8 +372,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			res = getModifierProps( &imageInfo, modifier, &externalFormatProps );
 			if ( res == VK_ERROR_FORMAT_NOT_SUPPORTED )
 				continue;
-			else if ( res != VK_SUCCESS )
+			else if ( res != VK_SUCCESS ) {
+				fprintf( stderr, "getModifierProps failed\n" );
 				return false;
+			}
 
 			if ( !( externalFormatProps.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT ) )
 				continue;
@@ -410,6 +415,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	}
 	
 	if (vkCreateImage(device, &imageInfo, nullptr, &m_vkImage) != VK_SUCCESS) {
+		fprintf( stderr, "vkCreateImage failed\n" );
 		return false;
 	}
 	
@@ -490,9 +496,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	}
 	
 	res = vkBindImageMemory(device, m_vkImage, m_vkImageMemory, 0);
-	
-	if ( res != VK_SUCCESS )
+	if ( res != VK_SUCCESS ) {
+		fprintf( stderr, "vkBindImageMemory failed\n" );
 		return false;
+	}
 
 	if ( flags.bMappable == true )
 	{
@@ -530,8 +537,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
 		};
 		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &dmabuf.fd[0]);
-		if ( res != VK_SUCCESS )
+		if ( res != VK_SUCCESS ) {
+			fprintf( stderr, "vkGetMemoryFdKHR failed\n" );
 			return false;
+		}
 
 		if ( tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT )
 		{
@@ -539,8 +548,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			VkImageDrmFormatModifierPropertiesEXT imgModifierProps = {};
 			imgModifierProps.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT;
 			res = dyn_vkGetImageDrmFormatModifierPropertiesEXT( device, m_vkImage, &imgModifierProps );
-			if ( res != VK_SUCCESS )
+			if ( res != VK_SUCCESS ) {
+				fprintf( stderr, "vkGetImageDrmFormatModifierPropertiesEXT failed\n" );
 				return false;
+			}
 			dmabuf.modifier = imgModifierProps.drmFormatModifier;
 
 			assert( DRMModifierProps.count( format ) > 0);
@@ -573,8 +584,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			for ( int i = 1; i < dmabuf.n_planes; i++ )
 			{
 				dmabuf.fd[i] = dup( dmabuf.fd[0] );
-				if ( dmabuf.fd[i] < 0 )
+				if ( dmabuf.fd[i] < 0 ) {
+					fprintf( stderr, "dup failed\n" );
 					return false;
+				}
 			}
 		}
 		else
@@ -594,8 +607,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		}
 
 		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &dmabuf );
-		if ( m_FBID == 0 )
+		if ( m_FBID == 0 ) {
+			fprintf( stderr, "drm_fbid_from_dmabuf failed\n" );
 			return false;
+		}
 
 		wlr_dmabuf_attributes_finish( &dmabuf );
 	}
@@ -626,8 +641,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	createInfo.subresourceRange.layerCount = 1;
 	
 	res = vkCreateImageView(device, &createInfo, nullptr, &m_vkImageView);
-	if ( res != VK_SUCCESS )
+	if ( res != VK_SUCCESS ) {
+		fprintf( stderr, "vkCreateImageView failed\n" );
 		return false;
+	}
 
 	if ( flags.bMappable )
 	{
@@ -635,6 +652,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 
 		if ( m_pMappedData == nullptr )
 		{
+			fprintf( stderr, "vkMapMemory failed\n" );
 			return false;
 		}
 	}
