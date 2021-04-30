@@ -819,7 +819,7 @@ void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 
 /* Prepares an atomic commit without using libliftoff */
 static bool
-drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
+drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	// Discard cases where our non-liftoff path is known to fail
 
@@ -890,7 +890,7 @@ drm_prepare_basic( struct drm_t *drm, struct Composite_t *pComposite, struct Vul
 }
 
 static bool
-drm_prepare_liftoff( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
+drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
@@ -974,7 +974,7 @@ drm_prepare_liftoff( struct drm_t *drm, struct Composite_t *pComposite, struct V
 
 /* Prepares an atomic commit for the provided scene-graph. Returns false on
  * error or if the scene-graph can't be presented directly. */
-bool drm_prepare( struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
+bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	drm->fbids_in_req.clear();
 
