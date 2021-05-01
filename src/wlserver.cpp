@@ -772,7 +772,10 @@ void wlserver_surface_init( struct wlserver_surface *surf, long x11_id )
 
 void wlserver_surface_set_wl_id( struct wlserver_surface *surf, long id )
 {
-	assert( surf->wl_id == 0 );
+	if ( surf->wl_id != 0 )
+	{
+		fprintf( stderr, "surf->wl_id already set, was %lu, set %lu\n", surf->wl_id, id );
+	}
 
 	surf->wl_id = id;
 	surf->wlr = nullptr;
