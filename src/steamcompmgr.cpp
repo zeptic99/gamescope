@@ -268,7 +268,7 @@ static Bool		debugEvents = False;
 static Bool		steamMode = False;
 static Bool		alwaysComposite = False;
 static Bool		takeScreenshot = False;
-static Bool		useXRes = False;
+static Bool		useXRes = True;
 
 std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
@@ -2853,7 +2853,7 @@ steamcompmgr_main (int argc, char **argv)
 				alwaysComposite = True;
 				break;
 			case 'x':
-				useXRes = True;
+				useXRes = False;
 				break;
 			default:
 				break;
