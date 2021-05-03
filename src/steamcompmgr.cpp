@@ -35,6 +35,9 @@
 #include <atomic>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <string>
 
 #include <assert.h>
 #include <stdlib.h>
@@ -115,7 +118,7 @@ typedef struct _win {
 	Bool isSteamPopup;
 	Bool wantsUnfocus;
 	Bool wantsInputFocus;
-	unsigned long long int gameID;
+	uint32_t appID;
 	Bool isOverlay;
 	Bool isFullscreen;
 	Bool isHidden;
@@ -1153,7 +1156,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		}
 		else
 		{
-			stats_printf( "focus=%i\n", w->gameID );
+			stats_printf( "focus=%i\n", w->appID );
 		}
 	}
 
@@ -1296,7 +1299,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 static bool
 win_has_game_id( win *w )
 {
-	return w->gameID != 0;
+	return w->appID != 0;
 }
 
 static bool
@@ -1398,7 +1401,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	if ( vecPossibleFocusWindows.size() > 0 )
 	{
 		focus = vecPossibleFocusWindows[ 0 ];
-		gameFocused = focus->gameID != 0;
+		gameFocused = focus->appID != 0;
 	}
 
 	if (!focus)
@@ -1741,11 +1744,17 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	if ( steamMode == True )
 	{
-		w->gameID = get_prop (dpy, w->id, gameAtom, 0);
+		uint32_t appID = get_prop (dpy, w->id, gameAtom, 0);
+		
+		if ( w->appID != 0 && appID != 0 && w->appID != appID )
+		{
+			fprintf( stderr, "appid clash was %u now %u\n", w->appID, appID );
+		}
+		w->appID = appID;
 	}
 	else
 	{
-		w->gameID = w->id;
+		w->appID = w->id;
 	}
 	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
 
@@ -1813,6 +1822,91 @@ unmap_win (Display *dpy, Window id, Bool fade)
 	focusDirty = True;
 
 	finish_unmap_win (dpy, w);
+}
+
+static uint32_t
+get_appid_from_pid( pid_t pid )
+{
+	uint32_t unFoundAppId = 0;
+	
+	char filename[256];
+	pid_t next_pid = pid;
+	
+	while ( 1 )
+	{
+		snprintf( filename, sizeof( filename ), "/proc/%i/stat", next_pid );
+		std::ifstream proc_stat_file( filename );
+		std::string proc_stat;
+		
+		std::getline( proc_stat_file, proc_stat );
+		
+		char *procName = nullptr;
+		char *lastParens;
+		
+		for ( uint32_t i = 0; i < proc_stat.length(); i++ )
+		{
+			if ( procName == nullptr && proc_stat[ i ] == '(' )
+			{
+				procName = &proc_stat[ i + 1 ];
+			}
+			
+			if ( proc_stat[ i ] == ')' )
+			{
+				lastParens = &proc_stat[ i ];
+			}
+		}
+		
+		*lastParens = '\0';
+		char state;
+		int parent_pid = -1;
+		
+		sscanf( lastParens + 1, " %c %d", &state, &parent_pid );
+		
+		if ( strcmp( "reaper", procName ) == 0 )
+		{
+			snprintf( filename, sizeof( filename ), "/proc/%i/cmdline", next_pid );
+			std::ifstream proc_cmdline_file( filename );
+			std::string proc_cmdline;
+			
+			bool bSteamLaunch = false;
+			uint32_t unAppId = 0;
+			
+			std::getline( proc_cmdline_file, proc_cmdline );
+			
+			for ( uint32_t j = 0; j < proc_cmdline.length(); j++ )
+			{
+				if ( proc_cmdline[ j ] == '\0' && j + 1 < proc_cmdline.length() )
+				{
+					if ( strcmp( "SteamLaunch", &proc_cmdline[ j + 1 ] ) == 0 )
+					{
+						bSteamLaunch = true;
+					}
+					else if ( sscanf( &proc_cmdline[ j + 1 ], "AppId=%u", &unAppId ) == 1 && unAppId != 0 )
+					{
+						if ( bSteamLaunch == true )
+						{
+							unFoundAppId = unAppId;
+						}
+					}
+					else if ( strcmp( "--", &proc_cmdline[ j + 1 ] ) == 0 )
+					{
+						break;
+					}
+				}
+			}
+		}
+		
+		if ( parent_pid == -1 || parent_pid == 0 )
+		{
+			break;
+		}
+		else
+		{
+			next_pid = parent_pid;
+		}
+	}
+	
+	return unFoundAppId;
 }
 
 static pid_t
@@ -1889,11 +1983,18 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 
 	if ( steamMode == True )
 	{
-		new_win->gameID = 0;
+		if ( new_win->pid != -1 )
+		{
+			new_win->appID = get_appid_from_pid( new_win->pid );
+		}
+		else
+		{
+			new_win->appID = 0;
+		}
 	}
 	else
 	{
-		new_win->gameID = id;
+		new_win->appID = id;
 	}
 	
 	Window transientFor = None;
@@ -2093,20 +2194,20 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 
 	// First damage event we get, compute focus; we only want to focus damaged
 	// windows to have meaningful frames.
-	if (w->gameID && w->damage_sequence == 0)
+	if (w->appID && w->damage_sequence == 0)
 		focusDirty = True;
 
 	w->damage_sequence = damageSequence++;
 
 	// If we just passed the focused window, we might be eliglible to take over
-	if (focus && focus != w && w->gameID &&
+	if (focus && focus != w && w->appID &&
 		w->damage_sequence > focus->damage_sequence)
 		focusDirty = True;
 
 	if (w->damage)
 		XDamageSubtract(dpy, w->damage, None, None);
 
-	gpuvis_trace_printf( "damage_win win %lx gameID %llu", w->id, w->gameID );
+	gpuvis_trace_printf( "damage_win win %lx appID %u", w->id, w->appID );
 }
 
 static void
@@ -2313,7 +2414,14 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		win * w = find_win(dpy, ev->window);
 		if (w)
 		{
-			w->gameID = get_prop(dpy, w->id, gameAtom, 0);
+			uint32_t appID = get_prop (dpy, w->id, gameAtom, 0);
+			
+			if ( w->appID != 0 && appID != 0 && w->appID != appID )
+			{
+				fprintf( stderr, "appid clash was %u now %u\n", w->appID, appID );
+			}
+			w->appID = appID;
+
 			focusDirty = True;
 		}
 	}
