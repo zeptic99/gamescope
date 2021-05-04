@@ -990,7 +990,7 @@ retry:
 		.pNext = nullptr,
 		.flags = 0,
 		.maxSets = k_nMaxSets,
-		.poolSizeCount = 4,
+		.poolSizeCount = sizeof(descriptorPoolSize) / sizeof(descriptorPoolSize[0]),
 		.pPoolSizes = descriptorPoolSize
 	};
 	
