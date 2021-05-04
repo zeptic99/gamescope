@@ -533,7 +533,10 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	{
 		// We probably don't want to be in portrait mode, rotate
 		g_bRotated = true;
+	}
 
+	if ( g_bRotated )
+	{
 		g_nOutputWidth = drm->mode->vdisplay;
 		g_nOutputHeight = drm->mode->hdisplay;
 	}
