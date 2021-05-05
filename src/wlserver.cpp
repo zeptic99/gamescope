@@ -801,6 +801,11 @@ void wlserver_surface_set_wl_id( struct wlserver_surface *surf, long id )
 
 void wlserver_surface_finish( struct wlserver_surface *surf )
 {
+	if ( surf->wlr == wlserver.mouse_focus_surface )
+	{
+		wlserver.mouse_focus_surface = nullptr;
+	}
+
 	surf->wl_id = 0;
 	surf->wlr = nullptr;
 	wl_list_remove( &surf->pending_link );
