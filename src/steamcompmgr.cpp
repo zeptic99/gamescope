@@ -1146,6 +1146,13 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	{
 		return;
 	}
+	
+	Bool inGame = False;
+	
+	if ( gamesRunningCount || w->appID != 0 )
+	{
+		inGame = True;
+	}
 
 	frameCounter++;
 
@@ -1183,8 +1190,6 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		fadeOutWindow.opacity = (1.0 - newOpacity) * OPAQUE;
 		paint_window(dpy, &fadeOutWindow, &composite, &pipeline, False, cursor);
 
-		w = find_win(dpy, currentFocusWindow);
-
 		// Blend new window on top with linear crossfade
 		w->opacity = newOpacity * OPAQUE;
 
@@ -1192,8 +1197,6 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	}
 	else
 	{
-		w = find_win(dpy, currentFocusWindow);
-
 		// If the window we'd paint as the base layer is the streaming client,
 		// find the video underlay and put it up first in the scenegraph
 		if ( w->isSteamStreamingClient == True )
@@ -1234,7 +1237,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	focusedWindowOffsetX = composite.data.vOffset[ mainLayer ].x;
 	focusedWindowOffsetY = composite.data.vOffset[ mainLayer ].y;
 
-	if (gamesRunningCount && overlay)
+	if (inGame && overlay)
 	{
 		if (overlay->opacity)
 		{
@@ -1242,7 +1245,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		}
 	}
 
-	if (gamesRunningCount && notification)
+	if (inGame && notification)
 	{
 		if (notification->opacity)
 		{
@@ -1389,6 +1392,10 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	win *inputFocus = NULL;
 
 	gameFocused = False;
+	
+	currentFocusWindow = None;
+	currentOverlayWindow = None;
+	currentNotificationWindow = None;
 
 	unsigned int maxOpacity = 0;
 	std::vector< win* > vecPossibleFocusWindows;
@@ -1435,7 +1442,6 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	if (!focus)
 	{
-		currentFocusWindow = None;
 		return;
 	}
 
