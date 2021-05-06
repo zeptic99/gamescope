@@ -346,6 +346,8 @@ retry:
 	}
 	gpuvis_trace_end_ctx_printf( commitID, "wait fence" );
 
+	close( fence );
+
 	{
 		std::unique_lock< std::mutex > lock( listCommitsDoneLock );
 
@@ -2769,6 +2771,8 @@ void check_new_wayland_res( void )
 		assert( result == true );
 
 		commit_t newCommit = {};
+		int fence = dup( dmabuf.fd[ 0 ] );
+		assert( fence >= 0 );
 		bool bSuccess = import_commit( buf, &dmabuf, newCommit );
 		wlr_dmabuf_attributes_finish( &dmabuf );
 
@@ -2776,14 +2780,6 @@ void check_new_wayland_res( void )
 		{
 			newCommit.commitID = ++maxCommmitID;
 			w->commit_queue.push_back( newCommit );
-		}
-
-		int fence = vulkan_get_texture_fence( newCommit.vulkanTex );
-
-		if ( fence < 0 )
-		{
-			fprintf (stderr, "no fence for texture\n");
-			continue;
 		}
 
 		gpuvis_trace_printf( "pushing wait for commit %lu win %lx", newCommit.commitID, w->id );

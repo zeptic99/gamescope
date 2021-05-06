@@ -496,14 +496,6 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		importMemoryInfo.pNext = allocInfo.pNext;
 		
 		allocInfo.pNext = &importMemoryInfo;
-
-		// Take another copy to poll for implicit sync completion
-		m_FD = dup( pDMA->fd[0] );
-		if ( m_FD < 0 )
-		{
-			perror( "dup failed" );
-			return false;
-		}
 	}
 	
 	if (vkAllocateMemory(device, &allocInfo, nullptr, &m_vkImageMemory) != VK_SUCCESS) {
@@ -679,12 +671,6 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 
 CVulkanTexture::~CVulkanTexture( void )
 {
-	if ( m_FD >= 0 )
-	{
-		close( m_FD );
-		m_FD = -1;
-	}
-
 	if ( m_pMappedData != nullptr )
 	{
 		vkUnmapMemory( device, g_output.pScreenshotImage->m_vkImageMemory );
@@ -2158,20 +2144,6 @@ uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex )
 	
 	return ret;
 }
-
-int vulkan_get_texture_fence( VulkanTexture_t vulkanTex )
-{
-	CVulkanTexture *pTex = g_mapVulkanTextures[ vulkanTex ];
-
-	if ( pTex == nullptr )
-	{
-		assert( 0 );
-		return -1;
-	}
-
-	return pTex->m_FD;
-}
-
 
 static void renderer_begin( struct wlr_renderer *renderer, uint32_t width, uint32_t height )
 {
