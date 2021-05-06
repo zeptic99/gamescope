@@ -116,6 +116,8 @@ typedef struct _win {
 
 	Bool isSteam;
 	Bool isSteamPopup;
+	Bool isSteamStreamingClient;
+	Bool isSteamStreamingClientVideo;
 	Bool wantsUnfocus;
 	Bool wantsInputFocus;
 	uint32_t appID;
@@ -230,6 +232,8 @@ static Atom		steamTouchClickModeAtom;
 static Atom		utf8StringAtom;
 static Atom		netWMNameAtom;
 static Atom		netSystemTrayOpcodeAtom;
+static Atom		steamStreamingClientAtom;
+static Atom		steamStreamingClientVideoAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -1048,7 +1052,12 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite,
 	pPipeline->layerBindings[ curLayer ].surfaceWidth = w->a.width;
 	pPipeline->layerBindings[ curLayer ].surfaceHeight = w->a.height;
 
-	pPipeline->layerBindings[ curLayer ].zpos = w->isOverlay ? 1 : 0;
+	pPipeline->layerBindings[ curLayer ].zpos = 0;
+
+	if ( w->isOverlay || w->isSteamStreamingClient )
+	{
+		pPipeline->layerBindings[ curLayer ].zpos = 1;
+	}
 
 	pPipeline->layerBindings[ curLayer ].tex = lastCommit.vulkanTex;
 	pPipeline->layerBindings[ curLayer ].fbid = lastCommit.fb_id;
@@ -1184,6 +1193,24 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	else
 	{
 		w = find_win(dpy, currentFocusWindow);
+
+		// If the window we'd paint as the base layer is the streaming client,
+		// find the video underlay and put it up first in the scenegraph
+		if ( w->isSteamStreamingClient == True )
+		{
+			win *videow = NULL;
+
+			for ( videow = list; videow; videow = videow->next )
+			{
+				if ( videow->isSteamStreamingClientVideo == True )
+				{
+					// TODO: also check matching AppID so we can have several pairs
+					paint_window(dpy, videow, &composite, &pipeline, False, cursor);
+					break;
+				}
+			}
+		}
+
 		// Just draw focused window as normal, be it Steam or the game
 		paint_window(dpy, w, &composite, &pipeline, False, cursor);
 
@@ -1744,6 +1771,9 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
 	w->wantsInputFocus = get_prop(dpy, w->id, steamInputFocusAtom, 0);
 
+	w->isSteamStreamingClient = get_prop(dpy, w->id, steamStreamingClientAtom, 0);
+	w->isSteamStreamingClientVideo = get_prop(dpy, w->id, steamStreamingClientVideoAtom, 0);
+
 	if ( steamMode == True )
 	{
 		uint32_t appID = get_prop (dpy, w->id, gameAtom, 0);
@@ -1980,6 +2010,8 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new_win->isOverlay = False;
 	new_win->isSteam = False;
 	new_win->isSteamPopup = False;
+	new_win->isSteamStreamingClient = False;
+	new_win->isSteamStreamingClientVideo = False;
 	new_win->wantsUnfocus = False;
 	new_win->wantsInputFocus = False;
 
@@ -2410,6 +2442,24 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 	{
 		// Default to 1, left click
 		g_nTouchClickMode = get_prop(dpy, root, steamTouchClickModeAtom, 1 );
+	}
+	if (ev->atom == steamStreamingClientAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			w->isSteamStreamingClient = get_prop(dpy, w->id, steamStreamingClientAtom, 0);
+			focusDirty = True;
+		}
+	}
+	if (ev->atom == steamStreamingClientVideoAtom)
+	{
+		win * w = find_win(dpy, ev->window);
+		if (w)
+		{
+			w->isSteamStreamingClientVideo = get_prop(dpy, w->id, steamStreamingClientVideoAtom, 0);
+			focusDirty = True;
+		}
 	}
 	if (ev->atom == gameAtom)
 	{
@@ -2960,6 +3010,8 @@ steamcompmgr_main (int argc, char **argv)
 	utf8StringAtom = XInternAtom (dpy, "UTF8_STRING", False);
 	netWMNameAtom = XInternAtom (dpy, "_NET_WM_NAME", False);
 	netSystemTrayOpcodeAtom = XInternAtom (dpy, "_NET_SYSTEM_TRAY_OPCODE", False);
+	steamStreamingClientAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT", False);
+	steamStreamingClientVideoAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT_VIDEO", False);
 
 	root_width = DisplayWidth (dpy, scr);
 	root_height = DisplayHeight (dpy, scr);
