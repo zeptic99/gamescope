@@ -768,15 +768,25 @@ void init_formats()
 		{
 			map[ modifierProps[j].drmFormatModifier ] = modifierProps[j];
 
+			uint64_t modifier = modifierProps[j].drmFormatModifier;
+
 			if ( ( modifierProps[j].drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT ) == 0 )
 			{
 				continue;
 			}
-			if ( BIsNested() == false && !wlr_drm_format_set_has( &g_DRM.formats, drmFormat, modifierProps[j].drmFormatModifier ) )
+			if ( BIsNested() == false && !wlr_drm_format_set_has( &g_DRM.formats, drmFormat, modifier ) )
 			{
 				continue;
 			}
-			wlr_drm_format_set_add( &sampledDRMFormats, drmFormat, modifierProps[j].drmFormatModifier );
+			if ( BIsNested() == false && drmFormat == DRM_FORMAT_NV12 && modifier == DRM_FORMAT_MOD_LINEAR && g_bRotated )
+			{
+				// If embedded and rotated, blacklist NV12 LINEAR because
+				// amdgpu won't support direct scan-out. Since only pure
+				// Wayland clients can submit NV12 buffers, this should only
+				// affect streaming_client.
+				continue;
+			}
+			wlr_drm_format_set_add( &sampledDRMFormats, drmFormat, modifier );
 		}
 
 		DRMModifierProps[ format ] = map;
