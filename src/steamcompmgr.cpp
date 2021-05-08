@@ -1212,10 +1212,18 @@ paint_all(Display *dpy, MouseCursor *cursor)
 					break;
 				}
 			}
+			
+			// paint UI unless it's fully hidden, which it communicates to us through opacity=0
+			if ( w->opacity > TRANSLUCENT )
+			{
+				paint_window(dpy, w, &composite, &pipeline, False, cursor);
+			}
 		}
-
-		// Just draw focused window as normal, be it Steam or the game
-		paint_window(dpy, w, &composite, &pipeline, False, cursor);
+		else
+		{
+			// Just draw focused window as normal, be it Steam or the game
+			paint_window(dpy, w, &composite, &pipeline, False, cursor);
+		}
 
 		if (fadeOutWindow.id) {
 
@@ -1448,12 +1456,6 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	if ( inputFocus == NULL )
 	{
 		inputFocus = focus;
-	}
-	else if ( inputFocus->isOverlay == False )
-	{
-		// Right now we'll assume that if a non-overlay layer wants to temporarily
-		// hijack input, it also wants to be shown. Might relax/generalize this later.
-		focus = inputFocus;
 	}
 	
 	if ( gameFocused )
@@ -2383,7 +2385,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 	{
 		/* reset mode and redraw window */
 		win * w = find_win(dpy, ev->window);
-		if (w && w->isOverlay)
+		if ( w != nullptr )
 		{
 			unsigned int newOpacity = get_prop(dpy, w->id, opacityAtom, OPAQUE);
 
