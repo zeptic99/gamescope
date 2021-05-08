@@ -1415,7 +1415,8 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			continue;
 		}
 
-		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False && w->opacity > TRANSLUCENT )
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False && 
+			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient == True ) )
 		{
 			vecPossibleFocusWindows.push_back( w );
 		}
