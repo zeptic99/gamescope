@@ -159,6 +159,7 @@ static int		composite_opcode;
 uint32_t		currentOutputWidth, currentOutputHeight;
 
 static Window	currentFocusWindow;
+static win*		currentFocusWin;
 static Window	currentInputFocusWindow;
 static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
@@ -1429,6 +1430,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	gameFocused = False;
 	
 	currentFocusWindow = None;
+	currentFocusWin = nullptr;
 	currentOverlayWindow = None;
 	currentNotificationWindow = None;
 
@@ -1582,6 +1584,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	}
 
 	currentFocusWindow = focus->id;
+	currentFocusWin = focus;
 
 	if ( currentInputFocusWindow != inputFocus->id )
 	{
@@ -2240,7 +2243,10 @@ static void
 destroy_win (Display *dpy, Window id, Bool gone, Bool fade)
 {
 	if (currentFocusWindow == id && gone)
+	{
 		currentFocusWindow = None;
+		currentFocusWin = nullptr;
+	}
 	if (currentInputFocusWindow == id && gone)
 		currentInputFocusWindow = None;
 	if (currentOverlayWindow == id && gone)
@@ -2786,6 +2792,11 @@ void handle_done_commits( void )
 
 					// If this is the main plane, repaint
 					if ( w->id == currentFocusWindow )
+					{
+						hasRepaint = true;
+					}
+					
+					if ( w->isSteamStreamingClientVideo && currentFocusWin && currentFocusWin->isSteamStreamingClient )
 					{
 						hasRepaint = true;
 					}
