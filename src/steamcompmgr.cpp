@@ -115,10 +115,8 @@ typedef struct _win {
 	pid_t pid;
 
 	Bool isSteam;
-	Bool isSteamPopup;
 	Bool isSteamStreamingClient;
 	Bool isSteamStreamingClientVideo;
-	Bool wantsUnfocus;
 	Bool wantsInputFocus;
 	uint32_t appID;
 	Bool isOverlay;
@@ -226,7 +224,6 @@ static Atom		netWMStateSkipTaskbarAtom;
 static Atom		netWMStateSkipPagerAtom;
 static Atom		WLSurfaceIDAtom;
 static Atom		WMStateAtom;
-static Atom		steamUnfocusAtom;
 static Atom		steamInputFocusAtom;
 static Atom		steamTouchClickModeAtom;
 static Atom		utf8StringAtom;
@@ -1168,10 +1165,6 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		{
 			stats_printf( "focus=steam\n" );
 		}
-		else if ( w->isSteamPopup )
-		{
-			stats_printf( "focus=steampopup\n" );
-		}
 		else
 		{
 			stats_printf( "focus=%i\n", w->appID );
@@ -1377,9 +1370,6 @@ is_focus_priority_greater( win *a, win *b )
 	// one.
 	if ( win_is_override_redirect( a ) != win_is_override_redirect( b ) )
 		return !win_is_override_redirect( a );
-
-	if ( a->wantsUnfocus != b->wantsUnfocus )
-		return !a->wantsUnfocus;
 
 	// Wine sets SKIP_TASKBAR and SKIP_PAGER hints for WS_EX_NOACTIVATE windows.
 	// See https://github.com/Plagman/gamescope/issues/87
@@ -1791,19 +1781,6 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	get_win_title( dpy, w, netWMNameAtom );
 	get_win_title( dpy, w, XA_WM_NAME );
 
-	XTextProperty tp;
-	XGetTextProperty ( dpy, id, &tp, XA_WM_NAME );
-
-	if ( tp.value && strncmp( (char *)tp.value, "SP", tp.nitems ) == 0 )
-	{
-		w->isSteamPopup = True;
-	}
-	else
-	{
-		w->isSteamPopup = False;
-	}
-
-	w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
 	w->wantsInputFocus = get_prop(dpy, w->id, steamInputFocusAtom, 0);
 
 	w->isSteamStreamingClient = get_prop(dpy, w->id, steamStreamingClientAtom, 0);
@@ -2048,10 +2025,8 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 
 	new_win->isOverlay = False;
 	new_win->isSteam = False;
-	new_win->isSteamPopup = False;
 	new_win->isSteamStreamingClient = False;
 	new_win->isSteamStreamingClientVideo = False;
-	new_win->wantsUnfocus = False;
 	new_win->wantsInputFocus = False;
 
 	if ( steamMode == True )
@@ -2456,15 +2431,6 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteam = get_prop(dpy, w->id, steamAtom, 0);
-			focusDirty = True;
-		}
-	}
-	if (ev->atom == steamUnfocusAtom )
-	{
-		win * w = find_win(dpy, ev->window);
-		if (w)
-		{
-			w->wantsUnfocus = get_prop(dpy, w->id, steamUnfocusAtom, 0);
 			focusDirty = True;
 		}
 	}
@@ -3017,7 +2983,6 @@ steamcompmgr_main (int argc, char **argv)
 
 	/* get atoms */
 	steamAtom = XInternAtom (dpy, STEAM_PROP, False);
-	steamUnfocusAtom = XInternAtom (dpy, "STEAM_UNFOCUS", False);
 	steamInputFocusAtom = XInternAtom (dpy, "STEAM_INPUT_FOCUS", False);
 	steamTouchClickModeAtom = XInternAtom (dpy, "STEAM_TOUCH_CLICK_MODE", False);
 	gameAtom = XInternAtom (dpy, GAME_PROP, False);
