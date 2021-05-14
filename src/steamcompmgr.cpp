@@ -1456,8 +1456,8 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)focusable_appids.data(),
 					 focusable_appids.size() );
 
-	std::sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
-			   is_focus_priority_greater );
+	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
+					  is_focus_priority_greater );
 
 	if ( vecPossibleFocusWindows.size() > 0 )
 	{
