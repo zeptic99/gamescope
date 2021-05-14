@@ -165,6 +165,9 @@ static Window	currentNotificationWindow;
 
 bool hasFocusWindow;
 
+bool focusControlled;
+uint32_t focuscontrolAppID;
+
 static Window	ourWindow;
 static XEvent	nudgeEvent;
 
@@ -231,6 +234,7 @@ static Atom		netWMNameAtom;
 static Atom		netSystemTrayOpcodeAtom;
 static Atom		steamStreamingClientAtom;
 static Atom		steamStreamingClientVideoAtom;
+static Atom		gamescopeCtrlAppIDAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -1329,6 +1333,39 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	gpuvis_trace_printf( "paint_all %i layers, composite %i", (int)composite.nLayerCount, bDoComposite );
 }
 
+/* Get prop from window
+ *   not found: default
+ *   otherwise the value
+ */
+static unsigned int
+get_prop(Display *dpy, Window win, Atom prop, unsigned int def, bool *found = nullptr )
+{
+	Atom actual;
+	int format;
+	unsigned long n, left;
+	
+	unsigned char *data;
+	int result = XGetWindowProperty(dpy, win, prop, 0L, 1L, False,
+									XA_CARDINAL, &actual, &format,
+								 &n, &left, &data);
+	if (result == Success && data != NULL)
+	{
+		unsigned int i;
+		memcpy (&i, data, sizeof (unsigned int));
+		XFree( (void *) data);
+		if ( found != nullptr )
+		{
+			*found = true;
+		}
+		return i;
+	}
+	if ( found != nullptr )
+	{
+		*found = false;
+	}
+	return def;
+}
+
 static bool
 win_has_game_id( win *w )
 {
@@ -1432,7 +1469,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	
 	std::vector< unsigned long > focusable_appids;
 	
-	for( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
+	for ( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
 	{
 		unsigned int unAppID = vecPossibleFocusWindows[ i ]->appID;
 		if ( unAppID != 0 )
@@ -1459,7 +1496,19 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
 					  is_focus_priority_greater );
 
-	if ( vecPossibleFocusWindows.size() > 0 )
+	if ( focusControlled == true )
+	{
+		for ( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
+		{
+			if ( vecPossibleFocusWindows[ i ]->appID == focuscontrolAppID )
+			{
+				focus = vecPossibleFocusWindows[ i ];
+				
+			}
+		}
+		gameFocused = true;
+	}
+	else if ( vecPossibleFocusWindows.size() > 0 )
 	{
 		focus = vecPossibleFocusWindows[ 0 ];
 		gameFocused = focus->appID != 0;
@@ -1569,7 +1618,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	cursor->constrainPosition();
 
-	if (gameFocused || (!gamesRunningCount && list[0].id != inputFocus->id))
+	if ( list[0].id != inputFocus->id )
 	{
 		XRaiseWindow(dpy, inputFocus->id);
 	}
@@ -1608,31 +1657,6 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	}
 
 	XFree (children);
-}
-
-/* Get prop from window
- *   not found: default
- *   otherwise the value
- */
-static unsigned int
-get_prop(Display *dpy, Window win, Atom prop, unsigned int def)
-{
-	Atom actual;
-	int format;
-	unsigned long n, left;
-
-	unsigned char *data;
-	int result = XGetWindowProperty(dpy, win, prop, 0L, 1L, False,
-									XA_CARDINAL, &actual, &format,
-								 &n, &left, &data);
-	if (result == Success && data != NULL)
-	{
-		unsigned int i;
-		memcpy (&i, data, sizeof (unsigned int));
-		XFree( (void *) data);
-		return i;
-	}
-	return def;
 }
 
 static void
@@ -2466,6 +2490,11 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 			focusDirty = True;
 		}
 	}
+	if (ev->atom == gamescopeCtrlAppIDAtom )
+	{
+		focuscontrolAppID = get_prop( dpy, root, gamescopeCtrlAppIDAtom, 0, &focusControlled );
+		focusDirty = True;
+	}
 	if (ev->atom == gameAtom)
 	{
 		win * w = find_win(dpy, ev->window);
@@ -3016,6 +3045,7 @@ steamcompmgr_main (int argc, char **argv)
 	netSystemTrayOpcodeAtom = XInternAtom (dpy, "_NET_SYSTEM_TRAY_OPCODE", False);
 	steamStreamingClientAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT", False);
 	steamStreamingClientVideoAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT_VIDEO", False);
+	gamescopeCtrlAppIDAtom = XInternAtom (dpy, "GAMESCOPECTRL_BASELAYER_APPID", False);
 
 	root_width = DisplayWidth (dpy, scr);
 	root_height = DisplayHeight (dpy, scr);
