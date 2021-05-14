@@ -1439,6 +1439,32 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			inputFocus = w;
 		}
 	}
+	
+	std::vector< unsigned long > focusable_appids;
+	
+	for( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
+	{
+		unsigned int unAppID = vecPossibleFocusWindows[ i ]->appID;
+		if ( unAppID != 0 )
+		{
+			unsigned long j;
+			for( j = 0; j < focusable_appids.size(); j++ )
+			{
+				if ( focusable_appids[ j ] == unAppID )
+				{
+					break;
+				}
+			}
+			if ( j == focusable_appids.size() )
+			{
+				focusable_appids.push_back( unAppID );
+			}
+		}
+	}
+	
+	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSABLE_APPS", False ),
+					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)focusable_appids.data(),
+					 focusable_appids.size() );
 
 	std::sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
 			   is_focus_priority_greater );
