@@ -1817,7 +1817,11 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 		{
 			fprintf( stderr, "appid clash was %u now %u\n", w->appID, appID );
 		}
-		w->appID = appID;
+		// Let the appID property be authoritative for now
+		if ( appID != 0 )
+		{
+			w->appID = appID;
+		}
 	}
 	else
 	{
