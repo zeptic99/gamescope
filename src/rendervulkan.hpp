@@ -49,6 +49,7 @@ struct Composite_t
 
 #include <unordered_map>
 #include <vector>
+#include <wayland-server-core.h>
 
 extern "C" {
 #define static

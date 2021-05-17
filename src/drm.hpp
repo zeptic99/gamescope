@@ -6,6 +6,7 @@
 #include <xf86drmMode.h>
 #include <assert.h>
 #include <drm_fourcc.h>
+#include <wayland-server-core.h>
 
 extern "C" {
 #include <libliftoff.h>
