@@ -1429,6 +1429,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	gameFocused = False;
 	
+	Window prevFocusWindow = currentFocusWindow;
 	currentFocusWindow = None;
 	currentFocusWin = nullptr;
 	currentOverlayWindow = None;
@@ -1565,11 +1566,11 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 // 	}
 
 // 	if (fadeOutWindow.id && currentFocusWindow != focus->id)
-	if ( currentFocusWindow != focus->id )
+	if ( prevFocusWindow != focus->id )
 	{
-		if ( currentFocusWindow != inputFocus->id )
+		if ( prevFocusWindow != inputFocus->id )
 		{
-			set_win_hidden( dpy, find_win(dpy, currentFocusWindow), True );
+			set_win_hidden( dpy, find_win(dpy, prevFocusWindow), True );
 		}
 
 		gpuvis_trace_printf( "determine_and_apply_focus focus %lu", focus->id );
