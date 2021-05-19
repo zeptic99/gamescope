@@ -1546,6 +1546,23 @@ found:
 		focus = vecPossibleFocusWindows[ 0 ];
 		gameFocused = focus->appID != 0;
 	}
+	
+	unsigned long focusedWindow = 0;
+	unsigned long focusedAppId = 0;
+	
+	if ( focus )
+	{
+		focusedWindow = focus->id;
+		focusedAppId = focus->appID;
+	}
+	
+	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", False ),
+					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedWindow,
+					 focusedWindow != 0 ? 1 : 0 );
+	
+	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_APP", False ),
+					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedAppId,
+					 focusedAppId != 0 ? 1 : 0 );
 
 	if (!focus)
 	{
