@@ -167,7 +167,7 @@ static Window	currentNotificationWindow;
 bool hasFocusWindow;
 
 bool focusControlled;
-uint32_t focuscontrolAppID;
+std::vector< uint32_t > vecFocuscontrolAppIDs;
 
 static Window	ourWindow;
 static XEvent	nudgeEvent;
@@ -1367,6 +1367,32 @@ get_prop(Display *dpy, Window win, Atom prop, unsigned int def, bool *found = nu
 	return def;
 }
 
+// vectored version, return value is whether anything was found
+bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vecResult )
+{
+	Atom actual;
+	int format;
+	unsigned long n, left;
+	
+	uint64_t *data;
+	// get up to 16 results in one go, we can add a real loop if we ever need anything beyong that
+	int result = XGetWindowProperty(dpy, win, prop, 0L, 16L, False,
+									XA_CARDINAL, &actual, &format,
+									&n, &left, ( unsigned char** )&data);
+	if (result == Success && data != NULL)
+	{
+		vecResult.clear();
+		
+		for ( uint32_t i = 0; i < n; i++ )
+		{
+			vecResult.push_back( data[ i ] );
+		}
+		XFree( (void *) data);
+		return true;
+	}
+	return false;
+}
+
 static bool
 win_has_game_id( win *w )
 {
@@ -1501,14 +1527,18 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 
 	if ( focusControlled == true )
 	{
-		for ( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
+		for ( unsigned long i = 0; i < vecFocuscontrolAppIDs.size(); i++ )
 		{
-			if ( vecPossibleFocusWindows[ i ]->appID == focuscontrolAppID )
+			for ( unsigned long j = 0; j < vecPossibleFocusWindows.size(); j++ )
 			{
-				focus = vecPossibleFocusWindows[ i ];
-				
+				if ( vecPossibleFocusWindows[ j ]->appID == vecFocuscontrolAppIDs[ i ] )
+				{
+					focus = vecPossibleFocusWindows[ j ];
+					goto found;
+				}
 			}
 		}
+found:
 		gameFocused = true;
 	}
 	else if ( vecPossibleFocusWindows.size() > 0 )
@@ -2499,7 +2529,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 	}
 	if (ev->atom == gamescopeCtrlAppIDAtom )
 	{
-		focuscontrolAppID = get_prop( dpy, root, gamescopeCtrlAppIDAtom, 0, &focusControlled );
+		focusControlled = get_prop( dpy, root, gamescopeCtrlAppIDAtom, vecFocuscontrolAppIDs );
 		focusDirty = True;
 	}
 	if (ev->atom == gameAtom)
