@@ -117,7 +117,7 @@ typedef struct _win {
 	Bool isSteam;
 	Bool isSteamStreamingClient;
 	Bool isSteamStreamingClientVideo;
-	Bool wantsInputFocus;
+	uint32_t inputFocusMode;
 	uint32_t appID;
 	Bool isOverlay;
 	Bool isFullscreen;
@@ -161,6 +161,7 @@ uint32_t		currentOutputWidth, currentOutputHeight;
 static Window	currentFocusWindow;
 static win*		currentFocusWin;
 static Window	currentInputFocusWindow;
+uint32_t		currentInputFocusMode;
 static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
 
@@ -530,6 +531,10 @@ find_win (Display *dpy, Window id)
 			return w;
 		}
 	}
+	
+	if ( dpy == nullptr )
+		return nullptr;
+	
 	// Didn't find, must be a children somewhere; try again with parent.
 	Window root = None;
 	Window parent = None;
@@ -1490,7 +1495,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			}
 		}
 
-		if ( w->wantsInputFocus )
+		if ( w->inputFocusMode )
 		{
 			inputFocus = w;
 		}
@@ -1634,29 +1639,36 @@ found:
 	currentFocusWindow = focus->id;
 	currentFocusWin = focus;
 
-	if ( currentInputFocusWindow != inputFocus->id )
+	if ( currentInputFocusWindow != inputFocus->id ||
+		currentInputFocusMode != inputFocus->inputFocusMode )
 	{
 		if ( currentInputFocusWindow != focus->id )
 		{
 			set_win_hidden( dpy, find_win(dpy, currentInputFocusWindow), True );
 		}
+		
+		win *keyboardFocusWin = inputFocus;
+		
+		if ( inputFocus->inputFocusMode == 2 )
+			keyboardFocusWin = focus;
 
-		if ( focus->surface.wlr != nullptr )
+		if ( inputFocus->surface.wlr != nullptr || keyboardFocusWin->surface.wlr != nullptr )
 		{
 			wlserver_lock();
 
-			if ( focus->surface.wlr != nullptr )
-			{
-				wlserver_keyboardfocus( focus->surface.wlr );
-				wlserver_mousefocus( focus->surface.wlr );
-			}
+			if ( inputFocus->surface.wlr != nullptr )
+				wlserver_mousefocus( inputFocus->surface.wlr );
+		
+			if ( keyboardFocusWin->surface.wlr != nullptr )
+				wlserver_keyboardfocus( keyboardFocusWin->surface.wlr );
 
 			wlserver_unlock();
 		}
-
-		XSetInputFocus(dpy, inputFocus->id, RevertToNone, CurrentTime);
+		
+		XSetInputFocus(dpy, keyboardFocusWin->id, RevertToNone, CurrentTime);
 
 		currentInputFocusWindow = inputFocus->id;
+		currentInputFocusMode = inputFocus->inputFocusMode;
 	}
 
 	w = focus;
@@ -1856,7 +1868,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	get_win_title( dpy, w, netWMNameAtom );
 	get_win_title( dpy, w, XA_WM_NAME );
 
-	w->wantsInputFocus = get_prop(dpy, w->id, steamInputFocusAtom, 0);
+	w->inputFocusMode = get_prop(dpy, w->id, steamInputFocusAtom, 0);
 
 	w->isSteamStreamingClient = get_prop(dpy, w->id, steamStreamingClientAtom, 0);
 	w->isSteamStreamingClientVideo = get_prop(dpy, w->id, steamStreamingClientVideoAtom, 0);
@@ -2102,7 +2114,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new_win->isSteam = False;
 	new_win->isSteamStreamingClient = False;
 	new_win->isSteamStreamingClientVideo = False;
-	new_win->wantsInputFocus = False;
+	new_win->inputFocusMode = 0;
 
 	if ( steamMode == True )
 	{
@@ -2326,7 +2338,7 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 	w->damage_sequence = damageSequence++;
 
 	// If we just passed the focused window, we might be eliglible to take over
-	if (focus && focus != w && w->appID &&
+	if ( !focusControlled && focus && focus != w && w->appID &&
 		w->damage_sequence > focus->damage_sequence)
 		focusDirty = True;
 
@@ -2355,10 +2367,16 @@ handle_wl_surface_id(win *w, long surfaceID)
 	// If we already focused on our side and are handling this late,
 	// let wayland know now.
 	if ( w->id == currentInputFocusWindow )
-	{
-		wlserver_keyboardfocus( surface );
 		wlserver_mousefocus( surface );
-	}
+	
+	win *inputFocusWin = find_win( nullptr, currentInputFocusWindow );
+	Window keyboardFocusWindow = currentInputFocusWindow;
+	
+	if ( inputFocusWin && inputFocusWin->inputFocusMode == 2 )
+		keyboardFocusWindow = currentFocusWindow;
+
+	if ( w->id == keyboardFocusWindow )
+		wlserver_keyboardfocus( surface );
 
 	// Pull the first buffer out of that window, if needed
 	xwayland_surface_role_commit( surface );
@@ -2517,7 +2535,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		win * w = find_win(dpy, ev->window);
 		if (w)
 		{
-			w->wantsInputFocus = get_prop(dpy, w->id, steamInputFocusAtom, 0);
+			w->inputFocusMode = get_prop(dpy, w->id, steamInputFocusAtom, 0);
 			focusDirty = True;
 		}
 	}
