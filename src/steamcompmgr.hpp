@@ -82,6 +82,7 @@ extern std::vector< wlr_surface * > wayland_surfaces_deleted;
 
 extern bool hasFocusWindow;
 
+// These are used for touch scaling, so it's really the window that's focused for touch
 extern float focusedWindowScaleX;
 extern float focusedWindowScaleY;
 extern float focusedWindowOffsetX;

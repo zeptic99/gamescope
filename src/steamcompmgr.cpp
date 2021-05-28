@@ -1242,19 +1242,23 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		}
 	}
 
-	int mainLayer = composite.nLayerCount - 1;
-	focusedWindowScaleX = composite.data.vScale[ mainLayer ].x;
-	focusedWindowScaleY = composite.data.vScale[ mainLayer ].y;
-	focusedWindowOffsetX = composite.data.vOffset[ mainLayer ].x;
-	focusedWindowOffsetY = composite.data.vOffset[ mainLayer ].y;
+	int touchInputFocusLayer = composite.nLayerCount - 1;
 
 	if (inGame && overlay)
 	{
 		if (overlay->opacity)
 		{
 			paint_window(dpy, overlay, &composite, &pipeline, False, cursor);
+
+			if ( overlay->id == currentInputFocusWindow )
+				touchInputFocusLayer = composite.nLayerCount - 1;
 		}
 	}
+
+	focusedWindowScaleX = composite.data.vScale[ touchInputFocusLayer ].x;
+	focusedWindowScaleY = composite.data.vScale[ touchInputFocusLayer ].y;
+	focusedWindowOffsetX = composite.data.vOffset[ touchInputFocusLayer ].x;
+	focusedWindowOffsetY = composite.data.vOffset[ touchInputFocusLayer ].y;
 
 	if (inGame && notification)
 	{
