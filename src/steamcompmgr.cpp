@@ -1255,10 +1255,13 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		}
 	}
 
-	focusedWindowScaleX = composite.data.vScale[ touchInputFocusLayer ].x;
-	focusedWindowScaleY = composite.data.vScale[ touchInputFocusLayer ].y;
-	focusedWindowOffsetX = composite.data.vOffset[ touchInputFocusLayer ].x;
-	focusedWindowOffsetY = composite.data.vOffset[ touchInputFocusLayer ].y;
+	if ( touchInputFocusLayer >= 0 )
+	{
+		focusedWindowScaleX = composite.data.vScale[ touchInputFocusLayer ].x;
+		focusedWindowScaleY = composite.data.vScale[ touchInputFocusLayer ].y;
+		focusedWindowOffsetX = composite.data.vOffset[ touchInputFocusLayer ].x;
+		focusedWindowOffsetY = composite.data.vOffset[ touchInputFocusLayer ].y;
+	}
 
 	if (inGame && notification)
 	{
