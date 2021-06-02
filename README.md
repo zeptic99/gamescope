@@ -23,6 +23,12 @@ ninja -C build/
 build/gamescope -- <game>
 ```
 
+Install with:
+
+```
+meson install -C build/ --skip-subprojects
+```
+
 ## Keyboard shortcuts
 
 * **Super + F** : Toggle fullscreen
