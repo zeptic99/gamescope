@@ -1502,7 +1502,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			}
 		}
 
-		if ( w->inputFocusMode )
+		if ( w->isOverlay && w->inputFocusMode )
 		{
 			inputFocus = w;
 		}
@@ -3188,7 +3188,7 @@ steamcompmgr_main (int argc, char **argv)
 	if ( g_nSubCommandArg != 0 )
 	{
 		// (Don't Lose) The Children
-		prctl( PR_SET_CHILD_SUBREAPER );
+		prctl( PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0 );
 
 		std::string strNewPreload;
 		char *pchPreloadCopy = nullptr;
