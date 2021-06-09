@@ -3066,7 +3066,7 @@ spawn_client( char **argv )
 }
 
 static void
-dispatch_x11( Display *dpy, MouseCursor *cursor, bool *vblank )
+dispatch_x11( Display *dpy, MouseCursor *cursor )
 {
 	do {
 		XEvent ev;
@@ -3153,26 +3153,6 @@ dispatch_x11( Display *dpy, MouseCursor *cursor, bool *vblank )
 				break;
 			case ClientMessage:
 				handle_client_message(dpy, &ev.xclient);
-
-				if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
-				{
-					// Decode the split up vblanktime... Sign-extend nonsense...
-					uint64_t vblanktime = (uint64_t(uint32_t(ev.xclient.data.l[2])) << 32) |
-										   uint64_t(uint32_t(ev.xclient.data.l[3]));
-					uint64_t vblankreceived = get_time_in_nanos();
-					uint64_t diff = vblankreceived - vblanktime;
-
-					// give it 1 ms of slack.. maybe too long
-					if ( diff > 1'000'000ul )
-					{
-						gpuvis_trace_printf( "ignored stale vblank" );
-					}
-					else
-					{
-						gpuvis_trace_printf( "got vblank" );
-						*vblank = true;
-					}
-				}
 				break;
 			case LeaveNotify:
 				if (ev.xcrossing.window == currentInputFocusWindow)
@@ -3203,8 +3183,48 @@ dispatch_x11( Display *dpy, MouseCursor *cursor, bool *vblank )
 				}
 				break;
 		}
-	} while (QLength (dpy));
+		XFlush(dpy);
+	} while (XPending (dpy));
 }
+
+static bool
+dispatch_vblank( int fd )
+{
+	bool vblank = false;
+	for (;;)
+	{
+		uint64_t vblanktime = 0;
+		ssize_t ret = read( fd, &vblanktime, sizeof( vblanktime ) );
+		if ( ret < 0 )
+		{
+			if ( errno == EAGAIN )
+				break;
+
+			perror( "steamcompmgr: dispatch_vblank: read failed" );
+			break;
+		}
+
+		uint64_t diff = get_time_in_nanos() - vblanktime;
+
+		// give it 1 ms of slack.. maybe too long
+		if ( diff > 1'000'000ul )
+		{
+			gpuvis_trace_printf( "ignored stale vblank" );
+		}
+		else
+		{
+			gpuvis_trace_printf( "got vblank" );
+			vblank = true;
+		}
+	}
+	return vblank;
+}
+
+enum event_type {
+	EVENT_X11,
+	EVENT_VBLANK,
+	EVENT_COUNT // keep last
+};
 
 void
 steamcompmgr_main (int argc, char **argv)
@@ -3380,7 +3400,8 @@ steamcompmgr_main (int argc, char **argv)
 	allDamage = None;
 	clipChanged = True;
 
-	vblank_init();
+	int vblankFD = vblank_init();
+	assert( vblankFD >= 0 );
 
 	currentOutputWidth = g_nOutputWidth;
 	currentOutputHeight = g_nOutputHeight;
@@ -3436,9 +3457,15 @@ steamcompmgr_main (int argc, char **argv)
 	std::thread imageWaitThread( imageWaitThreadMain );
 	imageWaitThread.detach();
 
-	struct pollfd x11_pollfd = {
-		.fd = XConnectionNumber(dpy),
-		.events = POLLIN,
+	struct pollfd pollfds[] = {
+		[ EVENT_X11 ] = {
+			.fd = XConnectionNumber( dpy ),
+			.events = POLLIN,
+		},
+		[ EVENT_VBLANK ] = {
+			.fd = vblankFD,
+			.events = POLLIN,
+		},
 	};
 
 	for (;;)
@@ -3446,7 +3473,7 @@ steamcompmgr_main (int argc, char **argv)
 		focusDirty = False;
 		bool vblank = false;
 
-		if ( poll( &x11_pollfd, 1, -1 ) < 0)
+		if ( poll( pollfds, EVENT_COUNT, -1 ) < 0)
 		{
 			if ( errno == EAGAIN )
 				continue;
@@ -3455,15 +3482,21 @@ steamcompmgr_main (int argc, char **argv)
 			break;
 		}
 
-		if ( x11_pollfd.revents & POLLHUP )
+		if ( pollfds[ EVENT_X11 ].revents & POLLHUP )
 		{
 			fprintf( stderr, "Lost connection to the X11 server\n" );
 			break;
 		}
 
-		if ( x11_pollfd.revents & POLLIN )
+		assert( !( pollfds[ EVENT_VBLANK ].revents & POLLHUP ) );
+
+		if ( pollfds[ EVENT_X11 ].revents & POLLIN )
 		{
-			dispatch_x11( dpy, cursor.get(), &vblank );
+			dispatch_x11( dpy, cursor.get() );
+		}
+		if ( pollfds[ EVENT_VBLANK ].revents & POLLIN )
+		{
+			vblank = dispatch_vblank( vblankFD );
 		}
 
 		if ( run == false )
@@ -3527,7 +3560,6 @@ steamcompmgr_main (int argc, char **argv)
 			if (fadeOutWindow.id)
 			{
 				XSendEvent(dpy, ourWindow, True, SubstructureRedirectMask, &nudgeEvent);
-				XFlush(dpy);
 			}
 
 			cursor->updatePosition();

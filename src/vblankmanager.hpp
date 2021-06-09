@@ -1,5 +1,5 @@
 // Try to figure out when vblank is and notify steamcompmgr to render some time before it
 
-void vblank_init( void );
+int vblank_init( void );
 
 void vblank_mark_possible_vblank( void );
