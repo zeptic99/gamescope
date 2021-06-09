@@ -6,6 +6,7 @@
 #include <cstring>
 #include <sys/capability.h>
 
+#include <signal.h>
 #include <unistd.h>
 
 #include "main.hpp"
@@ -43,6 +44,8 @@ int g_nOldNice = 0;
 int g_nNewNice = 0;
 
 uint32_t g_nSubCommandArg = 0;
+
+pthread_t g_mainThread;
 
 int BIsNested()
 {
@@ -156,6 +159,7 @@ int main(int argc, char **argv)
 	}
 
 	XInitThreads();
+	g_mainThread = pthread_self();
 
 	if ( getenv("DISPLAY") != NULL || getenv("WAYLAND_DISPLAY") != NULL )
 	{
@@ -208,14 +212,14 @@ int main(int argc, char **argv)
 void steamCompMgrThreadRun(void)
 {
 	steamcompmgr_main( ac, av );
+
+	pthread_kill( g_mainThread, SIGINT );
 }
 
 void startSteamCompMgr(void)
 {
 	std::thread steamCompMgrThread( steamCompMgrThreadRun );
 	steamCompMgrThread.detach();
-	
-	return;
 }
 
 int initOutput(void)
