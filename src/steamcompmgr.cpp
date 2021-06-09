@@ -3053,12 +3053,9 @@ spawn_client( char **argv )
 		perror( "execvp failed" );
 	}
 
-	std::thread waitThread([](){
-		while( wait( nullptr ) >= 0 )
-		{
-			;
-		}
-
+	std::thread waitThread([pid](){
+		if ( waitpid( pid, nullptr, 0 ) < 0 )
+			perror( "steamcompmgr: waitpid failed" );
 		run = false;
 	});
 
