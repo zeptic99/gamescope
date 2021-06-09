@@ -3219,7 +3219,7 @@ steamcompmgr_main (int argc, char **argv)
 	{
 		switch (o) {
 			case 'R':
-				readyPipeFD = open( optarg, O_WRONLY );
+				readyPipeFD = open( optarg, O_WRONLY | O_CLOEXEC );
 				break;
 			case 'T':
 				statsThreadPath = optarg;
