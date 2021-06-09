@@ -734,6 +734,7 @@ void MouseCursor::checkSuspension()
 		if (window && !m_imageEmpty ) {
 			hasRepaint = true;
 			XSendEvent(m_display, ourWindow, true, SubstructureRedirectMask, &nudgeEvent);
+			XFlush(m_display);
 		}
 	}
 }
@@ -3524,7 +3525,10 @@ steamcompmgr_main (int argc, char **argv)
 			// If we're in the middle of a fade, pump an event into the loop to
 			// make sure we keep pushing frames even if the app isn't updating.
 			if (fadeOutWindow.id)
+			{
 				XSendEvent(dpy, ourWindow, True, SubstructureRedirectMask, &nudgeEvent);
+				XFlush(dpy);
+			}
 
 			cursor->updatePosition();
 
