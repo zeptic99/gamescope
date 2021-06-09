@@ -3020,6 +3020,9 @@ spawn_client( char **argv )
 
 	pid_t pid = fork();
 
+	if ( pid < 0 )
+		perror( "fork failed" );
+
 	// Are we in the child?
 	if ( pid == 0 )
 	{
@@ -3045,6 +3048,8 @@ spawn_client( char **argv )
 		unsetenv( "ENABLE_VKBASALT" );
 
 		execvp( argv[ 0 ], argv );
+
+		perror( "execvp failed" );
 	}
 
 	std::thread waitThread([](){
