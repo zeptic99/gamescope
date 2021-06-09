@@ -383,7 +383,7 @@ void statsThreadMain( void )
 
 	while ( statsPipeFD == -1 )
 	{
-		statsPipeFD = open( statsThreadPath.c_str(), O_WRONLY );
+		statsPipeFD = open( statsThreadPath.c_str(), O_WRONLY | O_CLOEXEC );
 
 		if ( statsPipeFD == -1 )
 		{
