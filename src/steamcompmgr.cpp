@@ -2963,6 +2963,103 @@ void check_new_wayland_res( void )
 }
 
 static void
+spawn_client( char **argv )
+{
+	// (Don't Lose) The Children
+	prctl( PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0 );
+
+	std::string strNewPreload;
+	char *pchPreloadCopy = nullptr;
+	const char *pchCurrentPreload = getenv( "LD_PRELOAD" );
+	bool bFirst = true;
+
+	if ( pchCurrentPreload != nullptr )
+	{
+		pchPreloadCopy = strdup( pchCurrentPreload );
+
+		// First replace all the separators in our copy with terminators
+		for ( uint32_t i = 0; i < strlen( pchCurrentPreload ); i++ )
+		{
+			if ( pchPreloadCopy[ i ] == ' ' || pchPreloadCopy[ i ] == ':' )
+			{
+				pchPreloadCopy[ i ] = '\0';
+			}
+		}
+
+		// Then walk it again and find all the substrings
+		uint32_t i = 0;
+		while ( i < strlen( pchCurrentPreload ) )
+		{
+			// If there's a string and it's not gameoverlayrenderer, append it to our new LD_PRELOAD
+			if ( pchPreloadCopy[ i ] != '\0' )
+			{
+				if ( strstr( pchPreloadCopy + i, "gameoverlayrenderer.so" ) == nullptr )
+				{
+					if ( bFirst == false )
+					{
+						strNewPreload.append( ":" );
+					}
+					else
+					{
+						bFirst = false;
+					}
+
+					strNewPreload.append( pchPreloadCopy + i );
+				}
+
+				i += strlen ( pchPreloadCopy + i );
+			}
+			else
+			{
+				i++;
+			}
+		}
+
+		free( pchPreloadCopy );
+	}
+
+	pid_t pid = fork();
+
+	// Are we in the child?
+	if ( pid == 0 )
+	{
+		// Try to snap back to old priority
+		if ( g_bNiceCap == true )
+		{
+			nice( g_nOldNice - g_nNewNice );
+		}
+
+		// Set modified LD_PRELOAD if needed
+		if ( pchCurrentPreload != nullptr )
+		{
+			if ( strNewPreload.empty() == false )
+			{
+				setenv( "LD_PRELOAD", strNewPreload.c_str(), 1 );
+			}
+			else
+			{
+				unsetenv( "LD_PRELOAD" );
+			}
+		}
+
+		unsetenv( "ENABLE_VKBASALT" );
+
+		execvp( argv[ 0 ], argv );
+	}
+
+	std::thread waitThread([](){
+		while( wait( nullptr ) >= 0 )
+		{
+			;
+		}
+
+		run = false;
+	});
+
+	waitThread.detach();
+}
+
+static void
 dispatch_x11( Display *dpy, MouseCursor *cursor, bool *vblank )
 {
 	do {
@@ -3327,98 +3424,7 @@ steamcompmgr_main (int argc, char **argv)
 
 	if ( g_nSubCommandArg != 0 )
 	{
-		// (Don't Lose) The Children
-		prctl( PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0 );
-
-		std::string strNewPreload;
-		char *pchPreloadCopy = nullptr;
-		const char *pchCurrentPreload = getenv( "LD_PRELOAD" );
-		bool bFirst = true;
-
-		if ( pchCurrentPreload != nullptr )
-		{
-			pchPreloadCopy = strdup( pchCurrentPreload );
-
-			// First replace all the separators in our copy with terminators
-			for ( uint32_t i = 0; i < strlen( pchCurrentPreload ); i++ )
-			{
-				if ( pchPreloadCopy[ i ] == ' ' || pchPreloadCopy[ i ] == ':' )
-				{
-					pchPreloadCopy[ i ] = '\0';
-				}
-			}
-
-			// Then walk it again and find all the substrings
-			uint32_t i = 0;
-			while ( i < strlen( pchCurrentPreload ) )
-			{
-				// If there's a string and it's not gameoverlayrenderer, append it to our new LD_PRELOAD
-				if ( pchPreloadCopy[ i ] != '\0' )
-				{
-					if ( strstr( pchPreloadCopy + i, "gameoverlayrenderer.so" ) == nullptr )
-					{
-						if ( bFirst == false )
-						{
-							strNewPreload.append( ":" );
-						}
-						else
-						{
-							bFirst = false;
-						}
-
-						strNewPreload.append( pchPreloadCopy + i );
-					}
-
-					i += strlen ( pchPreloadCopy + i );
-				}
-				else
-				{
-					i++;
-				}
-			}
-
-			free( pchPreloadCopy );
-		}
-
-		pid_t pid = fork();
-
-		// Are we in the child?
-		if ( pid == 0 )
-		{
-			// Try to snap back to old priority
-			if ( g_bNiceCap == true )
-			{
-				nice( g_nOldNice - g_nNewNice );
-			}
-
-			// Set modified LD_PRELOAD if needed
-			if ( pchCurrentPreload != nullptr )
-			{
-				if ( strNewPreload.empty() == false )
-				{
-					setenv( "LD_PRELOAD", strNewPreload.c_str(), 1 );
-				}
-				else
-				{
-					unsetenv( "LD_PRELOAD" );
-				}
-			}
-
-			unsetenv( "ENABLE_VKBASALT" );
-
-			execvp( argv[ g_nSubCommandArg ], &argv[ g_nSubCommandArg ] );
-		}
-
-		std::thread waitThread([](){
-			while( wait( nullptr ) >= 0 )
-			{
-				;
-			}
-
-			run = false;
-		});
-
-		waitThread.detach();
+		spawn_client( &argv[ g_nSubCommandArg ] );
 	}
 
 	std::thread imageWaitThread( imageWaitThreadMain );
