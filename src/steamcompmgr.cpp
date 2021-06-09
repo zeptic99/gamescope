@@ -3284,10 +3284,35 @@ steamcompmgr_main (int argc, char **argv)
 	std::thread imageWaitThread( imageWaitThreadMain );
 	imageWaitThread.detach();
 
+	struct pollfd x11_pollfd = {
+		.fd = XConnectionNumber(dpy),
+		.events = POLLIN,
+	};
+
 	for (;;)
 	{
 		focusDirty = False;
 		bool vblank = false;
+
+		if ( poll( &x11_pollfd, 1, -1 ) < 0)
+		{
+			if ( errno == EAGAIN )
+				continue;
+
+			perror( "poll failed" );
+			break;
+		}
+
+		if ( x11_pollfd.revents & POLLHUP )
+		{
+			fprintf( stderr, "Lost connection to the X11 server\n" );
+			break;
+		}
+
+		if ( !( x11_pollfd.revents & POLLIN ) )
+		{
+			continue;
+		}
 
 		do {
 			XNextEvent (dpy, &ev);
