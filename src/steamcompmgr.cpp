@@ -2962,11 +2962,151 @@ void check_new_wayland_res( void )
 	}
 }
 
+static void
+dispatch_x11( Display *dpy, MouseCursor *cursor, bool *vblank )
+{
+	do {
+		XEvent ev;
+		XNextEvent (dpy, &ev);
+		if ((ev.type & 0x7f) != KeymapNotify)
+			discard_ignore (dpy, ev.xany.serial);
+		if (debugEvents)
+		{
+			gpuvis_trace_printf ("event %d", ev.type);
+			printf ("event %d\n", ev.type);
+		}
+		switch (ev.type) {
+			case CreateNotify:
+				if (ev.xcreatewindow.parent == root)
+					add_win (dpy, ev.xcreatewindow.window, 0, ev.xcreatewindow.serial);
+				break;
+			case ConfigureNotify:
+				configure_win (dpy, &ev.xconfigure);
+				break;
+			case DestroyNotify:
+			{
+				win * w = find_win(dpy, ev.xdestroywindow.window);
+
+				if (w && w->id == ev.xdestroywindow.window)
+					destroy_win (dpy, ev.xdestroywindow.window, True, True);
+				break;
+			}
+			case MapNotify:
+			{
+				win * w = find_win(dpy, ev.xmap.window);
+
+				if (w && w->id == ev.xmap.window)
+					map_win (dpy, ev.xmap.window, ev.xmap.serial);
+				break;
+			}
+			case UnmapNotify:
+			{
+				win * w = find_win(dpy, ev.xunmap.window);
+
+				if (w && w->id == ev.xunmap.window)
+					unmap_win (dpy, ev.xunmap.window, True);
+				break;
+			}
+			case ReparentNotify:
+				if (ev.xreparent.parent == root)
+					add_win (dpy, ev.xreparent.window, 0, ev.xreparent.serial);
+				else
+				{
+					win * w = find_win(dpy, ev.xreparent.window);
+
+					if (w && w->id == ev.xreparent.window)
+					{
+						destroy_win (dpy, ev.xreparent.window, False, True);
+					}
+					else
+					{
+						// If something got reparented _to_ a toplevel window,
+						// go check for the fullscreen workaround again.
+						w = find_win(dpy, ev.xreparent.parent);
+						if (w)
+						{
+							get_size_hints(dpy, w);
+							focusDirty = True;
+						}
+					}
+				}
+				break;
+			case CirculateNotify:
+				circulate_win(dpy, &ev.xcirculate);
+				break;
+			case MapRequest:
+				map_request(dpy, &ev.xmaprequest);
+				break;
+			case ConfigureRequest:
+				configure_request(dpy, &ev.xconfigurerequest);
+				break;
+			case CirculateRequest:
+				circulate_request(dpy, &ev.xcirculaterequest);
+				break;
+			case Expose:
+				break;
+			case PropertyNotify:
+				handle_property_notify(dpy, &ev.xproperty);
+				break;
+			case ClientMessage:
+				handle_client_message(dpy, &ev.xclient);
+
+				if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
+				{
+					// Decode the split up vblanktime... Sign-extend nonsense...
+					uint64_t vblanktime = (uint64_t(uint32_t(ev.xclient.data.l[2])) << 32) |
+										   uint64_t(uint32_t(ev.xclient.data.l[3]));
+					uint64_t vblankreceived = get_time_in_nanos();
+					uint64_t diff = vblankreceived - vblanktime;
+
+					// give it 1 ms of slack.. maybe too long
+					if ( diff > 1'000'000ul )
+					{
+						gpuvis_trace_printf( "ignored stale vblank" );
+					}
+					else
+					{
+						gpuvis_trace_printf( "got vblank" );
+						*vblank = true;
+					}
+				}
+				break;
+			case LeaveNotify:
+				if (ev.xcrossing.window == currentInputFocusWindow)
+				{
+					// This shouldn't happen due to our pointer barriers,
+					// but there is a known X server bug; warp to last good
+					// position.
+					cursor->resetPosition();
+				}
+				break;
+			case MotionNotify:
+				{
+					win * w = find_win(dpy, ev.xmotion.window);
+					if (w && w->id == currentInputFocusWindow)
+					{
+						cursor->move(ev.xmotion.x, ev.xmotion.y);
+					}
+					break;
+				}
+			default:
+				if (ev.type == damage_event + XDamageNotify)
+				{
+					damage_win (dpy, (XDamageNotifyEvent *) &ev);
+				}
+				else if (ev.type == xfixes_event + XFixesCursorNotify)
+				{
+					cursor->setDirty();
+				}
+				break;
+		}
+	} while (QLength (dpy));
+}
+
 void
 steamcompmgr_main (int argc, char **argv)
 {
 	Display	   *dpy;
-	XEvent	    ev;
 	Window	    root_return, parent_return;
 	Window	    *children;
 	unsigned int    nchildren;
@@ -3309,146 +3449,10 @@ steamcompmgr_main (int argc, char **argv)
 			break;
 		}
 
-		if ( !( x11_pollfd.revents & POLLIN ) )
+		if ( x11_pollfd.revents & POLLIN )
 		{
-			continue;
+			dispatch_x11( dpy, cursor.get(), &vblank );
 		}
-
-		do {
-			XNextEvent (dpy, &ev);
-			if ((ev.type & 0x7f) != KeymapNotify)
-				discard_ignore (dpy, ev.xany.serial);
-			if (debugEvents)
-			{
-				gpuvis_trace_printf ("event %d", ev.type);
-				printf ("event %d\n", ev.type);
-			}
-			switch (ev.type) {
-				case CreateNotify:
-					if (ev.xcreatewindow.parent == root)
-						add_win (dpy, ev.xcreatewindow.window, 0, ev.xcreatewindow.serial);
-					break;
-				case ConfigureNotify:
-					configure_win (dpy, &ev.xconfigure);
-					break;
-				case DestroyNotify:
-				{
-					win * w = find_win(dpy, ev.xdestroywindow.window);
-
-					if (w && w->id == ev.xdestroywindow.window)
-						destroy_win (dpy, ev.xdestroywindow.window, True, True);
-					break;
-				}
-				case MapNotify:
-				{
-					win * w = find_win(dpy, ev.xmap.window);
-
-					if (w && w->id == ev.xmap.window)
-						map_win (dpy, ev.xmap.window, ev.xmap.serial);
-					break;
-				}
-				case UnmapNotify:
-				{
-					win * w = find_win(dpy, ev.xunmap.window);
-
-					if (w && w->id == ev.xunmap.window)
-						unmap_win (dpy, ev.xunmap.window, True);
-					break;
-				}
-				case ReparentNotify:
-					if (ev.xreparent.parent == root)
-						add_win (dpy, ev.xreparent.window, 0, ev.xreparent.serial);
-					else
-					{
-						win * w = find_win(dpy, ev.xreparent.window);
-
-						if (w && w->id == ev.xreparent.window)
-						{
-							destroy_win (dpy, ev.xreparent.window, False, True);
-						}
-						else
-						{
-							// If something got reparented _to_ a toplevel window,
-							// go check for the fullscreen workaround again.
-							w = find_win(dpy, ev.xreparent.parent);
-							if (w)
-							{
-								get_size_hints(dpy, w);
-								focusDirty = True;
-							}
-						}
-					}
-					break;
-				case CirculateNotify:
-					circulate_win(dpy, &ev.xcirculate);
-					break;
-				case MapRequest:
-					map_request(dpy, &ev.xmaprequest);
-					break;
-				case ConfigureRequest:
-					configure_request(dpy, &ev.xconfigurerequest);
-					break;
-				case CirculateRequest:
-					circulate_request(dpy, &ev.xcirculaterequest);
-					break;
-				case Expose:
-					break;
-				case PropertyNotify:
-					handle_property_notify(dpy, &ev.xproperty);
-					break;
-				case ClientMessage:
-					handle_client_message(dpy, &ev.xclient);
-
-					if ( ev.xclient.data.l[0] == 24 && ev.xclient.data.l[1] == 8 )
-					{
-						// Decode the split up vblanktime... Sign-extend nonsense...
-						uint64_t vblanktime = (uint64_t(uint32_t(ev.xclient.data.l[2])) << 32) |
-											   uint64_t(uint32_t(ev.xclient.data.l[3]));
-						uint64_t vblankreceived = get_time_in_nanos();
-						uint64_t diff = vblankreceived - vblanktime;
-
-						// give it 1 ms of slack.. maybe too long
-						if ( diff > 1'000'000ul )
-						{
-							gpuvis_trace_printf( "ignored stale vblank" );
-						}
-						else
-						{
-							gpuvis_trace_printf( "got vblank" );
-							vblank = true;
-						}
-					}
-					break;
-				case LeaveNotify:
-					if (ev.xcrossing.window == currentInputFocusWindow)
-					{
-						// This shouldn't happen due to our pointer barriers,
-						// but there is a known X server bug; warp to last good
-						// position.
-						cursor->resetPosition();
-					}
-					break;
-				case MotionNotify:
-					{
-						win * w = find_win(dpy, ev.xmotion.window);
-						if (w && w->id == currentInputFocusWindow)
-						{
-							cursor->move(ev.xmotion.x, ev.xmotion.y);
-						}
-						break;
-					}
-				default:
-					if (ev.type == damage_event + XDamageNotify)
-					{
-						damage_win (dpy, (XDamageNotifyEvent *) &ev);
-					}
-					else if (ev.type == xfixes_event + XFixesCursorNotify)
-					{
-						cursor->setDirty();
-					}
-					break;
-			}
-		} while (QLength (dpy));
 
 		if ( run == false )
 		{
