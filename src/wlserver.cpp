@@ -78,26 +78,6 @@ void sig_handler(int signal)
 	run = false;
 }
 
-void nudge_steamcompmgr(void)
-{
-	static bool bHasNestedDisplay = false;
-	static XEvent XWLExposeEvent = {};
-	
-	if ( bHasNestedDisplay == false )
-	{
-		g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland_server->display_name );
-		
-		XWLExposeEvent.xclient.type = ClientMessage;
-		XWLExposeEvent.xclient.window = DefaultRootWindow( g_XWLDpy );
-		XWLExposeEvent.xclient.format = 32;
-
-		bHasNestedDisplay = true;
-	}
-	
-	XSendEvent( g_XWLDpy , DefaultRootWindow( g_XWLDpy ), True, SubstructureRedirectMask, &XWLExposeEvent);
-	XFlush( g_XWLDpy );
-}
-
 extern const struct wlr_surface_role xwayland_surface_role;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {

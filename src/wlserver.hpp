@@ -70,8 +70,6 @@ int wlserver_init( int argc, char **argv, bool bIsNested );
 
 int wlserver_run(void);
 
-void nudge_steamcompmgr(void);
-
 void wlserver_lock(void);
 void wlserver_unlock(void);
 

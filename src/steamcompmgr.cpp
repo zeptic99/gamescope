@@ -171,7 +171,6 @@ bool focusControlled;
 std::vector< uint32_t > vecFocuscontrolAppIDs;
 
 static Window	ourWindow;
-static XEvent	nudgeEvent;
 
 Bool			gameFocused;
 
@@ -280,6 +279,8 @@ static Bool		useXRes = True;
 std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
 
+static int g_nudgePipe[2];
+
 // poor man's semaphore
 class sem
 {
@@ -361,9 +362,7 @@ retry:
 		listCommitsDone.push_back( commitID );
 	}
 
-	static Display *threadDPY = XOpenDisplay ( wlserver_get_nested_display_name() );
-	XSendEvent( threadDPY, ourWindow, True, SubstructureRedirectMask, &nudgeEvent );
-	XFlush( threadDPY );
+	nudge_steamcompmgr();
 
 	goto retry;
 }
@@ -733,8 +732,7 @@ void MouseCursor::checkSuspension()
 		// We're hiding the cursor, force redraw if we were showing it
 		if (window && !m_imageEmpty ) {
 			hasRepaint = true;
-			XSendEvent(m_display, ourWindow, true, SubstructureRedirectMask, &nudgeEvent);
-			XFlush(m_display);
+			nudge_steamcompmgr();
 		}
 	}
 }
@@ -2810,10 +2808,6 @@ register_cm (Display *dpy)
 
 	ourWindow = w;
 
-	nudgeEvent.xclient.type = ClientMessage;
-	nudgeEvent.xclient.window = ourWindow;
-	nudgeEvent.xclient.format = 32;
-
 	return True;
 }
 
@@ -2896,6 +2890,12 @@ void handle_done_commits( void )
 	}
 
 	listCommitsDone.clear();
+}
+
+void nudge_steamcompmgr( void )
+{
+	if ( write( g_nudgePipe[ 1 ], "\n", 1 ) < 0 )
+		perror( "nudge_steamcompmgr: write failed" );
 }
 
 void check_new_wayland_res( void )
@@ -3217,9 +3217,25 @@ dispatch_vblank( int fd )
 	return vblank;
 }
 
+static void
+dispatch_nudge( int fd )
+{
+	for (;;)
+	{
+		static char buf[1024];
+		if ( read( fd, buf, sizeof(buf) ) < 0 )
+		{
+			if ( errno != EAGAIN )
+				perror(" steamcompmgr: dispatch_nudge: read failed" );
+			break;
+		}
+	}
+}
+
 enum event_type {
 	EVENT_X11,
 	EVENT_VBLANK,
+	EVENT_NUDGE,
 	EVENT_COUNT // keep last
 };
 
@@ -3282,6 +3298,12 @@ steamcompmgr_main (int argc, char **argv)
 			default:
 				break;
 		}
+	}
+
+	if ( pipe2( g_nudgePipe, O_CLOEXEC | O_NONBLOCK ) != 0 )
+	{
+		perror( "steamcompmgr: pipe failed" );
+		exit( 1 );
 	}
 
 	const char *pchEnableVkBasalt = getenv( "ENABLE_VKBASALT" );
@@ -3463,6 +3485,10 @@ steamcompmgr_main (int argc, char **argv)
 			.fd = vblankFD,
 			.events = POLLIN,
 		},
+		[ EVENT_NUDGE ] = {
+			.fd = g_nudgePipe[ 0 ],
+			.events = POLLIN,
+		},
 	};
 
 	for (;;)
@@ -3486,15 +3512,14 @@ steamcompmgr_main (int argc, char **argv)
 		}
 
 		assert( !( pollfds[ EVENT_VBLANK ].revents & POLLHUP ) );
+		assert( !( pollfds[ EVENT_NUDGE ].revents & POLLHUP ) );
 
 		if ( pollfds[ EVENT_X11 ].revents & POLLIN )
-		{
 			dispatch_x11( dpy, cursor.get() );
-		}
 		if ( pollfds[ EVENT_VBLANK ].revents & POLLIN )
-		{
 			vblank = dispatch_vblank( vblankFD );
-		}
+		if ( pollfds[ EVENT_NUDGE ].revents & POLLIN )
+			dispatch_nudge( g_nudgePipe[ 0 ] );
 
 		if ( run == false )
 		{
@@ -3556,7 +3581,7 @@ steamcompmgr_main (int argc, char **argv)
 			// make sure we keep pushing frames even if the app isn't updating.
 			if (fadeOutWindow.id)
 			{
-				XSendEvent(dpy, ourWindow, True, SubstructureRedirectMask, &nudgeEvent);
+				nudge_steamcompmgr();
 			}
 
 			cursor->updatePosition();
