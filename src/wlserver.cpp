@@ -112,6 +112,13 @@ const struct wlr_surface_role xwayland_surface_role = {
 static void xwayland_ready(struct wl_listener *listener, void *data)
 {
 	setenv("DISPLAY", wlserver.wlr.xwayland_server->display_name, true);
+
+	g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland_server->display_name );
+	if ( g_XWLDpy == nullptr )
+	{
+		wlr_log( WLR_ERROR, "wlserver: failed to connect to X11 server\n" );
+		exit ( 1 );
+	}
 	
 	startSteamCompMgr();
 }
