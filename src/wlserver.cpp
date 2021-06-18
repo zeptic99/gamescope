@@ -59,8 +59,7 @@ struct wlserver_content_override {
 
 std::map<uint32_t, struct wlserver_content_override *> content_overrides;
 
-// O = hover, 1/2/3 = left/right/middle, 4 = touch passthrough
-int g_nTouchClickMode = 1;
+enum wlserver_touch_click_mode g_nTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
 
 static struct wl_list pending_surfaces = {0};
 
@@ -245,7 +244,7 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
 
-		if ( g_nTouchClickMode == 4 )
+		if ( g_nTouchClickMode == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
 		{
 			if ( event->touch_id >= 0 && event->touch_id < WLSERVER_TOUCH_COUNT )
 			{
@@ -338,7 +337,7 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
 
-		if ( g_nTouchClickMode == 4 )
+		if ( g_nTouchClickMode == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
 		{
 			wlr_seat_touch_notify_motion( wlserver.wlr.seat, event->time_msec, event->touch_id, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		}

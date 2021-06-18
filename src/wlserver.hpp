@@ -62,7 +62,15 @@ extern struct wlserver_t wlserver;
 
 extern bool run;
 
-extern int g_nTouchClickMode;
+enum wlserver_touch_click_mode {
+	WLSERVER_TOUCH_CLICK_HOVER = 0,
+	WLSERVER_TOUCH_CLICK_LEFT = 1,
+	WLSERVER_TOUCH_CLICK_RIGHT = 2,
+	WLSERVER_TOUCH_CLICK_MIDDLE = 3,
+	WLSERVER_TOUCH_CLICK_PASSTHROUGH = 4,
+};
+
+extern enum wlserver_touch_click_mode g_nTouchClickMode;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 
