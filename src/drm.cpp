@@ -463,6 +463,14 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		}
 	}
 
+	// Disable all CRTCs. This ensures the CRTC we've selected isn't being used
+	// by another connector.
+	for (i = 0; i < resources->count_crtcs; i++) {
+		ret = drmModeSetCrtc(drm->fd, resources->crtcs[i], 0, 0, 0, nullptr, 0, nullptr);
+		if (ret != 0)
+			fprintf(stderr, "failed to disable CRTC %" PRIu32 ": %s", resources->crtcs[i], strerror(-ret));
+	}
+
 	drmModeFreeResources(resources);
 
 	drm->connector_id = connector->connector_id;
