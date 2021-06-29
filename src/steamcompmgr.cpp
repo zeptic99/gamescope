@@ -604,6 +604,8 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 	XChangeProperty(dpy, w->id, netWMStateAtom, XA_ATOM, 32, PropModeReplace,
 					(unsigned char *)&netWMState, netWMStateLen);
 
+	/* Some games (e.g. DOOM Eternal) don't react well to being put back as
+	 * iconic, so never do that. Only take them out of iconic. */
 	uint32_t wmState[] = { ICCCM_NORMAL_STATE, None };
 	XChangeProperty(dpy, w->id, WMStateAtom, WMStateAtom, 32,
 					PropModeReplace, (unsigned char *)wmState,
