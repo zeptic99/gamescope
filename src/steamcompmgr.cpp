@@ -604,10 +604,7 @@ set_win_hidden (Display *dpy, win *w, Bool hidden)
 	XChangeProperty(dpy, w->id, netWMStateAtom, XA_ATOM, 32, PropModeReplace,
 					(unsigned char *)&netWMState, netWMStateLen);
 
-	uint32_t wmState[] = {
-		(uint32_t)(hidden ? ICCCM_ICONIC_STATE : ICCCM_NORMAL_STATE),
-		None,
-	};
+	uint32_t wmState[] = { ICCCM_NORMAL_STATE, None };
 	XChangeProperty(dpy, w->id, WMStateAtom, WMStateAtom, 32,
 					PropModeReplace, (unsigned char *)wmState,
 					sizeof(wmState) / sizeof(wmState[0]));
