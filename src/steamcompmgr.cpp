@@ -161,6 +161,7 @@ static Window	currentFocusWindow;
 static win*		currentFocusWin;
 static Window	currentInputFocusWindow;
 uint32_t		currentInputFocusMode;
+static Window 	currentKeyboardFocusWindow;
 static Window	currentOverlayWindow;
 static Window	currentNotificationWindow;
 
@@ -1620,6 +1621,7 @@ found:
 
 		currentInputFocusWindow = inputFocus->id;
 		currentInputFocusMode = inputFocus->inputFocusMode;
+		currentKeyboardFocusWindow = keyboardFocusWin->id;
 	}
 
 	w = focus;
@@ -1660,7 +1662,7 @@ found:
 
 	while (i < nchildren)
 	{
-		XSelectInput(dpy, children[i], PointerMotionMask);
+		XSelectInput( dpy, children[i], PointerMotionMask | FocusChangeMask );
 		i++;
 	}
 
@@ -1802,7 +1804,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	/* This needs to be here or else we lose transparency messages */
 	XSelectInput (dpy, id, PropertyChangeMask | SubstructureNotifyMask |
-		PointerMotionMask | LeaveWindowMask);
+		PointerMotionMask | LeaveWindowMask | FocusChangeMask);
 
 	/* This needs to be here since we don't get PropertyNotify when unmapped */
 	w->opacity = get_prop (dpy, w->id, opacityAtom, OPAQUE);
@@ -2257,6 +2259,8 @@ destroy_win (Display *dpy, Window id, Bool gone, Bool fade)
 		currentOverlayWindow = None;
 	if (currentNotificationWindow == id && gone)
 		currentNotificationWindow = None;
+	if (currentKeyboardFocusWindow == id && gone)
+		currentKeyboardFocusWindow = None;
 	focusDirty = True;
 
 	finish_destroy_win (dpy, id, gone);
@@ -3062,6 +3066,37 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 
 				if (w && w->id == ev.xunmap.window)
 					unmap_win (dpy, ev.xunmap.window, True);
+				break;
+			}
+			case FocusOut:
+			{
+				win * w = find_win( dpy, ev.xfocus.window );
+				
+				// If focus escaped the current desired keyboard focus window, check where it went
+				if ( w && w->id == currentKeyboardFocusWindow )
+				{
+					Window newKeyboardFocus = None;
+					int nRevertMode = 0;
+					XGetInputFocus( dpy, &newKeyboardFocus, &nRevertMode );
+					
+					// Find window or its toplevel parent
+					win *kbw = find_win( dpy, newKeyboardFocus );
+					
+					if ( kbw )
+					{
+						if ( kbw->id == currentKeyboardFocusWindow )
+						{
+							// focus went to a child, this is fine, make note of it in case we need to fix it
+							currentKeyboardFocusWindow = newKeyboardFocus;
+						}
+						else
+						{
+							// focus went elsewhere, correct it
+							XSetInputFocus(dpy, currentKeyboardFocusWindow, RevertToNone, CurrentTime);
+						}
+					}
+				}
+				
 				break;
 			}
 			case ReparentNotify:
