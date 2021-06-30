@@ -1509,10 +1509,15 @@ found:
 	unsigned long focusedWindow = 0;
 	unsigned long focusedAppId = 0;
 	
+	if ( inputFocus == NULL )
+	{
+		inputFocus = focus;
+	}
+
 	if ( focus )
 	{
 		focusedWindow = focus->id;
-		focusedAppId = focus->appID;
+		focusedAppId = inputFocus->appID;
 	}
 	
 	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", False ),
@@ -1528,11 +1533,6 @@ found:
 		return;
 	}
 
-	if ( inputFocus == NULL )
-	{
-		inputFocus = focus;
-	}
-	
 	if ( gameFocused )
 	{
 		// Do some searches through game windows to follow transient links if needed
