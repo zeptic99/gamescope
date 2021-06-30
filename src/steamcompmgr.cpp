@@ -121,7 +121,6 @@ typedef struct _win {
 	uint32_t appID;
 	Bool isOverlay;
 	Bool isFullscreen;
-	Bool isHidden;
 	Bool isSysTrayIcon;
 	Bool sizeHintsSpecified;
 	Bool skipTaskbar;
@@ -564,54 +563,6 @@ static win * find_win( struct wlr_surface *surf )
 	}
 
 	return nullptr;
-}
-
-static void
-set_win_hidden (Display *dpy, win *w, Bool hidden)
-{
-	if (!w || w->id == None)
-	{
-		return;
-	}
-
-	if (w->isHidden == hidden)
-	{
-		return;
-	}
-
-	int netWMStateLen = 0;
-	Atom netWMState[5] = {0};
-
-	if (hidden == True)
-	{
-		netWMState[netWMStateLen++] = netWMStateHiddenAtom;
-	}
-	else
-	{
-		netWMState[netWMStateLen++] = netWMStateFullscreenAtom;
-		netWMState[netWMStateLen++] = netWMStateFocusedAtom;
-	}
-
-	if (w->skipTaskbar)
-	{
-		netWMState[netWMStateLen++] = netWMStateSkipTaskbarAtom;
-	}
-	if (w->skipPager)
-	{
-		netWMState[netWMStateLen++] = netWMStateSkipPagerAtom;
-	}
-
-	XChangeProperty(dpy, w->id, netWMStateAtom, XA_ATOM, 32, PropModeReplace,
-					(unsigned char *)&netWMState, netWMStateLen);
-
-	/* Some games (e.g. DOOM Eternal) don't react well to being put back as
-	 * iconic, so never do that. Only take them out of iconic. */
-	uint32_t wmState[] = { ICCCM_NORMAL_STATE, None };
-	XChangeProperty(dpy, w->id, WMStateAtom, WMStateAtom, 32,
-					PropModeReplace, (unsigned char *)wmState,
-					sizeof(wmState) / sizeof(wmState[0]));
-
-	w->isHidden = hidden;
 }
 
 static void
@@ -1235,9 +1186,6 @@ paint_all(Display *dpy, MouseCursor *cursor)
 				fadeOutWindowGone = False;
 			}
 			fadeOutWindow.id = None;
-
-			// Finished fading out, mark previous window hidden
-			set_win_hidden(dpy, &fadeOutWindow, True);
 		}
 	}
 
@@ -1626,10 +1574,12 @@ found:
 // 	if (fadeOutWindow.id && currentFocusWindow != focus->id)
 	if ( prevFocusWindow != focus->id )
 	{
-		if ( prevFocusWindow != inputFocus->id )
-		{
-			set_win_hidden( dpy, find_win(dpy, prevFocusWindow), True );
-		}
+		/* Some games (e.g. DOOM Eternal) don't react well to being put back as
+		* iconic, so never do that. Only take them out of iconic. */
+		uint32_t wmState[] = { ICCCM_NORMAL_STATE, None };
+		XChangeProperty(dpy, w->id, WMStateAtom, WMStateAtom, 32,
+					PropModeReplace, (unsigned char *)wmState,
+					sizeof(wmState) / sizeof(wmState[0]));
 
 		gpuvis_trace_printf( "determine_and_apply_focus focus %lu", focus->id );
 
@@ -1648,11 +1598,6 @@ found:
 	if ( currentInputFocusWindow != inputFocus->id ||
 		currentInputFocusMode != inputFocus->inputFocusMode )
 	{
-		if ( currentInputFocusWindow != focus->id )
-		{
-			set_win_hidden( dpy, find_win(dpy, currentInputFocusWindow), True );
-		}
-		
 		win *keyboardFocusWin = inputFocus;
 		
 		if ( inputFocus->inputFocusMode == 2 )
@@ -1678,12 +1623,6 @@ found:
 	}
 
 	w = focus;
-
-	set_win_hidden(dpy, w, False);
-	if ( inputFocus != focus )
-	{
-		set_win_hidden(dpy, inputFocus, False);
-	}
 
 	cursor->constrainPosition();
 
@@ -2152,7 +2091,6 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new_win->utf8_title = False;
 	
 	new_win->isFullscreen = False;
-	new_win->isHidden = False;
 	new_win->isSysTrayIcon = False;
 	new_win->sizeHintsSpecified = False;
 	new_win->skipTaskbar = False;
@@ -2529,11 +2467,6 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 				{
 					hasRepaint = true;
 				}
-			}
-
-			if (w->isOverlay)
-			{
-				set_win_hidden(dpy, w, w->opacity == TRANSLUCENT);
 			}
 
 			unsigned int maxOpacity = 0;
