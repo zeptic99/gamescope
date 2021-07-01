@@ -556,6 +556,8 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 	drm->lo_device = liftoff_device_create( drm->fd );
 	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc_id );
 
+	liftoff_device_register_all_planes( drm->lo_device );
+
 	assert( drm->lo_device && drm->lo_output );
 
 	for ( int i = 0; i < k_nMaxLayers; i++ )
@@ -966,7 +968,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 	{
 		for ( int i = 0; i < k_nMaxLayers; i++ )
 		{
-			if ( liftoff_layer_get_plane_id( drm->lo_layers[ i ] ) != 0 )
+			if ( liftoff_layer_get_plane( drm->lo_layers[ i ] ) != NULL )
 				scanoutLayerCount++;
 		}
 		ret = scanoutLayerCount == pComposite->nLayerCount;
