@@ -1,11 +1,10 @@
 // Initialize Vulkan and composite stuff with a compute queue
 
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/stat.h>
 #include <array>
-
-#include <sys/syscall.h>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -223,21 +222,30 @@ int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeB
 	return -1;
 }
 
-// Copied from <linux/kcmp.h>
-#define KCMP_FILE 0
-
-static bool allFileDescriptorsEqual( wlr_dmabuf_attributes *pDMA )
+static bool allDMABUFsEqual( wlr_dmabuf_attributes *pDMA )
 {
-	pid_t pid = getpid();
-	
+	if ( pDMA->n_planes == 1 )
+		return true;
+
+	struct stat first_stat;
+	if ( fstat( pDMA->fd[0], &first_stat ) != 0 )
+	{
+		perror( "fstat failed" );
+		return false;
+	}
+
 	for ( int i = 1; i < pDMA->n_planes; ++i )
 	{
-		// kcmp returns -1 for failures, 0 for equal, >0 for different
-		if ( pDMA->fd[0] != pDMA->fd[i] &&
-		     syscall( SYS_kcmp, pid, pid, KCMP_FILE, pDMA->fd[0], pDMA->fd[i] ) > 0 )
+		struct stat plane_stat;
+		if ( fstat( pDMA->fd[i], &plane_stat ) != 0 )
+		{
+			perror( "fstat failed" );
+			return false;
+		}
+		if ( plane_stat.st_ino != first_stat.st_ino )
 			return false;
 	}
-	
+
 	return true;
 }
 
@@ -474,7 +482,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	{
 		// TODO: multi-planar DISTINCT DMA-BUFs support (see vkBindImageMemory2
 		// and VkBindImagePlaneMemoryInfo)
-		assert( pDMA->n_planes == 1 || allFileDescriptorsEqual( pDMA ) );
+		assert( allDMABUFsEqual( pDMA ) );
 
 		// Importing memory from a FD transfers ownership of the FD
 		int fd = dup( pDMA->fd[0] );
