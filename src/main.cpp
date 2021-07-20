@@ -25,8 +25,8 @@ int g_nNestedHeight = 0;
 int g_nNestedRefresh = 0;
 int g_nNestedUnfocusedRefresh = 0;
 
-uint32_t g_nOutputWidth = 1280;
-uint32_t g_nOutputHeight = 720;
+uint32_t g_nOutputWidth = 0;
+uint32_t g_nOutputHeight = 0;
 int g_nOutputRefresh = 60;
 
 bool g_bFullscreen = false;
@@ -115,6 +115,18 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if ( g_nOutputHeight == 0 )
+	{
+		if ( g_nOutputWidth != 0 )
+		{
+			fprintf( stderr, "Cannot specify -W without -H\n" );
+			return 1;
+		}
+		g_nOutputHeight = 720;
+	}
+	if ( g_nOutputWidth == 0 )
+		g_nOutputWidth = g_nOutputHeight * 16 / 9;
+
 	cap_t caps;
 	caps = cap_get_proc();
 	cap_flag_value_t nicecapvalue = CAP_CLEAR;
@@ -199,10 +211,18 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if ( g_nNestedWidth == 0 )
-		g_nNestedWidth = g_nOutputWidth;
 	if ( g_nNestedHeight == 0 )
+	{
+		if ( g_nNestedWidth != 0 )
+		{
+			fprintf( stderr, "Cannot specify -w without -h\n" );
+			return 1;
+		}
+		g_nNestedWidth = g_nOutputWidth;
 		g_nNestedHeight = g_nOutputHeight;
+	}
+	if ( g_nNestedWidth == 0 )
+		g_nNestedWidth = g_nNestedHeight * 16 / 9;
 
 	wlserver_init(argc, argv, g_bIsNested == true );
 
