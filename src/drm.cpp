@@ -39,9 +39,7 @@ static int s_drm_log = 0;
 
 static uint32_t find_crtc_for_encoder(const drmModeRes *resources,
 		const drmModeEncoder *encoder) {
-	int i;
-
-	for (i = 0; i < resources->count_crtcs; i++) {
+	for (int i = 0; i < resources->count_crtcs; i++) {
 		/* possible_crtcs is a bitmask as described here:
 		 * https://dvdhrm.wordpress.com/2012/09/13/linux-drm-mode-setting-api
 		 */
@@ -53,14 +51,12 @@ static uint32_t find_crtc_for_encoder(const drmModeRes *resources,
 	}
 
 	/* no match found */
-	return -1;
+	return 0;
 }
 
 static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeRes *resources,
 		const drmModeConnector *connector) {
-	int i;
-
-	for (i = 0; i < connector->count_encoders; i++) {
+	for (int i = 0; i < connector->count_encoders; i++) {
 		const uint32_t encoder_id = connector->encoders[i];
 		drmModeEncoder *encoder = drmModeGetEncoder(drm->fd, encoder_id);
 
@@ -75,7 +71,7 @@ static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeRe
 	}
 
 	/* no match found */
-	return -1;
+	return 0;
 }
 
 static int get_resources(int fd, drmModeRes **resources)
