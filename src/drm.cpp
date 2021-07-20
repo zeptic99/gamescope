@@ -23,6 +23,7 @@ extern "C" {
 
 #include "gpuvis_trace_utils.h"
 
+#include <algorithm>
 #include <thread>
 
 struct drm_t g_DRM = {};
@@ -365,26 +366,19 @@ static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connect
 	return NULL;
 }
 
-static const drmModeModeInfo *get_preferred_mode( const drmModeConnector *connector )
+static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 {
-	/* find preferred mode or the highest resolution mode */
-	int highest_area = 0;
-	const drmModeModeInfo *highest_mode = NULL;
-	for (int i = 0; i < connector->count_modes; i++) {
-		const drmModeModeInfo *mode = &connector->modes[i];
+	if (mode1.type & DRM_MODE_TYPE_PREFERRED)
+		return true;
+	if (mode2.type & DRM_MODE_TYPE_PREFERRED)
+		return false;
 
-		if (mode->type & DRM_MODE_TYPE_PREFERRED) {
-			return mode;
-		}
+	int area1 = mode1.hdisplay * mode1.vdisplay;
+	int area2 = mode2.hdisplay * mode2.vdisplay;
+	if (area1 != area2)
+		return area1 > area2;
 
-		int area = mode->hdisplay * mode->vdisplay;
-		if (area > highest_area) {
-			highest_mode = mode;
-			highest_area = area;
-		}
-	}
-
-	return highest_mode;
+	return mode1.vrefresh > mode2.vrefresh;
 }
 
 int init_drm(struct drm_t *drm, const char *device)
@@ -432,13 +426,17 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
+	/* sort modes by preference: preferred flag, then highest area, then
+	 * highest refresh rate */
+	std::stable_sort(connector->modes, connector->modes + connector->count_modes, compare_modes);
+
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
 		drm->mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
 	}
 
 	if (!drm->mode) {
-		drm->mode = get_preferred_mode(connector);
+		drm->mode = get_matching_mode(connector, 0, 0, 0);
 	}
 
 	if (!drm->mode) {
