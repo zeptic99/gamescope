@@ -27,18 +27,21 @@ struct plane {
 	uint32_t id;
 	drmModePlane *plane;
 	std::map<std::string, drmModePropertyRes *> props;
+	std::map<std::string, uint64_t> initial_prop_values;
 };
 
 struct crtc {
 	uint32_t id;
 	drmModeCrtc *crtc;
 	std::map<std::string, drmModePropertyRes *> props;
+	std::map<std::string, uint64_t> initial_prop_values;
 };
 
 struct connector {
 	uint32_t id;
 	drmModeConnector *connector;
 	std::map<std::string, drmModePropertyRes *> props;
+	std::map<std::string, uint64_t> initial_prop_values;
 };
 
 struct fb {

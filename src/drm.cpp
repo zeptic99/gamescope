@@ -294,7 +294,7 @@ void flip_handler_thread_run(void)
 	}
 }
 
-static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, std::map<std::string, drmModePropertyRes *> &map)
+static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, std::map<std::string, drmModePropertyRes *> &map, std::map<std::string, uint64_t> &values)
 {
 	drmModeObjectProperties *props = drmModeObjectGetProperties(drm->fd, obj_id, obj_type);
 	if (!props) {
@@ -303,6 +303,7 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 	}
 
 	map = {};
+	values = {};
 
 	for (uint32_t i = 0; i < props->count_props; i++) {
 		drmModePropertyRes *prop = drmModeGetProperty(drm->fd, props->props[i]);
@@ -311,6 +312,7 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 			return false;
 		}
 		map[prop->name] = prop;
+		values[prop->name] = props->prop_values[i];
 	}
 
 	drmModeFreeObjectProperties(props);
@@ -334,7 +336,7 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
-		if (!get_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props)) {
+		if (!get_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props, conn.initial_prop_values)) {
 			return false;
 		}
 
@@ -350,7 +352,7 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
-		if (!get_properties(drm, crtc.id, DRM_MODE_OBJECT_CRTC, crtc.props)) {
+		if (!get_properties(drm, crtc.id, DRM_MODE_OBJECT_CRTC, crtc.props, crtc.initial_prop_values)) {
 			return false;
 		}
 
@@ -374,7 +376,7 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
-		if (!get_properties(drm, plane.id, DRM_MODE_OBJECT_PLANE, plane.props)) {
+		if (!get_properties(drm, plane.id, DRM_MODE_OBJECT_PLANE, plane.props, plane.initial_prop_values)) {
 			return false;
 		}
 
