@@ -34,8 +34,6 @@ dep_xres = dependency('xres')
 drm_dep = dependency('libdrm')
 vulkan_dep = dependency('vulkan')
 
-cc = meson.get_compiler('c')
-
 wayland_server = dependency('wayland-server')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
 xkbcommon      = dependency('xkbcommon')
