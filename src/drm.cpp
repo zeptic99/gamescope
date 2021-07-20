@@ -432,9 +432,9 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nOutputRefresh != 0 )
+	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
-		drm->mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nOutputRefresh);
+		drm->mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
 	}
 
 	if (!drm->mode) {
