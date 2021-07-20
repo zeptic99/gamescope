@@ -6,7 +6,7 @@ project(
 )
 
 add_project_arguments([
-	'-DWLR_USE_UNSTABLE',
+  '-DWLR_USE_UNSTABLE',
 ], language: ['c','cpp'])
 
 cc = meson.get_compiler('c')
@@ -36,8 +36,8 @@ vulkan_dep = dependency('vulkan')
 
 wayland_server = dependency('wayland-server')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
-xkbcommon      = dependency('xkbcommon')
-math           = cc.find_library('m')
+xkbcommon = dependency('xkbcommon')
+math = cc.find_library('m')
 thread_dep = dependency('threads')
 cap_dep = cc.find_library('cap')
 sdl_dep = dependency('SDL2')
