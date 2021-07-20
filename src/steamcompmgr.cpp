@@ -3243,7 +3243,7 @@ steamcompmgr_main (int argc, char **argv)
 	int		    o;
 	int			readyPipeFD = -1;
 
-	// :/
+	// Reset getopt() state
 	optind = 1;
 
 	while ((o = getopt (argc, argv, GAMESCOPE_OPTIONS)) != -1)
@@ -3290,6 +3290,12 @@ steamcompmgr_main (int argc, char **argv)
 			default:
 				break;
 		}
+	}
+
+	int subCommandArg = -1;
+	if ( optind < argc )
+	{
+		subCommandArg = optind;
 	}
 
 	if ( pipe2( g_nudgePipe, O_CLOEXEC | O_NONBLOCK ) != 0 )
@@ -3461,9 +3467,9 @@ steamcompmgr_main (int argc, char **argv)
 		readyPipeFD = -1;
 	}
 
-	if ( g_nSubCommandArg != 0 )
+	if ( subCommandArg >= 0 )
 	{
-		spawn_client( &argv[ g_nSubCommandArg ] );
+		spawn_client( &argv[ subCommandArg ] );
 	}
 
 	std::thread imageWaitThread( imageWaitThreadMain );

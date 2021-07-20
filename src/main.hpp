@@ -27,8 +27,6 @@ extern bool g_bBorderlessOutputWindow;
 
 extern bool g_bTakeScreenshot;
 
-extern uint32_t g_nSubCommandArg;
-
 extern bool g_bNiceCap;
 extern int g_nOldNice;
 extern int g_nNewNice;
