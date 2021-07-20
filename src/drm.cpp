@@ -37,22 +37,21 @@ bool g_bDebugLayers = false;
 
 static int s_drm_log = 0;
 
-static uint32_t find_crtc_for_encoder(const struct drm_t *drm, const drmModeEncoder *encoder) {
+static struct crtc *find_crtc_for_encoder(struct drm_t *drm, const drmModeEncoder *encoder) {
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
 		/* possible_crtcs is a bitmask as described here:
 		 * https://dvdhrm.wordpress.com/2012/09/13/linux-drm-mode-setting-api
 		 */
 		uint32_t crtc_mask = 1 << i;
-		uint32_t crtc_id = drm->crtcs[i].id;
 		if (encoder->possible_crtcs & crtc_mask)
-			return crtc_id;
+			return &drm->crtcs[i];
 	}
 
 	/* no match found */
-	return 0;
+	return nullptr;
 }
 
-static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeConnector *connector) {
+static struct crtc *find_crtc_for_connector(struct drm_t *drm, const drmModeConnector *connector) {
 	for (int i = 0; i < connector->count_encoders; i++) {
 		uint32_t encoder_id = connector->encoders[i];
 
@@ -60,14 +59,14 @@ static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeCo
 		if (encoder == nullptr)
 			continue;
 
-		uint32_t crtc_id = find_crtc_for_encoder(drm, encoder);
+		struct crtc *crtc = find_crtc_for_encoder(drm, encoder);
 		drmModeFreeEncoder(encoder);
-		if (crtc_id != 0)
-			return crtc_id;
+		if (crtc != nullptr)
+			return crtc;
 	}
 
 	/* no match found */
-	return 0;
+	return nullptr;
 }
 
 #define MAX_DRM_DEVICES 64
@@ -515,11 +514,12 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	drm->crtc_id = find_crtc_for_connector(drm, drm->connector->connector);
-	if (drm->crtc_id == 0) {
+	drm->crtc = find_crtc_for_connector(drm, drm->connector->connector);
+	if (drm->crtc == nullptr) {
 		fprintf(stderr, "no crtc found!\n");
 		return -1;
 	}
+	drm->crtc_id = drm->crtc->id;
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
 		if (drm->crtcs[i].id == drm->crtc_id) {
