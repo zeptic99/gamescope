@@ -80,21 +80,24 @@ endif
 subdir('protocol')
 
 executable(
-    'gamescope',
+  'gamescope',
+  [
     'src/steamcompmgr.cpp',
     'src/main.cpp',
-	'src/wlserver.cpp',
-	'src/drm.cpp',
-	'src/cvt.cpp',
-	'src/sdlwindow.cpp',
-	'src/vblankmanager.cpp',
-	[ 'src/rendervulkan.cpp', spirv_shader ],
-	gamescope_xwayland_proto_files,
-    dependencies : [
-        dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
-        dep_xxf86vm, dep_xres, drm_dep, wayland_server, wayland_protos,
-        xkbcommon, math, thread_dep, sdl_dep, wlroots_dep,
-        vulkan_dep, liftoff_dep, dep_xtst, cap_dep
-    ],
-    install: true,
+    'src/wlserver.cpp',
+    'src/drm.cpp',
+    'src/cvt.cpp',
+    'src/sdlwindow.cpp',
+    'src/vblankmanager.cpp',
+    'src/rendervulkan.cpp',
+    spirv_shader,
+    gamescope_xwayland_proto_files,
+  ],
+  dependencies: [
+    dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
+    dep_xxf86vm, dep_xres, drm_dep, wayland_server, wayland_protos,
+    xkbcommon, math, thread_dep, sdl_dep, wlroots_dep,
+    vulkan_dep, liftoff_dep, dep_xtst, cap_dep
+  ],
+  install: true,
 )
