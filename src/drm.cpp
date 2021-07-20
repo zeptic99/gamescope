@@ -173,61 +173,44 @@ static uint32_t pick_plane_format( const struct wlr_drm_format_set *formats )
 }
 
 /* Pick a primary plane that can be connected to the chosen CRTC. */
-static uint32_t get_plane_id(struct drm_t *drm)
+static struct plane *find_primary_plane(struct drm_t *drm)
 {
-	drmModePlaneResPtr plane_resources;
-	uint32_t i;
-	uint32_t ret = 0;
+	struct plane *ret = nullptr;
 
-	plane_resources = drmModeGetPlaneResources(drm->fd);
-	if (!plane_resources) {
-		perror("drmModeGetPlaneResources failed");
-		return 0;
-	}
-
-	for (i = 0; (i < plane_resources->count_planes) && ret == 0; i++) {
-		uint32_t id = plane_resources->planes[i];
-		drmModePlanePtr plane = drmModeGetPlane(drm->fd, id);
-		if (!plane) {
-			fprintf(stderr, "drmModeGetPlane(%u) failed: %s\n", id, strerror(errno));
-			continue;
-		}
+	for (size_t i = 0; i < drm->planes.size() && ret == nullptr; i++) {
+		drmModePlane *plane = drm->planes[i].plane;
 
 		if (plane->possible_crtcs & (1 << drm->crtc_index)) {
 			drmModeObjectPropertiesPtr props =
-				drmModeObjectGetProperties(drm->fd, id, DRM_MODE_OBJECT_PLANE);
+				drmModeObjectGetProperties(drm->fd, plane->plane_id, DRM_MODE_OBJECT_PLANE);
 
 			uint64_t plane_type;
 			if (!get_prop_value(drm, props, "type", &plane_type)) {
-				fprintf(stderr, "Plane %" PRIu32 " is missing the type property", id);
-				return 0;
+				fprintf(stderr, "Plane %" PRIu32 " is missing the type property", plane->plane_id);
+				return nullptr;
 			}
 
 			if (!get_plane_formats(drm, plane, props, &drm->formats)) {
-				return 0;
+				return nullptr;
 			}
 
 			if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
 				/* found our primary plane, let's use that */
-				ret = id;
+				ret = &drm->planes[i];
 
 				if (!get_plane_formats(drm, plane, props, &drm->plane_formats)) {
-					return 0;
+					return nullptr;
 				}
 			}
 
 			drmModeFreeObjectProperties(props);
 		}
-
-		drmModeFreePlane(plane);
 	}
-
-	drmModeFreePlaneResources(plane_resources);
 
 	g_nDRMFormat = pick_plane_format( &drm->plane_formats );
 	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
 		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
-		return false;
+		return nullptr;
 	}
 
 	return ret;
@@ -538,13 +521,12 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	drm->connector_id = connector->connector_id;
 
-	drm->plane_id = get_plane_id( &g_DRM );
-
-	if ( drm->plane_id == 0 )
-	{
-		fprintf(stderr, "could not find a suitable plane\n");
+	drm->plane = find_primary_plane( drm );
+	if ( drm->plane == nullptr ) {
+		fprintf(stderr, "could not find a suitable primary plane\n");
 		return -1;
 	}
+	drm->plane_id = drm->plane->id;
 
 	drm->plane = (struct plane*)calloc(1, sizeof(*drm->plane));
 	drm->crtc = (struct crtc*)calloc(1, sizeof(*drm->crtc));
