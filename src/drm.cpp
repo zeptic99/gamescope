@@ -207,6 +207,9 @@ static struct plane *find_primary_plane(struct drm_t *drm)
 		}
 	}
 
+	if ( ret == nullptr )
+		return nullptr;
+
 	g_nDRMFormat = pick_plane_format( &drm->plane_formats );
 	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
 		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
@@ -527,33 +530,6 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 	drm->plane_id = drm->plane->id;
-
-	drm->plane = (struct plane*)calloc(1, sizeof(*drm->plane));
-	drm->crtc = (struct crtc*)calloc(1, sizeof(*drm->crtc));
-	drm->connector = (struct connector*)calloc(1, sizeof(*drm->connector));
-
-	if (!(drm->plane->plane = drmModeGetPlane(drm->fd, drm->plane_id))) {
-		perror("drmModeGetPlane failed");
-		return -1;
-	}
-	if (!(drm->crtc->crtc = drmModeGetCrtc(drm->fd, drm->crtc_id))) {
-		perror("drmModeGetCrtc failed");
-		return -1;
-	}
-	if (!(drm->connector->connector = drmModeGetConnector(drm->fd, drm->connector_id))) {
-		perror("drmModeGetConnector failed");
-		return -1;
-	}
-
-	if (!get_properties(drm, drm->plane_id, DRM_MODE_OBJECT_PLANE, drm->plane->props)) {
-		return -1;
-	}
-	if (!get_properties(drm, drm->crtc_id, DRM_MODE_OBJECT_CRTC, drm->crtc->props)) {
-		return -1;
-	}
-	if (!get_properties(drm, drm->connector_id, DRM_MODE_OBJECT_CONNECTOR, drm->connector->props)) {
-		return -1;
-	}
 
 	drm->kms_in_fence_fd = -1;
 
