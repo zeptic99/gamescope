@@ -430,23 +430,26 @@ int init_drm(struct drm_t *drm, const char *device)
 	 * highest refresh rate */
 	std::stable_sort(connector->modes, connector->modes + connector->count_modes, compare_modes);
 
+	const drmModeModeInfo *mode = nullptr;
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
-		drm->mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
+		mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
 	}
 
-	if (!drm->mode) {
-		drm->mode = get_matching_mode(connector, 0, 0, 0);
+	if (!mode) {
+		mode = get_matching_mode(connector, 0, 0, 0);
 	}
 
-	if (!drm->mode) {
+	if (!mode) {
 		fprintf(stderr, "could not find mode!\n");
 		return -1;
 	}
 
-	fprintf( stderr, "drm: selected mode %dx%d@%uHz\n", drm->mode->hdisplay, drm->mode->vdisplay, drm->mode->vrefresh );
+	fprintf( stderr, "drm: selected mode %dx%d@%uHz\n", mode->hdisplay, mode->vdisplay, mode->vrefresh );
 
-	if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode), &drm->mode_id) != 0)
+	drm->mode = *mode;
+
+	if (drmModeCreatePropertyBlob(drm->fd, &drm->mode, sizeof(drm->mode), &drm->mode_id) != 0)
 		return -1;
 
 	/* find encoder: */
@@ -546,9 +549,9 @@ int init_drm(struct drm_t *drm, const char *device)
 	std::thread flip_handler_thread( flip_handler_thread_run );
 	flip_handler_thread.detach();
 
-	g_nOutputWidth = drm->mode->hdisplay;
-	g_nOutputHeight = drm->mode->vdisplay;
-	g_nOutputRefresh = drm->mode->vrefresh;
+	g_nOutputWidth = drm->mode.hdisplay;
+	g_nOutputHeight = drm->mode.vdisplay;
+	g_nOutputRefresh = drm->mode.vrefresh;
 
 	if ( g_nOutputWidth < g_nOutputHeight )
 	{
@@ -558,8 +561,8 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	if ( g_bRotated )
 	{
-		g_nOutputWidth = drm->mode->vdisplay;
-		g_nOutputHeight = drm->mode->hdisplay;
+		g_nOutputWidth = drm->mode.vdisplay;
+		g_nOutputHeight = drm->mode.hdisplay;
 	}
 
 	if (g_bUseLayers) {
