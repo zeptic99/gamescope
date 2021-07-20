@@ -237,7 +237,7 @@ int initOutput(void)
 	}
 	else
 	{
-		return init_drm( &g_DRM, nullptr, nullptr, 0 );
+		return init_drm( &g_DRM, nullptr );
 	}
 }
 

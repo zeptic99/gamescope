@@ -348,7 +348,7 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 }
 
 
-int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsigned int vrefresh)
+int init_drm(struct drm_t *drm, const char *device)
 {
 	drmModeRes *resources;
 	drmModeConnector *connector = NULL;
@@ -391,22 +391,6 @@ int init_drm(struct drm_t *drm, const char *device, const char *mode_str, unsign
 		 */
 		fprintf(stderr, "no connected connector!\n");
 		return -1;
-	}
-
-	/* find user requested mode: */
-	if (mode_str && *mode_str) {
-		for (i = 0; i < connector->count_modes; i++) {
-			drmModeModeInfo *current_mode = &connector->modes[i];
-
-			if (strcmp(current_mode->name, mode_str) == 0) {
-				if (vrefresh == 0 || current_mode->vrefresh == vrefresh) {
-					drm->mode = current_mode;
-					break;
-				}
-			}
-		}
-		if (!drm->mode)
-			fprintf(stderr, "requested mode not found, using default mode!\n");
 	}
 
 	/* find preferred mode or the highest resolution mode: */
