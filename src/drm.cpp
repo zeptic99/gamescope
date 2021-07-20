@@ -347,13 +347,35 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 	return true;
 }
 
+static const drmModeModeInfo *get_preferred_mode( const drmModeConnector *connector )
+{
+	/* find preferred mode or the highest resolution mode */
+	int highest_area = 0;
+	const drmModeModeInfo *highest_mode = NULL;
+	for (int i = 0; i < connector->count_modes; i++) {
+		const drmModeModeInfo *mode = &connector->modes[i];
+
+		if (mode->type & DRM_MODE_TYPE_PREFERRED) {
+			return mode;
+		}
+
+		int area = mode->hdisplay * mode->vdisplay;
+		if (area > highest_area) {
+			highest_mode = mode;
+			highest_area = area;
+		}
+	}
+
+	return highest_mode;
+}
+
 
 int init_drm(struct drm_t *drm, const char *device)
 {
 	drmModeRes *resources;
 	drmModeConnector *connector = NULL;
 	drmModeEncoder *encoder = NULL;
-	int i, ret, area;
+	int i, ret;
 
 	if (device) {
 		drm->fd = open(device, O_RDWR | O_CLOEXEC);
@@ -393,22 +415,8 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	/* find preferred mode or the highest resolution mode: */
 	if (!drm->mode) {
-		for (i = 0, area = 0; i < connector->count_modes; i++) {
-			drmModeModeInfo *current_mode = &connector->modes[i];
-
-			if (current_mode->type & DRM_MODE_TYPE_PREFERRED) {
-				drm->mode = current_mode;
-				break;
-			}
-
-			int current_area = current_mode->hdisplay * current_mode->vdisplay;
-			if (current_area > area) {
-				drm->mode = current_mode;
-				area = current_area;
-			}
-		}
+		drm->mode = get_preferred_mode(connector);
 	}
 
 	if (!drm->mode) {
