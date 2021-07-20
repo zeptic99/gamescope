@@ -44,7 +44,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
-#include <math.h>
 #include <sys/poll.h>
 #include <sys/time.h>
 #include <sys/wait.h>

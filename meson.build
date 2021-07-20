@@ -37,7 +37,6 @@ vulkan_dep = dependency('vulkan')
 wayland_server = dependency('wayland-server')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
 xkbcommon = dependency('xkbcommon')
-math = cc.find_library('m')
 thread_dep = dependency('threads')
 cap_dep = cc.find_library('cap')
 sdl_dep = dependency('SDL2')
@@ -92,7 +91,7 @@ executable(
   dependencies: [
     dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
     dep_xxf86vm, dep_xres, drm_dep, wayland_server, wayland_protos,
-    xkbcommon, math, thread_dep, sdl_dep, wlroots_dep,
+    xkbcommon, thread_dep, sdl_dep, wlroots_dep,
     vulkan_dep, liftoff_dep, dep_xtst, cap_dep
   ],
   install: true,
