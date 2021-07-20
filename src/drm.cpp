@@ -76,7 +76,7 @@ static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeRe
 
 #define MAX_DRM_DEVICES 64
 
-static int find_drm_device(drmModeRes **resources)
+static int find_drm_device(void)
 {
 	drmDevicePtr devices[MAX_DRM_DEVICES] = { NULL };
 	int num_devices, fd = -1;
@@ -92,19 +92,18 @@ static int find_drm_device(drmModeRes **resources)
 
 		if (!(device->available_nodes & (1 << DRM_NODE_PRIMARY)))
 			continue;
-		/* OK, it's a primary device. If we can get the
-		 * drmModeResources, it means it's also a
-		 * KMS-capable device.
-		 */
+
 		fd = open(device->nodes[DRM_NODE_PRIMARY], O_RDWR | O_CLOEXEC);
 		if (fd < 0)
 			continue;
-		*resources = drmModeGetResources(fd);
-		if (*resources)
+
+		if (drmIsKMS(fd))
 			break;
+
 		close(fd);
 		fd = -1;
 	}
+
 	drmFreeDevices(devices, num_devices);
 
 	if (fd < 0)
@@ -447,11 +446,12 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	if (device) {
 		drm->fd = open(device, O_RDWR | O_CLOEXEC);
-		resources = drmModeGetResources(drm->fd);
-		if (!resources && errno == EOPNOTSUPP)
+		if (!drmIsKMS(drm->fd)) {
 			fprintf(stderr, "%s does not look like a modeset device\n", device);
+			return -1;
+		}
 	} else {
-		drm->fd = find_drm_device(&resources);
+		drm->fd = find_drm_device();
 	}
 
 	if (drm->fd < 0) {
@@ -459,6 +459,7 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
+	resources = drmModeGetResources(drm->fd);
 	if (!resources) {
 		perror("drmModeGetResources failed");
 		return -1;
