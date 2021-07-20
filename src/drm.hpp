@@ -78,6 +78,11 @@ struct drm_t {
 	struct liftoff_output *lo_output;
 	struct liftoff_layer *lo_layers[ k_nMaxLayers ];
 
+	struct {
+		drmModeModeInfo mode;
+		uint32_t mode_id;
+	} pending;
+
 	/* FBs in the atomic request, but not yet submitted to KMS */
 	std::vector < uint32_t > fbids_in_req;
 	/* FBs submitted to KMS, but not yet displayed on screen */
@@ -107,3 +112,5 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf );
 void drm_drop_fbid( struct drm_t *drm, uint32_t fbid );
 bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline );
+bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode );
+bool drm_set_refresh( struct drm_t *drm, int refresh );

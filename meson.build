@@ -85,6 +85,7 @@ executable(
     'src/main.cpp',
 	'src/wlserver.cpp',
 	'src/drm.cpp',
+	'src/cvt.cpp',
 	'src/sdlwindow.cpp',
 	'src/vblankmanager.cpp',
 	[ 'src/rendervulkan.cpp', spirv_shader ],

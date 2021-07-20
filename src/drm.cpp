@@ -16,6 +16,7 @@ extern "C" {
 #include <wlr/types/wlr_buffer.h>
 }
 
+#include "cvt.hpp"
 #include "drm.hpp"
 #include "main.hpp"
 #include "vblankmanager.hpp"
@@ -445,12 +446,10 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	fprintf( stderr, "drm: selected mode %dx%d@%uHz\n", mode->hdisplay, mode->vdisplay, mode->vrefresh );
-
-	drm->mode = *mode;
-
-	if (drmModeCreatePropertyBlob(drm->fd, &drm->mode, sizeof(drm->mode), &drm->mode_id) != 0)
+	if (!drm_set_mode(drm, mode)) {
+		fprintf(stderr, "failed to set initial mode\n");
 		return -1;
+	}
 
 	/* find encoder: */
 	for (i = 0; i < resources->count_encoders; i++) {
@@ -548,22 +547,6 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	std::thread flip_handler_thread( flip_handler_thread_run );
 	flip_handler_thread.detach();
-
-	g_nOutputWidth = drm->mode.hdisplay;
-	g_nOutputHeight = drm->mode.vdisplay;
-	g_nOutputRefresh = drm->mode.vrefresh;
-
-	if ( g_nOutputWidth < g_nOutputHeight )
-	{
-		// We probably don't want to be in portrait mode, rotate
-		g_bRotated = true;
-	}
-
-	if ( g_bRotated )
-	{
-		g_nOutputWidth = drm->mode.vdisplay;
-		g_nOutputHeight = drm->mode.hdisplay;
-	}
 
 	if (g_bUseLayers) {
 		liftoff_log_set_priority(g_bDebugLayers ? LIFTOFF_DEBUG : LIFTOFF_ERROR);
@@ -714,6 +697,12 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 		goto out;
 	} else {
 		drm->fbids_in_req.clear();
+
+		if ( drm->flags & DRM_MODE_ATOMIC_ALLOW_MODESET )
+		{
+			drm->mode = drm->pending.mode;
+			drm->mode_id = drm->pending.mode_id;
+		}
 	}
 
 	// Wait for flip handler to unlock
@@ -1010,22 +999,18 @@ bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const
 	assert( drm->req == nullptr );
 	drm->req = drmModeAtomicAlloc();
 
-	static bool bFirstSwap = true;
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
-
-	if ( bFirstSwap == true )
-	{
-		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-	}
 
 	// We do internal refcounting with these events
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
-	if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET) {
+	if ( drm->pending.mode_id != drm->mode_id ) {
+		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+
 		if (add_connector_property(drm, drm->req, drm->connector_id, "CRTC_ID", drm->crtc_id) < 0)
 			return false;
 
-		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", drm->mode_id) < 0)
+		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", drm->pending.mode_id) < 0)
 			return false;
 
 		if (add_crtc_property(drm, drm->req, drm->crtc_id, "ACTIVE", 1) < 0)
@@ -1041,9 +1026,7 @@ bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const
 		result = drm_prepare_basic( drm, pComposite, pPipeline );
 	}
 
-	if ( result ) {
-		bFirstSwap = false;
-	} else {
+	if ( !result ) {
 		drmModeAtomicFree( drm->req );
 		drm->req = nullptr;
 
@@ -1051,4 +1034,49 @@ bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const
 	}
 
 	return result;
+}
+
+bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
+{
+	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &drm->pending.mode_id) != 0)
+		return false;
+
+	drm->pending.mode = *mode;
+	fprintf( stderr, "drm: selecting mode %dx%d@%uHz\n", mode->hdisplay, mode->vdisplay, mode->vrefresh );
+
+	g_nOutputWidth = mode->hdisplay;
+	g_nOutputHeight = mode->vdisplay;
+	g_nOutputRefresh = mode->vrefresh;
+
+	if ( g_nOutputWidth < g_nOutputHeight )
+	{
+		// We probably don't want to be in portrait mode, rotate
+		g_bRotated = true;
+	}
+
+	if ( g_bRotated )
+	{
+		g_nOutputWidth = mode->vdisplay;
+		g_nOutputHeight = mode->hdisplay;
+	}
+
+	return true;
+}
+
+bool drm_set_refresh( struct drm_t *drm, int refresh )
+{
+	drmModeConnector *connector = drm->connector->connector;
+	const drmModeModeInfo *existing_mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, refresh);
+	drmModeModeInfo mode;
+	if ( existing_mode )
+	{
+		mode = *existing_mode;
+	}
+	else
+	{
+		/* TODO: check refresh is within the EDID limits */
+		generate_cvt_mode( &mode, g_nOutputWidth, g_nOutputHeight, refresh, true, false );
+	}
+
+	return drm_set_mode(drm, &mode);
 }
