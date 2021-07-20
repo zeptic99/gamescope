@@ -2,7 +2,7 @@ project(
   'gamescope',
   ['c','cpp'],
   meson_version: '>=0.54.0',
-  default_options: ['warning_level=2'],
+  default_options: ['warning_level=2', 'force_fallback_for=wlroots,libliftoff'],
 )
 
 add_project_arguments([
@@ -44,13 +44,12 @@ thread_dep = dependency('threads')
 cap_dep = cc.find_library('cap')
 sdl_dep = dependency('SDL2')
 
-wlroots_proj = subproject('wlroots', required: false, default_options:
-  ['default_library=static', 'examples=false', 'xwayland=enabled'])
-if wlroots_proj.found()
-  wlroots_dep = wlroots_proj.get_variable('wlroots')
-else
-  wlroots_dep = dependency('wlroots', version: ['>= 0.13.0', '< 0.14.0'])
-endif
+wlroots_dep = dependency(
+  'wlroots',
+  version: ['>= 0.13.0', '< 0.14.0'],
+  fallback: ['wlroots', 'wlroots'],
+  default_options: ['default_library=static', 'examples=false', 'xwayland=enabled'],
+)
 
 wlroots_has_xwayland = wlroots_dep.get_variable(pkgconfig: 'have_xwayland', internal: 'have_xwayland') == 'true'
 if not wlroots_has_xwayland
@@ -69,13 +68,12 @@ spirv_shader = custom_target('shader_target',
   install : false,
 )
 
-liftoff_proj = subproject('libliftoff', required: false, default_options:
-  ['default_library=static'])
-if liftoff_proj.found()
-  liftoff_dep = liftoff_proj.get_variable('liftoff')
-else
-  liftoff_dep = dependency('libliftoff')
-endif
+liftoff_dep = dependency(
+  'libliftoff',
+  version: ['>= 0.1.0', '< 0.2.0'],
+  fallback: ['libliftoff', 'liftoff'],
+  default_options: ['default_library=static'],
+)
 
 subdir('protocol')
 
