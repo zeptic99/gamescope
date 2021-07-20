@@ -106,31 +106,15 @@ static int find_drm_device(void)
 	return fd;
 }
 
-/* Seems like there is some room for a drmModeObjectGetNamedProperty()
- * type helper in libdrm..
- */
-static bool get_prop_value(struct drm_t *drm, const drmModeObjectProperties *props, const char *name, uint64_t *out) {
-	for (uint32_t i = 0; i < props->count_props; i++) {
-		drmModePropertyRes *p = drmModeGetProperty(drm->fd, props->props[i]);
-		bool found = strcmp(p->name, name) == 0;
-		drmModeFreeProperty(p);
-
-		if (found) {
-			*out = props->prop_values[i];
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool get_plane_formats(struct drm_t *drm, const drmModePlane *plane, const drmModeObjectProperties *props, struct wlr_drm_format_set *formats) {
-	for (uint32_t k = 0; k < plane->count_formats; k++) {
-		uint32_t fmt = plane->formats[k];
+static bool get_plane_formats(struct drm_t *drm, struct plane *plane, struct wlr_drm_format_set *formats) {
+	for (uint32_t k = 0; k < plane->plane->count_formats; k++) {
+		uint32_t fmt = plane->plane->formats[k];
 		wlr_drm_format_set_add(formats, fmt, DRM_FORMAT_MOD_INVALID);
 	}
 
-	uint64_t blob_id;
-	if (get_prop_value(drm, props, "IN_FORMATS", &blob_id)) {
+	if (plane->props.count("IN_FORMATS") > 0) {
+		uint64_t blob_id = plane->initial_prop_values["IN_FORMATS"];
+
 		drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
 		if (!blob) {
 			perror("drmModeGetPropertyBlob(IN_FORMATS) failed");
@@ -178,34 +162,24 @@ static struct plane *find_primary_plane(struct drm_t *drm)
 	struct plane *ret = nullptr;
 
 	for (size_t i = 0; i < drm->planes.size() && ret == nullptr; i++) {
-		drmModePlane *plane = drm->planes[i].plane;
+		struct plane *plane = &drm->planes[i];
 
-		if (!(plane->possible_crtcs & (1 << drm->crtc_index)))
+		if (!(plane->plane->possible_crtcs & (1 << drm->crtc_index)))
 			continue;
 
-		drmModeObjectPropertiesPtr props =
-			drmModeObjectGetProperties(drm->fd, plane->plane_id, DRM_MODE_OBJECT_PLANE);
-
-		uint64_t plane_type;
-		if (!get_prop_value(drm, props, "type", &plane_type)) {
-			fprintf(stderr, "Plane %" PRIu32 " is missing the type property", plane->plane_id);
+		if (!get_plane_formats(drm, plane, &drm->formats)) {
 			return nullptr;
 		}
 
-		if (!get_plane_formats(drm, plane, props, &drm->formats)) {
-			return nullptr;
-		}
-
+		uint64_t plane_type = drm->planes[i].initial_prop_values["type"];
 		if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
 			/* found our primary plane, let's use that */
-			ret = &drm->planes[i];
+			ret = plane;
 
-			if (!get_plane_formats(drm, plane, props, &drm->plane_formats)) {
+			if (!get_plane_formats(drm, plane, &drm->plane_formats)) {
 				return nullptr;
 			}
 		}
-
-		drmModeFreeObjectProperties(props);
 	}
 
 	if ( ret == nullptr )
