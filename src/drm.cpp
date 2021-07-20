@@ -37,37 +37,33 @@ bool g_bDebugLayers = false;
 
 static int s_drm_log = 0;
 
-static uint32_t find_crtc_for_encoder(const drmModeRes *resources,
-		const drmModeEncoder *encoder) {
-	for (int i = 0; i < resources->count_crtcs; i++) {
+static uint32_t find_crtc_for_encoder(const struct drm_t *drm, const drmModeEncoder *encoder) {
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
 		/* possible_crtcs is a bitmask as described here:
 		 * https://dvdhrm.wordpress.com/2012/09/13/linux-drm-mode-setting-api
 		 */
-		const uint32_t crtc_mask = 1 << i;
-		const uint32_t crtc_id = resources->crtcs[i];
-		if (encoder->possible_crtcs & crtc_mask) {
+		uint32_t crtc_mask = 1 << i;
+		uint32_t crtc_id = drm->crtcs[i].id;
+		if (encoder->possible_crtcs & crtc_mask)
 			return crtc_id;
-		}
 	}
 
 	/* no match found */
 	return 0;
 }
 
-static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeRes *resources,
-		const drmModeConnector *connector) {
+static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeConnector *connector) {
 	for (int i = 0; i < connector->count_encoders; i++) {
-		const uint32_t encoder_id = connector->encoders[i];
+		uint32_t encoder_id = connector->encoders[i];
+
 		drmModeEncoder *encoder = drmModeGetEncoder(drm->fd, encoder_id);
+		if (encoder == nullptr)
+			continue;
 
-		if (encoder) {
-			const uint32_t crtc_id = find_crtc_for_encoder(resources, encoder);
-
-			drmModeFreeEncoder(encoder);
-			if (crtc_id != 0) {
-				return crtc_id;
-			}
-		}
+		uint32_t crtc_id = find_crtc_for_encoder(drm, encoder);
+		drmModeFreeEncoder(encoder);
+		if (crtc_id != 0)
+			return crtc_id;
 	}
 
 	/* no match found */
@@ -439,14 +435,13 @@ static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 
 int init_drm(struct drm_t *drm, const char *device)
 {
-	drmModeRes *resources;
 	drmModeConnector *connector = NULL;
-	int i, ret;
+	int ret;
 
 	if (device) {
 		drm->fd = open(device, O_RDWR | O_CLOEXEC);
 		if (!drmIsKMS(drm->fd)) {
-			fprintf(stderr, "%s does not look like a modeset device\n", device);
+			fprintf(stderr, "%s is not a KMS device\n", device);
 			return -1;
 		}
 	} else {
@@ -455,12 +450,6 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	if (drm->fd < 0) {
 		fprintf(stderr, "could not open drm device\n");
-		return -1;
-	}
-
-	resources = drmModeGetResources(drm->fd);
-	if (!resources) {
-		perror("drmModeGetResources failed");
 		return -1;
 	}
 
@@ -485,18 +474,16 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	/* find a connected connector: */
-	for (i = 0; i < resources->count_connectors; i++) {
-		connector = drmModeGetConnector(drm->fd, resources->connectors[i]);
-		if (connector->connection == DRM_MODE_CONNECTED) {
-			/* it's connected, let's use this! */
+	/* find a connected connector */
+	for (size_t i = 0; i < drm->connectors.size(); i++) {
+		if (drm->connectors[i].connector->connection == DRM_MODE_CONNECTED) {
+			drm->connector = &drm->connectors[i];
+			connector = drm->connector->connector;
 			break;
 		}
-		drmModeFreeConnector(connector);
-		connector = NULL;
 	}
 
-	if (!connector) {
+	if (!drm->connector) {
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
 		 */
@@ -528,14 +515,14 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	drm->crtc_id = find_crtc_for_connector(drm, resources, connector);
+	drm->crtc_id = find_crtc_for_connector(drm, drm->connector->connector);
 	if (drm->crtc_id == 0) {
 		fprintf(stderr, "no crtc found!\n");
 		return -1;
 	}
 
-	for (i = 0; i < resources->count_crtcs; i++) {
-		if (resources->crtcs[i] == drm->crtc_id) {
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
+		if (drm->crtcs[i].id == drm->crtc_id) {
 			drm->crtc_index = i;
 			break;
 		}
@@ -543,13 +530,11 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	// Disable all CRTCs. This ensures the CRTC we've selected isn't being used
 	// by another connector.
-	for (i = 0; i < resources->count_crtcs; i++) {
-		ret = drmModeSetCrtc(drm->fd, resources->crtcs[i], 0, 0, 0, nullptr, 0, nullptr);
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
+		ret = drmModeSetCrtc(drm->fd, drm->crtcs[i].id, 0, 0, 0, nullptr, 0, nullptr);
 		if (ret != 0)
-			fprintf(stderr, "failed to disable CRTC %" PRIu32 ": %s", resources->crtcs[i], strerror(-ret));
+			fprintf(stderr, "failed to disable CRTC %" PRIu32 ": %s", drm->crtcs[i].id, strerror(-ret));
 	}
-
-	drmModeFreeResources(resources);
 
 	drm->connector_id = connector->connector_id;
 
