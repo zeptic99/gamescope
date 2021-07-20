@@ -347,6 +347,24 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 	return true;
 }
 
+static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
+{
+	for (int i = 0; i < connector->count_modes; i++) {
+		const drmModeModeInfo *mode = &connector->modes[i];
+
+		if (hdisplay != 0 && hdisplay != mode->hdisplay)
+			continue;
+		if (vdisplay != 0 && vdisplay != mode->vdisplay)
+			continue;
+		if (vrefresh != 0 && vrefresh != mode->vrefresh)
+			continue;
+
+		return mode;
+	}
+
+	return NULL;
+}
+
 static const drmModeModeInfo *get_preferred_mode( const drmModeConnector *connector )
 {
 	/* find preferred mode or the highest resolution mode */
@@ -368,7 +386,6 @@ static const drmModeModeInfo *get_preferred_mode( const drmModeConnector *connec
 
 	return highest_mode;
 }
-
 
 int init_drm(struct drm_t *drm, const char *device)
 {
@@ -415,6 +432,11 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
+	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nOutputRefresh != 0 )
+	{
+		drm->mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nOutputRefresh);
+	}
+
 	if (!drm->mode) {
 		drm->mode = get_preferred_mode(connector);
 	}
@@ -423,6 +445,8 @@ int init_drm(struct drm_t *drm, const char *device)
 		fprintf(stderr, "could not find mode!\n");
 		return -1;
 	}
+
+	fprintf( stderr, "drm: selected mode %dx%d@%uHz\n", drm->mode->hdisplay, drm->mode->vdisplay, drm->mode->vrefresh );
 
 	if (drmModeCreatePropertyBlob(drm->fd, drm->mode, sizeof(*drm->mode), &drm->mode_id) != 0)
 		return -1;
@@ -526,7 +550,6 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	g_nOutputWidth = drm->mode->hdisplay;
 	g_nOutputHeight = drm->mode->vdisplay;
-
 	g_nOutputRefresh = drm->mode->vrefresh;
 
 	if ( g_nOutputWidth < g_nOutputHeight )
