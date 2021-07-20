@@ -48,7 +48,7 @@ if not wlroots_has_xwayland
   error('Cannot use wlroots built without Xwayland support')
 endif
 
-shadercompiler = find_program('glslangValidator')
+shadercompiler = find_program('glslangValidator', native: true)
 
 spirv_shader = custom_target('shader_target',
   output : 'composite.h',
