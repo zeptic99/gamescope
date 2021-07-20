@@ -71,10 +71,7 @@ struct drm_t {
 	
 	drmModeModeInfo mode;
 	uint32_t mode_id;
-	uint32_t crtc_id;
-	uint32_t connector_id;
 	
-	uint32_t plane_id;
 	struct wlr_drm_format_set plane_formats;
 	
 	drmModeAtomicReq *req;

@@ -505,10 +505,9 @@ int init_drm(struct drm_t *drm, const char *device)
 		fprintf(stderr, "no crtc found!\n");
 		return -1;
 	}
-	drm->crtc_id = drm->crtc->id;
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
-		if (drm->crtcs[i].id == drm->crtc_id) {
+		if (drm->crtcs[i].id == drm->crtc->id) {
 			drm->crtc_index = i;
 			break;
 		}
@@ -522,14 +521,11 @@ int init_drm(struct drm_t *drm, const char *device)
 			fprintf(stderr, "failed to disable CRTC %" PRIu32 ": %s", drm->crtcs[i].id, strerror(-ret));
 	}
 
-	drm->connector_id = connector->connector_id;
-
 	drm->plane = find_primary_plane( drm );
 	if ( drm->plane == nullptr ) {
 		fprintf(stderr, "could not find a suitable primary plane\n");
 		return -1;
 	}
-	drm->plane_id = drm->plane->id;
 
 	drm->kms_in_fence_fd = -1;
 
@@ -541,7 +537,7 @@ int init_drm(struct drm_t *drm, const char *device)
 	}
 
 	drm->lo_device = liftoff_device_create( drm->fd );
-	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc_id );
+	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc->id );
 
 	liftoff_device_register_all_planes( drm->lo_device );
 
@@ -852,7 +848,7 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 	}
 
 	add_plane_property(drm, req, plane_id, "FB_ID", fb_id);
-	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc_id);
+	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc->id);
 	add_plane_property(drm, req, plane_id, "SRC_X", 0);
 	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
 	add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
@@ -995,13 +991,13 @@ bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const
 	if ( drm->pending.mode_id != drm->mode_id ) {
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 
-		if (add_connector_property(drm, drm->req, drm->connector_id, "CRTC_ID", drm->crtc_id) < 0)
+		if (add_connector_property(drm, drm->req, drm->connector->id, "CRTC_ID", drm->crtc->id) < 0)
 			return false;
 
-		if (add_crtc_property(drm, drm->req, drm->crtc_id, "MODE_ID", drm->pending.mode_id) < 0)
+		if (add_crtc_property(drm, drm->req, drm->crtc->id, "MODE_ID", drm->pending.mode_id) < 0)
 			return false;
 
-		if (add_crtc_property(drm, drm->req, drm->crtc_id, "ACTIVE", 1) < 0)
+		if (add_crtc_property(drm, drm->req, drm->crtc->id, "ACTIVE", 1) < 0)
 			return false;
 	}
 
