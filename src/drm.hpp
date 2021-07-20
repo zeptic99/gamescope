@@ -24,16 +24,19 @@ extern "C" {
 #include <vector>
 
 struct plane {
+	uint32_t id;
 	drmModePlane *plane;
 	std::map<std::string, drmModePropertyRes *> props;
 };
 
 struct crtc {
+	uint32_t id;
 	drmModeCrtc *crtc;
 	std::map<std::string, drmModePropertyRes *> props;
 };
 
 struct connector {
+	uint32_t id;
 	drmModeConnector *connector;
 	std::map<std::string, drmModePropertyRes *> props;
 };
@@ -54,8 +57,11 @@ struct drm_t {
 	uint64_t cursor_width, cursor_height;
 	bool allow_modifiers;
 	struct wlr_drm_format_set formats;
+
+	std::vector< struct plane > planes;
+	std::vector< struct crtc > crtcs;
+	std::vector< struct connector > connectors;
 	
-	/* only used for atomic: */
 	struct plane *plane;
 	struct crtc *crtc;
 	struct connector *connector;

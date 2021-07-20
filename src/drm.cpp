@@ -74,14 +74,6 @@ static uint32_t find_crtc_for_connector(const struct drm_t *drm, const drmModeRe
 	return 0;
 }
 
-static int get_resources(int fd, drmModeRes **resources)
-{
-	*resources = drmModeGetResources(fd);
-	if (*resources == NULL)
-		return -1;
-	return 0;
-}
-
 #define MAX_DRM_DEVICES 64
 
 static int find_drm_device(drmModeRes **resources)
@@ -97,7 +89,6 @@ static int find_drm_device(drmModeRes **resources)
 
 	for (int i = 0; i < num_devices; i++) {
 		drmDevicePtr device = devices[i];
-		int ret;
 
 		if (!(device->available_nodes & (1 << DRM_NODE_PRIMARY)))
 			continue;
@@ -108,8 +99,8 @@ static int find_drm_device(drmModeRes **resources)
 		fd = open(device->nodes[DRM_NODE_PRIMARY], O_RDWR | O_CLOEXEC);
 		if (fd < 0)
 			continue;
-		ret = get_resources(fd, resources);
-		if (!ret)
+		*resources = drmModeGetResources(fd);
+		if (*resources)
 			break;
 		close(fd);
 		fd = -1;
@@ -345,6 +336,75 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 	return true;
 }
 
+static bool get_resources(struct drm_t *drm)
+{
+	drmModeRes *resources = drmModeGetResources(drm->fd);
+	if (resources == nullptr) {
+		perror("drmModeGetResources failed");
+		return false;
+	}
+
+	for (int i = 0; i < resources->count_connectors; i++) {
+		struct connector conn = { .id = resources->connectors[i] };
+
+		conn.connector = drmModeGetConnector(drm->fd, conn.id);
+		if (conn.connector == nullptr) {
+			perror("drmModeGetConnector failed");
+			return false;
+		}
+
+		if (!get_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props)) {
+			return false;
+		}
+
+		drm->connectors.push_back(conn);
+	}
+
+	for (int i = 0; i < resources->count_crtcs; i++) {
+		struct crtc crtc = { .id = resources->crtcs[i] };
+
+		crtc.crtc = drmModeGetCrtc(drm->fd, crtc.id);
+		if (crtc.crtc == nullptr) {
+			perror("drmModeGetCrtc failed");
+			return false;
+		}
+
+		if (!get_properties(drm, crtc.id, DRM_MODE_OBJECT_CRTC, crtc.props)) {
+			return false;
+		}
+
+		drm->crtcs.push_back(crtc);
+	}
+
+	drmModeFreeResources(resources);
+
+	drmModePlaneRes *plane_resources = drmModeGetPlaneResources(drm->fd);
+	if (!plane_resources) {
+		perror("drmModeGetPlaneResources failed");
+		return false;
+	}
+
+	for (uint32_t i = 0; i < plane_resources->count_planes; i++) {
+		struct plane plane = { .id = plane_resources->planes[i] };
+
+		plane.plane = drmModeGetPlane(drm->fd, plane.id);
+		if (plane.plane == nullptr) {
+			perror("drmModeGetPlane failed");
+			return false;
+		}
+
+		if (!get_properties(drm, plane.id, DRM_MODE_OBJECT_PLANE, plane.props)) {
+			return false;
+		}
+
+		drm->planes.push_back(plane);
+	}
+
+	drmModeFreePlaneResources(plane_resources);
+
+	return true;
+}
+
 static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
 {
 	for (int i = 0; i < connector->count_modes; i++) {
@@ -387,8 +447,8 @@ int init_drm(struct drm_t *drm, const char *device)
 
 	if (device) {
 		drm->fd = open(device, O_RDWR | O_CLOEXEC);
-		ret = get_resources(drm->fd, &resources);
-		if (ret < 0 && errno == EOPNOTSUPP)
+		resources = drmModeGetResources(drm->fd);
+		if (!resources && errno == EOPNOTSUPP)
 			fprintf(stderr, "%s does not look like a modeset device\n", device);
 	} else {
 		drm->fd = find_drm_device(&resources);
@@ -400,7 +460,28 @@ int init_drm(struct drm_t *drm, const char *device)
 	}
 
 	if (!resources) {
-		fprintf(stderr, "drmModeGetResources failed: %s\n", strerror(errno));
+		perror("drmModeGetResources failed");
+		return -1;
+	}
+
+	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
+		fprintf(stderr, "drmSetClientCap(ATOMIC) failed\n");
+		return -1;
+	}
+
+	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_WIDTH, &drm->cursor_width) != 0) {
+		drm->cursor_width = 64;
+	}
+	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_HEIGHT, &drm->cursor_height) != 0) {
+		drm->cursor_height = 64;
+	}
+
+	uint64_t cap;
+	if (drmGetCap(drm->fd, DRM_CAP_ADDFB2_MODIFIERS, &cap) == 0 && cap != 0) {
+		drm->allow_modifiers = true;
+	}
+
+	if (!get_resources(drm)) {
 		return -1;
 	}
 
@@ -486,23 +567,6 @@ int init_drm(struct drm_t *drm, const char *device)
 	drmModeFreeResources(resources);
 
 	drm->connector_id = connector->connector_id;
-
-	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_WIDTH, &drm->cursor_width) != 0) {
-		drm->cursor_width = 64;
-	}
-	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_HEIGHT, &drm->cursor_height) != 0) {
-		drm->cursor_height = 64;
-	}
-
-	uint64_t cap;
-	if (drmGetCap(drm->fd, DRM_CAP_ADDFB2_MODIFIERS, &cap) == 0 && cap != 0) {
-		drm->allow_modifiers = true;
-	}
-
-	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
-		fprintf(stderr, "drmSetClientCap(ATOMIC) failed\n");
-		return -1;
-	}
 
 	drm->plane_id = get_plane_id( &g_DRM );
 
