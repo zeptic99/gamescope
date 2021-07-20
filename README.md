@@ -41,7 +41,7 @@ On any X11 or Wayland desktop running Mesa 20.3+, you can set the Steam launch a
 
 ```sh
 # Upscale a 720p game to 1440p with integer scaling
-gamescope -w 1280 -h 720 -W 2560 -H 1440 -n -- %command%
+gamescope -h 720 -H 1440 -n -- %command%
 
 # Limit a vsynced game to 30 FPS
 gamescope -r 30 -- %command%
@@ -52,7 +52,7 @@ gamescope -w 1920 -h 1080 -W 3440 -H 1440 -b -- %command%
 
 ## Options
 
-* `-W`, `-H`: set the resolution used by gamescope. Resizing the gamescope window will update these settings. Ignored in embedded mode. If `-H` is specified but `-W` isn't, a 16:9 aspect ratio is assumed. Defaults to 1280x720.
+* `-W`, `-H`: set the resolution used by gamescope. Resizing the gamescope window will update these settings. Ignored in embedded mode. If `-H` is specified but `-W` isn't, a 16:9 aspect ratio is assumed. Defaults to 1280×720.
 * `-w`, `-h`: set the resolution used by the game. If `-h` is specified but `-w` isn't, a 16:9 aspect ratio is assumed. Defaults to the values specified in `-W` and `-H`.
 * `-r`: set a frame-rate limit for the game. Specified in frames per second. Defaults to unlimited.
 * `-o`: set a frame-rate limit for the game when unfocused. Specified in frames per second. Defaults to unlimited.
