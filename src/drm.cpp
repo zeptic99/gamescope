@@ -180,31 +180,32 @@ static struct plane *find_primary_plane(struct drm_t *drm)
 	for (size_t i = 0; i < drm->planes.size() && ret == nullptr; i++) {
 		drmModePlane *plane = drm->planes[i].plane;
 
-		if (plane->possible_crtcs & (1 << drm->crtc_index)) {
-			drmModeObjectPropertiesPtr props =
-				drmModeObjectGetProperties(drm->fd, plane->plane_id, DRM_MODE_OBJECT_PLANE);
+		if (!(plane->possible_crtcs & (1 << drm->crtc_index)))
+			continue;
 
-			uint64_t plane_type;
-			if (!get_prop_value(drm, props, "type", &plane_type)) {
-				fprintf(stderr, "Plane %" PRIu32 " is missing the type property", plane->plane_id);
-				return nullptr;
-			}
+		drmModeObjectPropertiesPtr props =
+			drmModeObjectGetProperties(drm->fd, plane->plane_id, DRM_MODE_OBJECT_PLANE);
 
-			if (!get_plane_formats(drm, plane, props, &drm->formats)) {
-				return nullptr;
-			}
-
-			if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
-				/* found our primary plane, let's use that */
-				ret = &drm->planes[i];
-
-				if (!get_plane_formats(drm, plane, props, &drm->plane_formats)) {
-					return nullptr;
-				}
-			}
-
-			drmModeFreeObjectProperties(props);
+		uint64_t plane_type;
+		if (!get_prop_value(drm, props, "type", &plane_type)) {
+			fprintf(stderr, "Plane %" PRIu32 " is missing the type property", plane->plane_id);
+			return nullptr;
 		}
+
+		if (!get_plane_formats(drm, plane, props, &drm->formats)) {
+			return nullptr;
+		}
+
+		if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
+			/* found our primary plane, let's use that */
+			ret = &drm->planes[i];
+
+			if (!get_plane_formats(drm, plane, props, &drm->plane_formats)) {
+				return nullptr;
+			}
+		}
+
+		drmModeFreeObjectProperties(props);
 	}
 
 	if ( ret == nullptr )
