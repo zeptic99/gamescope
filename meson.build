@@ -1,20 +1,15 @@
 project(
   'gamescope',
-  ['c','cpp'],
+  'cpp',
   meson_version: '>=0.54.0',
   default_options: ['warning_level=2', 'force_fallback_for=wlroots,libliftoff'],
 )
 
 add_project_arguments([
   '-DWLR_USE_UNSTABLE',
-], language: ['c','cpp'])
+], language: 'cpp')
 
-cc = meson.get_compiler('c')
 cppc = meson.get_compiler('cpp')
-
-add_project_arguments(cc.get_supported_arguments([
-  '-Wno-unused-parameter',
-]), language: 'c')
 
 add_project_arguments(cppc.get_supported_arguments([
   '-Wno-unused-parameter',
@@ -38,7 +33,7 @@ wayland_server = dependency('wayland-server')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
 xkbcommon = dependency('xkbcommon')
 thread_dep = dependency('threads')
-cap_dep = cc.find_library('cap')
+cap_dep = dependency('libcap')
 sdl_dep = dependency('SDL2')
 
 wlroots_dep = dependency(
