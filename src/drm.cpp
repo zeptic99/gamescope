@@ -532,20 +532,18 @@ int init_drm(struct drm_t *drm, const char *device)
 }
 
 static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
-								  uint32_t obj_id, const char *name,
+								  struct connector *conn, const char *name,
 								  uint64_t value)
 {
-	struct connector *obj = drm->connector;
-
-	if ( obj->props.count( name ) == 0 )
+	if ( conn->props.count( name ) == 0 )
 	{
 		fprintf(stderr, "no connector property: %s\n", name);
 		return -EINVAL;
 	}
 
-	const drmModePropertyRes *prop = obj->props[ name ];
+	const drmModePropertyRes *prop = conn->props[ name ];
 
-	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
+	int ret = drmModeAtomicAddProperty(req, conn->id, prop->prop_id, value);
 	if ( ret < 0 )
 	{
 		perror( "drmModeAtomicAddProperty failed" );
@@ -554,20 +552,18 @@ static int add_connector_property(struct drm_t *drm, drmModeAtomicReq *req,
 }
 
 static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
-							 uint32_t obj_id, const char *name,
+							 struct crtc *crtc, const char *name,
 							 uint64_t value)
 {
-	struct crtc *obj = drm->crtc;
-
-	if ( obj->props.count( name ) == 0 )
+	if ( crtc->props.count( name ) == 0 )
 	{
 		fprintf(stderr, "no CRTC property: %s\n", name);
 		return -EINVAL;
 	}
 
-	const drmModePropertyRes *prop = obj->props[ name ];
+	const drmModePropertyRes *prop = crtc->props[ name ];
 
-	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
+	int ret = drmModeAtomicAddProperty(req, crtc->id, prop->prop_id, value);
 	if ( ret < 0 )
 	{
 		perror( "drmModeAtomicAddProperty failed" );
@@ -576,19 +572,17 @@ static int add_crtc_property(struct drm_t *drm, drmModeAtomicReq *req,
 }
 
 static int add_plane_property(struct drm_t *drm, drmModeAtomicReq *req,
-							uint32_t obj_id, const char *name, uint64_t value)
+							  struct plane *plane, const char *name, uint64_t value)
 {
-	struct plane *obj = drm->plane;
-
-	if ( obj->props.count( name ) == 0 )
+	if ( plane->props.count( name ) == 0 )
 	{
 		fprintf(stderr, "no plane property: %s\n", name);
 		return -EINVAL;
 	}
 
-	const drmModePropertyRes *prop = obj->props[ name ];
+	const drmModePropertyRes *prop = plane->props[ name ];
 
-	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
+	int ret = drmModeAtomicAddProperty(req, plane->id, prop->prop_id, value);
 	if ( ret < 0 )
 	{
 		perror( "drmModeAtomicAddProperty failed" );
@@ -814,22 +808,21 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 	}
 
 	drmModeAtomicReq *req = drm->req;
-	uint32_t plane_id = drm->plane->plane->plane_id;
 	uint32_t fb_id = pPipeline->layerBindings[ 0 ].fbid;
 
 	drm->fbids_in_req.push_back( fb_id );
 
 	if ( g_bRotated )
 	{
-		add_plane_property(drm, req, plane_id, "rotation", DRM_MODE_ROTATE_270);
+		add_plane_property(drm, req, drm->plane, "rotation", DRM_MODE_ROTATE_270);
 	}
 
-	add_plane_property(drm, req, plane_id, "FB_ID", fb_id);
-	add_plane_property(drm, req, plane_id, "CRTC_ID", drm->crtc->id);
-	add_plane_property(drm, req, plane_id, "SRC_X", 0);
-	add_plane_property(drm, req, plane_id, "SRC_Y", 0);
-	add_plane_property(drm, req, plane_id, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
-	add_plane_property(drm, req, plane_id, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
+	add_plane_property(drm, req, drm->plane, "FB_ID", fb_id);
+	add_plane_property(drm, req, drm->plane, "CRTC_ID", drm->crtc->id);
+	add_plane_property(drm, req, drm->plane, "SRC_X", 0);
+	add_plane_property(drm, req, drm->plane, "SRC_Y", 0);
+	add_plane_property(drm, req, drm->plane, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
+	add_plane_property(drm, req, drm->plane, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
 
 	gpuvis_trace_printf ( "legacy flip fb_id %u src %ix%i", fb_id,
 						 pPipeline->layerBindings[ 0 ].surfaceWidth,
@@ -851,10 +844,10 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 		crtcH = tmp;
 	}
 
-	add_plane_property(drm, req, plane_id, "CRTC_X", crtcX);
-	add_plane_property(drm, req, plane_id, "CRTC_Y", crtcY);
-	add_plane_property(drm, req, plane_id, "CRTC_W", crtcW);
-	add_plane_property(drm, req, plane_id, "CRTC_H", crtcH);
+	add_plane_property(drm, req, drm->plane, "CRTC_X", crtcX);
+	add_plane_property(drm, req, drm->plane, "CRTC_Y", crtcY);
+	add_plane_property(drm, req, drm->plane, "CRTC_W", crtcW);
+	add_plane_property(drm, req, drm->plane, "CRTC_H", crtcH);
 
 	gpuvis_trace_printf ( "crtc %li,%li %lix%li", crtcX, crtcY, crtcW, crtcH );
 
@@ -968,13 +961,13 @@ bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const
 	if ( drm->pending.mode_id != drm->mode_id ) {
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 
-		if (add_connector_property(drm, drm->req, drm->connector->id, "CRTC_ID", drm->crtc->id) < 0)
+		if (add_connector_property(drm, drm->req, drm->connector, "CRTC_ID", drm->crtc->id) < 0)
 			return false;
 
-		if (add_crtc_property(drm, drm->req, drm->crtc->id, "MODE_ID", drm->pending.mode_id) < 0)
+		if (add_crtc_property(drm, drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id) < 0)
 			return false;
 
-		if (add_crtc_property(drm, drm->req, drm->crtc->id, "ACTIVE", 1) < 0)
+		if (add_crtc_property(drm, drm->req, drm->crtc, "ACTIVE", 1) < 0)
 			return false;
 	}
 
