@@ -320,6 +320,21 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 	return true;
 }
 
+static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
+{
+	if (mode1.type & DRM_MODE_TYPE_PREFERRED)
+		return true;
+	if (mode2.type & DRM_MODE_TYPE_PREFERRED)
+		return false;
+
+	int area1 = mode1.hdisplay * mode1.vdisplay;
+	int area2 = mode2.hdisplay * mode2.vdisplay;
+	if (area1 != area2)
+		return area1 > area2;
+
+	return mode1.vrefresh > mode2.vrefresh;
+}
+
 static bool get_resources(struct drm_t *drm)
 {
 	drmModeRes *resources = drmModeGetResources(drm->fd);
@@ -336,6 +351,10 @@ static bool get_resources(struct drm_t *drm)
 			perror("drmModeGetConnector failed");
 			return false;
 		}
+
+		/* sort modes by preference: preferred flag, then highest area, then
+		 * highest refresh rate */
+		std::stable_sort(conn.connector->modes, conn.connector->modes + conn.connector->count_modes, compare_modes);
 
 		if (!get_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props, conn.initial_prop_values)) {
 			return false;
@@ -433,24 +452,8 @@ static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connect
 	return NULL;
 }
 
-static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
-{
-	if (mode1.type & DRM_MODE_TYPE_PREFERRED)
-		return true;
-	if (mode2.type & DRM_MODE_TYPE_PREFERRED)
-		return false;
-
-	int area1 = mode1.hdisplay * mode1.vdisplay;
-	int area2 = mode2.hdisplay * mode2.vdisplay;
-	if (area1 != area2)
-		return area1 > area2;
-
-	return mode1.vrefresh > mode2.vrefresh;
-}
-
 int init_drm(struct drm_t *drm, const char *device)
 {
-	drmModeConnector *connector = NULL;
 	int ret;
 
 	if (device) {
@@ -512,18 +515,14 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	/* sort modes by preference: preferred flag, then highest area, then
-	 * highest refresh rate */
-	std::stable_sort(connector->modes, connector->modes + connector->count_modes, compare_modes);
-
 	const drmModeModeInfo *mode = nullptr;
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
-		mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
+		mode = get_matching_mode(drm->connector->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
 	}
 
 	if (!mode) {
-		mode = get_matching_mode(connector, 0, 0, 0);
+		mode = get_matching_mode(drm->connector->connector, 0, 0, 0);
 	}
 
 	if (!mode) {
