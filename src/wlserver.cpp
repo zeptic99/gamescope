@@ -493,7 +493,15 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	signal(SIGINT, sig_handler);
 	signal(SIGUSR2, sig_handler);
 
-	wlserver.wlr.session = ( bIsDRM == True ) ? wlr_session_create(wlserver.wl_display) : NULL;
+	if ( bIsDRM == true )
+	{
+		wlserver.wlr.session = wlr_session_create( wlserver.wl_display );
+		if ( wlserver.wlr.session == nullptr )
+		{
+			fprintf( stderr, "Failed to create session\n" );
+			return 1;
+		}
+	}
 
 	wlserver.wl_event_loop = wl_display_get_event_loop(wlserver.wl_display);
 	wlserver.wl_event_loop_fd = wl_event_loop_get_fd( wlserver.wl_event_loop );
@@ -501,7 +509,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlserver.wlr.multi_backend = wlr_multi_backend_create(wlserver.wl_display);
 
 	assert( wlserver.wl_display && wlserver.wl_event_loop && wlserver.wlr.multi_backend );
-	assert( !bIsDRM || wlserver.wlr.session );
 
 	wl_signal_add( &wlserver.wlr.multi_backend->events.new_input, &new_input_listener );
 
