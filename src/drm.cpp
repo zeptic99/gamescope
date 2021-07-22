@@ -34,8 +34,35 @@ bool g_bRotated = false;
 
 bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
+const char *g_sOutputName = nullptr;
 
 static int s_drm_log = 0;
+
+static std::map< uint32_t, const char * > connector_types = {
+	{ DRM_MODE_CONNECTOR_Unknown, "Unknown" },
+	{ DRM_MODE_CONNECTOR_VGA, "VGA" },
+	{ DRM_MODE_CONNECTOR_DVII, "DVI-I" },
+	{ DRM_MODE_CONNECTOR_DVID, "DVI-D" },
+	{ DRM_MODE_CONNECTOR_DVIA, "DVI-A" },
+	{ DRM_MODE_CONNECTOR_Composite, "Composite" },
+	{ DRM_MODE_CONNECTOR_SVIDEO, "SVIDEO" },
+	{ DRM_MODE_CONNECTOR_LVDS, "LVDS" },
+	{ DRM_MODE_CONNECTOR_Component, "Component" },
+	{ DRM_MODE_CONNECTOR_9PinDIN, "DIN" },
+	{ DRM_MODE_CONNECTOR_DisplayPort, "DisplayPort" },
+	{ DRM_MODE_CONNECTOR_HDMIA, "HDMI-A" },
+	{ DRM_MODE_CONNECTOR_HDMIB, "HDMI-B" },
+	{ DRM_MODE_CONNECTOR_TV, "TV" },
+	{ DRM_MODE_CONNECTOR_eDP, "eDP" },
+	{ DRM_MODE_CONNECTOR_VIRTUAL, "Virtual" },
+	{ DRM_MODE_CONNECTOR_DSI, "DSI" },
+	{ DRM_MODE_CONNECTOR_DPI, "DPI" },
+	{ DRM_MODE_CONNECTOR_WRITEBACK, "Writeback" },
+	{ DRM_MODE_CONNECTOR_SPI, "SPI" },
+#ifdef DRM_MODE_CONNECTOR_USB
+	{ DRM_MODE_CONNECTOR_USB, "USB" },
+#endif
+};
 
 static struct crtc *find_crtc_for_encoder(struct drm_t *drm, const drmModeEncoder *encoder) {
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
@@ -314,6 +341,15 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
+		const char *type_str = "Unknown";
+		if ( connector_types.count( conn.connector->connector_type ) > 0 )
+			type_str = connector_types[ conn.connector->connector_type ];
+
+		char name[128] = {};
+		snprintf(name, sizeof(name), "%s-%d", type_str, conn.connector->connector_type_id);
+
+		conn.name = strdup(name);
+
 		drm->connectors.push_back(conn);
 	}
 
@@ -360,6 +396,23 @@ static bool get_resources(struct drm_t *drm)
 	drmModeFreePlaneResources(plane_resources);
 
 	return true;
+}
+
+static struct connector *find_connector( drm_t *drm, const char *name )
+{
+	for (size_t i = 0; i < drm->connectors.size(); i++) {
+		struct connector *conn = &drm->connectors[i];
+
+		if (conn->connector->connection != DRM_MODE_CONNECTED)
+			continue;
+
+		if ( name != nullptr && strcmp( conn->name, name ) != 0 )
+			continue;
+
+		return conn;
+	}
+
+	return nullptr;
 }
 
 static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
@@ -436,20 +489,26 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
-	/* find a connected connector */
+	fprintf( stderr, "Connectors:\n" );
 	for (size_t i = 0; i < drm->connectors.size(); i++) {
-		if (drm->connectors[i].connector->connection == DRM_MODE_CONNECTED) {
-			drm->connector = &drm->connectors[i];
-			connector = drm->connector->connector;
-			break;
-		}
+		struct connector *conn = &drm->connectors[i];
+
+		const char *status_str = "disconnected";
+		if ( conn->connector->connection == DRM_MODE_CONNECTED )
+			status_str = "connected";
+
+		fprintf( stderr, "  %s (%s)\n", conn->name, status_str );
 	}
 
+	drm->connector = find_connector( drm, g_sOutputName );
 	if (!drm->connector) {
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
 		 */
-		fprintf(stderr, "no connected connector!\n");
+		if ( g_sOutputName != nullptr )
+			fprintf( stderr, "Cannot find connector '%s'\n", g_sOutputName );
+		else
+			fprintf( stderr, "Cannot find any connector!\n" );
 		return -1;
 	}
 

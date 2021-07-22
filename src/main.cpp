@@ -97,6 +97,9 @@ int main(int argc, char **argv)
 			case 'f':
 				g_bFullscreen = true;
 				break;
+			case 'O':
+				g_sOutputName = optarg;
+				break;
 			default:
 				break;
 		}
