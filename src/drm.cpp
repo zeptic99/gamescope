@@ -515,6 +515,8 @@ int init_drm(struct drm_t *drm, const char *device)
 		return -1;
 	}
 
+	fprintf( stderr, "drm: selecting connector %s\n", drm->connector->name );
+
 	const drmModeModeInfo *mode = nullptr;
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
