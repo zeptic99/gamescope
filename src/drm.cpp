@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <sys/select.h>
+#include <poll.h>
 
 extern "C" {
 #include <wlr/types/wlr_buffer.h>
@@ -270,23 +270,23 @@ static void page_flip_handler(int fd, unsigned int frame,
 
 void flip_handler_thread_run(void)
 {
-	fd_set fds;
-	int ret;
-	drmEventContext evctx = {
-		.version = 2,
-		.page_flip_handler = page_flip_handler,
+	struct pollfd pollfd = {
+		.fd = g_DRM.fd,
+		.events = POLLIN,
 	};
-
-	FD_ZERO(&fds);
-	FD_SET(0, &fds);
-	FD_SET(g_DRM.fd, &fds);
 
 	while ( true )
 	{
-		ret = select(g_DRM.fd + 1, &fds, NULL, NULL, NULL);
-		if (ret < 0) {
+		int ret = poll( &pollfd, 1, -1 );
+		if ( ret < 0 ) {
+			perror( "drm: polling for DRM events failed" );
 			break;
 		}
+
+		drmEventContext evctx = {
+			.version = 2,
+			.page_flip_handler = page_flip_handler,
+		};
 		drmHandleEvent(g_DRM.fd, &evctx);
 	}
 }

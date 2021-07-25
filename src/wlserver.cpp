@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include <stdio.h> 
 #include <string.h> 
-#include <sys/epoll.h>
+#include <poll.h>
 
 #include <map>
 
@@ -613,47 +613,36 @@ void wlserver_unlock(void)
 
 int wlserver_run(void)
 {
-	int epoll_fd = epoll_create( 1 );
-	struct epoll_event ev;
-	struct epoll_event events[128];
-	int n;
-	
-	ev.events = EPOLLIN;
-	
-	if ( epoll_fd == -1 ||
-		epoll_ctl( epoll_fd, EPOLL_CTL_ADD, wlserver.wl_event_loop_fd, &ev ) == -1 )
-	{
-		return 1;
-	}
-
-	while ( run )
-	{
-		n = epoll_wait( epoll_fd, events, 128, -1 );
-		if ( n == -1 )
-		{
+	struct pollfd pollfd = {
+		.fd = wlserver.wl_event_loop_fd,
+		.events = POLLIN,
+	};
+	while ( run ) {
+		int ret = poll( &pollfd, 1, -1 );
+		if ( ret < 0 ) {
 			if ( errno == EINTR )
-			{
 				continue;
-			}
-			else
-			{
-				break;
-			}
+			perror( "wlserver: poll failed" );
+			break;
 		}
 
-		// We have wayland stuff to do, do it while locked
-		wlserver_lock();
-		
-		for ( int i = 0; i < n; i++ )
-		{
+		if ( pollfd.revents & (POLLHUP | POLLERR) ) {
+			fprintf( stderr, "wlserver: socket %s\n", ( pollfd.revents & POLLERR ) ? "error" : "closed" );
+			break;
+		}
+
+		if ( pollfd.revents & POLLIN ) {
+			// We have wayland stuff to do, do it while locked
+			wlserver_lock();
+
 			wl_display_flush_clients(wlserver.wl_display);
 			int ret = wl_event_loop_dispatch(wlserver.wl_event_loop, 0);
 			if (ret < 0) {
 				break;
 			}
-		}
 
-		wlserver_unlock();
+			wlserver_unlock();
+		}
 	}
 
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise
