@@ -186,39 +186,35 @@ static uint32_t pick_plane_format( const struct wlr_drm_format_set *formats )
 /* Pick a primary plane that can be connected to the chosen CRTC. */
 static struct plane *find_primary_plane(struct drm_t *drm)
 {
-	struct plane *ret = nullptr;
+	struct plane *primary = nullptr;
 
-	for (size_t i = 0; i < drm->planes.size() && ret == nullptr; i++) {
+	for (size_t i = 0; i < drm->planes.size(); i++) {
 		struct plane *plane = &drm->planes[i];
 
 		if (!(plane->plane->possible_crtcs & (1 << drm->crtc_index)))
 			continue;
 
-		if (!get_plane_formats(drm, plane, &drm->formats)) {
-			return nullptr;
-		}
-
 		uint64_t plane_type = drm->planes[i].initial_prop_values["type"];
 		if (plane_type == DRM_PLANE_TYPE_PRIMARY) {
-			/* found our primary plane, let's use that */
-			ret = plane;
-
-			if (!get_plane_formats(drm, plane, &drm->plane_formats)) {
-				return nullptr;
-			}
+			primary = plane;
+			break;
 		}
 	}
 
-	if ( ret == nullptr )
+	if (primary == nullptr)
 		return nullptr;
 
-	g_nDRMFormat = pick_plane_format( &drm->plane_formats );
+	if (!get_plane_formats(drm, primary, &drm->plane_formats)) {
+		return nullptr;
+	}
+
+	g_nDRMFormat = pick_plane_format(&drm->plane_formats);
 	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
 		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
 		return nullptr;
 	}
 
-	return ret;
+	return primary;
 }
 
 static void drm_free_fb( struct drm_t *drm, struct fb *fb );
@@ -556,6 +552,13 @@ int init_drm(struct drm_t *drm, const char *device)
 		ret = drmModeSetCrtc(drm->fd, drm->crtcs[i].id, 0, 0, 0, nullptr, 0, nullptr);
 		if (ret != 0)
 			fprintf(stderr, "failed to disable CRTC %" PRIu32 ": %s", drm->crtcs[i].id, strerror(-ret));
+	}
+
+	// Fetch formats which can be scanned out
+	for (size_t i = 0; i < drm->planes.size(); i++) {
+		struct plane *plane = &drm->planes[i];
+		if (!get_plane_formats(drm, plane, &drm->formats))
+			return -1;
 	}
 
 	drm->plane = find_primary_plane( drm );
