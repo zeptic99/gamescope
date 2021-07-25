@@ -144,7 +144,7 @@ struct wsi_memory_allocate_info {
 struct {
 	uint32_t DRMFormat;
 	VkFormat vkFormat;
-	bool bNeedsSwizzle;
+	bool bNeedsSwizzle; // swap the R and the B channels
 	bool bHasAlpha;
 } s_DRMVKFormatTable[] = {
 	{ DRM_FORMAT_XRGB8888, VK_FORMAT_B8G8R8A8_UNORM, false, false },
