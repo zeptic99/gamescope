@@ -670,10 +670,6 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 // 	add_crtc_property(drm, req, drm->crtc_id, "OUT_FENCE_PTR",
 // 					  (uint64_t)(unsigned long)&drm->kms_out_fence_fd);
 
-	if ( s_drm_log != 0 )
-	{
-		fprintf(stderr, "flipping\n");
-	}
 	drm->flip_lock.lock();
 
 	// Do it before the commit, as otherwise the pageflip handler could
@@ -688,6 +684,11 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	drm->fbids_queued = drm->fbids_in_req;
 
 	g_DRM.flipcount++;
+
+	if ( s_drm_log != 0 )
+	{
+		fprintf(stderr, "flip commit %lu\n", (uint64_t)g_DRM.flipcount);
+	}
 	gpuvis_trace_printf ( "flip commit %lu", (uint64_t)g_DRM.flipcount );
 
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
