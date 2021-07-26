@@ -689,19 +689,15 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	{
 		fprintf(stderr, "flip commit %lu\n", (uint64_t)g_DRM.flipcount);
 	}
-	gpuvis_trace_printf ( "flip commit %lu", (uint64_t)g_DRM.flipcount );
+	gpuvis_trace_printf( "flip commit %lu", (uint64_t)g_DRM.flipcount );
 
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
-	if (ret)
+	if ( ret != 0 )
 	{
-		if ( ret != -EBUSY && ret != -ENOSPC )
+		fprintf( stderr, "flip error: %s", strerror( -ret ) );
+		if ( ret != -EBUSY )
 		{
-			fprintf( stderr, "flip error %d\n", ret);
 			exit( 1 );
-		}
-		else
-		{
-			fprintf( stderr, "flip busy %d\n", ret);
 		}
 
 		// Undo refcount if the commit didn't actually work
