@@ -222,15 +222,17 @@ static void drm_free_fb( struct drm_t *drm, struct fb *fb );
 static void page_flip_handler(int fd, unsigned int frame,
 							  unsigned int sec, unsigned int usec, void *data)
 {
+	uint64_t flipcount = (uint64_t)data;
+
 	vblank_mark_possible_vblank();
 
 	// TODO: get the fbids_queued instance from data if we ever have more than one in flight
 
 	if ( s_drm_log != 0 )
 	{
-		fprintf(stderr, "page_flip_handler %p\n", data);
+		fprintf(stderr, "page_flip_handler %lu\n", flipcount);
 	}
-	gpuvis_trace_printf("page_flip_handler %p", data);
+	gpuvis_trace_printf("page_flip_handler %lu", flipcount);
 
 	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
 	{
@@ -686,7 +688,8 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	drm->fbids_queued = drm->fbids_in_req;
 
 	g_DRM.flipcount++;
-	gpuvis_trace_printf ( "legacy flip commit %lu", (uint64_t)g_DRM.flipcount );
+	gpuvis_trace_printf ( "flip commit %lu", (uint64_t)g_DRM.flipcount );
+
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
 	if (ret)
 	{
