@@ -694,7 +694,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
 	if ( ret != 0 )
 	{
-		fprintf( stderr, "flip error: %s", strerror( -ret ) );
+		fprintf( stderr, "flip error: %s\n", strerror( -ret ) );
 		if ( ret != -EBUSY )
 		{
 			exit( 1 );
