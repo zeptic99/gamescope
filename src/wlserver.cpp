@@ -471,7 +471,7 @@ static void gamescope_xwayland_bind( struct wl_client *client, void *data, uint3
 static void create_gamescope_xwayland( void )
 {
 	uint32_t version = 1;
-	wl_global_create( wlserver.wl_display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
+	wl_global_create( wlserver.display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
 }
 
 int wlserver_init(int argc, char **argv, bool bIsNested) {
@@ -480,7 +480,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wl_list_init(&pending_surfaces);
 
 	wlr_log_init(WLR_DEBUG, NULL);
-	wlserver.wl_display = wl_display_create();
+	wlserver.display = wl_display_create();
 
 	signal(SIGTERM, sig_handler);
 	signal(SIGINT, sig_handler);
@@ -488,7 +488,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	if ( bIsDRM == true )
 	{
-		wlserver.wlr.session = wlr_session_create( wlserver.wl_display );
+		wlserver.wlr.session = wlr_session_create( wlserver.display );
 		if ( wlserver.wlr.session == nullptr )
 		{
 			fprintf( stderr, "Failed to create session\n" );
@@ -496,30 +496,29 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		}
 	}
 
-	wlserver.wl_event_loop = wl_display_get_event_loop(wlserver.wl_display);
-	wlserver.wl_event_loop_fd = wl_event_loop_get_fd( wlserver.wl_event_loop );
+	wlserver.event_loop = wl_display_get_event_loop(wlserver.display);
 
-	wlserver.wlr.multi_backend = wlr_multi_backend_create(wlserver.wl_display);
+	wlserver.wlr.multi_backend = wlr_multi_backend_create(wlserver.display);
 
-	assert( wlserver.wl_display && wlserver.wl_event_loop && wlserver.wlr.multi_backend );
+	assert( wlserver.display && wlserver.event_loop && wlserver.wlr.multi_backend );
 
 	wl_signal_add( &wlserver.wlr.multi_backend->events.new_input, &new_input_listener );
 
-	wlserver.wlr.headless_backend = wlr_headless_backend_create( wlserver.wl_display );
+	wlserver.wlr.headless_backend = wlr_headless_backend_create( wlserver.display );
 	if ( wlserver.wlr.headless_backend == NULL )
 	{
 		return 1;
 	}
 	wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.headless_backend );
 
-	wlserver.wlr.noop_backend = wlr_noop_backend_create( wlserver.wl_display );
+	wlserver.wlr.noop_backend = wlr_noop_backend_create( wlserver.display );
 	wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.noop_backend );
 
 	wlserver.wlr.output = wlr_noop_add_output( wlserver.wlr.noop_backend );
 
 	if ( bIsDRM == True )
 	{
-		wlserver.wlr.libinput_backend = wlr_libinput_backend_create( wlserver.wl_display, wlserver.wlr.session );
+		wlserver.wlr.libinput_backend = wlr_libinput_backend_create( wlserver.display, wlserver.wlr.session );
 		if ( wlserver.wlr.libinput_backend == NULL)
 		{
 			return 1;
@@ -535,9 +534,9 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	assert( headless_renderer );
 	wlserver.wlr.renderer = vulkan_renderer_create( headless_renderer );
 
-	wlr_renderer_init_wl_display(wlserver.wlr.renderer, wlserver.wl_display);
+	wlr_renderer_init_wl_display(wlserver.wlr.renderer, wlserver.display);
 
-	wlserver.wlr.compositor = wlr_compositor_create(wlserver.wl_display, wlserver.wlr.renderer);
+	wlserver.wlr.compositor = wlr_compositor_create(wlserver.display, wlserver.wlr.renderer);
 
 	wl_signal_add( &wlserver.wlr.compositor->events.new_surface, &new_surface_listener );
 
@@ -547,7 +546,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		.lazy = false,
 		.enable_wm = false,
 	};
-	wlserver.wlr.xwayland_server = wlr_xwayland_server_create(wlserver.wl_display, &xwayland_options);
+	wlserver.wlr.xwayland_server = wlr_xwayland_server_create(wlserver.display, &xwayland_options);
 	wl_signal_add(&wlserver.wlr.xwayland_server->events.ready, &xwayland_ready_listener);
 
 	int result = -1;
@@ -556,7 +555,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	while ( result != 0 && display_slot < 128 )
 	{
 		sprintf( wlserver.wl_display_name, "gamescope-%d", display_slot );
-		result = wl_display_add_socket( wlserver.wl_display, wlserver.wl_display_name );
+		result = wl_display_add_socket( wlserver.display, wlserver.wl_display_name );
 		display_slot++;
 	}
 
@@ -567,7 +566,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		return 1;
 	}
 
-	wlserver.wlr.seat = wlr_seat_create(wlserver.wl_display, "seat0");
+	wlserver.wlr.seat = wlr_seat_create(wlserver.display, "seat0");
 	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_TOUCH );
 
 	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wlserver.wl_display_name);
@@ -576,13 +575,13 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	{
 		wlr_log(WLR_ERROR, "Failed to start backend");
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
-		wl_display_destroy(wlserver.wl_display);
+		wl_display_destroy(wlserver.display);
 		return 1;
 	}
 
 	while (!bXwaylandReady) {
-		wl_display_flush_clients(wlserver.wl_display);
-		if (wl_event_loop_dispatch(wlserver.wl_event_loop, -1) < 0) {
+		wl_display_flush_clients(wlserver.display);
+		if (wl_event_loop_dispatch(wlserver.event_loop, -1) < 0) {
 			fprintf(stderr, "wlserver: wl_event_loop_dispatch failed\n");
 			return 1;
 		}
@@ -613,14 +612,14 @@ void wlserver_lock(void)
 
 void wlserver_unlock(void)
 {
-	wl_display_flush_clients(wlserver.wl_display);
+	wl_display_flush_clients(wlserver.display);
 	pthread_mutex_unlock(&waylock);
 }
 
 int wlserver_run(void)
 {
 	struct pollfd pollfd = {
-		.fd = wlserver.wl_event_loop_fd,
+		.fd = wl_event_loop_get_fd( wlserver.event_loop ),
 		.events = POLLIN,
 	};
 	while ( run ) {
@@ -641,8 +640,8 @@ int wlserver_run(void)
 			// We have wayland stuff to do, do it while locked
 			wlserver_lock();
 
-			wl_display_flush_clients(wlserver.wl_display);
-			int ret = wl_event_loop_dispatch(wlserver.wl_event_loop, 0);
+			wl_display_flush_clients(wlserver.display);
+			int ret = wl_event_loop_dispatch(wlserver.event_loop, 0);
 			if (ret < 0) {
 				break;
 			}
@@ -654,8 +653,8 @@ int wlserver_run(void)
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise
 	// wlroots will restart it automatically.
 	wlr_xwayland_server_destroy(wlserver.wlr.xwayland_server);
-	wl_display_destroy_clients(wlserver.wl_display);
-	wl_display_destroy(wlserver.wl_display);
+	wl_display_destroy_clients(wlserver.display);
+	wl_display_destroy(wlserver.display);
 	return 0;
 }
 

@@ -9,9 +9,8 @@
 #define WLSERVER_TOUCH_COUNT 11 // Ten fingers + nose ought to be enough for anyone
 
 struct wlserver_t {
-	struct wl_display *wl_display;
-	struct wl_event_loop *wl_event_loop;
-	int wl_event_loop_fd;
+	struct wl_display *display;
+	struct wl_event_loop *event_loop;
 	char wl_display_name[32];
 
 	struct {
