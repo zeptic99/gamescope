@@ -216,6 +216,11 @@ int main(int argc, char **argv)
 
 	wlserver_init(argc, argv, g_bIsNested == true );
 
+	setenv("DISPLAY", wlserver_get_nested_display_name(), 1);
+	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
+
+	startSteamCompMgr();
+
 	wlserver_run();
 }
 

@@ -113,17 +113,6 @@ const struct wlr_surface_role xwayland_surface_role = {
 static void xwayland_ready(struct wl_listener *listener, void *data)
 {
 	bXwaylandReady = true;
-
-	setenv("DISPLAY", wlserver.wlr.xwayland_server->display_name, true);
-
-	g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland_server->display_name );
-	if ( g_XWLDpy == nullptr )
-	{
-		wlr_log( WLR_ERROR, "wlserver: failed to connect to X11 server\n" );
-		exit ( 1 );
-	}
-	
-	startSteamCompMgr();
 }
 
 struct wl_listener xwayland_ready_listener = { .notify = xwayland_ready };
@@ -583,8 +572,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wlserver.wl_display_name);
 
-	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver.wl_display_name, 1);
-
 	if (!wlr_backend_start( wlserver.wlr.multi_backend ))
 	{
 		wlr_log(WLR_ERROR, "Failed to start backend");
@@ -599,6 +586,13 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 			fprintf(stderr, "wlserver: wl_event_loop_dispatch failed");
 			return 1;
 		}
+	}
+
+	g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland_server->display_name );
+	if ( g_XWLDpy == nullptr )
+	{
+		wlr_log( WLR_ERROR, "wlserver: failed to connect to X11 server\n" );
+		return 1;
 	}
 
 	wlr_output_enable( wlserver.wlr.output, true );
