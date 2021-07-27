@@ -1237,10 +1237,11 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 	if ( BIsNested() == false && alwaysComposite == False && takeScreenshot == False )
 	{
-		if ( drm_prepare( &g_DRM, &composite, &pipeline ) == true )
-		{
+		int ret = drm_prepare( &g_DRM, &composite, &pipeline );
+		if ( ret == 0 )
 			bDoComposite = false;
-		}
+		else if ( ret == -EACCES )
+			return;
 	}
 
 	if ( bDoComposite == true )
@@ -1251,7 +1252,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 		if ( bResult != true )
 		{
-			fprintf (stderr, "composite alarm!!!\n");
+			fprintf( stderr, "composite alarm!!!\n" );
 		}
 
 		if ( BIsNested() == True )
@@ -1274,19 +1275,26 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			pipeline.layerBindings[ 0 ].fbid = vulkan_get_last_composite_fbid();
 			pipeline.layerBindings[ 0 ].bFilter = false;
 
-			bool bFlip = drm_prepare( &g_DRM, &composite, &pipeline );
+			int ret = drm_prepare( &g_DRM, &composite, &pipeline );
+
+			// Happens when we're VT-switched away
+			if ( ret == -EACCES )
+				return;
+
+			if ( ret != 0 )
+				fprintf( stderr, "Failed to prepare 1-layer flip: %s\n", strerror(-ret) );
 
 			// We should always handle a 1-layer flip
-			assert( bFlip == true );
+			assert( ret == 0 );
 
-			drm_atomic_commit( &g_DRM, &composite, &pipeline );
+			drm_commit( &g_DRM, &composite, &pipeline );
 		}
 	}
 	else
 	{
 		assert( BIsNested() == false );
 
-		drm_atomic_commit( &g_DRM, &composite, &pipeline );
+		drm_commit( &g_DRM, &composite, &pipeline );
 	}
 
 	gpuvis_trace_end_ctx_printf( paintID, "paint_all" );

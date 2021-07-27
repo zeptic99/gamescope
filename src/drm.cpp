@@ -576,7 +576,7 @@ static int add_plane_property(drmModeAtomicReq *req, struct plane *plane, const 
 	return add_property(req, plane->id, plane->props, name, value);
 }
 
-int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
+int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
 {
 	int ret;
 
@@ -616,7 +616,7 @@ int drm_atomic_commit(struct drm_t *drm, struct Composite_t *pComposite, struct 
 	if ( ret != 0 )
 	{
 		fprintf( stderr, "flip error: %s\n", strerror( -ret ) );
-		if ( ret != -EBUSY )
+		if ( ret != -EBUSY && ret != -EACCES )
 		{
 			exit( 1 );
 		}
@@ -775,7 +775,7 @@ void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 }
 
 /* Prepares an atomic commit without using libliftoff */
-static bool
+static int
 drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	// Discard cases where our non-liftoff path is known to fail
@@ -783,12 +783,12 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 	// It only supports one layer
 	if ( pComposite->nLayerCount > 1 )
 	{
-		return false;
+		return -EINVAL;
 	}
 
 	if ( pPipeline->layerBindings[ 0 ].fbid == 0 )
 	{
-		return false;
+		return -EINVAL;
 	}
 
 	drmModeAtomicReq *req = drm->req;
@@ -842,10 +842,10 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 		fprintf( stderr, "drmModeAtomicCommit failed: %s", strerror( -ret ) );
 	}
 
-	return ret == 0;
+	return ret;
 }
 
-static bool
+static int
 drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	for ( int i = 0; i < k_nMaxLayers; i++ )
@@ -854,7 +854,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 		{
 			if ( pPipeline->layerBindings[ i ].fbid == 0 )
 			{
-				return false;
+				return -EINVAL;
 			}
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pPipeline->layerBindings[ i ].fbid);
@@ -904,22 +904,23 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 		}
 	}
 
-	bool ret = liftoff_output_apply( drm->lo_output, drm->req, drm->flags );
+	int ret = liftoff_output_apply( drm->lo_output, drm->req, drm->flags );
 
 	int scanoutLayerCount = 0;
-	if ( ret )
+	if ( ret == 0 )
 	{
 		for ( int i = 0; i < k_nMaxLayers; i++ )
 		{
 			if ( liftoff_layer_get_plane( drm->lo_layers[ i ] ) != NULL )
 				scanoutLayerCount++;
 		}
-		ret = scanoutLayerCount == pComposite->nLayerCount;
+		if ( scanoutLayerCount != pComposite->nLayerCount )
+			ret = -EINVAL;
 	}
 
 	if ( s_drm_log != 0 )
 	{
-		if ( ret )
+		if ( ret == 0 )
 			fprintf( stderr, "can drm present %i layers\n", pComposite->nLayerCount );
 		else
 			fprintf( stderr, "can NOT drm present %i layers\n", pComposite->nLayerCount );
@@ -930,7 +931,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 
 /* Prepares an atomic commit for the provided scene-graph. Returns false on
  * error or if the scene-graph can't be presented directly. */
-bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
+int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	drm->fbids_in_req.clear();
 
@@ -977,21 +978,21 @@ bool drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const
 
 	drm->flags = flags;
 
-	bool result;
+	int ret;
 	if ( g_bUseLayers == true ) {
-		result = drm_prepare_liftoff( drm, pComposite, pPipeline );
+		ret = drm_prepare_liftoff( drm, pComposite, pPipeline );
 	} else {
-		result = drm_prepare_basic( drm, pComposite, pPipeline );
+		ret = drm_prepare_basic( drm, pComposite, pPipeline );
 	}
 
-	if ( !result ) {
+	if ( ret != 0 ) {
 		drmModeAtomicFree( drm->req );
 		drm->req = nullptr;
 
 		drm->fbids_in_req.clear();
 	}
 
-	return result;
+	return ret;
 }
 
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
