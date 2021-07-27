@@ -1226,6 +1226,13 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	if (drawDebugInfo)
 		paint_debug_info(dpy);
 
+	if ( BIsNested() == false && g_DRM.paused == true )
+	{
+		// Force a mode-set when our session is resumed
+		g_DRM.mode_id = 0;
+		return;
+	}
+
 	bool bDoComposite = true;
 
 	// Handoff from whatever thread to this one since we check ours twice

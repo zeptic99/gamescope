@@ -474,6 +474,12 @@ static void create_gamescope_xwayland( void )
 	wl_global_create( wlserver.display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
 }
 
+static void handle_session_active( struct wl_listener *listener, void *data )
+{
+	g_DRM.paused = !wlserver.wlr.session->active;
+	fprintf( stderr, "wlserver: session %s\n", g_DRM.paused ? "paused" : "resumed" );
+}
+
 int wlsession_init( void ) {
 	wlr_log_init(WLR_DEBUG, NULL);
 	wlserver.display = wl_display_create();
@@ -487,6 +493,9 @@ int wlsession_init( void ) {
 		fprintf( stderr, "Failed to create session\n" );
 		return 1;
 	}
+
+	wlserver.session_active.notify = handle_session_active;
+	wl_signal_add( &wlserver.wlr.session->events.active, &wlserver.session_active );
 
 	return 0;
 }
