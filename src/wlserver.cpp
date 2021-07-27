@@ -583,7 +583,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	while (!bXwaylandReady) {
 		wl_display_flush_clients(wlserver.wl_display);
 		if (wl_event_loop_dispatch(wlserver.wl_event_loop, -1) < 0) {
-			fprintf(stderr, "wlserver: wl_event_loop_dispatch failed");
+			fprintf(stderr, "wlserver: wl_event_loop_dispatch failed\n");
 			return 1;
 		}
 	}
