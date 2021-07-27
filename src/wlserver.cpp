@@ -63,6 +63,8 @@ enum wlserver_touch_click_mode g_nTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
 
 static struct wl_list pending_surfaces = {0};
 
+static bool bXwaylandReady = false;
+
 static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_surface *wlr_surf );
 
 void sig_handler(int signal)
@@ -110,6 +112,8 @@ const struct wlr_surface_role xwayland_surface_role = {
 
 static void xwayland_ready(struct wl_listener *listener, void *data)
 {
+	bXwaylandReady = true;
+
 	setenv("DISPLAY", wlserver.wlr.xwayland_server->display_name, true);
 
 	g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland_server->display_name );
@@ -587,6 +591,14 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
 		wl_display_destroy(wlserver.wl_display);
 		return 1;
+	}
+
+	while (!bXwaylandReady) {
+		wl_display_flush_clients(wlserver.wl_display);
+		if (wl_event_loop_dispatch(wlserver.wl_event_loop, -1) < 0) {
+			fprintf(stderr, "wlserver: wl_event_loop_dispatch failed");
+			return 1;
+		}
 	}
 
 	wlr_output_enable( wlserver.wlr.output, true );
