@@ -220,7 +220,11 @@ int main(int argc, char **argv)
 	if ( g_nNestedWidth == 0 )
 		g_nNestedWidth = g_nNestedHeight * 16 / 9;
 
-	wlserver_init(argc, argv, g_bIsNested == true );
+	if ( wlserver_init(argc, argv, g_bIsNested == true ) != 0 )
+	{
+		fprintf( stderr, "Failed to initialize wlserver\n" );
+		return 1;
+	}
 
 	setenv("DISPLAY", wlserver_get_nested_display_name(), 1);
 	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
