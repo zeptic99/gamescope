@@ -783,11 +783,15 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 	// It only supports one layer
 	if ( pComposite->nLayerCount > 1 )
 	{
+		if ( s_drm_log != 0 )
+			fprintf( stderr, "drm_prepare_basic: cannot handle %d layers\n", pComposite->nLayerCount );
 		return -EINVAL;
 	}
 
 	if ( pPipeline->layerBindings[ 0 ].fbid == 0 )
 	{
+		if ( s_drm_log != 0 )
+			fprintf( stderr, "drm_prepare_basic: layer has no FB\n" );
 		return -EINVAL;
 	}
 
@@ -854,6 +858,8 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 		{
 			if ( pPipeline->layerBindings[ i ].fbid == 0 )
 			{
+				if ( s_drm_log != 0 )
+					fprintf( stderr, "drm_prepare_liftoff: layer %d has no FB", i );
 				return -EINVAL;
 			}
 
