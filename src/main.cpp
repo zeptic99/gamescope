@@ -55,10 +55,10 @@ int main(int argc, char **argv)
 	int o;
 	ac = argc;
 	av = argv;
-	
+
 	bool bSleepAtStartup = false;
-	
-	while ((o = getopt (argc, argv, GAMESCOPE_OPTIONS)) != -1)
+
+	while ((o = getopt(argc, argv, GAMESCOPE_OPTIONS)) != -1)
 	{
 		switch (o) {
 			case 'w':
@@ -166,6 +166,12 @@ int main(int argc, char **argv)
 	if ( getenv("DISPLAY") != NULL || getenv("WAYLAND_DISPLAY") != NULL )
 	{
 		g_bIsNested = true;
+	}
+
+	if ( wlsession_init() != 0 )
+	{
+		fprintf( stderr, "Failed to initialize Wayland session\n" );
+		return 1;
 	}
 
 	if ( initOutput() != 0 )

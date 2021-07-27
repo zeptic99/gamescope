@@ -474,27 +474,65 @@ static void create_gamescope_xwayland( void )
 	wl_global_create( wlserver.display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
 }
 
+int wlsession_init( void ) {
+	wlr_log_init(WLR_DEBUG, NULL);
+	wlserver.display = wl_display_create();
+
+	if ( BIsNested() )
+		return 0;
+
+	wlserver.wlr.session = wlr_session_create( wlserver.display );
+	if ( wlserver.wlr.session == nullptr )
+	{
+		fprintf( stderr, "Failed to create session\n" );
+		return 1;
+	}
+
+	return 0;
+}
+
+int wlsession_open_kms( const char *device_name ) {
+	if ( device_name != nullptr )
+	{
+		struct wlr_device *device = wlr_session_open_file( wlserver.wlr.session, device_name );
+		if ( device == nullptr )
+			return -1;
+		if ( !drmIsKMS( device->fd ) )
+		{
+			wlr_log( WLR_ERROR, "'%s' is not a KMS device", device_name );
+			wlr_session_close_file( wlserver.wlr.session, device );
+			return -1;
+		}
+		return device->fd;
+	}
+	else
+	{
+		struct wlr_device *device = nullptr;
+		ssize_t n = wlr_session_find_gpus( wlserver.wlr.session, 1, &device );
+		if ( n < 0 )
+		{
+			wlr_log( WLR_ERROR, "Failed to list GPUs" );
+			return -1;
+		}
+		if ( n == 0 )
+		{
+			wlr_log( WLR_ERROR, "No GPU detected" );
+			return -1;
+		}
+		return device->fd;
+	}
+}
+
 int wlserver_init(int argc, char **argv, bool bIsNested) {
+	assert( wlserver.display != nullptr );
+
 	bool bIsDRM = bIsNested == false;
 
 	wl_list_init(&pending_surfaces);
 
-	wlr_log_init(WLR_DEBUG, NULL);
-	wlserver.display = wl_display_create();
-
 	signal(SIGTERM, sig_handler);
 	signal(SIGINT, sig_handler);
 	signal(SIGUSR2, sig_handler);
-
-	if ( bIsDRM == true )
-	{
-		wlserver.wlr.session = wlr_session_create( wlserver.display );
-		if ( wlserver.wlr.session == nullptr )
-		{
-			fprintf( stderr, "Failed to create session\n" );
-			return 1;
-		}
-	}
 
 	wlserver.event_loop = wl_display_get_event_loop(wlserver.display);
 

@@ -96,43 +96,6 @@ static struct crtc *find_crtc_for_connector(struct drm_t *drm, const drmModeConn
 	return nullptr;
 }
 
-#define MAX_DRM_DEVICES 64
-
-static int find_drm_device(void)
-{
-	drmDevicePtr devices[MAX_DRM_DEVICES] = { NULL };
-	int num_devices, fd = -1;
-
-	num_devices = drmGetDevices2(0, devices, MAX_DRM_DEVICES);
-	if (num_devices < 0) {
-		perror("drmGetDevices2 failed");
-		return -1;
-	}
-
-	for (int i = 0; i < num_devices; i++) {
-		drmDevicePtr device = devices[i];
-
-		if (!(device->available_nodes & (1 << DRM_NODE_PRIMARY)))
-			continue;
-
-		fd = open(device->nodes[DRM_NODE_PRIMARY], O_RDWR | O_CLOEXEC);
-		if (fd < 0)
-			continue;
-
-		if (drmIsKMS(fd))
-			break;
-
-		close(fd);
-		fd = -1;
-	}
-
-	drmFreeDevices(devices, num_devices);
-
-	if (fd < 0)
-		fprintf(stderr, "no drm device found!\n");
-	return fd;
-}
-
 static bool get_plane_formats(struct drm_t *drm, struct plane *plane, struct wlr_drm_format_set *formats) {
 	for (uint32_t k = 0; k < plane->plane->count_formats; k++) {
 		uint32_t fmt = plane->plane->formats[k];
@@ -452,20 +415,12 @@ static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connect
 	return NULL;
 }
 
-int init_drm(struct drm_t *drm, const char *device)
+int init_drm(struct drm_t *drm, const char *device_name)
 {
-	if (device) {
-		drm->fd = open(device, O_RDWR | O_CLOEXEC);
-		if (!drmIsKMS(drm->fd)) {
-			fprintf(stderr, "%s is not a KMS device\n", device);
-			return -1;
-		}
-	} else {
-		drm->fd = find_drm_device();
-	}
-
-	if (drm->fd < 0) {
-		fprintf(stderr, "could not open drm device\n");
+	drm->fd = wlsession_open_kms( device_name );
+	if ( drm->fd < 0 )
+	{
+		fprintf(stderr, "Could not open KMS device\n");
 		return -1;
 	}
 

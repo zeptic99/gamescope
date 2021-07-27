@@ -73,6 +73,9 @@ extern enum wlserver_touch_click_mode g_nTouchClickMode;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 
+int wlsession_init( void );
+int wlsession_open_kms( const char *device_name );
+
 int wlserver_init( int argc, char **argv, bool bIsNested );
 
 int wlserver_run(void);
