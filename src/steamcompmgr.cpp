@@ -1229,7 +1229,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	if ( BIsNested() == false && g_DRM.paused == true )
 	{
 		// Force a mode-set when our session is resumed
-		g_DRM.mode_id = 0;
+		g_DRM.current.mode_id = 0;
 		return;
 	}
 

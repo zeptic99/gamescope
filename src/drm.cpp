@@ -688,11 +688,7 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 	} else {
 		drm->fbids_in_req.clear();
 
-		if ( drm->flags & DRM_MODE_ATOMIC_ALLOW_MODESET )
-		{
-			drm->mode = drm->pending.mode;
-			drm->mode_id = drm->pending.mode_id;
-		}
+		drm->current = drm->pending;
 
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
 		{
@@ -1009,7 +1005,7 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 	// We do internal refcounting with these events
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
-	if ( drm->pending.mode_id != drm->mode_id ) {
+	if ( drm->pending.mode_id != drm->current.mode_id ) {
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 
 		// Disable all connectors and CRTCs

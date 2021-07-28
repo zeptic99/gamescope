@@ -79,9 +79,6 @@ struct drm_t {
 	int kms_in_fence_fd;
 	int kms_out_fence_fd;
 	
-	drmModeModeInfo mode;
-	uint32_t mode_id;
-	
 	struct wlr_drm_format_set plane_formats;
 	
 	drmModeAtomicReq *req;
@@ -94,7 +91,7 @@ struct drm_t {
 	struct {
 		drmModeModeInfo mode;
 		uint32_t mode_id;
-	} pending;
+	} current, pending;
 
 	/* FBs in the atomic request, but not yet submitted to KMS */
 	std::vector < uint32_t > fbids_in_req;
