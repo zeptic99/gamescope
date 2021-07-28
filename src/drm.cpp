@@ -1045,3 +1045,15 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 
 	return drm_set_mode(drm, &mode);
 }
+
+bool drm_set_resolution( struct drm_t *drm, int width, int height )
+{
+	drmModeConnector *connector = drm->connector->connector;
+	const drmModeModeInfo *mode = get_matching_mode(connector, width, height, 0);
+	if ( !mode )
+	{
+		return false;
+	}
+
+	return drm_set_mode(drm, mode);
+}
