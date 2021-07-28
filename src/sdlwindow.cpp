@@ -146,9 +146,10 @@ void inputSDLThreadRun( void )
 			case SDL_KEYUP:
 				mod = SDL_GetModState();
 				key = SDLScancodeToLinuxKey( event.key.keysym.scancode );
-				
+
 				if ( event.type == SDL_KEYUP && mod & KMOD_LGUI )
 				{
+					bool handled = true;
 					switch ( key )
 					{
 						case KEY_F:
@@ -162,12 +163,14 @@ void inputSDLThreadRun( void )
 							g_bTakeScreenshot = true;
 							break;
 						default:
-							goto client;
-						
+							handled = false;
 					}
-					break;
+					if ( handled )
+					{
+						break;
+					}
 				}
-client:
+
 				wlserver_lock();
 				wlserver_key( key, event.type == SDL_KEYDOWN, event.key.timestamp );
 				wlserver_unlock();
