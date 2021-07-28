@@ -504,8 +504,8 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		fprintf( stderr, "  %s (%s)\n", conn->name, status_str );
 	}
 
-	drm->connector = find_connector( drm, g_sOutputName );
-	if (!drm->connector) {
+	struct connector *connector = find_connector( drm, g_sOutputName );
+	if (!connector) {
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
 		 */
@@ -516,7 +516,9 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		return -1;
 	}
 
-	fprintf( stderr, "drm: selecting connector %s\n", drm->connector->name );
+	if (!drm_set_connector(drm, connector)) {
+		return -1;
+	}
 
 	const drmModeModeInfo *mode = nullptr;
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
@@ -535,15 +537,6 @@ int init_drm(struct drm_t *drm, const char *device_name)
 
 	if (!drm_set_mode(drm, mode)) {
 		fprintf(stderr, "drm: failed to set initial mode\n");
-		return -1;
-	}
-
-	struct crtc *crtc = find_crtc_for_connector(drm, drm->connector->connector);
-	if (crtc == nullptr) {
-		fprintf(stderr, "drm: no crtc found!\n");
-		return -1;
-	}
-	if (!drm_set_crtc(drm, crtc)) {
 		return -1;
 	}
 
@@ -1079,6 +1072,25 @@ static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
 		fprintf(stderr, "could not find a suitable primary plane\n");
 		return false;
 	}
+
+	return true;
+}
+
+bool drm_set_connector( struct drm_t *drm, struct connector *conn )
+{
+	fprintf( stderr, "drm: selecting connector %s\n", conn->name );
+
+	struct crtc *crtc = find_crtc_for_connector(drm, conn->connector);
+	if (crtc == nullptr) {
+		fprintf(stderr, "drm: no CRTC found!\n");
+		return false;
+	}
+
+	if (!drm_set_crtc(drm, crtc)) {
+		return false;
+	}
+
+	drm->connector = conn;
 
 	return true;
 }
