@@ -1085,11 +1085,8 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	g_nOutputHeight = mode->vdisplay;
 	g_nOutputRefresh = mode->vrefresh;
 
-	if ( g_nOutputWidth < g_nOutputHeight )
-	{
-		// We probably don't want to be in portrait mode, rotate
-		g_bRotated = true;
-	}
+	// Auto-detect portrait mode
+	g_bRotated = g_nOutputWidth < g_nOutputHeight;
 
 	if ( g_bRotated )
 	{
