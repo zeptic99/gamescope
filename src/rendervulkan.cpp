@@ -666,7 +666,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 
 	if ( flags.bMappable )
 	{
-		vkMapMemory( device, g_output.pScreenshotImage->m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &m_pMappedData );
+		vkMapMemory( device, m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &m_pMappedData );
 
 		if ( m_pMappedData == nullptr )
 		{
@@ -684,7 +684,7 @@ CVulkanTexture::~CVulkanTexture( void )
 {
 	if ( m_pMappedData != nullptr )
 	{
-		vkUnmapMemory( device, g_output.pScreenshotImage->m_vkImageMemory );
+		vkUnmapMemory( device, m_vkImageMemory );
 		m_pMappedData = nullptr;
 	}
 
