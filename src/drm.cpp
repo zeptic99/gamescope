@@ -505,14 +505,15 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	}
 
 	struct connector *connector = find_connector( drm, g_sOutputName );
-	if (!connector) {
+	if ( !connector ) {
+		fprintf( stderr, "drm: warning: cannot find connector '%s', falling back to another one\n", g_sOutputName );
+		connector = find_connector( drm, nullptr );
+	}
+	if ( !connector ) {
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
 		 */
-		if ( g_sOutputName != nullptr )
-			fprintf( stderr, "Cannot find connector '%s'\n", g_sOutputName );
-		else
-			fprintf( stderr, "Cannot find any connector!\n" );
+		fprintf( stderr, "Cannot find any connector!\n" );
 		return -1;
 	}
 
