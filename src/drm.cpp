@@ -585,6 +585,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	}
 
 	drm->flipcount = 0;
+	drm->needs_modeset = true;
 
 	return 0;
 }
@@ -999,6 +1000,8 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 	if ( out_of_date )
 		refresh_state( drm );
 
+	bool needs_modeset = drm->needs_modeset.exchange(false);
+
 	assert( drm->req == nullptr );
 	drm->req = drmModeAtomicAlloc();
 
@@ -1007,7 +1010,7 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 	// We do internal refcounting with these events
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
-	if ( drm->pending.mode_id != drm->current.mode_id ) {
+	if ( needs_modeset ) {
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 
 		// Disable all connectors and CRTCs

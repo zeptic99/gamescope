@@ -476,7 +476,10 @@ static void create_gamescope_xwayland( void )
 
 static void handle_session_active( struct wl_listener *listener, void *data )
 {
-	g_DRM.out_of_date = true;
+	if (wlserver.wlr.session->active) {
+		g_DRM.out_of_date = true;
+		g_DRM.needs_modeset = true;
+	}
 	g_DRM.paused = !wlserver.wlr.session->active;
 	fprintf( stderr, "wlserver: session %s\n", g_DRM.paused ? "paused" : "resumed" );
 }
