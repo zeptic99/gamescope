@@ -2248,6 +2248,8 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		SDL_SaveBMP( pSDLSurface, pTimeBuffer );
 
 		SDL_FreeSurface( pSDLSurface );
+
+		fprintf(stderr, "Screenshot saved to %s\n", pTimeBuffer);
 	}
 	
 	if ( BIsNested() == false )
