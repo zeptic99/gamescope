@@ -35,6 +35,10 @@ struct crtc {
 	drmModeCrtc *crtc;
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
+
+	struct {
+		bool active;
+	} current, pending;
 };
 
 struct connector {

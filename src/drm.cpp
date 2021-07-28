@@ -363,6 +363,9 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
+		crtc.current.active = crtc.initial_prop_values["ACTIVE"];
+		crtc.pending = crtc.current;
+
 		drm->crtcs.push_back(crtc);
 	}
 
@@ -636,6 +639,11 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 			exit( 1 );
 		}
 
+		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
+		{
+			drm->crtcs[i].pending = drm->crtcs[i].current;
+		}
+
 		// Undo refcount if the commit didn't actually work
 		for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
 		{
@@ -656,6 +664,11 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 		{
 			drm->mode = drm->pending.mode;
 			drm->mode_id = drm->pending.mode_id;
+		}
+
+		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
+		{
+			drm->crtcs[i].current = drm->crtcs[i].pending;
 		}
 	}
 
@@ -977,13 +990,14 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 			// We can't disable a CRTC if it's already disabled, or else the
 			// kernel will error out with "requesting event but off".
 			// TODO: use current prop value, required for output switching support
-			if (drm->crtcs[i].initial_prop_values["ACTIVE"] == 0)
+			if (drm->crtcs[i].current.active == 0)
 				continue;
 
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "MODE_ID", 0) < 0)
 				return false;
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0) < 0)
 				return false;
+			drm->crtcs[i].pending.active = 0;
 		}
 
 		// Then enable the ones we've picked
@@ -995,6 +1009,7 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 			return false;
 		if (add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1) < 0)
 			return false;
+		drm->crtc->pending.active = 1;
 	}
 
 	drm->flags = flags;
@@ -1011,6 +1026,11 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 		drm->req = nullptr;
 
 		drm->fbids_in_req.clear();
+
+		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
+		{
+			drm->crtcs[i].pending = drm->crtcs[i].current;
+		}
 	}
 
 	return ret;
