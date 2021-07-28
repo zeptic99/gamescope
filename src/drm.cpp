@@ -1022,7 +1022,6 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 			// We can't disable a CRTC if it's already disabled, or else the
 			// kernel will error out with "requesting event but off".
-			// TODO: use current prop value, required for output switching support
 			if (drm->crtcs[i].current.active == 0)
 				continue;
 
