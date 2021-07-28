@@ -501,10 +501,17 @@ int wlsession_init( void ) {
 	return 0;
 }
 
+static void kms_device_handle_change( struct wl_listener *listener, void *data )
+{
+	g_DRM.out_of_date = true;
+	fprintf( stderr, "wlserver: got change event for KMS device\n" );
+}
+
 int wlsession_open_kms( const char *device_name ) {
+	struct wlr_device *device = nullptr;
 	if ( device_name != nullptr )
 	{
-		struct wlr_device *device = wlr_session_open_file( wlserver.wlr.session, device_name );
+		device = wlr_session_open_file( wlserver.wlr.session, device_name );
 		if ( device == nullptr )
 			return -1;
 		if ( !drmIsKMS( device->fd ) )
@@ -513,11 +520,9 @@ int wlsession_open_kms( const char *device_name ) {
 			wlr_session_close_file( wlserver.wlr.session, device );
 			return -1;
 		}
-		return device->fd;
 	}
 	else
 	{
-		struct wlr_device *device = nullptr;
 		ssize_t n = wlr_session_find_gpus( wlserver.wlr.session, 1, &device );
 		if ( n < 0 )
 		{
@@ -529,8 +534,13 @@ int wlsession_open_kms( const char *device_name ) {
 			wlr_log( WLR_ERROR, "No GPU detected" );
 			return -1;
 		}
-		return device->fd;
 	}
+
+	struct wl_listener *listener = new wl_listener();
+	listener->notify = kms_device_handle_change;
+	wl_signal_add( &device->events.change, listener );
+
+	return device->fd;
 }
 
 int wlserver_init(int argc, char **argv, bool bIsNested) {
