@@ -443,7 +443,7 @@ static struct connector *find_connector( drm_t *drm, const char *name )
 	return nullptr;
 }
 
-static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
+static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
 {
 	for (int i = 0; i < connector->count_modes; i++) {
 		const drmModeModeInfo *mode = &connector->modes[i];
@@ -524,11 +524,11 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	const drmModeModeInfo *mode = nullptr;
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
-		mode = get_matching_mode(drm->connector->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
+		mode = find_mode(drm->connector->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
 	}
 
 	if (!mode) {
-		mode = get_matching_mode(drm->connector->connector, 0, 0, 0);
+		mode = find_mode(drm->connector->connector, 0, 0, 0);
 	}
 
 	if (!mode) {
@@ -1126,7 +1126,7 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 bool drm_set_refresh( struct drm_t *drm, int refresh )
 {
 	drmModeConnector *connector = drm->connector->connector;
-	const drmModeModeInfo *existing_mode = get_matching_mode(connector, g_nOutputWidth, g_nOutputHeight, refresh);
+	const drmModeModeInfo *existing_mode = find_mode(connector, g_nOutputWidth, g_nOutputHeight, refresh);
 	drmModeModeInfo mode;
 	if ( existing_mode )
 	{
@@ -1144,7 +1144,7 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 bool drm_set_resolution( struct drm_t *drm, int width, int height )
 {
 	drmModeConnector *connector = drm->connector->connector;
-	const drmModeModeInfo *mode = get_matching_mode(connector, width, height, 0);
+	const drmModeModeInfo *mode = find_mode(connector, width, height, 0);
 	if ( !mode )
 	{
 		return false;
