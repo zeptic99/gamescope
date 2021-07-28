@@ -313,6 +313,37 @@ static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 	return mode1.vrefresh > mode2.vrefresh;
 }
 
+static bool refresh_state( drm_t *drm )
+{
+	// TODO: refresh list of connectors for DP-MST
+
+	for (size_t i = 0; i < drm->connectors.size(); i++) {
+		struct connector *conn = &drm->connectors[i];
+		// TODO: refresh connector status and mode list
+		if (!get_object_properties(drm, conn->id, DRM_MODE_OBJECT_CONNECTOR, conn->props, conn->initial_prop_values)) {
+			return false;
+		}
+	}
+
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
+		struct crtc *crtc = &drm->crtcs[i];
+		if (!get_object_properties(drm, crtc->id, DRM_MODE_OBJECT_CRTC, crtc->props, crtc->initial_prop_values)) {
+			return false;
+		}
+
+		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
+	}
+
+	for (size_t i = 0; i < drm->planes.size(); i++) {
+		struct plane *plane = &drm->planes[i];
+		if (!get_object_properties(drm, plane->id, DRM_MODE_OBJECT_PLANE, plane->props, plane->initial_prop_values)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static bool get_resources(struct drm_t *drm)
 {
 	drmModeRes *resources = drmModeGetResources(drm->fd);
@@ -334,19 +365,6 @@ static bool get_resources(struct drm_t *drm)
 		 * highest refresh rate */
 		std::stable_sort(conn.connector->modes, conn.connector->modes + conn.connector->count_modes, compare_modes);
 
-		if (!get_object_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props, conn.initial_prop_values)) {
-			return false;
-		}
-
-		const char *type_str = "Unknown";
-		if ( connector_types.count( conn.connector->connector_type ) > 0 )
-			type_str = connector_types[ conn.connector->connector_type ];
-
-		char name[128] = {};
-		snprintf(name, sizeof(name), "%s-%d", type_str, conn.connector->connector_type_id);
-
-		conn.name = strdup(name);
-
 		drm->connectors.push_back(conn);
 	}
 
@@ -358,13 +376,6 @@ static bool get_resources(struct drm_t *drm)
 			perror("drmModeGetCrtc failed");
 			return false;
 		}
-
-		if (!get_object_properties(drm, crtc.id, DRM_MODE_OBJECT_CRTC, crtc.props, crtc.initial_prop_values)) {
-			return false;
-		}
-
-		crtc.current.active = crtc.initial_prop_values["ACTIVE"];
-		crtc.pending = crtc.current;
 
 		drm->crtcs.push_back(crtc);
 	}
@@ -386,14 +397,31 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
-		if (!get_object_properties(drm, plane.id, DRM_MODE_OBJECT_PLANE, plane.props, plane.initial_prop_values)) {
-			return false;
-		}
-
 		drm->planes.push_back(plane);
 	}
 
 	drmModeFreePlaneResources(plane_resources);
+
+	if (!refresh_state(drm))
+		return false;
+
+	for (size_t i = 0; i < drm->connectors.size(); i++) {
+		struct connector *conn = &drm->connectors[i];
+
+		const char *type_str = "Unknown";
+		if ( connector_types.count( conn->connector->connector_type ) > 0 )
+			type_str = connector_types[ conn->connector->connector_type ];
+
+		char name[128] = {};
+		snprintf(name, sizeof(name), "%s-%d", type_str, conn->connector->connector_type_id);
+
+		conn->name = strdup(name);
+	}
+
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
+		struct crtc *crtc = &drm->crtcs[i];
+		crtc->pending = crtc->current;
+	}
 
 	return true;
 }
@@ -968,6 +996,10 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
 	drm->fbids_in_req.clear();
+
+	bool out_of_date = drm->out_of_date.exchange(false);
+	if ( out_of_date )
+		refresh_state( drm );
 
 	assert( drm->req == nullptr );
 	drm->req = drmModeAtomicAlloc();

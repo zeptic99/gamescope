@@ -112,6 +112,7 @@ struct drm_t {
 	std::atomic < uint64_t > flipcount;
 
 	std::atomic < bool > paused;
+	std::atomic < bool > out_of_date;
 };
 
 extern struct drm_t g_DRM;
