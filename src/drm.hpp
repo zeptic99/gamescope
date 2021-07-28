@@ -26,14 +26,14 @@ extern "C" {
 struct plane {
 	uint32_t id;
 	drmModePlane *plane;
-	std::map<std::string, drmModePropertyRes *> props;
+	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 };
 
 struct crtc {
 	uint32_t id;
 	drmModeCrtc *crtc;
-	std::map<std::string, drmModePropertyRes *> props;
+	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 };
 
@@ -41,7 +41,7 @@ struct connector {
 	uint32_t id;
 	char *name;
 	drmModeConnector *connector;
-	std::map<std::string, drmModePropertyRes *> props;
+	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 };
 
@@ -65,6 +65,8 @@ struct drm_t {
 	std::vector< struct plane > planes;
 	std::vector< struct crtc > crtcs;
 	std::vector< struct connector > connectors;
+
+	std::map< uint32_t, drmModePropertyRes * > props;
 	
 	struct plane *plane;
 	struct crtc *crtc;

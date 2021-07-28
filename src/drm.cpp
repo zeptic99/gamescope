@@ -258,7 +258,23 @@ void flip_handler_thread_run(void)
 	}
 }
 
-static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, std::map<std::string, drmModePropertyRes *> &map, std::map<std::string, uint64_t> &values)
+static const drmModePropertyRes *get_prop(struct drm_t *drm, uint32_t prop_id)
+{
+	if (drm->props.count(prop_id) > 0) {
+		return drm->props[prop_id];
+	}
+
+	drmModePropertyRes *prop = drmModeGetProperty(drm->fd, prop_id);
+	if (!prop) {
+		perror("drmModeGetProperty failed");
+		return nullptr;
+	}
+
+	drm->props[prop_id] = prop;
+	return prop;
+}
+
+static bool get_object_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type, std::map<std::string, const drmModePropertyRes *> &map, std::map<std::string, uint64_t> &values)
 {
 	drmModeObjectProperties *props = drmModeObjectGetProperties(drm->fd, obj_id, obj_type);
 	if (!props) {
@@ -270,9 +286,8 @@ static bool get_properties(struct drm_t *drm, uint32_t obj_id, uint32_t obj_type
 	values = {};
 
 	for (uint32_t i = 0; i < props->count_props; i++) {
-		drmModePropertyRes *prop = drmModeGetProperty(drm->fd, props->props[i]);
+		const drmModePropertyRes *prop = get_prop(drm, props->props[i]);
 		if (!prop) {
-			perror("drmModeGetProperty failed");
 			return false;
 		}
 		map[prop->name] = prop;
@@ -319,7 +334,7 @@ static bool get_resources(struct drm_t *drm)
 		 * highest refresh rate */
 		std::stable_sort(conn.connector->modes, conn.connector->modes + conn.connector->count_modes, compare_modes);
 
-		if (!get_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props, conn.initial_prop_values)) {
+		if (!get_object_properties(drm, conn.id, DRM_MODE_OBJECT_CONNECTOR, conn.props, conn.initial_prop_values)) {
 			return false;
 		}
 
@@ -344,7 +359,7 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
-		if (!get_properties(drm, crtc.id, DRM_MODE_OBJECT_CRTC, crtc.props, crtc.initial_prop_values)) {
+		if (!get_object_properties(drm, crtc.id, DRM_MODE_OBJECT_CRTC, crtc.props, crtc.initial_prop_values)) {
 			return false;
 		}
 
@@ -368,7 +383,7 @@ static bool get_resources(struct drm_t *drm)
 			return false;
 		}
 
-		if (!get_properties(drm, plane.id, DRM_MODE_OBJECT_PLANE, plane.props, plane.initial_prop_values)) {
+		if (!get_object_properties(drm, plane.id, DRM_MODE_OBJECT_PLANE, plane.props, plane.initial_prop_values)) {
 			return false;
 		}
 
@@ -543,7 +558,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	return 0;
 }
 
-static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::string, drmModePropertyRes *> &props, const char *name, uint64_t value)
+static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::string, const drmModePropertyRes *> &props, const char *name, uint64_t value)
 {
 	if ( props.count( name ) == 0 )
 	{
