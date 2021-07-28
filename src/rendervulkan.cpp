@@ -381,7 +381,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		}
 		else
 		{
-			const struct wlr_drm_format *drmFormatDesc = wlr_drm_format_set_get( &g_DRM.plane_formats, drmFormat );
+			const struct wlr_drm_format *drmFormatDesc = wlr_drm_format_set_get( &g_DRM.primary_formats, drmFormat );
 			assert( drmFormatDesc != nullptr );
 			possibleModifiers = drmFormatDesc->modifiers;
 			numPossibleModifiers = drmFormatDesc->len;

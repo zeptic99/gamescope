@@ -79,7 +79,7 @@ struct drm_t {
 	int kms_in_fence_fd;
 	int kms_out_fence_fd;
 	
-	struct wlr_drm_format_set plane_formats;
+	struct wlr_drm_format_set primary_formats;
 	
 	drmModeAtomicReq *req;
 	uint32_t flags;

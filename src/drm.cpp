@@ -167,16 +167,6 @@ static struct plane *find_primary_plane(struct drm_t *drm)
 	if (primary == nullptr)
 		return nullptr;
 
-	if (!get_plane_formats(drm, primary, &drm->plane_formats)) {
-		return nullptr;
-	}
-
-	g_nDRMFormat = pick_plane_format(&drm->plane_formats);
-	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
-		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
-		return nullptr;
-	}
-
 	return primary;
 }
 
@@ -546,6 +536,16 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		struct plane *plane = &drm->planes[i];
 		if (!get_plane_formats(drm, plane, &drm->formats))
 			return -1;
+	}
+
+	if (!get_plane_formats(drm, drm->plane, &drm->primary_formats)) {
+		return -1;
+	}
+
+	g_nDRMFormat = pick_plane_format(&drm->primary_formats);
+	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
+		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
+		return -1;
 	}
 
 	drm->kms_in_fence_fd = -1;
