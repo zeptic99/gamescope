@@ -538,7 +538,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 			return -1;
 	}
 
-	if (!get_plane_formats(drm, drm->plane, &drm->primary_formats)) {
+	if (!get_plane_formats(drm, drm->primary, &drm->primary_formats)) {
 		return -1;
 	}
 
@@ -843,15 +843,15 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 
 	if ( g_bRotated )
 	{
-		add_plane_property(req, drm->plane, "rotation", DRM_MODE_ROTATE_270);
+		add_plane_property(req, drm->primary, "rotation", DRM_MODE_ROTATE_270);
 	}
 
-	add_plane_property(req, drm->plane, "FB_ID", fb_id);
-	add_plane_property(req, drm->plane, "CRTC_ID", drm->crtc->id);
-	add_plane_property(req, drm->plane, "SRC_X", 0);
-	add_plane_property(req, drm->plane, "SRC_Y", 0);
-	add_plane_property(req, drm->plane, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
-	add_plane_property(req, drm->plane, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
+	add_plane_property(req, drm->primary, "FB_ID", fb_id);
+	add_plane_property(req, drm->primary, "CRTC_ID", drm->crtc->id);
+	add_plane_property(req, drm->primary, "SRC_X", 0);
+	add_plane_property(req, drm->primary, "SRC_Y", 0);
+	add_plane_property(req, drm->primary, "SRC_W", pPipeline->layerBindings[ 0 ].surfaceWidth << 16);
+	add_plane_property(req, drm->primary, "SRC_H", pPipeline->layerBindings[ 0 ].surfaceHeight << 16);
 
 	gpuvis_trace_printf ( "legacy flip fb_id %u src %ix%i", fb_id,
 						 pPipeline->layerBindings[ 0 ].surfaceWidth,
@@ -873,10 +873,10 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 		crtcH = tmp;
 	}
 
-	add_plane_property(req, drm->plane, "CRTC_X", crtcX);
-	add_plane_property(req, drm->plane, "CRTC_Y", crtcY);
-	add_plane_property(req, drm->plane, "CRTC_W", crtcW);
-	add_plane_property(req, drm->plane, "CRTC_H", crtcH);
+	add_plane_property(req, drm->primary, "CRTC_X", crtcX);
+	add_plane_property(req, drm->primary, "CRTC_Y", crtcY);
+	add_plane_property(req, drm->primary, "CRTC_W", crtcW);
+	add_plane_property(req, drm->primary, "CRTC_H", crtcH);
 
 	gpuvis_trace_printf ( "crtc %li,%li %lix%li", crtcX, crtcY, crtcW, crtcH );
 
@@ -1068,8 +1068,8 @@ static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
 		}
 	}
 
-	drm->plane = find_primary_plane( drm );
-	if ( drm->plane == nullptr ) {
+	drm->primary = find_primary_plane( drm );
+	if ( drm->primary == nullptr ) {
 		fprintf(stderr, "could not find a suitable primary plane\n");
 		return false;
 	}
