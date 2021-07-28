@@ -59,8 +59,6 @@ struct wlserver_touch {
 	struct wl_listener motion;
 };
 
-extern struct wlserver_t wlserver;
-
 extern bool run;
 
 enum wlserver_touch_click_mode {

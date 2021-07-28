@@ -45,7 +45,7 @@ extern "C" {
 
 #include "gpuvis_trace_utils.h"
 
-struct wlserver_t wlserver;
+static struct wlserver_t wlserver;
 
 Display *g_XWLDpy;
 
