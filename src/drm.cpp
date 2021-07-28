@@ -667,6 +667,8 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 			exit( 1 );
 		}
 
+		drm->pending = drm->current;
+
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
 		{
 			drm->crtcs[i].pending = drm->crtcs[i].current;
@@ -1054,6 +1056,8 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 		drm->req = nullptr;
 
 		drm->fbids_in_req.clear();
+
+		drm->pending = drm->current;
 
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
 		{
