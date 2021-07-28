@@ -451,7 +451,57 @@ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int 
 	return NULL;
 }
 
-static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc );
+static bool setup_best_connector(struct drm_t *drm)
+{
+	if (drm->connector && drm->connector->connector->connection != DRM_MODE_CONNECTED) {
+		fprintf(stderr, "drm: connector '%s' disconnected\n", drm->connector->name);
+		drm->connector = nullptr;
+	}
+
+	struct connector *connector = find_connector( drm, g_sOutputName );
+	if ((!connector && drm->connector) || (connector && connector == drm->connector)) {
+		// Let's keep our current connector
+		return true;
+	}
+
+	if ( g_sOutputName != nullptr && connector == nullptr ) {
+		fprintf( stderr, "drm: warning: cannot find connector '%s', falling back to another one\n", g_sOutputName );
+		connector = find_connector( drm, nullptr );
+	}
+
+	if ( connector == nullptr ) {
+		/* we could be fancy and listen for hotplug events and wait for
+		 * a connector..
+		 */
+		fprintf( stderr, "Cannot find any connector!\n" );
+		return false;
+	}
+
+	if (!drm_set_connector(drm, connector)) {
+		return false;
+	}
+
+	const drmModeModeInfo *mode = nullptr;
+	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
+	{
+		mode = find_mode(connector->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
+	}
+
+	if (!mode) {
+		mode = find_mode(connector->connector, 0, 0, 0);
+	}
+
+	if (!mode) {
+		fprintf(stderr, "drm: could not find mode!\n");
+		return false;
+	}
+
+	if (!drm_set_mode(drm, mode)) {
+		return false;
+	}
+
+	return true;
+}
 
 int init_drm(struct drm_t *drm, const char *device_name)
 {
@@ -494,40 +544,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		fprintf( stderr, "  %s (%s)\n", conn->name, status_str );
 	}
 
-	struct connector *connector = find_connector( drm, g_sOutputName );
-	if ( !connector ) {
-		fprintf( stderr, "drm: warning: cannot find connector '%s', falling back to another one\n", g_sOutputName );
-		connector = find_connector( drm, nullptr );
-	}
-	if ( !connector ) {
-		/* we could be fancy and listen for hotplug events and wait for
-		 * a connector..
-		 */
-		fprintf( stderr, "Cannot find any connector!\n" );
-		return -1;
-	}
-
-	if (!drm_set_connector(drm, connector)) {
-		return -1;
-	}
-
-	const drmModeModeInfo *mode = nullptr;
-	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
-	{
-		mode = find_mode(drm->connector->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
-	}
-
-	if (!mode) {
-		mode = find_mode(drm->connector->connector, 0, 0, 0);
-	}
-
-	if (!mode) {
-		fprintf(stderr, "drm: could not find mode!\n");
-		return -1;
-	}
-
-	if (!drm_set_mode(drm, mode)) {
-		fprintf(stderr, "drm: failed to set initial mode\n");
+	if (!setup_best_connector(drm)) {
 		return -1;
 	}
 
