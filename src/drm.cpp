@@ -1075,7 +1075,6 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &drm->pending.mode_id) != 0)
 		return false;
 
-	drm->pending.mode = *mode;
 	fprintf( stderr, "drm: selecting mode %dx%d@%uHz\n", mode->hdisplay, mode->vdisplay, mode->vrefresh );
 
 	g_nOutputWidth = mode->hdisplay;

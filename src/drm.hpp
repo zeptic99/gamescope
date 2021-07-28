@@ -89,7 +89,6 @@ struct drm_t {
 	struct liftoff_layer *lo_layers[ k_nMaxLayers ];
 
 	struct {
-		drmModeModeInfo mode;
 		uint32_t mode_id;
 	} current, pending;
 
