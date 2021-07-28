@@ -461,6 +461,8 @@ static const drmModeModeInfo *get_matching_mode( const drmModeConnector *connect
 	return NULL;
 }
 
+static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc );
+
 int init_drm(struct drm_t *drm, const char *device_name)
 {
 	drm->fd = wlsession_open_kms( device_name );
@@ -527,26 +529,22 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	}
 
 	if (!mode) {
-		fprintf(stderr, "could not find mode!\n");
+		fprintf(stderr, "drm: could not find mode!\n");
 		return -1;
 	}
 
 	if (!drm_set_mode(drm, mode)) {
-		fprintf(stderr, "failed to set initial mode\n");
+		fprintf(stderr, "drm: failed to set initial mode\n");
 		return -1;
 	}
 
-	drm->crtc = find_crtc_for_connector(drm, drm->connector->connector);
-	if (drm->crtc == nullptr) {
-		fprintf(stderr, "no crtc found!\n");
+	struct crtc *crtc = find_crtc_for_connector(drm, drm->connector->connector);
+	if (crtc == nullptr) {
+		fprintf(stderr, "drm: no crtc found!\n");
 		return -1;
 	}
-
-	for (size_t i = 0; i < drm->crtcs.size(); i++) {
-		if (drm->crtcs[i].id == drm->crtc->id) {
-			drm->crtc_index = i;
-			break;
-		}
+	if (!drm_set_crtc(drm, crtc)) {
+		return -1;
 	}
 
 	// Fetch formats which can be scanned out
@@ -554,12 +552,6 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		struct plane *plane = &drm->planes[i];
 		if (!get_plane_formats(drm, plane, &drm->formats))
 			return -1;
-	}
-
-	drm->plane = find_primary_plane( drm );
-	if ( drm->plane == nullptr ) {
-		fprintf(stderr, "could not find a suitable primary plane\n");
-		return -1;
 	}
 
 	drm->kms_in_fence_fd = -1;
@@ -1068,6 +1060,27 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 	}
 
 	return ret;
+}
+
+static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
+{
+	drm->crtc = crtc;
+	drm->needs_modeset = true;
+
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
+		if (drm->crtcs[i].id == drm->crtc->id) {
+			drm->crtc_index = i;
+			break;
+		}
+	}
+
+	drm->plane = find_primary_plane( drm );
+	if ( drm->plane == nullptr ) {
+		fprintf(stderr, "could not find a suitable primary plane\n");
+		return false;
+	}
+
+	return true;
 }
 
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
