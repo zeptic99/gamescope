@@ -1411,8 +1411,54 @@ bool vulkan_remake_swapchain( void )
 		pOutput->pScreenshotImage = nullptr;
 	}
 	
-	bool bRet = vulkan_make_swapchain( &g_output );
+	bool bRet = vulkan_make_swapchain( pOutput );
 	assert( bRet ); // Something has gone horribly wrong!
+	return bRet;
+}
+
+static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
+{
+	CVulkanTexture::createFlags outputImageflags;
+	outputImageflags.bFlippable = true;
+	outputImageflags.bTransferSrc = true; // for screenshots
+
+	bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
+	if ( bSuccess != true )
+	{
+		fprintf( stderr, "Failed to allocate buffer for KMS\n" );
+		return false;
+	}
+
+	bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
+	if ( bSuccess != true )
+	{
+		fprintf( stderr, "Failed to allocate buffer for KMS\n" );
+		return false;
+	}
+
+	return true;
+}
+
+bool vulkan_remake_output_images( void )
+{
+	VulkanOutput_t *pOutput = &g_output;
+	vkQueueWaitIdle( queue );
+
+	pOutput->outputImage[0].~CVulkanTexture();
+	pOutput->outputImage[1].~CVulkanTexture();
+	memset(&pOutput->outputImage, 0, sizeof(pOutput->outputImage));
+
+	pOutput->nOutImage = 0;
+
+	// Delete screenshot image to be remade if needed
+	if ( pOutput->pScreenshotImage != nullptr )
+	{
+		delete pOutput->pScreenshotImage;
+		pOutput->pScreenshotImage = nullptr;
+	}
+
+	bool bRet = vulkan_make_output_images( pOutput );
+	assert( bRet );
 	return bRet;
 }
 
@@ -1486,21 +1532,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 			return false;
 		}
 
-		CVulkanTexture::createFlags outputImageflags;
-		outputImageflags.bFlippable = true;
-		outputImageflags.bTransferSrc = true; // for screenshots
-		
-		bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
-		
-		if ( bSuccess != true )
-		{
-			fprintf( stderr, "Failed to allocate buffer for KMS\n" );
-			return false;
-		}
-		
-		bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
-		
-		if ( bSuccess != true )
+		if ( !vulkan_make_output_images( pOutput ) )
 			return false;
 	}
 

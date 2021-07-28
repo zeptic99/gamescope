@@ -3566,7 +3566,7 @@ steamcompmgr_main (int argc, char **argv)
 				}
 				else
 				{
-					// Remake output images if we ever care about resizing there
+					vulkan_remake_output_images();
 				}
 
 				currentOutputWidth = g_nOutputWidth;
