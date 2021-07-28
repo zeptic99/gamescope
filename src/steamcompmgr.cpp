@@ -3026,6 +3026,7 @@ spawn_client( char **argv )
 		execvp( argv[ 0 ], argv );
 
 		perror( "execvp failed" );
+		_exit( 1 );
 	}
 
 	std::thread waitThread([pid](){
