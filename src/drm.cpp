@@ -1072,10 +1072,14 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 {
-	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &drm->pending.mode_id) != 0)
+	uint32_t mode_id = 0;
+	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &mode_id) != 0)
 		return false;
 
 	fprintf( stderr, "drm: selecting mode %dx%d@%uHz\n", mode->hdisplay, mode->vdisplay, mode->vrefresh );
+
+	drm->pending.mode_id = mode_id;
+	drm->needs_modeset = true;
 
 	g_nOutputWidth = mode->hdisplay;
 	g_nOutputHeight = mode->vdisplay;
