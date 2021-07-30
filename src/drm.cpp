@@ -575,11 +575,13 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	}
 
 	drm->lo_device = liftoff_device_create( drm->fd );
+	if ( drm->lo_device == nullptr )
+		return -1;
 	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc->id );
-
-	liftoff_device_register_all_planes( drm->lo_device );
-
-	assert( drm->lo_device && drm->lo_output );
+	if ( drm->lo_output == nullptr )
+		return -1;
+	if ( liftoff_device_register_all_planes( drm->lo_device ) < 0 )
+		return -1;
 
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
