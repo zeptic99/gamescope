@@ -806,7 +806,7 @@ void init_formats()
 		DRMModifierProps[ format ] = map;
 	}
 
-	fprintf( stderr, "Supported DRM formats for sampling usage: " );
+	fprintf( stderr, "vulkan: supported DRM formats for sampling usage: " );
 	for ( size_t i = 0; i < sampledDRMFormats.len; i++ )
 	{
 		uint32_t fmt = sampledDRMFormats.formats[ i ]->format;
