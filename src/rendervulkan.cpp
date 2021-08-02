@@ -75,6 +75,9 @@ VkDescriptorPool descriptorPool;
 
 bool g_vulkanSupportsModifiers;
 
+bool g_vulkanHasDrmDevId = false;
+dev_t g_vulkanDrmDevId = 0;
+
 VkDescriptorSetLayout descriptorSetLayout;
 VkPipelineLayout pipelineLayout;
 VkDescriptorSet descriptorSet;
@@ -880,7 +883,7 @@ retry:
 
 	VkPhysicalDeviceProperties props = {};
 	vkGetPhysicalDeviceProperties( physicalDevice, &props );
-	fprintf(stderr, "vulkan: selecting physical device '%s'\n", props.deviceName);
+	fprintf( stderr, "vulkan: selecting physical device '%s'\n", props.deviceName );
 
 	vkGetPhysicalDeviceMemoryProperties( physicalDevice, &memoryProperties );
 
@@ -896,10 +899,30 @@ retry:
 		if ( strcmp(vecSupportedExtensions[i].extensionName,
 		     VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME) == 0 )
 			g_vulkanSupportsModifiers = true;
+
+		if ( strcmp(vecSupportedExtensions[i].extensionName,
+		            VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME) == 0 )
+			g_vulkanHasDrmDevId = true;
 	}
 
-	fprintf( stderr, "Vulkan %s DRM format modifiers\n",
+	fprintf( stderr, "vulkan: physical device %s DRM format modifiers\n",
 			g_vulkanSupportsModifiers ? "supports" : "does not support" );
+
+	if ( g_vulkanHasDrmDevId ) {
+		VkPhysicalDeviceDrmPropertiesEXT drmProps = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT,
+		};
+		VkPhysicalDeviceProperties2 props2 = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+			.pNext = &drmProps,
+		};
+		vkGetPhysicalDeviceProperties2( physicalDevice, &props2 );
+		if ( !drmProps.hasPrimary ) {
+			fprintf( stderr, "vulkan: physical device has no primary node\n" );
+			return false;
+		}
+		g_vulkanDrmDevId = makedev( drmProps.primaryMajor, drmProps.primaryMinor );
+	}
 
 	init_formats();
 

@@ -127,6 +127,9 @@ public:
 extern std::vector< const char * > g_vecSDLInstanceExts;
 extern bool g_vulkanSupportsModifiers;
 
+extern bool g_vulkanHasDrmDevId;
+extern dev_t g_vulkanDrmDevId;
+
 bool vulkan_init(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );

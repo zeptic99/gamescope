@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstring>
 #include <sys/capability.h>
+#include <sys/stat.h>
 
 #include <signal.h>
 #include <unistd.h>
@@ -184,6 +185,23 @@ int main(int argc, char **argv)
 	{
 		fprintf( stderr, "Failed to initialize Vulkan\n" );
 		return 1;
+	}
+
+	// TODO: get the DRM device from the Vulkan device
+	if ( g_bIsNested == false && g_vulkanHasDrmDevId )
+	{
+		struct stat drmStat = {};
+		if ( fstat( g_DRM.fd, &drmStat ) != 0 )
+		{
+			perror( "fstat failed on DRM FD" );
+			return 1;
+		}
+
+		if ( drmStat.st_rdev != g_vulkanDrmDevId )
+		{
+			fprintf( stderr, "Mismatch between DRM and Vulkan devices\n" );
+			return 1;
+		}
 	}
 
 	// Prevent our clients from connecting to the parent compositor
