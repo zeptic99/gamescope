@@ -877,7 +877,11 @@ retry:
 		fprintf(stderr, "Failed to find physical device\n");
 		return false;
 	}
-	
+
+	VkPhysicalDeviceProperties props = {};
+	vkGetPhysicalDeviceProperties( physicalDevice, &props );
+	fprintf(stderr, "vulkan: selecting physical device '%s'\n", props.deviceName);
+
 	vkGetPhysicalDeviceMemoryProperties( physicalDevice, &memoryProperties );
 
 	uint32_t supportedExtensionCount;
