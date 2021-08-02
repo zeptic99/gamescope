@@ -820,7 +820,7 @@ static bool is_vulkan_1_1_device(VkPhysicalDevice device)
 	return properties.apiVersion >= VK_API_VERSION_1_1;
 }
 
-int init_device()
+static bool init_device()
 {
 	uint32_t physicalDeviceCount = 0;
 	VkPhysicalDevice deviceHandles[MAX_DEVICE_COUNT];
@@ -1646,10 +1646,8 @@ bool vulkan_init(void)
 	if ( result != VK_SUCCESS )
 		return false;
 	
-	if ( init_device() != 1 )
-	{
+	if ( !init_device() )
 		return false;
-	}
 	
 	dyn_vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr( device, "vkGetMemoryFdKHR" );
 	if ( dyn_vkGetMemoryFdKHR == nullptr )
