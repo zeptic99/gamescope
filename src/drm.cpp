@@ -313,6 +313,19 @@ static bool refresh_state( drm_t *drm )
 		if (!get_object_properties(drm, conn->id, DRM_MODE_OBJECT_CONNECTOR, conn->props, conn->initial_prop_values)) {
 			return false;
 		}
+
+		if (conn->connector != nullptr)
+			drmModeFreeConnector(conn->connector);
+
+		conn->connector = drmModeGetConnector(drm->fd, conn->id);
+		if (conn->connector == nullptr) {
+			perror("drmModeGetConnector failed");
+			return false;
+		}
+
+		/* sort modes by preference: preferred flag, then highest area, then
+		 * highest refresh rate */
+		std::stable_sort(conn->connector->modes, conn->connector->modes + conn->connector->count_modes, compare_modes);
 	}
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
@@ -344,17 +357,6 @@ static bool get_resources(struct drm_t *drm)
 
 	for (int i = 0; i < resources->count_connectors; i++) {
 		struct connector conn = { .id = resources->connectors[i] };
-
-		conn.connector = drmModeGetConnector(drm->fd, conn.id);
-		if (conn.connector == nullptr) {
-			perror("drmModeGetConnector failed");
-			return false;
-		}
-
-		/* sort modes by preference: preferred flag, then highest area, then
-		 * highest refresh rate */
-		std::stable_sort(conn.connector->modes, conn.connector->modes + conn.connector->count_modes, compare_modes);
-
 		drm->connectors.push_back(conn);
 	}
 
@@ -454,7 +456,7 @@ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int 
 static bool setup_best_connector(struct drm_t *drm)
 {
 	if (drm->connector && drm->connector->connector->connection != DRM_MODE_CONNECTED) {
-		fprintf(stderr, "drm: connector '%s' disconnected\n", drm->connector->name);
+		fprintf(stderr, "drm: current connector '%s' disconnected\n", drm->connector->name);
 		drm->connector = nullptr;
 	}
 
@@ -473,7 +475,7 @@ static bool setup_best_connector(struct drm_t *drm)
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector..
 		 */
-		fprintf( stderr, "Cannot find any connector!\n" );
+		fprintf( stderr, "drm: cannot find any connector!\n" );
 		return false;
 	}
 
@@ -1001,10 +1003,6 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 {
 	drm->fbids_in_req.clear();
 
-	bool out_of_date = drm->out_of_date.exchange(false);
-	if ( out_of_date )
-		refresh_state( drm );
-
 	bool needs_modeset = drm->needs_modeset.exchange(false);
 
 	assert( drm->req == nullptr );
@@ -1075,6 +1073,17 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 	return ret;
 }
 
+void drm_poll_state( struct drm_t *drm )
+{
+	bool out_of_date = drm->out_of_date.exchange(false);
+	if ( !out_of_date )
+		return;
+
+	refresh_state( drm );
+
+	setup_best_connector(drm);
+}
+
 static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
 {
 	drm->crtc = crtc;
@@ -1111,6 +1120,7 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 	}
 
 	drm->connector = conn;
+	drm->needs_modeset = true;
 
 	return true;
 }
