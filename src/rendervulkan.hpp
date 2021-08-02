@@ -133,7 +133,7 @@ extern dev_t g_vulkanDrmDevId;
 bool vulkan_init(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
-VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, void *bits );
+VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, CVulkanTexture::createFlags texCreateFlags, void *bits );
 
 uint32_t vulkan_texture_get_fbid( VulkanTexture_t vulkanTex );
 

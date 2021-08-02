@@ -410,6 +410,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			modifiers.push_back( modifier );
 		}
 
+		fprintf(stderr, "format: 0x%x, size: %dx%d\n", drmFormat, width, height);
 		assert( modifiers.size() > 0 );
 
 		modifierListInfo.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT;
@@ -1692,8 +1693,9 @@ bool vulkan_init(void)
 		return false;
 	}
 
+	CVulkanTexture::createFlags texCreateFlags;
 	uint32_t bits = 0;
-	g_emptyTex = vulkan_create_texture_from_bits( 1, 1, VK_FORMAT_R8G8B8A8_UNORM, &bits );
+	g_emptyTex = vulkan_create_texture_from_bits( 1, 1, VK_FORMAT_R8G8B8A8_UNORM, texCreateFlags, &bits );
 
 	if ( g_emptyTex == 0 )
 	{
@@ -1830,18 +1832,15 @@ VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes 
 	return ret;
 }
 
-VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, void *bits )
+VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, CVulkanTexture::createFlags texCreateFlags, void *bits )
 {
 	VulkanTexture_t ret = 0;
 	
 	CVulkanTexture *pTex = new CVulkanTexture();
 
-	CVulkanTexture::createFlags texCreateFlags;
-	texCreateFlags.bFlippable = BIsNested() == false;
-	texCreateFlags.bLinear = true; // cursor buffer needs to be linear
 	texCreateFlags.bTextureable = true;
 	texCreateFlags.bTransferDst = true;
-	
+
 	if ( pTex->BInit( width, height, format, texCreateFlags ) == false )
 	{
 		delete pTex;
