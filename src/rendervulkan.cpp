@@ -512,12 +512,16 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		allocInfo.pNext = &importMemoryInfo;
 	}
 	
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &m_vkImageMemory) != VK_SUCCESS) {
+	res = vkAllocateMemory( device, &allocInfo, nullptr, &m_vkImageMemory );
+	if ( res != VK_SUCCESS )
+	{
+		fprintf( stderr, "vkAllocateMemory failed\n" );
 		return false;
 	}
 	
-	res = vkBindImageMemory(device, m_vkImage, m_vkImageMemory, 0);
-	if ( res != VK_SUCCESS ) {
+	res = vkBindImageMemory( device, m_vkImage, m_vkImageMemory, 0 );
+	if ( res != VK_SUCCESS )
+	{
 		fprintf( stderr, "vkBindImageMemory failed\n" );
 		return false;
 	}
