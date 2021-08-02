@@ -602,13 +602,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wl_signal_add( &wlserver.wlr.compositor->events.new_surface, &new_surface_listener );
 
 	create_gamescope_xwayland();
-	
-	struct wlr_xwayland_server_options xwayland_options = {
-		.lazy = false,
-		.enable_wm = false,
-	};
-	wlserver.wlr.xwayland_server = wlr_xwayland_server_create(wlserver.display, &xwayland_options);
-	wl_signal_add(&wlserver.wlr.xwayland_server->events.ready, &xwayland_ready_listener);
 
 	int result = -1;
 	int display_slot = 0;
@@ -640,6 +633,19 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		return 1;
 	}
 
+	wlr_output_enable( wlserver.wlr.output, true );
+	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
+	wlr_output_commit( wlserver.wlr.output );
+
+	wlr_output_create_global( wlserver.wlr.output );
+
+	struct wlr_xwayland_server_options xwayland_options = {
+		.lazy = false,
+		.enable_wm = false,
+	};
+	wlserver.wlr.xwayland_server = wlr_xwayland_server_create(wlserver.display, &xwayland_options);
+	wl_signal_add(&wlserver.wlr.xwayland_server->events.ready, &xwayland_ready_listener);
+
 	while (!bXwaylandReady) {
 		wl_display_flush_clients(wlserver.display);
 		if (wl_event_loop_dispatch(wlserver.event_loop, -1) < 0) {
@@ -654,12 +660,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wlr_log( WLR_ERROR, "wlserver: failed to connect to X11 server\n" );
 		return 1;
 	}
-
-	wlr_output_enable( wlserver.wlr.output, true );
-	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
-	wlr_output_commit( wlserver.wlr.output );
-
-	wlr_output_create_global( wlserver.wlr.output );
 
 	return 0;
 }
