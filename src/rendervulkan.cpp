@@ -1627,7 +1627,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	return true;
 }
 
-int vulkan_init(void)
+bool vulkan_init(void)
 {
 	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 	
@@ -1644,27 +1644,27 @@ int vulkan_init(void)
 	result = vkCreateInstance(&createInfo, 0, &instance);
 	
 	if ( result != VK_SUCCESS )
-		return 0;
+		return false;
 	
 	if ( init_device() != 1 )
 	{
-		return 0;
+		return false;
 	}
 	
 	dyn_vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr( device, "vkGetMemoryFdKHR" );
 	if ( dyn_vkGetMemoryFdKHR == nullptr )
-		return 0;
+		return false;
 	
 	dyn_vkGetFenceFdKHR = (PFN_vkGetFenceFdKHR)vkGetDeviceProcAddr( device, "vkGetFenceFdKHR" );
 	if ( dyn_vkGetFenceFdKHR == nullptr )
-		return 0;
+		return false;
 
 	dyn_vkGetImageDrmFormatModifierPropertiesEXT = (PFN_vkGetImageDrmFormatModifierPropertiesEXT)vkGetDeviceProcAddr( device, "vkGetImageDrmFormatModifierPropertiesEXT" );
 	
 	if ( vulkan_make_output( &g_output ) == false )
 	{
 		fprintf( stderr, "vulkan_make_output failed\n" );
-		return 0;
+		return false;
 	}
 
 	uint32_t bits = 0;
@@ -1672,10 +1672,10 @@ int vulkan_init(void)
 
 	if ( g_emptyTex == 0 )
 	{
-		return 0;
+		return false;
 	}
 	
-	return 1;
+	return true;
 }
 
 static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence *pFence )

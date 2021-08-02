@@ -180,7 +180,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( vulkan_init() != True )
+	if ( !vulkan_init() )
 	{
 		fprintf( stderr, "Failed to initialize Vulkan\n" );
 		return 1;
