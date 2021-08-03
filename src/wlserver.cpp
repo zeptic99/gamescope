@@ -26,6 +26,8 @@ extern "C" {
 #include <wlr/backend/multi.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/backend/noop.h>
+#include <wlr/interfaces/wlr_input_device.h>
+#include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
@@ -577,6 +579,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	wlserver.wlr.output = wlr_noop_add_output( wlserver.wlr.noop_backend );
 
+	struct wlr_input_device *kbd_dev = nullptr;
 	if ( bIsDRM == True )
 	{
 		wlserver.wlr.libinput_backend = wlr_libinput_backend_create( wlserver.display, wlserver.wlr.session );
@@ -588,7 +591,15 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	}
 	else
 	{
-		wlr_headless_add_input_device( wlserver.wlr.headless_backend, WLR_INPUT_DEVICE_KEYBOARD );
+		// Create a stub wlr_keyboard only used to set the keymap
+		struct wlr_keyboard *kbd = (struct wlr_keyboard *) calloc(1, sizeof(*kbd));
+		wlr_keyboard_init(kbd, nullptr);
+
+		kbd_dev = (struct wlr_input_device *) calloc(1, sizeof(*kbd_dev));
+		wlr_input_device_init(kbd_dev, WLR_INPUT_DEVICE_KEYBOARD, nullptr, "noop", 0, 0);
+		kbd_dev->keyboard = kbd;
+
+		// We need to wait for the backend to be started before adding the device
 	}
 
 	struct wlr_renderer *headless_renderer = wlr_backend_get_renderer( wlserver.wlr.multi_backend );
@@ -632,6 +643,9 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wl_display_destroy(wlserver.display);
 		return 1;
 	}
+
+	if ( kbd_dev != nullptr )
+		wl_signal_emit( &wlserver.wlr.multi_backend->events.new_input, kbd_dev );
 
 	wlr_output_enable( wlserver.wlr.output, true );
 	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
