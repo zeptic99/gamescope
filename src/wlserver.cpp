@@ -47,9 +47,9 @@ extern "C" {
 
 #include "gpuvis_trace_utils.h"
 
-static struct wlserver_t wlserver;
+static struct wlserver_t wlserver = {};
 
-Display *g_XWLDpy;
+static Display *g_XWLDpy = nullptr;
 
 bool run = true;
 
@@ -59,7 +59,7 @@ struct wlserver_content_override {
 	struct wl_listener surface_destroy_listener;
 };
 
-std::map<uint32_t, struct wlserver_content_override *> content_overrides;
+static std::map<uint32_t, struct wlserver_content_override *> content_overrides;
 
 enum wlserver_touch_click_mode g_nTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
 
