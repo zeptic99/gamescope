@@ -8,10 +8,10 @@ In an embedded session usecase, gamescope does the same thing as steamcompmgr, b
 
 It also runs on top of a regular desktop, the 'nested' usecase steamcompmgr didn't support.
 
- - Because the game is running in its own personal Xwayland sandbox desktop, it can't interfere with your desktop and your desktop can't interfere with it. 
+ - Because the game is running in its own personal Xwayland sandbox desktop, it can't interfere with your desktop and your desktop can't interfere with it.
  - You can spoof a virtual screen with a desired resolution and refresh rate as the only thing the game sees, and control/resize the output as needed. This can be useful in exotic display configurations like ultrawide or multi-monitor setups that involve rotation.
 
-It runs on Mesa+AMDGPU, and could be made to run on other Mesa/DRM drivers with minimal work. Can support NVIDIA if/when they support accelerated Xwayland.
+It runs on Mesa + AMD or Intel, and could be made to run on other Mesa/DRM drivers with minimal work. AMD requires Mesa 20.3+, Intel requires Mesa 21.2+. Can support NVIDIA if/when they support atomic KMS + accelerated Xwayland + Vulkan DMA-BUF extensions.
 
 If running RadeonSI clients with older cards (GFX8 and below), currently have to set `R600_DEBUG=nodcc`, or corruption will be observed until the stack picks up DRM modifiers support.
 
@@ -37,7 +37,7 @@ meson install -C build/ --skip-subprojects
 
 ## Examples
 
-On any X11 or Wayland desktop running Mesa 20.3+, you can set the Steam launch arguments of your game as follows:
+On any X11 or Wayland desktop, you can set the Steam launch arguments of your game as follows:
 
 ```sh
 # Upscale a 720p game to 1440p with integer scaling
