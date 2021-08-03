@@ -635,7 +635,11 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	wlr_output_enable( wlserver.wlr.output, true );
 	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
-	wlr_output_commit( wlserver.wlr.output );
+	if ( !wlr_output_commit( wlserver.wlr.output ) )
+	{
+		wlr_log(WLR_ERROR, "Failed to commit noop output");
+		return 1;
+	}
 
 	wlr_output_create_global( wlserver.wlr.output );
 
