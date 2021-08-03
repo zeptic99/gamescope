@@ -49,7 +49,7 @@ static std::map< uint32_t, const char * > connector_types = {
 	{ DRM_MODE_CONNECTOR_LVDS, "LVDS" },
 	{ DRM_MODE_CONNECTOR_Component, "Component" },
 	{ DRM_MODE_CONNECTOR_9PinDIN, "DIN" },
-	{ DRM_MODE_CONNECTOR_DisplayPort, "DisplayPort" },
+	{ DRM_MODE_CONNECTOR_DisplayPort, "DP" },
 	{ DRM_MODE_CONNECTOR_HDMIA, "HDMI-A" },
 	{ DRM_MODE_CONNECTOR_HDMIB, "HDMI-B" },
 	{ DRM_MODE_CONNECTOR_TV, "TV" },
