@@ -18,9 +18,6 @@
 #include "wlserver.hpp"
 #include "gpuvis_trace_utils.h"
 
-int ac;
-char **av;
-
 int g_nNestedWidth = 0;
 int g_nNestedHeight = 0;
 int g_nNestedRefresh = 0;
@@ -51,14 +48,13 @@ int BIsNested()
 	return g_bIsNested == true;
 }
 
+static int initOutput(void);
+static void steamCompMgrThreadRun(int argc, char **argv);
+
 int main(int argc, char **argv)
 {
 	int o;
-	ac = argc;
-	av = argv;
-
 	bool bSleepAtStartup = false;
-
 	while ((o = getopt(argc, argv, GAMESCOPE_OPTIONS)) != -1)
 	{
 		switch (o) {
@@ -247,25 +243,20 @@ int main(int argc, char **argv)
 	setenv("DISPLAY", wlserver_get_nested_display_name(), 1);
 	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
 
-	startSteamCompMgr();
+	std::thread steamCompMgrThread( steamCompMgrThreadRun, argc, argv );
+	steamCompMgrThread.detach();
 
 	wlserver_run();
 }
 
-void steamCompMgrThreadRun(void)
+static void steamCompMgrThreadRun(int argc, char **argv)
 {
-	steamcompmgr_main( ac, av );
+	steamcompmgr_main( argc, argv );
 
 	pthread_kill( g_mainThread, SIGINT );
 }
 
-void startSteamCompMgr(void)
-{
-	std::thread steamCompMgrThread( steamCompMgrThreadRun );
-	steamCompMgrThread.detach();
-}
-
-int initOutput(void)
+static int initOutput(void)
 {
 	if ( g_bIsNested == true )
 	{

@@ -2,12 +2,6 @@
 
 #define GAMESCOPE_OPTIONS ":R:T:C:w:h:W:H:r:o:NFSvVecsdLnbfxO:"
 
-int initOutput(void);
-
-void startSteamCompMgr(void);
-
-void register_signal(void);
-
 void wayland_commit(struct wlr_surface *surf, struct wlr_buffer *buf);
 
 extern int g_nNestedWidth;
