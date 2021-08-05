@@ -14,14 +14,20 @@ jobs:
         run: |
           pacman-key --init
           pacman -Syu --noconfirm
-          pacman -S --noconfirm git meson glslang libcap wlroots \
+          pacman -S --noconfirm git meson clang glslang libcap wlroots \
             sdl2 vulkan-headers libx11 libxcomposite libxrender libxres \
             libxtst libxkbcommon libdrm libinput wayland-protocols \
             xorg-xwayland
       - uses: actions/checkout@v2
         with:
           submodules: recursive
-      - name: Build
+      - name: Build with gcc
         run: |
-          meson build/
-          ninja -C build/
+          export CC=gcc CXX=g++
+          meson build-gcc/
+          ninja -C build-gcc/
+      - name: Build with clang
+        run: |
+          export CC=clang CXX=clang++
+          meson build-clang/
+          ninja -C build-clang/
