@@ -3050,6 +3050,7 @@ spawn_client( char **argv )
 		}
 
 		run = false;
+		nudge_steamcompmgr();
 	});
 
 	waitThread.detach();
