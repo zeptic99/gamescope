@@ -51,7 +51,7 @@ static struct wlserver_t wlserver = {};
 
 static Display *g_XWLDpy = nullptr;
 
-bool run = true;
+std::atomic< bool > run{true};
 
 struct wlserver_content_override {
 	struct wlr_surface *surface;
