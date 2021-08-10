@@ -3034,8 +3034,21 @@ spawn_client( char **argv )
 	}
 
 	std::thread waitThread([pid](){
-		if ( waitpid( pid, nullptr, 0 ) < 0 )
-			perror( "steamcompmgr: waitpid failed" );
+		// Because we've set PR_SET_CHILD_SUBREAPER above, we'll get process
+		// status notifications for all of our child processes, even if our
+		// direct child exits. Wait until all have exited.
+		while ( true )
+		{
+			if ( wait( nullptr ) < 0 )
+			{
+				if ( errno == EINTR )
+					continue;
+				if ( errno != ECHILD )
+					perror( "steamcompmgr: wait failed" );
+				break;
+			}
+		}
+
 		run = false;
 	});
 
