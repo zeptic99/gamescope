@@ -18,6 +18,8 @@
 #include "wlserver.hpp"
 #include "gpuvis_trace_utils.h"
 
+std::atomic< bool > g_bRun{true};
+
 int g_nNestedWidth = 0;
 int g_nNestedHeight = 0;
 int g_nNestedRefresh = 0;

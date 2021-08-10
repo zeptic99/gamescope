@@ -1,8 +1,12 @@
 #pragma once
 
+#include <atomic>
+
 #define GAMESCOPE_OPTIONS ":R:T:C:w:h:W:H:r:o:NFSvVecsdLnbfxO:"
 
 void wayland_commit(struct wlr_surface *surf, struct wlr_buffer *buf);
+
+extern std::atomic< bool > g_bRun;
 
 extern int g_nNestedWidth;
 extern int g_nNestedHeight;

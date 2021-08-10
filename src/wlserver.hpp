@@ -59,8 +59,6 @@ struct wlserver_touch {
 	struct wl_listener motion;
 };
 
-extern std::atomic< bool > run;
-
 enum wlserver_touch_click_mode {
 	WLSERVER_TOUCH_CLICK_HOVER = 0,
 	WLSERVER_TOUCH_CLICK_LEFT = 1,

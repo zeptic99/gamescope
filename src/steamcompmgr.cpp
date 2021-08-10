@@ -3049,7 +3049,7 @@ spawn_client( char **argv )
 			}
 		}
 
-		run = false;
+		g_bRun = false;
 		nudge_steamcompmgr();
 	});
 
@@ -3553,7 +3553,7 @@ steamcompmgr_main (int argc, char **argv)
 		if ( pollfds[ EVENT_NUDGE ].revents & POLLIN )
 			dispatch_nudge( g_nudgePipe[ 0 ] );
 
-		if ( run == false )
+		if ( g_bRun == false )
 		{
 			break;
 		}

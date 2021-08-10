@@ -51,8 +51,6 @@ static struct wlserver_t wlserver = {};
 
 static Display *g_XWLDpy = nullptr;
 
-std::atomic< bool > run{true};
-
 struct wlserver_content_override {
 	struct wlr_surface *surface;
 	uint32_t x11_window;
@@ -78,7 +76,7 @@ void sig_handler(int signal)
 	}
 
 	wlr_log(WLR_DEBUG, "Received kill signal. Terminating!");
-	run = false;
+	g_bRun = false;
 }
 
 extern const struct wlr_surface_role xwayland_surface_role;
@@ -701,7 +699,7 @@ int wlserver_run(void)
 		.fd = wl_event_loop_get_fd( wlserver.event_loop ),
 		.events = POLLIN,
 	};
-	while ( run ) {
+	while ( g_bRun ) {
 		int ret = poll( &pollfd, 1, -1 );
 		if ( ret < 0 ) {
 			if ( errno == EINTR )
