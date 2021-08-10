@@ -3033,7 +3033,7 @@ spawn_client( char **argv )
 		_exit( 1 );
 	}
 
-	std::thread waitThread([pid](){
+	std::thread waitThread([]() {
 		// Because we've set PR_SET_CHILD_SUBREAPER above, we'll get process
 		// status notifications for all of our child processes, even if our
 		// direct child exits. Wait until all have exited.
