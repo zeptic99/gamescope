@@ -535,6 +535,12 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		return -1;
 	}
 
+	drm->lo_device = liftoff_device_create( drm->fd );
+	if ( drm->lo_device == nullptr )
+		return -1;
+	if ( liftoff_device_register_all_planes( drm->lo_device ) < 0 )
+		return -1;
+
 	fprintf( stderr, "Connectors:\n" );
 	for (size_t i = 0; i < drm->connectors.size(); i++) {
 		struct connector *conn = &drm->connectors[i];
@@ -574,21 +580,6 @@ int init_drm(struct drm_t *drm, const char *device_name)
 
 	if (g_bUseLayers) {
 		liftoff_log_set_priority(g_bDebugLayers ? LIFTOFF_DEBUG : LIFTOFF_ERROR);
-	}
-
-	drm->lo_device = liftoff_device_create( drm->fd );
-	if ( drm->lo_device == nullptr )
-		return -1;
-	drm->lo_output = liftoff_output_create( drm->lo_device, drm->crtc->id );
-	if ( drm->lo_output == nullptr )
-		return -1;
-	if ( liftoff_device_register_all_planes( drm->lo_device ) < 0 )
-		return -1;
-
-	for ( int i = 0; i < k_nMaxLayers; i++ )
-	{
-		drm->lo_layers[ i ] = liftoff_layer_create( drm->lo_output );
-		assert( drm->lo_layers[ i ] );
 	}
 
 	drm->flipcount = 0;
@@ -1101,6 +1092,21 @@ static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
 		fprintf(stderr, "could not find a suitable primary plane\n");
 		return false;
 	}
+
+	struct liftoff_output *lo_output = liftoff_output_create( drm->lo_device, crtc->id );
+	if ( lo_output == nullptr )
+		return false;
+
+	for ( int i = 0; i < k_nMaxLayers; i++ )
+	{
+		liftoff_layer_destroy( drm->lo_layers[ i ] );
+		drm->lo_layers[ i ] = liftoff_layer_create( lo_output );
+		if ( drm->lo_layers[ i ] == nullptr )
+			return false;
+	}
+
+	liftoff_output_destroy( drm->lo_output );
+	drm->lo_output = lo_output;
 
 	return true;
 }
