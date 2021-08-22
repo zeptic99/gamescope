@@ -984,13 +984,17 @@ retry:
 	
 	if ( result != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreateDevice failed\n" );
 		return false;
 	}
 	
 	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
 	
 	if ( queue == VK_NULL_HANDLE )
+	{
+		fprintf( stderr, "vkGetDeviceQueue failed\n" );
 		return false;
+	}
 	
 	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
 	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1001,6 +1005,7 @@ retry:
 	
 	if ( res != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreateShaderModule failed\n" );
 		return false;
 	}
 	
@@ -1015,6 +1020,7 @@ retry:
 	
 	if ( res != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreateCommandPool failed\n" );
 		return false;
 	}
 
@@ -1046,6 +1052,7 @@ retry:
 	
 	if ( res != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreateDescriptorPool failed\n" );
 		return false;
 	}
 
@@ -1142,6 +1149,7 @@ retry:
 	
 	if ( res != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreateDescriptorSetLayout failed\n" );
 		return false;
 	}
 	
@@ -1159,6 +1167,7 @@ retry:
 	
 	if ( res != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreatePipelineLayout failed\n" );
 		return false;
 	}
 
@@ -1219,8 +1228,10 @@ retry:
 				};
 
 				res = vkCreateComputePipelines(device, 0, 1, &computePipelineCreateInfo, 0, &pipelines[layerCount][swapChannels][ycbcrMask]);
-				if (res != VK_SUCCESS)
+				if (res != VK_SUCCESS) {
+					fprintf( stderr, "vkCreateComputePipelines failed\n" );
 					return false;
+				}
 			}
 		}
 	}
@@ -1237,6 +1248,7 @@ retry:
 	
 	if ( res != VK_SUCCESS || descriptorSet == VK_NULL_HANDLE )
 	{
+		fprintf( stderr, "vkAllocateDescriptorSets failed\n" );
 		return false;
 	}
 	
@@ -1252,6 +1264,7 @@ retry:
 	
 	if ( result != VK_SUCCESS )
 	{
+		fprintf( stderr, "vkCreateBuffer failed\n" );
 		return false;
 	}
 	
@@ -1262,6 +1275,7 @@ retry:
 	
 	if ( memTypeIndex == -1 )
 	{
+		fprintf( stderr, "findMemoryType failed\n" );
 		return false;
 	}
 	
@@ -1277,6 +1291,7 @@ retry:
 	
 	if ( pUploadBuffer == nullptr )
 	{
+		fprintf( stderr, "vkMapMemory failed\n" );
 		return false;
 	}
 	
@@ -1294,6 +1309,7 @@ retry:
 		
 		if ( result != VK_SUCCESS )
 		{
+			fprintf( stderr, "vkAllocateCommandBuffers failed\n" );
 			return false;
 		}
 		
@@ -1306,12 +1322,12 @@ retry:
 		
 		if ( result != VK_SUCCESS )
 		{
+			fprintf( stderr, "vkCreateFence failed\n" );
 			return false;
 		}
 		
 		g_scratchCommandBuffers[ i ].busy = false;
 	}
-	
 	
 	return true;
 }
