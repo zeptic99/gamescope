@@ -21,20 +21,20 @@ bool LogScope::has(enum LogPriority priority) {
 	return priority <= this->priority;
 }
 
-void LogScope::vprintf(enum LogPriority priority, const char *fmt, va_list args) {
+void LogScope::vlogf(enum LogPriority priority, const char *fmt, va_list args) {
 	if (!this->has(priority)) {
 		return;
 	}
 	fprintf(stderr, "%s: ", this->name);
 	vfprintf(stderr, fmt, args);
+	fprintf(stderr, "\n");
 }
 
-void LogScope::vlogf(enum LogPriority priority, const char *fmt, va_list args) {
-	if (!this->has(priority)) {
-		return;
-	}
-	this->vprintf(priority, fmt, args);
-	fprintf(stderr, "\n");
+void LogScope::logf(enum LogPriority priority, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	this->vlogf(priority, fmt, args);
+	va_end(args);
 }
 
 void LogScope::errorf(const char *fmt, ...) {
@@ -59,16 +59,13 @@ void LogScope::debugf(const char *fmt, ...) {
 }
 
 void LogScope::errorf_errno(const char *fmt, ...) {
-	if (!this->has(LOG_ERROR)) {
-		return;
-	}
-
 	const char *err = strerror(errno);
 
+	static char buf[1024];
 	va_list args;
 	va_start(args, fmt);
-	this->vprintf(LOG_ERROR, fmt, args);
+	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 
-	fprintf(stderr, ": %s\n", err);
+	this->logf(LOG_ERROR, "%s: %s", buf, err);
 }

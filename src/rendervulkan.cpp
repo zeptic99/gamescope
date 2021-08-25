@@ -130,7 +130,7 @@ static void vk_errorf(VkResult result, const char *fmt, ...) {
 	static char buf[1024];
 	va_list args;
 	va_start(args, fmt);
-	snprintf(buf, sizeof(buf), fmt, args);
+	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 
 	vk_log.errorf("%s (VkResult: %d)", buf, result);

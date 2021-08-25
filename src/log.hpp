@@ -20,6 +20,7 @@ class LogScope {
 	bool has(enum LogPriority priority);
 	void vprintf(enum LogPriority priority, const char *fmt, va_list args) ATTRIB_PRINTF(3, 0);
 	void vlogf(enum LogPriority priority, const char *fmt, va_list args) ATTRIB_PRINTF(3, 0);
+	void logf(enum LogPriority priority, const char *fmt, ...) ATTRIB_PRINTF(3, 4);
 
 public:
 	LogScope(const char *name);
