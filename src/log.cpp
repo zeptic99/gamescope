@@ -9,16 +9,31 @@
 
 LogScope::LogScope(const char *name) {
 	this->name = name;
+	this->priority = LOG_DEBUG;
+}
+
+LogScope::LogScope(const char *name, enum LogPriority priority) {
+	this->name = name;
+	this->priority = priority;
+}
+
+bool LogScope::has(enum LogPriority priority) {
+	return priority <= this->priority;
 }
 
 void LogScope::vprintf(enum LogPriority priority, const char *fmt, va_list args) {
+	if (!this->has(priority)) {
+		return;
+	}
 	fprintf(stderr, "%s: ", this->name);
 	vfprintf(stderr, fmt, args);
 }
 
 void LogScope::vlogf(enum LogPriority priority, const char *fmt, va_list args) {
-	fprintf(stderr, "%s: ", this->name);
-	vfprintf(stderr, fmt, args);
+	if (!this->has(priority)) {
+		return;
+	}
+	this->vprintf(priority, fmt, args);
 	fprintf(stderr, "\n");
 }
 
@@ -44,6 +59,10 @@ void LogScope::debugf(const char *fmt, ...) {
 }
 
 void LogScope::errorf_errno(const char *fmt, ...) {
+	if (!this->has(LOG_ERROR)) {
+		return;
+	}
+
 	const char *err = strerror(errno);
 
 	va_list args;

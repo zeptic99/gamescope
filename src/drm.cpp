@@ -39,7 +39,7 @@ bool g_bDebugLayers = false;
 const char *g_sOutputName = nullptr;
 
 static LogScope drm_log("drm");
-static int s_drm_log = 0;
+static LogScope drm_verbose_log("drm", LOG_SILENT);
 
 static std::map< uint32_t, const char * > connector_types = {
 	{ DRM_MODE_CONNECTOR_Unknown, "Unknown" },
@@ -186,10 +186,7 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 
 	// TODO: get the fbids_queued instance from data if we ever have more than one in flight
 
-	if ( s_drm_log != 0 )
-	{
-		fprintf(stderr, "page_flip_handler %lu\n", flipcount);
-	}
+	drm_verbose_log.debugf("page_flip_handler %lu", flipcount);
 	gpuvis_trace_printf("page_flip_handler %lu", flipcount);
 
 	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
@@ -209,10 +206,8 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 			{
 				if ( g_DRM.fbid_free_queue[ i ] == previous_fbid )
 				{
-					if ( s_drm_log != 0 )
-					{
-						fprintf(stderr, "deferred free %u\n", previous_fbid);
-					}
+					drm_verbose_log.debugf("deferred free %u", previous_fbid);
+
 					drm_free_fb( &g_DRM, &g_DRM.map_fbid_inflightflips[ previous_fbid ] );
 
 					g_DRM.fbid_free_queue.erase( g_DRM.fbid_free_queue.begin() + i );
@@ -673,10 +668,7 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 
 	g_DRM.flipcount++;
 
-	if ( s_drm_log != 0 )
-	{
-		fprintf(stderr, "flip commit %lu\n", (uint64_t)g_DRM.flipcount);
-	}
+	drm_verbose_log.debugf("flip commit %lu", (uint64_t)g_DRM.flipcount);
 	gpuvis_trace_printf( "flip commit %lu", (uint64_t)g_DRM.flipcount );
 
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
@@ -744,10 +736,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 
 	if ( !wlr_drm_format_set_has( &drm->formats, dma_buf->format, dma_buf->modifier ) )
 	{
-		if ( s_drm_log != 0 )
-		{
-			drm_log.errorf( "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out", dma_buf->format, dma_buf->modifier );
-		}
+		drm_verbose_log.errorf( "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out", dma_buf->format, dma_buf->modifier );
 		return 0;
 	}
 
@@ -787,10 +776,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 		}
 	}
 
-	if ( s_drm_log != 0 )
-	{
-		fprintf(stderr, "make fbid %u\n", fb_id);
-	}
+	drm_verbose_log.debugf("make fbid %u", fb_id);
 	assert( drm->map_fbid_inflightflips[ fb_id ].held == false );
 
 	if ( buf != nullptr )
@@ -836,10 +822,7 @@ void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
 	if ( drm->map_fbid_inflightflips[ fbid ].n_refs == 0 )
 	{
 		/* FB isn't being used in any page-flip, free it immediately */
-		if ( s_drm_log != 0 )
-		{
-			fprintf(stderr, "free fbid %u\n", fbid);
-		}
+		drm_verbose_log.debugf("free fbid %u", fbid);
 		drm_free_fb( drm, &drm->map_fbid_inflightflips[ fbid ] );
 	}
 	else
@@ -859,15 +842,13 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 	// It only supports one layer
 	if ( pComposite->nLayerCount > 1 )
 	{
-		if ( s_drm_log != 0 )
-			fprintf( stderr, "drm_prepare_basic: cannot handle %d layers\n", pComposite->nLayerCount );
+		drm_verbose_log.errorf("drm_prepare_basic: cannot handle %d layers", pComposite->nLayerCount);
 		return -EINVAL;
 	}
 
 	if ( pPipeline->layerBindings[ 0 ].fbid == 0 )
 	{
-		if ( s_drm_log != 0 )
-			fprintf( stderr, "drm_prepare_basic: layer has no FB\n" );
+		drm_verbose_log.errorf("drm_prepare_basic: layer has no FB");
 		return -EINVAL;
 	}
 
@@ -934,8 +915,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 		{
 			if ( pPipeline->layerBindings[ i ].fbid == 0 )
 			{
-				if ( s_drm_log != 0 )
-					fprintf( stderr, "drm_prepare_liftoff: layer %d has no FB", i );
+				drm_verbose_log.errorf("drm_prepare_liftoff: layer %d has no FB", i );
 				return -EINVAL;
 			}
 
@@ -1000,13 +980,10 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 			ret = -EINVAL;
 	}
 
-	if ( s_drm_log != 0 )
-	{
-		if ( ret == 0 )
-			fprintf( stderr, "can drm present %i layers\n", pComposite->nLayerCount );
-		else
-			fprintf( stderr, "can NOT drm present %i layers\n", pComposite->nLayerCount );
-	}
+	if ( ret == 0 )
+		drm_verbose_log.debugf( "can drm present %i layers", pComposite->nLayerCount );
+	else
+		drm_verbose_log.debugf( "can NOT drm present %i layers", pComposite->nLayerCount );
 
 	return ret;
 }
