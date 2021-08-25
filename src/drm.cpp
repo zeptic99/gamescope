@@ -22,6 +22,7 @@ extern "C" {
 #include "main.hpp"
 #include "vblankmanager.hpp"
 #include "wlserver.hpp"
+#include "log.hpp"
 
 #include "gpuvis_trace_utils.h"
 
@@ -37,6 +38,7 @@ bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
 const char *g_sOutputName = nullptr;
 
+static LogScope drm_log("drm");
 static int s_drm_log = 0;
 
 static std::map< uint32_t, const char * > connector_types = {
@@ -108,7 +110,7 @@ static bool get_plane_formats(struct drm_t *drm, struct plane *plane, struct wlr
 
 		drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
 		if (!blob) {
-			perror("drmModeGetPropertyBlob(IN_FORMATS) failed");
+			drm_log.errorf_errno("drmModeGetPropertyBlob(IN_FORMATS) failed");
 			return false;
 		}
 
@@ -237,7 +239,7 @@ void flip_handler_thread_run(void)
 	{
 		int ret = poll( &pollfd, 1, -1 );
 		if ( ret < 0 ) {
-			perror( "drm: polling for DRM events failed" );
+			drm_log.errorf_errno( "polling for DRM events failed" );
 			break;
 		}
 
@@ -257,7 +259,7 @@ static const drmModePropertyRes *get_prop(struct drm_t *drm, uint32_t prop_id)
 
 	drmModePropertyRes *prop = drmModeGetProperty(drm->fd, prop_id);
 	if (!prop) {
-		perror("drmModeGetProperty failed");
+		drm_log.errorf_errno("drmModeGetProperty failed");
 		return nullptr;
 	}
 
@@ -269,7 +271,7 @@ static bool get_object_properties(struct drm_t *drm, uint32_t obj_id, uint32_t o
 {
 	drmModeObjectProperties *props = drmModeObjectGetProperties(drm->fd, obj_id, obj_type);
 	if (!props) {
-		perror("drmModeObjectGetProperties failed");
+		drm_log.errorf_errno("drmModeObjectGetProperties failed");
 		return false;
 	}
 
@@ -320,7 +322,7 @@ static bool refresh_state( drm_t *drm )
 
 		conn->connector = drmModeGetConnector(drm->fd, conn->id);
 		if (conn->connector == nullptr) {
-			perror("drmModeGetConnector failed");
+			drm_log.errorf_errno("drmModeGetConnector failed");
 			return false;
 		}
 
@@ -352,7 +354,7 @@ static bool get_resources(struct drm_t *drm)
 {
 	drmModeRes *resources = drmModeGetResources(drm->fd);
 	if (resources == nullptr) {
-		perror("drmModeGetResources failed");
+		drm_log.errorf_errno("drmModeGetResources failed");
 		return false;
 	}
 
@@ -366,7 +368,7 @@ static bool get_resources(struct drm_t *drm)
 
 		crtc.crtc = drmModeGetCrtc(drm->fd, crtc.id);
 		if (crtc.crtc == nullptr) {
-			perror("drmModeGetCrtc failed");
+			drm_log.errorf_errno("drmModeGetCrtc failed");
 			return false;
 		}
 
@@ -377,7 +379,7 @@ static bool get_resources(struct drm_t *drm)
 
 	drmModePlaneRes *plane_resources = drmModeGetPlaneResources(drm->fd);
 	if (!plane_resources) {
-		perror("drmModeGetPlaneResources failed");
+		drm_log.errorf_errno("drmModeGetPlaneResources failed");
 		return false;
 	}
 
@@ -386,7 +388,7 @@ static bool get_resources(struct drm_t *drm)
 
 		plane.plane = drmModeGetPlane(drm->fd, plane.id);
 		if (plane.plane == nullptr) {
-			perror("drmModeGetPlane failed");
+			drm_log.errorf_errno("drmModeGetPlane failed");
 			return false;
 		}
 
@@ -466,7 +468,7 @@ static int get_connector_priority(struct drm_t *drm, const char *name)
 static bool setup_best_connector(struct drm_t *drm)
 {
 	if (drm->connector && drm->connector->connector->connection != DRM_MODE_CONNECTED) {
-		fprintf(stderr, "drm: current connector '%s' disconnected\n", drm->connector->name);
+		drm_log.infof("current connector '%s' disconnected", drm->connector->name);
 		drm->connector = nullptr;
 	}
 
@@ -493,7 +495,7 @@ static bool setup_best_connector(struct drm_t *drm)
 	if ( best == nullptr ) {
 		/* we could be fancy and listen for hotplug events and wait for
 		 * a connector.. */
-		fprintf( stderr, "drm: cannot find any connector!\n" );
+		drm_log.errorf("cannot find any connector!");
 		return false;
 	}
 
@@ -512,7 +514,7 @@ static bool setup_best_connector(struct drm_t *drm)
 	}
 
 	if (!mode) {
-		fprintf(stderr, "drm: could not find mode!\n");
+		drm_log.errorf("could not find mode!");
 		return false;
 	}
 
@@ -528,12 +530,12 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	drm->fd = wlsession_open_kms( device_name );
 	if ( drm->fd < 0 )
 	{
-		fprintf(stderr, "Could not open KMS device\n");
+		drm_log.errorf("Could not open KMS device");
 		return -1;
 	}
 
 	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
-		fprintf(stderr, "drmSetClientCap(ATOMIC) failed\n");
+		drm_log.errorf("drmSetClientCap(ATOMIC) failed");
 		return -1;
 	}
 
@@ -559,7 +561,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	if ( liftoff_device_register_all_planes( drm->lo_device ) < 0 )
 		return -1;
 
-	fprintf( stderr, "Connectors:\n" );
+	drm_log.infof("Connectors:");
 	for (size_t i = 0; i < drm->connectors.size(); i++) {
 		struct connector *conn = &drm->connectors[i];
 
@@ -567,7 +569,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 		if ( conn->connector->connection == DRM_MODE_CONNECTED )
 			status_str = "connected";
 
-		fprintf( stderr, "  %s (%s)\n", conn->name, status_str );
+		drm_log.infof("  %s (%s)", conn->name, status_str);
 	}
 
 	drm->connector_priorities = parse_connector_priorities( g_sOutputName );
@@ -589,7 +591,7 @@ int init_drm(struct drm_t *drm, const char *device_name)
 
 	g_nDRMFormat = pick_plane_format(&drm->primary_formats);
 	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
-		fprintf( stderr, "Primary plane doesn't support XRGB8888 nor ARGB8888\n" );
+		drm_log.errorf("Primary plane doesn't support XRGB8888 nor ARGB8888");
 		return -1;
 	}
 
@@ -612,7 +614,7 @@ static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::st
 {
 	if ( props.count( name ) == 0 )
 	{
-		fprintf(stderr, "no property %s on object %u\n", name, obj_id);
+		drm_log.errorf("no property %s on object %u", name, obj_id);
 		return -EINVAL;
 	}
 
@@ -621,7 +623,7 @@ static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::st
 	int ret = drmModeAtomicAddProperty(req, obj_id, prop->prop_id, value);
 	if ( ret < 0 )
 	{
-		perror( "drmModeAtomicAddProperty failed" );
+		drm_log.errorf_errno( "drmModeAtomicAddProperty failed" );
 	}
 	return ret;
 }
@@ -680,7 +682,8 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 	ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, (void*)(uint64_t)g_DRM.flipcount );
 	if ( ret != 0 )
 	{
-		fprintf( stderr, "flip error: %s\n", strerror( -ret ) );
+		drm_log.errorf_errno( "flip error" );
+
 		if ( ret != -EBUSY && ret != -EACCES )
 		{
 			exit( 1 );
@@ -743,7 +746,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 	{
 		if ( s_drm_log != 0 )
 		{
-			fprintf( stderr, "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out\n", dma_buf->format, dma_buf->modifier );
+			drm_log.errorf( "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out", dma_buf->format, dma_buf->modifier );
 		}
 		return 0;
 	}
@@ -753,7 +756,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
 		if ( drmPrimeFDToHandle( drm->fd, dma_buf->fd[i], &handles[i] ) != 0 )
 		{
-			perror("drmPrimeFDToHandle failed");
+			drm_log.errorf_errno("drmPrimeFDToHandle failed");
 			return 0;
 		}
 
@@ -765,13 +768,13 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 	{
 		if ( !drm->allow_modifiers )
 		{
-			fprintf(stderr, "Cannot import DMA-BUF: has a modifier (0x%" PRIX64 "), but KMS doesn't support them\n", dma_buf->modifier);
+			drm_log.errorf("Cannot import DMA-BUF: has a modifier (0x%" PRIX64 "), but KMS doesn't support them", dma_buf->modifier);
 			return 0;
 		}
 
 		if ( drmModeAddFB2WithModifiers( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, modifiers, &fb_id, DRM_MODE_FB_MODIFIERS ) != 0 )
 		{
-			perror("drmModeAddFB2WithModifiers failed");
+			drm_log.errorf_errno("drmModeAddFB2WithModifiers failed");
 			return 0;
 		}
 	}
@@ -779,7 +782,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 	{
 		if ( drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &fb_id, 0 ) != 0 )
 		{
-			perror("drmModeAddFB2 failed");
+			drm_log.errorf_errno("drmModeAddFB2 failed");
 			return 0;
 		}
 	}
@@ -812,7 +815,7 @@ static void drm_free_fb( struct drm_t *drm, struct fb *fb )
 
 	if ( drmModeRmFB( drm->fd, fb->id ) != 0 )
 	{
-		perror( "drmModeRmFB failed" );
+		drm_log.errorf_errno( "drmModeRmFB failed" );
 	}
 
 	if ( fb->buf != nullptr )
@@ -916,7 +919,7 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 	int ret = drmModeAtomicCommit( drm->fd, drm->req, test_flags, NULL );
 
 	if ( ret != 0 && ret != -EINVAL && ret != -ERANGE ) {
-		fprintf( stderr, "drmModeAtomicCommit failed: %s", strerror( -ret ) );
+		drm_log.errorf_errno( "drmModeAtomicCommit failed" );
 	}
 
 	return ret;
@@ -1109,7 +1112,7 @@ static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
 
 	drm->primary = find_primary_plane( drm );
 	if ( drm->primary == nullptr ) {
-		fprintf(stderr, "could not find a suitable primary plane\n");
+		drm_log.errorf("could not find a suitable primary plane");
 		return false;
 	}
 
@@ -1133,11 +1136,11 @@ static bool drm_set_crtc( struct drm_t *drm, struct crtc *crtc )
 
 bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 {
-	fprintf( stderr, "drm: selecting connector %s\n", conn->name );
+	drm_log.infof("selecting connector %s", conn->name);
 
 	struct crtc *crtc = find_crtc_for_connector(drm, conn->connector);
 	if (crtc == nullptr) {
-		fprintf(stderr, "drm: no CRTC found!\n");
+		drm_log.errorf("no CRTC found!");
 		return false;
 	}
 
@@ -1157,7 +1160,7 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &mode_id) != 0)
 		return false;
 
-	fprintf( stderr, "drm: selecting mode %dx%d@%uHz\n", mode->hdisplay, mode->vdisplay, mode->vrefresh );
+	drm_log.infof("selecting mode %dx%d@%uHz", mode->hdisplay, mode->vdisplay, mode->vrefresh);
 
 	drm->pending.mode_id = mode_id;
 	drm->needs_modeset = true;
