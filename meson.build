@@ -80,6 +80,7 @@ executable(
     'src/sdlwindow.cpp',
     'src/vblankmanager.cpp',
     'src/rendervulkan.cpp',
+    'src/log.cpp',
     spirv_shader,
     gamescope_xwayland_proto_files,
   ],
