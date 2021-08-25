@@ -457,6 +457,9 @@ static int get_connector_priority(struct drm_t *drm, const char *name)
 	if (drm->connector_priorities.count(name) > 0) {
 		return drm->connector_priorities[name];
 	}
+	if (drm->connector_priorities.count("*") > 0) {
+		return drm->connector_priorities["*"];
+	}
 	return drm->connector_priorities.size();
 }
 
