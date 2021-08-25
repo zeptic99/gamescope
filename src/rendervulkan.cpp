@@ -10,6 +10,7 @@
 #include "main.hpp"
 #include "steamcompmgr.hpp"
 #include "sdlwindow.hpp"
+#include "log.hpp"
 
 #include "composite.h"
 
@@ -123,6 +124,18 @@ VulkanTexture_t g_emptyTex;
 static std::map< VkFormat, std::map< uint64_t, VkDrmFormatModifierPropertiesEXT > > DRMModifierProps = {};
 static struct wlr_drm_format_set sampledDRMFormats = {};
 
+static LogScope vk_log("vulkan");
+
+static void vk_errorf(VkResult result, const char *fmt, ...) {
+	static char buf[1024];
+	va_list args;
+	va_start(args, fmt);
+	snprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+	vk_log.errorf("%s (VkResult: %d)", buf, result);
+}
+
 #define MAX_DEVICE_COUNT 8
 #define MAX_QUEUE_COUNT 8
 
@@ -234,7 +247,7 @@ static bool allDMABUFsEqual( wlr_dmabuf_attributes *pDMA )
 	struct stat first_stat;
 	if ( fstat( pDMA->fd[0], &first_stat ) != 0 )
 	{
-		perror( "fstat failed" );
+		vk_log.errorf_errno( "fstat failed" );
 		return false;
 	}
 
@@ -243,7 +256,7 @@ static bool allDMABUFsEqual( wlr_dmabuf_attributes *pDMA )
 		struct stat plane_stat;
 		if ( fstat( pDMA->fd[i], &plane_stat ) != 0 )
 		{
-			perror( "fstat failed" );
+			vk_log.errorf_errno( "fstat failed" );
 			return false;
 		}
 		if ( plane_stat.st_ino != first_stat.st_ino )
@@ -342,7 +355,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		externalImageProperties.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES;
 		res = getModifierProps( &imageInfo, pDMA->modifier, &externalImageProperties );
 		if ( res != VK_SUCCESS && res != VK_ERROR_FORMAT_NOT_SUPPORTED ) {
-			fprintf( stderr, "getModifierProps failed\n" );
+			vk_errorf( res, "getModifierProps failed" );
 			return false;
 		}
 
@@ -400,7 +413,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			if ( res == VK_ERROR_FORMAT_NOT_SUPPORTED )
 				continue;
 			else if ( res != VK_SUCCESS ) {
-				fprintf( stderr, "getModifierProps failed\n" );
+				vk_errorf( res, "getModifierProps failed" );
 				return false;
 			}
 
@@ -410,7 +423,6 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			modifiers.push_back( modifier );
 		}
 
-		fprintf(stderr, "format: 0x%x, size: %dx%d\n", drmFormat, width, height);
 		assert( modifiers.size() > 0 );
 
 		modifierListInfo.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT;
@@ -444,8 +456,9 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	
 	m_format = imageInfo.format;
 
-	if (vkCreateImage(device, &imageInfo, nullptr, &m_vkImage) != VK_SUCCESS) {
-		fprintf( stderr, "vkCreateImage failed\n" );
+	res = vkCreateImage(device, &imageInfo, nullptr, &m_vkImage);
+	if (res != VK_SUCCESS) {
+		vk_errorf( res, "vkCreateImage failed" );
 		return false;
 	}
 	
@@ -493,7 +506,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		int fd = dup( pDMA->fd[0] );
 		if ( fd < 0 )
 		{
-			perror( "dup failed" );
+			vk_log.errorf_errno( "dup failed" );
 			return false;
 		}
 
@@ -516,14 +529,14 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	res = vkAllocateMemory( device, &allocInfo, nullptr, &m_vkImageMemory );
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkAllocateMemory failed\n" );
+		vk_errorf( res, "vkAllocateMemory failed" );
 		return false;
 	}
 	
 	res = vkBindImageMemory( device, m_vkImage, m_vkImageMemory, 0 );
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkBindImageMemory failed\n" );
+		vk_errorf( res, "vkBindImageMemory failed" );
 		return false;
 	}
 
@@ -564,7 +577,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		};
 		res = dyn_vkGetMemoryFdKHR(device, &memory_get_fd_info, &dmabuf.fd[0]);
 		if ( res != VK_SUCCESS ) {
-			fprintf( stderr, "vkGetMemoryFdKHR failed\n" );
+			vk_errorf( res, "vkGetMemoryFdKHR failed" );
 			return false;
 		}
 
@@ -575,7 +588,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			imgModifierProps.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT;
 			res = dyn_vkGetImageDrmFormatModifierPropertiesEXT( device, m_vkImage, &imgModifierProps );
 			if ( res != VK_SUCCESS ) {
-				fprintf( stderr, "vkGetImageDrmFormatModifierPropertiesEXT failed\n" );
+				vk_errorf( res, "vkGetImageDrmFormatModifierPropertiesEXT failed" );
 				return false;
 			}
 			dmabuf.modifier = imgModifierProps.drmFormatModifier;
@@ -611,7 +624,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 			{
 				dmabuf.fd[i] = dup( dmabuf.fd[0] );
 				if ( dmabuf.fd[i] < 0 ) {
-					fprintf( stderr, "dup failed\n" );
+					vk_log.errorf_errno( "dup failed" );
 					return false;
 				}
 			}
@@ -634,7 +647,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 
 		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &dmabuf );
 		if ( m_FBID == 0 ) {
-			fprintf( stderr, "drm_fbid_from_dmabuf failed\n" );
+			vk_log.errorf( "drm_fbid_from_dmabuf failed" );
 			return false;
 		}
 
@@ -668,17 +681,16 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	
 	res = vkCreateImageView(device, &createInfo, nullptr, &m_vkImageView);
 	if ( res != VK_SUCCESS ) {
-		fprintf( stderr, "vkCreateImageView failed\n" );
+		vk_errorf( res, "vkCreateImageView failed" );
 		return false;
 	}
 
 	if ( flags.bMappable )
 	{
-		vkMapMemory( device, m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &m_pMappedData );
-
-		if ( m_pMappedData == nullptr )
+		res = vkMapMemory( device, m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &m_pMappedData );
+		if ( res != VK_SUCCESS )
 		{
-			fprintf( stderr, "vkMapMemory failed\n" );
+			vk_errorf( res, "vkMapMemory failed" );
 			return false;
 		}
 	}
@@ -749,7 +761,7 @@ void init_formats()
 		}
 		else if ( res != VK_SUCCESS )
 		{
-			fprintf( stderr, "vkGetPhysicalDeviceImageFormatProperties2 failed for DRM format 0x%" PRIX32 "\n", drmFormat );
+			vk_errorf( res, "vkGetPhysicalDeviceImageFormatProperties2 failed for DRM format 0x%" PRIX32, drmFormat );
 			continue;
 		}
 
@@ -773,7 +785,7 @@ void init_formats()
 
 		if ( modifierPropList.drmFormatModifierCount == 0 )
 		{
-			fprintf( stderr, "vkGetPhysicalDeviceFormatProperties2 returned zero modifiers for DRM format 0x%" PRIX32 "\n", drmFormat );
+			vk_errorf( res, "vkGetPhysicalDeviceFormatProperties2 returned zero modifiers for DRM format 0x%" PRIX32, drmFormat );
 			continue;
 		}
 
@@ -811,13 +823,12 @@ void init_formats()
 		DRMModifierProps[ format ] = map;
 	}
 
-	fprintf( stderr, "vulkan: supported DRM formats for sampling usage: " );
+	vk_log.infof( "supported DRM formats for sampling usage:" );
 	for ( size_t i = 0; i < sampledDRMFormats.len; i++ )
 	{
 		uint32_t fmt = sampledDRMFormats.formats[ i ]->format;
-		fprintf( stderr, "%s0x%" PRIX32, i == 0 ? "" : ", ", fmt );
+		vk_log.infof( "  0x%" PRIX32, fmt );
 	}
-	fprintf( stderr, "\n" );
 }
 
 static bool is_vulkan_1_1_device(VkPhysicalDevice device)
@@ -882,13 +893,13 @@ retry:
 
 	if (!physicalDevice)
 	{
-		fprintf(stderr, "Failed to find physical device\n");
+		vk_log.errorf("failed to find physical device");
 		return false;
 	}
 
 	VkPhysicalDeviceProperties props = {};
 	vkGetPhysicalDeviceProperties( physicalDevice, &props );
-	fprintf( stderr, "vulkan: selecting physical device '%s'\n", props.deviceName );
+	vk_log.infof( "selecting physical device '%s'", props.deviceName );
 
 	vkGetPhysicalDeviceMemoryProperties( physicalDevice, &memoryProperties );
 
@@ -910,8 +921,7 @@ retry:
 			g_vulkanHasDrmDevId = true;
 	}
 
-	fprintf( stderr, "vulkan: physical device %s DRM format modifiers\n",
-			g_vulkanSupportsModifiers ? "supports" : "does not support" );
+	vk_log.infof( "physical device %s DRM format modifiers", g_vulkanSupportsModifiers ? "supports" : "does not support" );
 
 	if ( g_vulkanHasDrmDevId ) {
 		VkPhysicalDeviceDrmPropertiesEXT drmProps = {
@@ -923,7 +933,7 @@ retry:
 		};
 		vkGetPhysicalDeviceProperties2( physicalDevice, &props2 );
 		if ( !drmProps.hasPrimary ) {
-			fprintf( stderr, "vulkan: physical device has no primary node\n" );
+			vk_log.errorf( "physical device has no primary node" );
 			return false;
 		}
 		g_vulkanDrmDevId = makedev( drmProps.primaryMajor, drmProps.primaryMinor );
@@ -980,19 +990,17 @@ retry:
 		.pEnabledFeatures = 0,
 	};
 
-	VkResult result = vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device);
-	
-	if ( result != VK_SUCCESS )
+	VkResult res = vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device);
+	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreateDevice failed\n" );
+		vk_errorf( res, "vkCreateDevice failed" );
 		return false;
 	}
 	
 	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-	
 	if ( queue == VK_NULL_HANDLE )
 	{
-		fprintf( stderr, "vkGetDeviceQueue failed\n" );
+		vk_log.errorf( "vkGetDeviceQueue failed" );
 		return false;
 	}
 	
@@ -1001,11 +1009,10 @@ retry:
 	shaderModuleCreateInfo.codeSize = sizeof(composite_spv);
 	shaderModuleCreateInfo.pCode = (const uint32_t*)composite_spv;
 	
-	VkResult res = vkCreateShaderModule( device, &shaderModuleCreateInfo, nullptr, &shaderModule );
-	
+	res = vkCreateShaderModule( device, &shaderModuleCreateInfo, nullptr, &shaderModule );
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreateShaderModule failed\n" );
+		vk_errorf( res, "vkCreateShaderModule failed" );
 		return false;
 	}
 	
@@ -1017,10 +1024,9 @@ retry:
 	};
 
 	res = vkCreateCommandPool(device, &commandPoolCreateInfo, 0, &commandPool);
-	
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreateCommandPool failed\n" );
+		vk_errorf( res, "vkCreateCommandPool failed" );
 		return false;
 	}
 
@@ -1049,10 +1055,9 @@ retry:
 	};
 	
 	res = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, 0, &descriptorPool);
-	
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreateDescriptorPool failed\n" );
+		vk_errorf( res, "vkCreateDescriptorPool failed" );
 		return false;
 	}
 
@@ -1146,10 +1151,9 @@ retry:
 	};
 	
 	res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, 0, &descriptorSetLayout);
-	
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreateDescriptorSetLayout failed\n" );
+		vk_errorf( res, "vkCreateDescriptorSetLayout failed" );
 		return false;
 	}
 	
@@ -1164,10 +1168,9 @@ retry:
 	};
 	
 	res = vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, 0, &pipelineLayout);
-	
 	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreatePipelineLayout failed\n" );
+		vk_errorf( res, "vkCreatePipelineLayout failed" );
 		return false;
 	}
 
@@ -1229,7 +1232,7 @@ retry:
 
 				res = vkCreateComputePipelines(device, 0, 1, &computePipelineCreateInfo, 0, &pipelines[layerCount][swapChannels][ycbcrMask]);
 				if (res != VK_SUCCESS) {
-					fprintf( stderr, "vkCreateComputePipelines failed\n" );
+					vk_errorf( res, "vkCreateComputePipelines failed" );
 					return false;
 				}
 			}
@@ -1245,10 +1248,9 @@ retry:
 	};
 	
 	res = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
-	
 	if ( res != VK_SUCCESS || descriptorSet == VK_NULL_HANDLE )
 	{
-		fprintf( stderr, "vkAllocateDescriptorSets failed\n" );
+		vk_log.errorf( "vkAllocateDescriptorSets failed" );
 		return false;
 	}
 	
@@ -1260,11 +1262,10 @@ retry:
 	bufferCreateInfo.size = 512 * 512 * 4;
 	bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	
-	result = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &uploadBuffer );
-	
-	if ( result != VK_SUCCESS )
+	res = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &uploadBuffer );
+	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkCreateBuffer failed\n" );
+		vk_errorf( res, "vkCreateBuffer failed" );
 		return false;
 	}
 	
@@ -1272,10 +1273,9 @@ retry:
 	vkGetBufferMemoryRequirements(device, uploadBuffer, &memRequirements);
 	
 	int memTypeIndex =  findMemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memRequirements.memoryTypeBits );
-	
 	if ( memTypeIndex == -1 )
 	{
-		fprintf( stderr, "findMemoryType failed\n" );
+		vk_log.errorf( "findMemoryType failed" );
 		return false;
 	}
 	
@@ -1287,11 +1287,11 @@ retry:
 	vkAllocateMemory( device, &allocInfo, nullptr, &uploadBufferMemory);
 	
 	vkBindBufferMemory( device, uploadBuffer, uploadBufferMemory, 0 );
-	vkMapMemory( device, uploadBufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&pUploadBuffer );
-	
-	if ( pUploadBuffer == nullptr )
+
+	res = vkMapMemory( device, uploadBufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&pUploadBuffer );
+	if ( res != VK_SUCCESS )
 	{
-		fprintf( stderr, "vkMapMemory failed\n" );
+		vk_errorf( res, "vkMapMemory failed" );
 		return false;
 	}
 	
@@ -1305,11 +1305,10 @@ retry:
 	
 	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
 	{
-		result = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &g_scratchCommandBuffers[ i ].cmdBuf );
-		
-		if ( result != VK_SUCCESS )
+		res = vkAllocateCommandBuffers( device, &commandBufferAllocateInfo, &g_scratchCommandBuffers[ i ].cmdBuf );
+		if ( res != VK_SUCCESS )
 		{
-			fprintf( stderr, "vkAllocateCommandBuffers failed\n" );
+			vk_errorf( res, "vkAllocateCommandBuffers failed" );
 			return false;
 		}
 		
@@ -1318,11 +1317,10 @@ retry:
 			.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
 		};
 		
-		result = vkCreateFence( device, &fenceCreateInfo, nullptr, &g_scratchCommandBuffers[ i ].fence );
-		
-		if ( result != VK_SUCCESS )
+		res = vkCreateFence( device, &fenceCreateInfo, nullptr, &g_scratchCommandBuffers[ i ].fence );
+		if ( res != VK_SUCCESS )
 		{
-			fprintf( stderr, "vkCreateFence failed\n" );
+			vk_errorf( res, "vkCreateFence failed" );
 			return false;
 		}
 		
@@ -1473,14 +1471,14 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	bool bSuccess = pOutput->outputImage[0].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
 	if ( bSuccess != true )
 	{
-		fprintf( stderr, "Failed to allocate buffer for KMS\n" );
+		vk_log.errorf( "failed to allocate buffer for KMS" );
 		return false;
 	}
 
 	bSuccess = pOutput->outputImage[1].BInit( g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat, outputImageflags );
 	if ( bSuccess != true )
 	{
-		fprintf( stderr, "Failed to allocate buffer for KMS\n" );
+		vk_log.errorf( "failed to allocate buffer for KMS" );
 		return false;
 	}
 
@@ -1518,7 +1516,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	{
 		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &pOutput->surface ) )
 		{
-			fprintf( stderr, "SDL_Vulkan_CreateSurface failed\n" );
+			vk_log.errorf( "SDL_Vulkan_CreateSurface failed" );
 			return false;
 		}
 
@@ -1527,41 +1525,51 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 		vkGetPhysicalDeviceSurfaceSupportKHR( physicalDevice, queueFamilyIndex, pOutput->surface, &canPresent );
 		if ( !canPresent )
 		{
-			fprintf( stderr, "Physical device queue doesn't support presenting on our surface\n" );
+			vk_log.errorf( "physical device queue doesn't support presenting on our surface" );
 			return false;
 		}
 
 		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physicalDevice, pOutput->surface, &pOutput->surfaceCaps );
-		
 		if ( result != VK_SUCCESS )
+		{
+			vk_errorf( result, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed" );
 			return false;
+		}
 		
 		uint32_t formatCount = 0;
 		result = vkGetPhysicalDeviceSurfaceFormatsKHR( physicalDevice, pOutput->surface, &formatCount, nullptr );
-		
 		if ( result != VK_SUCCESS )
+		{
+			vk_errorf( result, "vkGetPhysicalDeviceSurfaceFormatsKHR failed" );
 			return false;
+		}
 		
 		if ( formatCount != 0 ) {
 			pOutput->surfaceFormats.resize( formatCount );
 			vkGetPhysicalDeviceSurfaceFormatsKHR( physicalDevice, pOutput->surface, &formatCount, pOutput->surfaceFormats.data() );
-			
 			if ( result != VK_SUCCESS )
+			{
+				vk_errorf( result, "vkGetPhysicalDeviceSurfaceFormatsKHR failed" );
 				return false;
+			}
 		}
 		
 		uint32_t presentModeCount = false;
 		result = vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, pOutput->surface, &presentModeCount, nullptr );
-		
 		if ( result != VK_SUCCESS )
+		{
+			vk_errorf( result, "vkGetPhysicalDeviceSurfacePresentModesKHR failed" );
 			return false;
+		}
 		
 		if ( presentModeCount != 0 ) {
 			pOutput->presentModes.resize(presentModeCount);
 			result = vkGetPhysicalDeviceSurfacePresentModesKHR( physicalDevice, pOutput->surface, &presentModeCount, pOutput->presentModes.data() );
-			
 			if ( result != VK_SUCCESS )
+			{
+				vk_errorf( result, "vkGetPhysicalDeviceSurfacePresentModesKHR failed" );
 				return false;
+			}
 		}
 		
 		if ( !vulkan_make_swapchain( pOutput ) )
@@ -1576,7 +1584,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 		
 		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{
-			fprintf( stderr, "Failed to find Vulkan format suitable for KMS\n" );
+			vk_log.errorf( "failed to find Vulkan format suitable for KMS" );
 			return false;
 		}
 
@@ -1593,9 +1601,9 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	bufferCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	
 	result = vkCreateBuffer( device, &bufferCreateInfo, nullptr, &pOutput->constantBuffer );
-	
 	if ( result != VK_SUCCESS )
 	{
+		vk_errorf( result, "vkCreateBuffer failed for constant buffer" );
 		return false;
 	}
 	
@@ -1606,6 +1614,7 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	
 	if ( memTypeIndex == -1 )
 	{
+		vk_log.errorf( "failed to find memory type for constant buffer" );
 		return false;
 	}
 	
@@ -1617,10 +1626,10 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	vkAllocateMemory( device, &allocInfo, nullptr, &pOutput->bufferMemory );
 	
 	vkBindBufferMemory( device, pOutput->constantBuffer, pOutput->bufferMemory, 0 );
-	vkMapMemory( device, pOutput->bufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&pOutput->pCompositeBuffer );
-	
-	if ( pOutput->pCompositeBuffer == nullptr )
+	result = vkMapMemory( device, pOutput->bufferMemory, 0, VK_WHOLE_SIZE, 0, (void**)&pOutput->pCompositeBuffer );
+	if ( result != VK_SUCCESS )
 	{
+		vk_errorf( result, "vkMapMemory failed for constant buffer" );
 		return false;
 	}
 	
@@ -1635,9 +1644,9 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	};
 	
 	result = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, pOutput->commandBuffers);
-	
 	if ( result != VK_SUCCESS )
 	{
+		vk_errorf( result, "vkAllocateCommandBuffers failed" );
 		return false;
 	}
 	
@@ -1686,9 +1695,11 @@ bool vulkan_init(void)
 	};
 
 	result = vkCreateInstance(&createInfo, 0, &instance);
-	
 	if ( result != VK_SUCCESS )
+	{
+		vk_errorf( result, "vkCreateInstance failed" );
 		return false;
+	}
 	
 	if ( !init_device() )
 		return false;
@@ -1705,7 +1716,7 @@ bool vulkan_init(void)
 	
 	if ( vulkan_make_output( &g_output ) == false )
 	{
-		fprintf( stderr, "vulkan_make_output failed\n" );
+		vk_log.errorf( "vulkan_make_output failed" );
 		return false;
 	}
 
@@ -2325,7 +2336,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 
 		SDL_FreeSurface( pSDLSurface );
 
-		fprintf(stderr, "Screenshot saved to %s\n", pTimeBuffer);
+		vk_log.infof("screenshot saved to %s", pTimeBuffer);
 	}
 	
 	if ( BIsNested() == false )
