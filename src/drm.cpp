@@ -1,5 +1,6 @@
 // DRM output stuff
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -418,23 +419,6 @@ static bool get_resources(struct drm_t *drm)
 	return true;
 }
 
-static struct connector *find_connector( drm_t *drm, const char *name )
-{
-	for (size_t i = 0; i < drm->connectors.size(); i++) {
-		struct connector *conn = &drm->connectors[i];
-
-		if (conn->connector->connection != DRM_MODE_CONNECTED)
-			continue;
-
-		if ( name != nullptr && strcmp( conn->name, name ) != 0 )
-			continue;
-
-		return conn;
-	}
-
-	return nullptr;
-}
-
 static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
 {
 	for (int i = 0; i < connector->count_modes; i++) {
@@ -453,6 +437,29 @@ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int 
 	return NULL;
 }
 
+static std::unordered_map<std::string, int> parse_connector_priorities(const char *str)
+{
+	std::unordered_map<std::string, int> priorities{};
+	int i = 0;
+	char *buf = strdup(str);
+	char *name = strtok(buf, ",");
+	while (name) {
+		priorities[name] = i;
+		i++;
+		name = strtok(nullptr, ",");
+	}
+	free(buf);
+	return priorities;
+}
+
+static int get_connector_priority(struct drm_t *drm, const char *name)
+{
+	if (drm->connector_priorities.count(name) > 0) {
+		return drm->connector_priorities[name];
+	}
+	return drm->connector_priorities.size();
+}
+
 static bool setup_best_connector(struct drm_t *drm)
 {
 	if (drm->connector && drm->connector->connector->connection != DRM_MODE_CONNECTED) {
@@ -460,37 +467,45 @@ static bool setup_best_connector(struct drm_t *drm)
 		drm->connector = nullptr;
 	}
 
-	struct connector *connector = find_connector( drm, g_sOutputName );
-	if ((!connector && drm->connector) || (connector && connector == drm->connector)) {
+	struct connector *best = nullptr;
+	int best_priority = INT_MAX;
+	for (size_t i = 0; i < drm->connectors.size(); i++) {
+		struct connector *conn = &drm->connectors[i];
+
+		if (conn->connector->connection != DRM_MODE_CONNECTED)
+			continue;
+
+		int priority = get_connector_priority(drm, conn->name);
+		if (priority < best_priority) {
+			best = conn;
+			best_priority = priority;
+		}
+	}
+
+	if ((!best && drm->connector) || (best && best == drm->connector)) {
 		// Let's keep our current connector
 		return true;
 	}
 
-	if ( g_sOutputName != nullptr && connector == nullptr ) {
-		fprintf( stderr, "drm: warning: cannot find connector '%s', falling back to another one\n", g_sOutputName );
-		connector = find_connector( drm, nullptr );
-	}
-
-	if ( connector == nullptr ) {
+	if ( best == nullptr ) {
 		/* we could be fancy and listen for hotplug events and wait for
-		 * a connector..
-		 */
+		 * a connector.. */
 		fprintf( stderr, "drm: cannot find any connector!\n" );
 		return false;
 	}
 
-	if (!drm_set_connector(drm, connector)) {
+	if (!drm_set_connector(drm, best)) {
 		return false;
 	}
 
 	const drmModeModeInfo *mode = nullptr;
 	if ( g_nOutputWidth != 0 || g_nOutputHeight != 0 || g_nNestedRefresh != 0 )
 	{
-		mode = find_mode(connector->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
+		mode = find_mode(best->connector, g_nOutputWidth, g_nOutputHeight, g_nNestedRefresh);
 	}
 
 	if (!mode) {
-		mode = find_mode(connector->connector, 0, 0, 0);
+		mode = find_mode(best->connector, 0, 0, 0);
 	}
 
 	if (!mode) {
@@ -551,6 +566,8 @@ int init_drm(struct drm_t *drm, const char *device_name)
 
 		fprintf( stderr, "  %s (%s)\n", conn->name, status_str );
 	}
+
+	drm->connector_priorities = parse_connector_priorities( g_sOutputName );
 
 	if (!setup_best_connector(drm)) {
 		return -1;

@@ -110,6 +110,8 @@ struct drm_t {
 	std::atomic < bool > paused;
 	std::atomic < bool > out_of_date;
 	std::atomic < bool > needs_modeset;
+
+	std::unordered_map< std::string, int > connector_priorities;
 };
 
 extern struct drm_t g_DRM;
