@@ -2951,6 +2951,7 @@ void nudge_steamcompmgr( void )
 void take_screenshot( void )
 {
 	g_bTakeScreenshot = true;
+	nudge_steamcompmgr();
 }
 
 void check_new_wayland_res( void )
@@ -3681,7 +3682,7 @@ steamcompmgr_main (int argc, char **argv)
 
 			check_new_wayland_res();
 
-			if ( hasRepaint == true && vblank == true )
+			if ( ( g_bTakeScreenshot == true || hasRepaint == true ) && vblank == true )
 			{
 				paint_all(dpy, cursor.get());
 
