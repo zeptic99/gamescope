@@ -518,8 +518,26 @@ static void handle_session_active( struct wl_listener *listener, void *data )
 	wl_log.infof( "Session %s", g_DRM.paused ? "paused" : "resumed" );
 }
 
+static void handle_wlr_log(enum wlr_log_importance importance, const char *fmt, va_list args)
+{
+	enum LogPriority prio;
+	switch (importance) {
+	case WLR_ERROR:
+		prio = LOG_ERROR;
+		break;
+	case WLR_INFO:
+		prio = LOG_INFO;
+		break;
+	default:
+		prio = LOG_DEBUG;
+		break;
+	}
+
+	wl_log.vlogf(prio, fmt, args);
+}
+
 int wlsession_init( void ) {
-	wlr_log_init(WLR_DEBUG, NULL);
+	wlr_log_init(WLR_DEBUG, handle_wlr_log);
 
 	wlserver.display = wl_display_create();
 
