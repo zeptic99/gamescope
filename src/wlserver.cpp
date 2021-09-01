@@ -5,8 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <stdio.h> 
-#include <string.h> 
+#include <string.h>
 #include <poll.h>
 
 #include <map>
@@ -45,12 +44,15 @@ extern "C" {
 #include "drm.hpp"
 #include "main.hpp"
 #include "steamcompmgr.hpp"
+#include "log.hpp"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
 #endif
 
 #include "gpuvis_trace_utils.h"
+
+static LogScope wl_log("wlserver");
 
 static struct wlserver_t wlserver = {};
 
@@ -80,7 +82,7 @@ void sig_handler(int signal)
 		return;
 	}
 
-	wlr_log(WLR_DEBUG, "Received kill signal. Terminating!");
+	wl_log.infof("Received kill signal. Terminating!");
 	g_bRun = false;
 }
 
@@ -513,11 +515,12 @@ static void handle_session_active( struct wl_listener *listener, void *data )
 		g_DRM.needs_modeset = true;
 	}
 	g_DRM.paused = !wlserver.wlr.session->active;
-	fprintf( stderr, "wlserver: session %s\n", g_DRM.paused ? "paused" : "resumed" );
+	wl_log.infof( "Session %s", g_DRM.paused ? "paused" : "resumed" );
 }
 
 int wlsession_init( void ) {
 	wlr_log_init(WLR_DEBUG, NULL);
+
 	wlserver.display = wl_display_create();
 
 	if ( BIsNested() )
@@ -526,7 +529,7 @@ int wlsession_init( void ) {
 	wlserver.wlr.session = wlr_session_create( wlserver.display );
 	if ( wlserver.wlr.session == nullptr )
 	{
-		fprintf( stderr, "Failed to create session\n" );
+		wl_log.errorf( "Failed to create session" );
 		return 1;
 	}
 
@@ -539,7 +542,7 @@ int wlsession_init( void ) {
 static void kms_device_handle_change( struct wl_listener *listener, void *data )
 {
 	g_DRM.out_of_date = true;
-	fprintf( stderr, "wlserver: got change event for KMS device\n" );
+	wl_log.infof( "Got change event for KMS device" );
 }
 
 int wlsession_open_kms( const char *device_name ) {
@@ -551,7 +554,7 @@ int wlsession_open_kms( const char *device_name ) {
 			return -1;
 		if ( !drmIsKMS( device->fd ) )
 		{
-			wlr_log( WLR_ERROR, "'%s' is not a KMS device", device_name );
+			wl_log.errorf( "'%s' is not a KMS device", device_name );
 			wlr_session_close_file( wlserver.wlr.session, device );
 			return -1;
 		}
@@ -561,12 +564,12 @@ int wlsession_open_kms( const char *device_name ) {
 		ssize_t n = wlr_session_find_gpus( wlserver.wlr.session, 1, &device );
 		if ( n < 0 )
 		{
-			wlr_log( WLR_ERROR, "Failed to list GPUs" );
+			wl_log.errorf( "Failed to list GPUs" );
 			return -1;
 		}
 		if ( n == 0 )
 		{
-			wlr_log( WLR_ERROR, "No GPU detected" );
+			wl_log.errorf( "No GPU detected" );
 			return -1;
 		}
 	}
@@ -660,7 +663,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	if ( result != 0 )
 	{
-		wlr_log_errno(WLR_ERROR, "Unable to open wayland socket");
+		wl_log.errorf_errno("Unable to open wayland socket");
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
 		return 1;
 	}
@@ -668,11 +671,11 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlserver.wlr.seat = wlr_seat_create(wlserver.display, "seat0");
 	wlr_seat_set_capabilities( wlserver.wlr.seat, WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_TOUCH );
 
-	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", wlserver.wl_display_name);
+	wl_log.infof("Running compositor on wayland display '%s'", wlserver.wl_display_name);
 
 	if (!wlr_backend_start( wlserver.wlr.multi_backend ))
 	{
-		wlr_log(WLR_ERROR, "Failed to start backend");
+		wl_log.errorf("Failed to start backend");
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
 		wl_display_destroy(wlserver.display);
 		return 1;
@@ -685,7 +688,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
 	if ( !wlr_output_commit( wlserver.wlr.output ) )
 	{
-		wlr_log(WLR_ERROR, "Failed to commit noop output");
+		wl_log.errorf("Failed to commit noop output");
 		return 1;
 	}
 
@@ -701,7 +704,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	while (!bXwaylandReady) {
 		wl_display_flush_clients(wlserver.display);
 		if (wl_event_loop_dispatch(wlserver.event_loop, -1) < 0) {
-			fprintf(stderr, "wlserver: wl_event_loop_dispatch failed\n");
+			wl_log.errorf("wl_event_loop_dispatch failed\n");
 			return 1;
 		}
 	}
@@ -709,7 +712,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	g_XWLDpy = XOpenDisplay( wlserver.wlr.xwayland_server->display_name );
 	if ( g_XWLDpy == nullptr )
 	{
-		wlr_log( WLR_ERROR, "wlserver: failed to connect to X11 server\n" );
+		wl_log.errorf( "Failed to connect to X11 server" );
 		return 1;
 	}
 
@@ -740,12 +743,12 @@ int wlserver_run(void)
 		if ( ret < 0 ) {
 			if ( errno == EINTR )
 				continue;
-			perror( "wlserver: poll failed" );
+			wl_log.errorf_errno( "poll failed" );
 			break;
 		}
 
 		if ( pollfd.revents & (POLLHUP | POLLERR) ) {
-			fprintf( stderr, "wlserver: socket %s\n", ( pollfd.revents & POLLERR ) ? "error" : "closed" );
+			wl_log.errorf( "socket %s", ( pollfd.revents & POLLERR ) ? "error" : "closed" );
 			break;
 		}
 
@@ -857,7 +860,7 @@ static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_
 
 	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, NULL, NULL, 0 ) )
 	{
-		fprintf (stderr, "Failed to set xwayland surface role");
+		wl_log.errorf("Failed to set xwayland surface role");
 	}
 }
 
@@ -874,7 +877,7 @@ void wlserver_surface_set_wl_id( struct wlserver_surface *surf, long id )
 {
 	if ( surf->wl_id != 0 )
 	{
-		fprintf( stderr, "surf->wl_id already set, was %lu, set %lu\n", surf->wl_id, id );
+		wl_log.errorf( "surf->wl_id already set, was %lu, set %lu", surf->wl_id, id );
 		return;
 	}
 
