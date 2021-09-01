@@ -24,7 +24,7 @@
 #include "pipewire.hpp"
 #endif
 
-const char *gamescope_optstring = "R:T:C:w:h:W:H:m:r:o:NFSvVecsdLinbfxO:";
+const char *gamescope_optstring = nullptr;
 
 const struct option *gamescope_options = (struct option[]){
 	{ "nested-width", required_argument, nullptr, 'w' },
@@ -95,8 +95,26 @@ int BIsNested()
 static int initOutput(void);
 static void steamCompMgrThreadRun(int argc, char **argv);
 
+static std::string build_optstring(const struct option *options) {
+	std::string optstring;
+	for (size_t i = 0; options[i].name != nullptr; i++) {
+		if (!options[i].val)
+			continue;
+
+		char str[] = { (char) options[i].val, '\0' };
+		optstring.append(str);
+
+		if (options[i].has_arg)
+			optstring.append(":");
+	}
+	return optstring;
+}
+
 int main(int argc, char **argv)
 {
+	static std::string optstring = build_optstring(gamescope_options);
+	gamescope_optstring = optstring.c_str();
+
 	int o;
 	bool bSleepAtStartup = false;
 	int opt_index = -1;
