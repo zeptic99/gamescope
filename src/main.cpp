@@ -111,6 +111,9 @@ int main(int argc, char **argv)
 			case 'O':
 				g_sOutputName = optarg;
 				break;
+			case '?':
+				fprintf( stderr, "Unknown option\n" );
+				return 1;
 			default:
 				break;
 		}
