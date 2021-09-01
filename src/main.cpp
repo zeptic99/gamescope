@@ -30,17 +30,21 @@ const struct option *gamescope_options = (struct option[]){
 	{ "nested-width", required_argument, nullptr, 'w' },
 	{ "nested-height", required_argument, nullptr, 'h' },
 	{ "nested-refresh", required_argument, nullptr, 'r' },
-	{ "nested-unfocused-refresh", required_argument, nullptr, 'o' },
 	{ "max-scale", required_argument, nullptr, 'm' },
 	{ "integer-scale", no_argument, nullptr, 'i' },
 	{ "sleep-at-startup", no_argument, nullptr, 's' },
 	{ "output-width", required_argument, nullptr, 'W' },
 	{ "output-height", required_argument, nullptr, 'H' },
-	{ "disable-layers", no_argument, nullptr, 'L' },
-	{ "debug-layers", no_argument, nullptr, 'd' },
 	{ "nearest-neighbor-filter", no_argument, nullptr, 'n' },
+
+	// nested mode options
+	{ "nested-unfocused-refresh", required_argument, nullptr, 'o' },
 	{ "borderless", no_argument, nullptr, 'b' },
 	{ "fullscreen", no_argument, nullptr, 'f' },
+
+	// embedded mode options
+	{ "disable-layers", no_argument, nullptr, 'L' },
+	{ "debug-layers", no_argument, nullptr, 'd' },
 	{ "prefer-output", no_argument, nullptr, 'O' },
 
 	// steamcompmgr options
