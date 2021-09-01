@@ -67,35 +67,33 @@ static std::map< uint32_t, const char * > connector_types = {
 #endif
 };
 
-static struct crtc *find_crtc_for_encoder(struct drm_t *drm, const drmModeEncoder *encoder) {
-	for (size_t i = 0; i < drm->crtcs.size(); i++) {
-		/* possible_crtcs is a bitmask as described here:
-		 * https://dvdhrm.wordpress.com/2012/09/13/linux-drm-mode-setting-api
-		 */
-		uint32_t crtc_mask = 1 << i;
-		if (encoder->possible_crtcs & crtc_mask)
-			return &drm->crtcs[i];
-	}
+static uint32_t get_connector_possible_crtcs(struct drm_t *drm, const drmModeConnector *connector) {
+	uint32_t possible_crtcs = 0;
 
-	/* no match found */
-	return nullptr;
-}
-
-static struct crtc *find_crtc_for_connector(struct drm_t *drm, const drmModeConnector *connector) {
 	for (int i = 0; i < connector->count_encoders; i++) {
 		uint32_t encoder_id = connector->encoders[i];
 
 		drmModeEncoder *encoder = drmModeGetEncoder(drm->fd, encoder_id);
-		if (encoder == nullptr)
+		if (encoder == nullptr) {
+			drm_log.errorf_errno("drmModeGetEncoder failed");
 			continue;
+		}
 
-		struct crtc *crtc = find_crtc_for_encoder(drm, encoder);
+		possible_crtcs |= encoder->possible_crtcs;
+
 		drmModeFreeEncoder(encoder);
-		if (crtc != nullptr)
-			return crtc;
 	}
 
-	/* no match found */
+	return possible_crtcs;
+}
+
+static struct crtc *find_crtc_for_connector(struct drm_t *drm, const struct connector *connector) {
+	for (size_t i = 0; i < drm->crtcs.size(); i++) {
+		uint32_t crtc_mask = 1 << i;
+		if (connector->possible_crtcs & crtc_mask)
+			return &drm->crtcs[i];
+	}
+
 	return nullptr;
 }
 
@@ -307,7 +305,6 @@ static bool refresh_state( drm_t *drm )
 
 	for (size_t i = 0; i < drm->connectors.size(); i++) {
 		struct connector *conn = &drm->connectors[i];
-		// TODO: refresh connector status and mode list
 		if (!get_object_properties(drm, conn->id, DRM_MODE_OBJECT_CONNECTOR, conn->props, conn->initial_prop_values)) {
 			return false;
 		}
@@ -406,6 +403,8 @@ static bool get_resources(struct drm_t *drm)
 		snprintf(name, sizeof(name), "%s-%d", type_str, conn->connector->connector_type_id);
 
 		conn->name = strdup(name);
+
+		conn->possible_crtcs = get_connector_possible_crtcs(drm, conn->connector);
 	}
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
@@ -1118,7 +1117,7 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 {
 	drm_log.infof("selecting connector %s", conn->name);
 
-	struct crtc *crtc = find_crtc_for_connector(drm, conn->connector);
+	struct crtc *crtc = find_crtc_for_connector(drm, conn);
 	if (crtc == nullptr) {
 		drm_log.errorf("no CRTC found!");
 		return false;

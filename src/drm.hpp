@@ -45,6 +45,7 @@ struct connector {
 	uint32_t id;
 	char *name;
 	drmModeConnector *connector;
+	uint32_t possible_crtcs;
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 };
