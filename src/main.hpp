@@ -1,8 +1,11 @@
 #pragma once
 
+#include <getopt.h>
+
 #include <atomic>
 
-#define GAMESCOPE_OPTIONS "R:T:C:w:h:W:H:m:r:o:NFSvVecsdLinbfxO:"
+extern const char *gamescope_optstring;
+extern const struct option *gamescope_options;
 
 void wayland_commit(struct wlr_surface *surf, struct wlr_buffer *buf);
 

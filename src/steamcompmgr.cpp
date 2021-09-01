@@ -3355,7 +3355,8 @@ steamcompmgr_main (int argc, char **argv)
 	// Reset getopt() state
 	optind = 1;
 
-	while ((o = getopt (argc, argv, GAMESCOPE_OPTIONS)) != -1)
+	int opt_index = -1;
+	while ((o = getopt_long(argc, argv, gamescope_optstring, gamescope_options, &opt_index)) != -1)
 	{
 		switch (o) {
 			case 'R':

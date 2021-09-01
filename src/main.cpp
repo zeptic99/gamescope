@@ -7,6 +7,7 @@
 #include <sys/capability.h>
 #include <sys/stat.h>
 
+#include <getopt.h>
 #include <signal.h>
 #include <unistd.h>
 #include <float.h>
@@ -22,6 +23,41 @@
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
 #endif
+
+const char *gamescope_optstring = "R:T:C:w:h:W:H:m:r:o:NFSvVecsdLinbfxO:";
+
+const struct option *gamescope_options = (struct option[]){
+	{ "nested-width", required_argument, nullptr, 'w' },
+	{ "nested-height", required_argument, nullptr, 'h' },
+	{ "nested-refresh", required_argument, nullptr, 'r' },
+	{ "nested-unfocused-refresh", required_argument, nullptr, 'o' },
+	{ "max-scale", required_argument, nullptr, 'm' },
+	{ "integer-scale", no_argument, nullptr, 'i' },
+	{ "sleep-at-startup", no_argument, nullptr, 's' },
+	{ "output-width", required_argument, nullptr, 'W' },
+	{ "output-height", required_argument, nullptr, 'H' },
+	{ "disable-layers", no_argument, nullptr, 'L' },
+	{ "debug-layers", no_argument, nullptr, 'd' },
+	{ "nearest-neighbor-filter", no_argument, nullptr, 'n' },
+	{ "borderless", no_argument, nullptr, 'b' },
+	{ "fullscreen", no_argument, nullptr, 'f' },
+	{ "prefer-output", no_argument, nullptr, 'O' },
+
+	// steamcompmgr options
+	{ "ready-fd", required_argument, nullptr, 'R' },
+	{ "stats-path", required_argument, nullptr, 'T' },
+	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
+	{ "disable-rendering", no_argument, nullptr, 'N' },
+	{ "debug-focus", no_argument, nullptr, 'F' },
+	{ "sync-x11-at-startup", no_argument, nullptr, 'S' },
+	{ "debug-hud", no_argument, nullptr, 'v' },
+	{ "debug-events", no_argument, nullptr, 'V' },
+	{ "steam", no_argument, nullptr, 'e' },
+	{ "force-composition", no_argument, nullptr, 'c' },
+	{ "disable-xres", no_argument, nullptr, 'x' },
+
+	{} // keep last
+};
 
 std::atomic< bool > g_bRun{true};
 
@@ -63,7 +99,8 @@ int main(int argc, char **argv)
 {
 	int o;
 	bool bSleepAtStartup = false;
-	while ((o = getopt(argc, argv, GAMESCOPE_OPTIONS)) != -1)
+	int opt_index = -1;
+	while ((o = getopt_long(argc, argv, gamescope_optstring, gamescope_options, &opt_index)) != -1)
 	{
 		switch (o) {
 			case 'w':
