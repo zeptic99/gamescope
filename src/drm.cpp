@@ -437,6 +437,9 @@ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int 
 static std::unordered_map<std::string, int> parse_connector_priorities(const char *str)
 {
 	std::unordered_map<std::string, int> priorities{};
+	if (!str) {
+		return priorities;
+	}
 	int i = 0;
 	char *buf = strdup(str);
 	char *name = strtok(buf, ",");
