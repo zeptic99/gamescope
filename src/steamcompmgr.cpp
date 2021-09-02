@@ -277,7 +277,6 @@ unsigned int	frameCounter;
 unsigned int	lastSampledFrameTime;
 float			currentFrameRate;
 
-static Bool		doRender = True;
 static Bool		debugFocus = False;
 static Bool		drawDebugInfo = False;
 static Bool		debugEvents = False;
@@ -3478,9 +3477,6 @@ steamcompmgr_main (int argc, char **argv)
 			case 'C':
 				cursorHideTime = atoi( optarg );
 				break;
-			case 'N':
-				doRender = False;
-				break;
 			case 'F':
 				debugFocus = True;
 				break;
@@ -3644,10 +3640,8 @@ steamcompmgr_main (int argc, char **argv)
 
 	XGrabServer (dpy);
 
-	if (doRender)
-	{
-		XCompositeRedirectSubwindows (dpy, root, CompositeRedirectManual);
-	}
+	XCompositeRedirectSubwindows (dpy, root, CompositeRedirectManual);
+
 	XSelectInput (dpy, root,
 				  SubstructureNotifyMask|
 				  ExposureMask|
@@ -3757,90 +3751,87 @@ steamcompmgr_main (int argc, char **argv)
 			sdlwindow_pushupdate();
 		}
 
-		if (doRender)
+		// If our DRM state is out-of-date, refresh it. This might update
+		// the output size.
+		if ( BIsNested() == false )
+			drm_poll_state( &g_DRM );
+
+		// Pick our width/height for this potential frame, regardless of how it might change later
+		// At some point we might even add proper locking so we get real updates atomically instead
+		// of whatever jumble of races the below might cause over a couple of frames
+		if ( currentOutputWidth != g_nOutputWidth ||
+			 currentOutputHeight != g_nOutputHeight )
 		{
-			// If our DRM state is out-of-date, refresh it. This might update
-			// the output size.
-			if ( BIsNested() == false )
-				drm_poll_state( &g_DRM );
-
-			// Pick our width/height for this potential frame, regardless of how it might change later
-			// At some point we might even add proper locking so we get real updates atomically instead
-			// of whatever jumble of races the below might cause over a couple of frames
-			if ( currentOutputWidth != g_nOutputWidth ||
-				 currentOutputHeight != g_nOutputHeight )
+			if ( BIsNested() == true )
 			{
-				if ( BIsNested() == true )
-				{
+				vulkan_remake_swapchain();
+
+				while ( !acquire_next_image() )
 					vulkan_remake_swapchain();
+			}
+			else
+			{
+				vulkan_remake_output_images();
+			}
 
-					while ( !acquire_next_image() )
-						vulkan_remake_swapchain();
-				}
-				else
-				{
-					vulkan_remake_output_images();
-				}
-
-				currentOutputWidth = g_nOutputWidth;
-				currentOutputHeight = g_nOutputHeight;
+			currentOutputWidth = g_nOutputWidth;
+			currentOutputHeight = g_nOutputHeight;
 
 #if HAVE_PIPEWIRE
-				nudge_pipewire();
+			nudge_pipewire();
 #endif
-			}
+		}
 
-			handle_done_commits();
+		handle_done_commits();
 
-			check_new_wayland_res();
+		check_new_wayland_res();
 
-			if ( ( g_bTakeScreenshot == true || hasRepaint == true ) && vblank == true )
+		if ( ( g_bTakeScreenshot == true || hasRepaint == true ) && vblank == true )
+		{
+			paint_all(dpy, cursor.get());
+
+			// Consumed the need to repaint here
+			hasRepaint = false;
+		}
+
+		// TODO: Look into making this _RAW
+		// wlroots, seems to just use normal MONOTONIC
+		// all over so this may be problematic to just change.
+		struct timespec now;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+
+		// If we're in the middle of a fade, pump an event into the loop to
+		// make sure we keep pushing frames even if the app isn't updating.
+		if (fadeOutWindow.id)
+		{
+			nudge_steamcompmgr();
+		}
+
+		cursor->updatePosition();
+
+		// Ask for a new surface every vblank
+		if ( vblank == true )
+		{
+			for (win *w = list; w; w = w->next)
 			{
-				paint_all(dpy, cursor.get());
-
-				// Consumed the need to repaint here
-				hasRepaint = false;
-			}
-
-			// TODO: Look into making this _RAW
-			// wlroots, seems to just use normal MONOTONIC
-			// all over so this may be problematic to just change.
-			struct timespec now;
-			clock_gettime(CLOCK_MONOTONIC, &now);
-
-			// If we're in the middle of a fade, pump an event into the loop to
-			// make sure we keep pushing frames even if the app isn't updating.
-			if (fadeOutWindow.id)
-			{
-				nudge_steamcompmgr();
-			}
-
-			cursor->updatePosition();
-
-			// Ask for a new surface every vblank
-			if ( vblank == true )
-			{
-				for (win *w = list; w; w = w->next)
+				if ( w->surface.wlr != nullptr )
 				{
+					// Acknowledge commit once.
+					wlserver_lock();
+
 					if ( w->surface.wlr != nullptr )
 					{
-						// Acknowledge commit once.
-						wlserver_lock();
-
-						if ( w->surface.wlr != nullptr )
-						{
-							wlserver_send_frame_done(w->surface.wlr, &now);
-						}
-
-						wlserver_unlock();
+						wlserver_send_frame_done(w->surface.wlr, &now);
 					}
+
+					wlserver_unlock();
 				}
 			}
-
-			vulkan_garbage_collect();
-
-			vblank = false;
 		}
+
+		vulkan_garbage_collect();
+
+		vblank = false;
 	}
 
 	imageWaitThreadRun = false;

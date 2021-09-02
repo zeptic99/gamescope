@@ -32,7 +32,6 @@ const struct option *gamescope_options = (struct option[]){
 	{ "nested-refresh", required_argument, nullptr, 'r' },
 	{ "max-scale", required_argument, nullptr, 'm' },
 	{ "integer-scale", no_argument, nullptr, 'i' },
-	{ "sleep-at-startup", no_argument, nullptr, 's' },
 	{ "output-width", required_argument, nullptr, 'W' },
 	{ "output-height", required_argument, nullptr, 'H' },
 	{ "nearest-neighbor-filter", no_argument, nullptr, 'n' },
@@ -52,7 +51,6 @@ const struct option *gamescope_options = (struct option[]){
 	{ "ready-fd", required_argument, nullptr, 'R' },
 	{ "stats-path", required_argument, nullptr, 'T' },
 	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
-	{ "disable-rendering", no_argument, nullptr, 'N' },
 	{ "debug-focus", no_argument, nullptr, 'F' },
 	{ "synchronous-x11", no_argument, nullptr, 'S' },
 	{ "debug-hud", no_argument, nullptr, 'v' },
@@ -121,7 +119,6 @@ int main(int argc, char **argv)
 	gamescope_optstring = optstring.c_str();
 
 	int o;
-	bool bSleepAtStartup = false;
 	int opt_index = -1;
 	while ((o = getopt_long(argc, argv, gamescope_optstring, gamescope_options, &opt_index)) != -1)
 	{
@@ -149,9 +146,6 @@ int main(int argc, char **argv)
 				break;
 			case 'i':
 				g_bIntegerScale = true;
-				break;
-			case 's':
-				bSleepAtStartup = true;
 				break;
 			case 'L':
 				g_bUseLayers = false;
@@ -227,11 +221,6 @@ int main(int argc, char **argv)
 	if ( gpuvis_trace_init() != -1 )
 	{
 		fprintf( stderr, "Tracing is enabled\n");
-	}
-
-	if ( bSleepAtStartup == true )
-	{
-	 	sleep( 2 );
 	}
 
 	XInitThreads();
