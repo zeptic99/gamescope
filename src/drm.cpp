@@ -859,10 +859,7 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 
 	drm->fbids_in_req.push_back( fb_id );
 
-	if ( g_bRotated )
-	{
-		add_plane_property(req, drm->primary, "rotation", DRM_MODE_ROTATE_270);
-	}
+	add_plane_property(req, drm->primary, "rotation", g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0);
 
 	add_plane_property(req, drm->primary, "FB_ID", fb_id);
 	add_plane_property(req, drm->primary, "CRTC_ID", drm->crtc->id);
@@ -952,9 +949,9 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 				crtcY = x;
 				crtcW = crtcH;
 				crtcH = w;
-
-				liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", DRM_MODE_ROTATE_270);
 			}
+
+			liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0);
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", crtcX);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", crtcY);
