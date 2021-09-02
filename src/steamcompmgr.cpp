@@ -3462,6 +3462,7 @@ steamcompmgr_main (int argc, char **argv)
 	int opt_index = -1;
 	while ((o = getopt_long(argc, argv, gamescope_optstring, gamescope_options, &opt_index)) != -1)
 	{
+		const char *opt_name;
 		switch (o) {
 			case 'R':
 				readyPipeFD = open( optarg, O_WRONLY | O_CLOEXEC );
@@ -3477,17 +3478,8 @@ steamcompmgr_main (int argc, char **argv)
 			case 'C':
 				cursorHideTime = atoi( optarg );
 				break;
-			case 'F':
-				debugFocus = True;
-				break;
-			case 'S':
-				synchronize = True;
-				break;
 			case 'v':
 				drawDebugInfo = True;
-				break;
-			case 'V':
-				debugEvents = True;
 				break;
 			case 'e':
 				steamMode = True;
@@ -3501,8 +3493,18 @@ steamcompmgr_main (int argc, char **argv)
 			case 'a':
 				g_customCursorPath = optarg;
 				break;
-			default:
+			case 0:; // long options without a short option
+				opt_name = gamescope_options[opt_index].name;
+				if (strcmp(opt_name, "debug-focus") == 0) {
+					debugFocus = True;
+				} else if (strcmp(opt_name, "synchronous-x11") == 0) {
+					synchronize = True;
+				} else if (strcmp(opt_name, "debug-events") == 0) {
+					debugEvents = True;
+				}
 				break;
+			case '?':
+				assert(false); // unreachable
 		}
 	}
 

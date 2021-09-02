@@ -42,8 +42,8 @@ const struct option *gamescope_options = (struct option[]){
 	{ "fullscreen", no_argument, nullptr, 'f' },
 
 	// embedded mode options
-	{ "disable-layers", no_argument, nullptr, 'L' },
-	{ "debug-layers", no_argument, nullptr, 'd' },
+	{ "disable-layers", no_argument, nullptr, 0 },
+	{ "debug-layers", no_argument, nullptr, 0 },
 	{ "prefer-output", no_argument, nullptr, 'O' },
 
 	// steamcompmgr options
@@ -51,10 +51,10 @@ const struct option *gamescope_options = (struct option[]){
 	{ "ready-fd", required_argument, nullptr, 'R' },
 	{ "stats-path", required_argument, nullptr, 'T' },
 	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
-	{ "debug-focus", no_argument, nullptr, 'F' },
-	{ "synchronous-x11", no_argument, nullptr, 'S' },
+	{ "debug-focus", no_argument, nullptr, 0 },
+	{ "synchronous-x11", no_argument, nullptr, 0 },
 	{ "debug-hud", no_argument, nullptr, 'v' },
-	{ "debug-events", no_argument, nullptr, 'V' },
+	{ "debug-events", no_argument, nullptr, 0 },
 	{ "steam", no_argument, nullptr, 'e' },
 	{ "force-composition", no_argument, nullptr, 'c' },
 	{ "disable-xres", no_argument, nullptr, 'x' },
@@ -101,7 +101,7 @@ static void steamCompMgrThreadRun(int argc, char **argv);
 static std::string build_optstring(const struct option *options) {
 	std::string optstring;
 	for (size_t i = 0; options[i].name != nullptr; i++) {
-		if (!options[i].val)
+		if (!options[i].name)
 			continue;
 
 		char str[] = { (char) options[i].val, '\0' };
@@ -122,6 +122,7 @@ int main(int argc, char **argv)
 	int opt_index = -1;
 	while ((o = getopt_long(argc, argv, gamescope_optstring, gamescope_options, &opt_index)) != -1)
 	{
+		const char *opt_name;
 		switch (o) {
 			case 'w':
 				g_nNestedWidth = atoi( optarg );
@@ -147,12 +148,6 @@ int main(int argc, char **argv)
 			case 'i':
 				g_bIntegerScale = true;
 				break;
-			case 'L':
-				g_bUseLayers = false;
-				break;
-			case 'd':
-				g_bDebugLayers = true;
-				break;
 			case 'n':
 				g_bFilterGameWindow = false;
 				break;
@@ -165,11 +160,17 @@ int main(int argc, char **argv)
 			case 'O':
 				g_sOutputName = optarg;
 				break;
+			case 0:; // long options without a short option
+				opt_name = gamescope_options[opt_index].name;
+				if (strcmp(opt_name, "disable-layers") == 0) {
+					g_bUseLayers = false;
+				} else if (strcmp(opt_name, "debug-layers") == 0) {
+					g_bDebugLayers = true;
+				}
+				break;
 			case '?':
 				fprintf( stderr, "Unknown option\n" );
 				return 1;
-			default:
-				break;
 		}
 	}
 
