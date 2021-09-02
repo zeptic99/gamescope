@@ -54,7 +54,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
 	{ "disable-rendering", no_argument, nullptr, 'N' },
 	{ "debug-focus", no_argument, nullptr, 'F' },
-	{ "sync-x11-at-startup", no_argument, nullptr, 'S' },
+	{ "synchronous-x11", no_argument, nullptr, 'S' },
 	{ "debug-hud", no_argument, nullptr, 'v' },
 	{ "debug-events", no_argument, nullptr, 'V' },
 	{ "steam", no_argument, nullptr, 'e' },
