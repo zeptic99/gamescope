@@ -44,7 +44,7 @@ const struct option *gamescope_options = (struct option[]){
 	// embedded mode options
 	{ "disable-layers", no_argument, nullptr, 0 },
 	{ "debug-layers", no_argument, nullptr, 0 },
-	{ "prefer-output", no_argument, nullptr, 'O' },
+	{ "prefer-output", required_argument, nullptr, 'O' },
 
 	// steamcompmgr options
 	{ "cursor", required_argument, nullptr, 'a' },
