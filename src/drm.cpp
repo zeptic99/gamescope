@@ -797,6 +797,18 @@ out:
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
 		if ( handles[i] == 0 )
 			continue;
+
+		// GEM handles aren't ref'counted by the kernel. Two DMA-BUFs may
+		// return the same GEM handle, we need to be careful not to
+		// double-close them.
+		bool already_closed = false;
+		for ( int j = 0; j < i; j++ ) {
+			if ( handles[i] == handles[j] )
+				already_closed = true;
+		}
+		if ( already_closed )
+			continue;
+
 		struct drm_gem_close args = { .handle = handles[i] };
 		if ( drmIoctl( drm->fd, DRM_IOCTL_GEM_CLOSE, &args ) != 0 ) {
 			drm_log.errorf_errno( "drmIoctl(GEM_CLOSE) failed" );
