@@ -748,7 +748,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 		if ( drmPrimeFDToHandle( drm->fd, dma_buf->fd[i], &handles[i] ) != 0 )
 		{
 			drm_log.errorf_errno("drmPrimeFDToHandle failed");
-			return 0;
+			goto out;
 		}
 
 		/* KMS requires all planes to have the same modifier */
@@ -760,13 +760,13 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 		if ( !drm->allow_modifiers )
 		{
 			drm_log.errorf("Cannot import DMA-BUF: has a modifier (0x%" PRIX64 "), but KMS doesn't support them", dma_buf->modifier);
-			return 0;
+			goto out;
 		}
 
 		if ( drmModeAddFB2WithModifiers( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, modifiers, &fb_id, DRM_MODE_FB_MODIFIERS ) != 0 )
 		{
 			drm_log.errorf_errno("drmModeAddFB2WithModifiers failed");
-			return 0;
+			goto out;
 		}
 	}
 	else
@@ -774,7 +774,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 		if ( drmModeAddFB2( drm->fd, dma_buf->width, dma_buf->height, dma_buf->format, handles, dma_buf->stride, dma_buf->offset, &fb_id, 0 ) != 0 )
 		{
 			drm_log.errorf_errno("drmModeAddFB2 failed");
-			return 0;
+			goto out;
 		}
 	}
 
@@ -792,6 +792,16 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 	drm->map_fbid_inflightflips[ fb_id ].buf = buf;
 	drm->map_fbid_inflightflips[ fb_id ].held = true;
 	drm->map_fbid_inflightflips[ fb_id ].n_refs = 0;
+
+out:
+	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
+		if ( handles[i] == 0 )
+			continue;
+		struct drm_gem_close args = { .handle = handles[i] };
+		if ( drmIoctl( drm->fd, DRM_IOCTL_GEM_CLOSE, &args ) != 0 ) {
+			drm_log.errorf_errno( "drmIoctl(GEM_CLOSE) failed" );
+		}
+	}
 
 	return fb_id;
 }
