@@ -3213,7 +3213,12 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 {
 	do {
 		XEvent ev;
-		XNextEvent (dpy, &ev);
+		int ret = XNextEvent (dpy, &ev);
+		if (ret != 0)
+		{
+			fprintf(stderr, "XNextEvent failed\n");
+			break;
+		}
 		if ((ev.type & 0x7f) != KeymapNotify)
 			discard_ignore (dpy, ev.xany.serial);
 		if (debugEvents)
