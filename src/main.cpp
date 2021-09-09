@@ -98,7 +98,8 @@ int BIsNested()
 static int initOutput(void);
 static void steamCompMgrThreadRun(int argc, char **argv);
 
-static std::string build_optstring(const struct option *options) {
+static std::string build_optstring(const struct option *options)
+{
 	std::string optstring;
 	for (size_t i = 0; options[i].name != nullptr; i++) {
 		if (!options[i].name)
@@ -111,6 +112,22 @@ static std::string build_optstring(const struct option *options) {
 			optstring.append(":");
 	}
 	return optstring;
+}
+
+static void handle_signal( int sig )
+{
+	switch ( sig ) {
+	case SIGUSR2:
+		take_screenshot();
+		break;
+	case SIGTERM:
+	case SIGINT:
+		fprintf( stderr, "gamescope: received kill signal, terminating!\n" );
+		g_bRun = false;
+		break;
+	default:
+		assert( false ); // unreachable
+	}
 }
 
 int main(int argc, char **argv)
@@ -319,6 +336,10 @@ int main(int argc, char **argv)
 
 	std::thread steamCompMgrThread( steamCompMgrThreadRun, argc, argv );
 	steamCompMgrThread.detach();
+
+	signal( SIGTERM, handle_signal );
+	signal( SIGINT, handle_signal );
+	signal( SIGUSR2, handle_signal );
 
 	wlserver_run();
 }

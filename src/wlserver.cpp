@@ -1,7 +1,6 @@
 #define _GNU_SOURCE 1
 
 #include <assert.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -73,18 +72,6 @@ static struct wl_list pending_surfaces = {0};
 static bool bXwaylandReady = false;
 
 static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_surface *wlr_surf );
-
-void sig_handler(int signal)
-{
-	if ( signal == SIGUSR2 )
-	{
-		take_screenshot();
-		return;
-	}
-
-	wl_log.infof("Received kill signal. Terminating!");
-	g_bRun = false;
-}
 
 extern const struct wlr_surface_role xwayland_surface_role;
 
@@ -607,10 +594,6 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	bool bIsDRM = bIsNested == false;
 
 	wl_list_init(&pending_surfaces);
-
-	signal(SIGTERM, sig_handler);
-	signal(SIGINT, sig_handler);
-	signal(SIGUSR2, sig_handler);
 
 	wlserver.event_loop = wl_display_get_event_loop(wlserver.display);
 
