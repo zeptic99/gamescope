@@ -335,13 +335,14 @@ int main(int argc, char **argv)
 #endif
 
 	std::thread steamCompMgrThread( steamCompMgrThreadRun, argc, argv );
-	steamCompMgrThread.detach();
 
 	signal( SIGTERM, handle_signal );
 	signal( SIGINT, handle_signal );
 	signal( SIGUSR2, handle_signal );
 
 	wlserver_run();
+
+	steamCompMgrThread.join();
 }
 
 static void steamCompMgrThreadRun(int argc, char **argv)
