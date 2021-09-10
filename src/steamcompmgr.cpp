@@ -3852,4 +3852,6 @@ steamcompmgr_main (int argc, char **argv)
 		statsThreadRun = false;
 		statsThreadSem.signal();
 	}
+
+	finish_drm( &g_DRM );
 }

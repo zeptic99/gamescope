@@ -607,6 +607,12 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	return 0;
 }
 
+void finish_drm(struct drm_t *drm)
+{
+	close(drm->fd);
+	drm->fd = -1;
+}
+
 static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::string, const drmModePropertyRes *> &props, const char *name, uint64_t value)
 {
 	if ( props.count( name ) == 0 )

@@ -125,6 +125,7 @@ extern bool g_bDebugLayers;
 extern const char *g_sOutputName;
 
 int init_drm(struct drm_t *drm, const char *device);
+void finish_drm(struct drm_t *drm);
 int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline );
 int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline );
 bool drm_poll_state(struct drm_t *drm);
