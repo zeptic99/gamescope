@@ -607,12 +607,6 @@ int init_drm(struct drm_t *drm, const char *device_name)
 	return 0;
 }
 
-void finish_drm(struct drm_t *drm)
-{
-	close(drm->fd);
-	drm->fd = -1;
-}
-
 static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::string, const drmModePropertyRes *> &props, const char *name, uint64_t value)
 {
 	if ( props.count( name ) == 0 )
@@ -644,6 +638,49 @@ static int add_crtc_property(drmModeAtomicReq *req, struct crtc *crtc, const cha
 static int add_plane_property(drmModeAtomicReq *req, struct plane *plane, const char *name, uint64_t value)
 {
 	return add_property(req, plane->id, plane->props, name, value);
+}
+
+void finish_drm(struct drm_t *drm)
+{
+	// Disable all connectors, CRTCs and planes. This is necessary to leave a
+	// clean KMS state behind. Some other KMS clients might not support all of
+	// the properties we use, e.g. "rotation" and Xorg don't play well
+	// together.
+
+	drmModeAtomicReq *req = drmModeAtomicAlloc();
+	for ( size_t i = 0; i < drm->connectors.size(); i++ ) {
+		add_connector_property(req, &drm->connectors[i], "CRTC_ID", 0);
+	}
+	for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
+		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
+		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
+	}
+	for ( size_t i = 0; i < drm->planes.size(); i++ ) {
+		struct plane *plane = &drm->planes[i];
+		add_plane_property(req, plane, "FB_ID", 0);
+		add_plane_property(req, plane, "CRTC_ID", 0);
+		add_plane_property(req, plane, "SRC_X", 0);
+		add_plane_property(req, plane, "SRC_Y", 0);
+		add_plane_property(req, plane, "SRC_W", 0);
+		add_plane_property(req, plane, "SRC_H", 0);
+		add_plane_property(req, plane, "CRTC_X", 0);
+		add_plane_property(req, plane, "CRTC_Y", 0);
+		add_plane_property(req, plane, "CRTC_W", 0);
+		add_plane_property(req, plane, "CRTC_H", 0);
+		if (plane->props.count("rotation") > 0)
+			add_plane_property(req, plane, "rotation", DRM_MODE_ROTATE_0);
+	}
+	// We can't do a non-blocking commit here or else risk EBUSY in case the
+	// previous page-flip is still in flight.
+	uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
+	int ret = drmModeAtomicCommit( drm->fd, req, flags, nullptr );
+	if ( ret != 0 ) {
+		drm_log.errorf_errno( "finish_drm: drmModeAtomicCommit failed" );
+	}
+	drmModeAtomicFree(req);
+
+	// We can't close the DRM FD here, it might still be in use by the
+	// page-flip handler thread.
 }
 
 int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline )
@@ -923,6 +960,8 @@ drm_prepare_basic( struct drm_t *drm, const struct Composite_t *pComposite, cons
 
 	gpuvis_trace_printf ( "crtc %li,%li %lix%li", crtcX, crtcY, crtcW, crtcH );
 
+	// TODO: disable all planes except drm->primary
+
 	unsigned test_flags = (drm->flags & DRM_MODE_ATOMIC_ALLOW_MODESET) | DRM_MODE_ATOMIC_TEST_ONLY;
 	int ret = drmModeAtomicCommit( drm->fd, drm->req, test_flags, NULL );
 
@@ -1053,7 +1092,7 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 			drm->crtcs[i].pending.active = 0;
 		}
 
-		// Then enable the ones we've picked
+		// Then enable the one we've picked
 
 		if (add_connector_property(drm->req, drm->connector, "CRTC_ID", drm->crtc->id) < 0)
 			return false;
