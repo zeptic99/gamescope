@@ -85,8 +85,6 @@
 #define GPUVIS_TRACE_IMPLEMENTATION
 #include "gpuvis_trace_utils.h"
 
-extern char **environ;
-
 typedef struct _ignore {
 	struct _ignore	*next;
 	unsigned long	sequence;
