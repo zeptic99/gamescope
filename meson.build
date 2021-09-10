@@ -2,7 +2,11 @@ project(
   'gamescope',
   'cpp',
   meson_version: '>=0.54.0',
-  default_options: ['warning_level=2', 'force_fallback_for=wlroots,libliftoff'],
+  default_options: [
+    'cpp_std=c++14',
+    'warning_level=2',
+    'force_fallback_for=wlroots,libliftoff',
+  ],
 )
 
 add_project_arguments([
