@@ -287,7 +287,7 @@ std::vector<ResListEntry_t> wayland_commit_queue;
 
 static std::atomic< bool > g_bTakeScreenshot{false};
 
-static int g_nudgePipe[2];
+static int g_nudgePipe[2] = {-1, -1};
 
 // poor man's semaphore
 class sem
