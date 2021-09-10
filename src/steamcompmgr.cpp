@@ -74,6 +74,7 @@
 #include "steamcompmgr.hpp"
 #include "vblankmanager.hpp"
 #include "sdlwindow.hpp"
+#include "log.hpp"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
@@ -289,6 +290,8 @@ static std::atomic< bool > g_bTakeScreenshot{false};
 
 static int g_nudgePipe[2] = {-1, -1};
 
+static LogScope xwm_log("xwm");
+
 // poor man's semaphore
 class sem
 {
@@ -358,7 +361,7 @@ retry:
 	int ret = poll( &fd, 1, 100 );
 	if ( ret < 0 )
 	{
-		perror( "failed to poll fence FD" );
+		xwm_log.errorf_errno( "failed to poll fence FD" );
 	}
 	gpuvis_trace_end_ctx_printf( commitID, "wait fence" );
 
@@ -731,19 +734,19 @@ bool MouseCursor::setCursorImage(char *data, int w, int h)
 		w, h,
 		32, 0)))
 	{
-		fprintf(stderr, "Failed to make ximage for cursor.\n");
+		xwm_log.errorf("Failed to make ximage for cursor");
 		goto error_image;
 	}
 
 	if (!(pixmap = XCreatePixmap(m_display, DefaultRootWindow(m_display), w, h, 32)))
 	{
-		fprintf(stderr, "Failed to make pixmap for cursor\n");
+		xwm_log.errorf("Failed to make pixmap for cursor");
 		goto error_pixmap;
 	}
 
 	if (!(gc = XCreateGC(m_display, pixmap, 0, NULL)))
 	{
-		fprintf(stderr, "Failed to make gc for cursor\n");
+		xwm_log.errorf("Failed to make gc for cursor");
 		goto error_gc;
 	}
 
@@ -751,19 +754,19 @@ bool MouseCursor::setCursorImage(char *data, int w, int h)
 
 	if (!(pictformat = XRenderFindStandardFormat(m_display, PictStandardARGB32)))
 	{
-		fprintf(stderr, "Failed to create pictformat for cursor\n");
+		xwm_log.errorf("Failed to create pictformat for cursor");
 		goto error_pictformat;
 	}
 
 	if (!(picture = XRenderCreatePicture(m_display, pixmap, pictformat, 0, NULL)))
 	{
-		fprintf(stderr, "Failed to create picture for cursor\n");
+		xwm_log.errorf("Failed to create picture for cursor");
 		goto error_picture;
 	}
 
 	if (!(cursor = XRenderCreateCursor(m_display, picture, 0, 0)))
 	{
-		fprintf(stderr, "Failed to create cursor\n");
+		xwm_log.errorf("Failed to create cursor");
 		goto error_cursor;
 	}
 
@@ -1353,7 +1356,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 		if ( bResult != true )
 		{
-			fprintf( stderr, "composite alarm!!!\n" );
+			xwm_log.errorf("vulkan_composite failed");
 			return;
 		}
 
@@ -1384,10 +1387,11 @@ paint_all(Display *dpy, MouseCursor *cursor)
 				return;
 
 			if ( ret != 0 )
-				fprintf( stderr, "Failed to prepare 1-layer flip: %s\n", strerror(-ret) );
-
-			// We should always handle a 1-layer flip
-			assert( ret == 0 );
+			{
+				xwm_log.errorf( "Failed to prepare 1-layer flip: %s", strerror( -ret ) );
+				// We should always handle a 1-layer flip
+				abort();
+			}
 
 			drm_commit( &g_DRM, &composite, &pipeline );
 		}
@@ -1414,7 +1418,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 			SDL_FreeSurface( pSDLSurface );
 
-			fprintf(stderr, "Screenshot saved to %s\n", pTimeBuffer);
+			xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
 			takeScreenshot = False;
 		}
 
@@ -1748,7 +1752,7 @@ found:
 
 		if ( debugFocus == True )
 		{
-			fprintf( stderr, "determine_and_apply_focus focus %lu\n", focus->id );
+			xwm_log.debugf( "determine_and_apply_focus focus %lu", focus->id );
 			char buf[512];
 			sprintf( buf,  "xwininfo -id 0x%lx; xprop -id 0x%lx; xwininfo -root -tree", focus->id, focus->id );
 			system( buf );
@@ -1947,7 +1951,7 @@ get_net_wm_state(Display *dpy, win *w)
 		} else if (props[i] == netWMStateSkipPagerAtom) {
 			w->skipPager = True;
 		} else {
-			fprintf(stderr, "Unhandled initial NET_WM_STATE property: %s\n", XGetAtomName(dpy, props[i]));
+			xwm_log.debugf("Unhandled initial NET_WM_STATE property: %s", XGetAtomName(dpy, props[i]));
 		}
 	}
 
@@ -1988,7 +1992,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 		
 		if ( w->appID != 0 && appID != 0 && w->appID != appID )
 		{
-			fprintf( stderr, "appid clash was %u now %u\n", w->appID, appID );
+			xwm_log.errorf( "appid clash was %u now %u", w->appID, appID );
 		}
 		// Let the appID property be authoritative for now
 		if ( appID != 0 )
@@ -2172,7 +2176,7 @@ get_win_pid (Display *dpy, Window id)
 	}
 	XResClientIdsDestroy(num_ids, client_ids);
 	if (pid <= 0)
-		fprintf(stderr, "Failed to find PID for window 0x%lx\n", id);
+		xwm_log.errorf("Failed to find PID for window 0x%lx", id);
 	return pid;
 }
 
@@ -2508,7 +2512,7 @@ update_net_wm_state(uint32_t action, Bool *value)
 		*value = !*value;
 		break;
 	default:
-		fprintf(stderr, "Unknown NET_WM_STATE action: %" PRIu32 "\n", action);
+		xwm_log.debugf("Unknown NET_WM_STATE action: %" PRIu32, action);
 	}
 }
 
@@ -2528,7 +2532,7 @@ handle_net_wm_state(Display *dpy, win *w, XClientMessageEvent *ev)
 			update_net_wm_state(action, &w->skipPager);
 			focusDirty = True;
 		} else if (props[i] != None) {
-			fprintf(stderr, "Unhandled NET_WM_STATE property change: %s\n", XGetAtomName(dpy, props[i]));
+			xwm_log.debugf("Unhandled NET_WM_STATE property change: %s", XGetAtomName(dpy, props[i]));
 		}
 	}
 }
@@ -2554,7 +2558,7 @@ handle_system_tray_opcode(Display *dpy, XClientMessageEvent *ev)
 			break;
 		}
 		default:
-			fprintf(stderr, "Unhandled _NET_SYSTEM_TRAY_OPCODE %ld\n", opcode);
+			xwm_log.debugf("Unhandled _NET_SYSTEM_TRAY_OPCODE %ld", opcode);
 	}
 }
 
@@ -2568,13 +2572,13 @@ handle_wm_change_state(Display *dpy, win *w, XClientMessageEvent *ev)
 		/* Wine will request iconic state and cannot ensure that the WM has
 		 * agreed on it; immediately revert to normal state to avoid being
 		 * stuck in a paused state. */
-		fprintf(stderr, "Rejecting WM_CHANGE_STATE to ICONIC for window 0x%lx\n", w->id);
+		xwm_log.debugf("Rejecting WM_CHANGE_STATE to ICONIC for window 0x%lx", w->id);
 		uint32_t wmState[] = { ICCCM_NORMAL_STATE, None };
 		XChangeProperty(dpy, w->id, WMStateAtom, WMStateAtom, 32,
 			PropModeReplace, (unsigned char *)wmState,
 			sizeof(wmState) / sizeof(wmState[0]));
 	} else {
-		fprintf(stderr, "Unhandled WM_CHANGE_STATE to %ld for window 0x%lx\n", state, w->id);
+		xwm_log.debugf("Unhandled WM_CHANGE_STATE to %ld for window 0x%lx", state, w->id);
 	}
 }
 
@@ -2608,7 +2612,7 @@ handle_client_message(Display *dpy, XClientMessageEvent *ev)
 		}
 		else if ( ev->message_type != 0 )
 		{
-			fprintf( stderr, "Unhandled client message: %s\n", XGetAtomName( dpy, ev->message_type ) );
+			xwm_log.debugf( "Unhandled client message: %s", XGetAtomName( dpy, ev->message_type ) );
 		}
 	}
 }
@@ -2705,7 +2709,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 			
 			if ( w->appID != 0 && appID != 0 && w->appID != appID )
 			{
-				fprintf( stderr, "appid clash was %u now %u\n", w->appID, appID );
+				xwm_log.errorf( "appid clash was %u now %u", w->appID, appID );
 			}
 			w->appID = appID;
 
@@ -2805,8 +2809,8 @@ error (Display *dpy, XErrorEvent *ev)
 	if (ev->request_code == composite_opcode &&
 		ev->minor_code == X_CompositeRedirectSubwindows)
 	{
-		fprintf (stderr, "Another composite manager is already running\n");
-		exit (1);
+		xwm_log.errorf("Another composite manager is already running");
+		exit(1);
 	}
 
 	o = ev->error_code - xfixes_error;
@@ -2836,7 +2840,7 @@ error (Display *dpy, XErrorEvent *ev)
 		name = buffer;
 	}
 
-	fprintf (stderr, "error %d: %s request %d minor %d serial %lu\n",
+	xwm_log.errorf("error %d: %s request %d minor %d serial %lu",
 			 ev->error_code, (strlen (name) > 0) ? name : "unknown",
 			 ev->request_code, ev->minor_code, ev->serial);
 
@@ -2848,7 +2852,7 @@ error (Display *dpy, XErrorEvent *ev)
 static int
 handle_io_error(Display *dpy)
 {
-	fprintf(stderr, "X11 I/O error\n");
+	xwm_log.errorf("X11 I/O error");
 
 	imageWaitThreadRun = false;
 	waitListSem.signal();
@@ -2883,16 +2887,12 @@ register_cm (Display *dpy)
 		if (!XGetTextProperty (dpy, w, &tp, winNameAtom) &&
 			!XGetTextProperty (dpy, w, &tp, XA_WM_NAME))
 		{
-			fprintf (stderr,
-					 "Another composite manager is already running (0x%lx)\n",
-					 (unsigned long) w);
+			xwm_log.errorf("Another composite manager is already running (0x%lx)", (unsigned long) w);
 			return False;
 		}
 		if (XmbTextPropertyToTextList (dpy, &tp, &strs, &count) == Success)
 		{
-			fprintf (stderr,
-					 "Another composite manager is already running (%s)\n",
-					 strs[0]);
+			xwm_log.errorf("Another composite manager is already running (%s)", strs[0]);
 
 			XFreeStringList (strs);
 		}
@@ -3018,7 +3018,7 @@ void handle_done_commits( void )
 void nudge_steamcompmgr( void )
 {
 	if ( write( g_nudgePipe[ 1 ], "\n", 1 ) < 0 )
-		perror( "nudge_steamcompmgr: write failed" );
+		xwm_log.errorf_errno( "nudge_steamcompmgr: write failed" );
 }
 
 void take_screenshot( void )
@@ -3050,7 +3050,7 @@ void check_new_wayland_res( void )
 			wlserver_lock();
 			wlr_buffer_unlock( buf );
 			wlserver_unlock();
-			fprintf (stderr, "waylandres but no win\n");
+			xwm_log.errorf( "waylandres but no win" );
 			continue;
 		}
 
@@ -3151,7 +3151,7 @@ spawn_client( char **argv )
 	pid_t pid = fork();
 
 	if ( pid < 0 )
-		perror( "fork failed" );
+		xwm_log.errorf_errno( "fork failed" );
 
 	// Are we in the child?
 	if ( pid == 0 )
@@ -3179,7 +3179,7 @@ spawn_client( char **argv )
 
 		execvp( argv[ 0 ], argv );
 
-		perror( "execvp failed" );
+		xwm_log.errorf_errno( "execvp failed" );
 		_exit( 1 );
 	}
 
@@ -3194,7 +3194,7 @@ spawn_client( char **argv )
 				if ( errno == EINTR )
 					continue;
 				if ( errno != ECHILD )
-					perror( "steamcompmgr: wait failed" );
+					xwm_log.errorf_errno( "steamcompmgr: wait failed" );
 				break;
 			}
 		}
@@ -3214,7 +3214,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 		int ret = XNextEvent (dpy, &ev);
 		if (ret != 0)
 		{
-			fprintf(stderr, "XNextEvent failed\n");
+			xwm_log.errorf("XNextEvent failed");
 			break;
 		}
 		if ((ev.type & 0x7f) != KeymapNotify)
@@ -3377,7 +3377,7 @@ dispatch_vblank( int fd )
 			if ( errno == EAGAIN )
 				break;
 
-			perror( "steamcompmgr: dispatch_vblank: read failed" );
+			xwm_log.errorf_errno( "steamcompmgr: dispatch_vblank: read failed" );
 			break;
 		}
 
@@ -3406,7 +3406,7 @@ dispatch_nudge( int fd )
 		if ( read( fd, buf, sizeof(buf) ) < 0 )
 		{
 			if ( errno != EAGAIN )
-				perror(" steamcompmgr: dispatch_nudge: read failed" );
+				xwm_log.errorf_errno(" steamcompmgr: dispatch_nudge: read failed" );
 			break;
 		}
 	}
@@ -3421,10 +3421,10 @@ static bool
 load_mouse_cursor( MouseCursor *cursor, const char *path )
 {
 	int w, h, channels;
-	rgba_t* data = (rgba_t*)stbi_load(path, &w, &h, &channels, STBI_rgb_alpha);
+	rgba_t *data = (rgba_t *) stbi_load(path, &w, &h, &channels, STBI_rgb_alpha);
 	if (!data)
 	{
-		fprintf(stderr, "Failed to open/load cursor file\n");
+		xwm_log.errorf("Failed to open/load cursor file");
 		return false;
 	}
 
@@ -3435,7 +3435,7 @@ load_mouse_cursor( MouseCursor *cursor, const char *path )
 	});
 
 	// Data is freed by XDestroyImage in setCursorImage.
-	return cursor->setCursorImage((char*)data, w, h);
+	return cursor->setCursorImage((char *)data, w, h);
 }
 
 enum event_type {
@@ -3519,7 +3519,7 @@ steamcompmgr_main (int argc, char **argv)
 
 	if ( pipe2( g_nudgePipe, O_CLOEXEC | O_NONBLOCK ) != 0 )
 	{
-		perror( "steamcompmgr: pipe failed" );
+		xwm_log.errorf_errno( "steamcompmgr: pipe2 failed" );
 		exit( 1 );
 	}
 
@@ -3532,7 +3532,7 @@ steamcompmgr_main (int argc, char **argv)
 	dpy = XOpenDisplay ( wlserver_get_nested_display_name() );
 	if (!dpy)
 	{
-		fprintf (stderr, "Can't open display\n");
+		xwm_log.errorf("Can't open display");
 		exit (1);
 	}
 	XSetErrorHandler (error);
@@ -3544,45 +3544,45 @@ steamcompmgr_main (int argc, char **argv)
 
 	if (!XRenderQueryExtension (dpy, &render_event, &render_error))
 	{
-		fprintf (stderr, "No render extension\n");
+		xwm_log.errorf("No render extension");
 		exit (1);
 	}
 	if (!XQueryExtension (dpy, COMPOSITE_NAME, &composite_opcode,
 		&composite_event, &composite_error))
 	{
-		fprintf (stderr, "No composite extension\n");
+		xwm_log.errorf("No composite extension");
 		exit (1);
 	}
 	XCompositeQueryVersion (dpy, &composite_major, &composite_minor);
 
 	if (!XDamageQueryExtension (dpy, &damage_event, &damage_error))
 	{
-		fprintf (stderr, "No damage extension\n");
+		xwm_log.errorf("No damage extension");
 		exit (1);
 	}
 	if (!XFixesQueryExtension (dpy, &xfixes_event, &xfixes_error))
 	{
-		fprintf (stderr, "No XFixes extension\n");
+		xwm_log.errorf("No XFixes extension");
 		exit (1);
 	}
 	if (!XShapeQueryExtension (dpy, &xshape_event, &xshape_error))
 	{
-		fprintf (stderr, "No XShape extension\n");
+		xwm_log.errorf("No XShape extension");
 		exit (1);
 	}
 	if (!XFixesQueryExtension (dpy, &xfixes_event, &xfixes_error))
 	{
-		fprintf (stderr, "No XFixes extension\n");
+		xwm_log.errorf("No XFixes extension");
 		exit (1);
 	}
 	if (!XResQueryVersion (dpy, &xres_major, &xres_minor))
 	{
-		fprintf (stderr, "No XRes extension\n");
+		xwm_log.errorf("No XRes extension");
 		exit (1);
 	}
 	if (xres_major != 1 || xres_minor < 2)
 	{
-		fprintf (stderr, "Unsupported XRes version: have %d.%d, want 1.2\n", xres_major, xres_minor);
+		xwm_log.errorf("Unsupported XRes version: have %d.%d, want 1.2", xres_major, xres_minor);
 		exit (1);
 	}
 
@@ -3671,7 +3671,7 @@ steamcompmgr_main (int argc, char **argv)
 	if (g_customCursorPath)
 	{
 		if (!load_mouse_cursor(cursor.get(), g_customCursorPath))
-			fprintf(stderr, "Failed to load mouse cursor: %s.\n", g_customCursorPath);
+			xwm_log.errorf("Failed to load mouse cursor: %s", g_customCursorPath);
 	}
 
 	gamesRunningCount = get_prop(dpy, root, gamesRunningAtom, 0);
@@ -3722,13 +3722,13 @@ steamcompmgr_main (int argc, char **argv)
 			if ( errno == EAGAIN )
 				continue;
 
-			perror( "poll failed" );
+			xwm_log.errorf_errno( "poll failed" );
 			break;
 		}
 
 		if ( pollfds[ EVENT_X11 ].revents & POLLHUP )
 		{
-			fprintf( stderr, "Lost connection to the X11 server\n" );
+			xwm_log.errorf( "Lost connection to the X11 server" );
 			break;
 		}
 
