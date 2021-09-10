@@ -3493,9 +3493,6 @@ steamcompmgr_main (int argc, char **argv)
 			case 'x':
 				useXRes = False;
 				break;
-			case 'a':
-				g_customCursorPath = optarg;
-				break;
 			case 0:; // long options without a short option
 				opt_name = gamescope_options[opt_index].name;
 				if (strcmp(opt_name, "debug-focus") == 0) {
@@ -3504,6 +3501,8 @@ steamcompmgr_main (int argc, char **argv)
 					synchronize = True;
 				} else if (strcmp(opt_name, "debug-events") == 0) {
 					debugEvents = True;
+				} else if (strcmp(opt_name, "cursor") == 0) {
+					g_customCursorPath = optarg;
 				}
 				break;
 			case '?':

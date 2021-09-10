@@ -48,7 +48,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "prefer-output", required_argument, nullptr, 'O' },
 
 	// steamcompmgr options
-	{ "cursor", required_argument, nullptr, 'a' },
+	{ "cursor", required_argument, nullptr, 0 },
 	{ "ready-fd", required_argument, nullptr, 'R' },
 	{ "stats-path", required_argument, nullptr, 'T' },
 	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
@@ -76,7 +76,7 @@ const char usage[] =
 	"  -W, --output-width             output width\n"
 	"  -H, --output-height            output height\n"
 	"  -n, --nearest-neighbor-filter  use nearest neighbor filtering\n"
-	"  -a, --cursor                   path to default cursor image\n"
+	"  --cursor                       path to default cursor image\n"
 	"  -R, --ready-fd                 notify FD when ready\n"
 	"  -T, --stats-path               write statistics to path\n"
 	"  -C, --hide-cursor-delay        hide cursor image after delay\n"
