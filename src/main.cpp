@@ -27,6 +27,7 @@
 const char *gamescope_optstring = nullptr;
 
 const struct option *gamescope_options = (struct option[]){
+	{ "help", no_argument, nullptr, 0 },
 	{ "nested-width", required_argument, nullptr, 'w' },
 	{ "nested-height", required_argument, nullptr, 'h' },
 	{ "nested-refresh", required_argument, nullptr, 'r' },
@@ -61,6 +62,49 @@ const struct option *gamescope_options = (struct option[]){
 
 	{} // keep last
 };
+
+const char usage[] =
+	"usage: gamescope [options...] -- [command...]\n"
+	"\n"
+	"Options:\n"
+	"  --help                         show help message\n"
+	"  -w, --nested-width             game width\n"
+	"  -h, --nexted-height            game height\n"
+	"  -r, --nested-refresh           game refresh rate (frames per second)\n"
+	"  -m, --max-scale                maximum scale factor\n"
+	"  -i, --integer-scale            force scale factor to integer\n"
+	"  -W, --output-width             output width\n"
+	"  -H, --output-height            output height\n"
+	"  -n, --nearest-neighbor-filter  use nearest neighbor filtering\n"
+	"  -a, --cursor                   path to default cursor image\n"
+	"  -R, --ready-fd                 notify FD when ready\n"
+	"  -T, --stats-path               write statistics to path\n"
+	"  -C, --hide-cursor-delay        hide cursor image after delay\n"
+	"  -e, --steam                    enable Steam integration\n"
+	"\n"
+	"Nested mode options:\n"
+	"  -o, --nested-unfocused-refresh game refresh rate when unfocused\n"
+	"  -b, --borderless               make the window borderless\n"
+	"  -f, --fullscreen               make the window fullscreen\n"
+	"\n"
+	"Embedded mode options:\n"
+	"  -O, --prefer-output            list of connectors in order of preference\n"
+	"\n"
+	"Debug options:\n"
+	"  --disable-layers               disable libliftoff (hardware planes)\n"
+	"  --debug-layers                 debug libliftoff\n"
+	"  --debug-focus                  debug XWM focus\n"
+	"  --synchronous-x11              force X11 connection synchronization\n"
+	"  --debug-hud                    paint HUD with debug info\n"
+	"  --debug-events                 debug X11 events\n"
+	"  --force-composition            disable direct scan-out\n"
+	"  --disable-xres                 disable XRes for PID lookup\n"
+	"\n"
+	"Keyboard shortcuts:\n"
+	"  Super + F                      toggle fullscreen\n"
+	"  Super + N                      toggle nearest neighbour filtering\n"
+	"  Super + S                      take a screenshot\n"
+	"";
 
 std::atomic< bool > g_bRun{true};
 
@@ -179,7 +223,10 @@ int main(int argc, char **argv)
 				break;
 			case 0:; // long options without a short option
 				opt_name = gamescope_options[opt_index].name;
-				if (strcmp(opt_name, "disable-layers") == 0) {
+				if (strcmp(opt_name, "help") == 0) {
+					fprintf(stderr, "%s", usage);
+					return 0;
+				} else if (strcmp(opt_name, "disable-layers") == 0) {
 					g_bUseLayers = false;
 				} else if (strcmp(opt_name, "debug-layers") == 0) {
 					g_bDebugLayers = true;
