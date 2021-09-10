@@ -735,7 +735,7 @@ void wlserver_unlock(void)
 	pthread_mutex_unlock(&waylock);
 }
 
-int wlserver_run(void)
+void wlserver_run(void)
 {
 	struct pollfd pollfd = {
 		.fd = wl_event_loop_get_fd( wlserver.event_loop ),
@@ -774,7 +774,6 @@ int wlserver_run(void)
 	wlr_xwayland_server_destroy(wlserver.wlr.xwayland_server);
 	wl_display_destroy_clients(wlserver.display);
 	wl_display_destroy(wlserver.display);
-	return 0;
 }
 
 void wlserver_keyboardfocus( struct wlr_surface *surface )

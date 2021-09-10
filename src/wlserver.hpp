@@ -76,7 +76,7 @@ int wlsession_open_kms( const char *device_name );
 
 int wlserver_init( int argc, char **argv, bool bIsNested );
 
-int wlserver_run(void);
+void wlserver_run(void);
 
 void wlserver_lock(void);
 void wlserver_unlock(void);
