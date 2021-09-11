@@ -69,7 +69,7 @@ const char usage[] =
 	"Options:\n"
 	"  --help                         show help message\n"
 	"  -w, --nested-width             game width\n"
-	"  -h, --nexted-height            game height\n"
+	"  -h, --nested-height            game height\n"
 	"  -r, --nested-refresh           game refresh rate (frames per second)\n"
 	"  -m, --max-scale                maximum scale factor\n"
 	"  -i, --integer-scale            force scale factor to integer\n"
