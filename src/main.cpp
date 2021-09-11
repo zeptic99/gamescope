@@ -146,13 +146,13 @@ static std::string build_optstring(const struct option *options)
 {
 	std::string optstring;
 	for (size_t i = 0; options[i].name != nullptr; i++) {
-		if (!options[i].name)
+		if (!options[i].name || !options[i].val)
 			continue;
 
 		char str[] = { (char) options[i].val, '\0' };
 		optstring.append(str);
 
-		if (options[i].val && options[i].has_arg)
+		if (options[i].has_arg)
 			optstring.append(":");
 	}
 	return optstring;
