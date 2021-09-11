@@ -152,7 +152,7 @@ static std::string build_optstring(const struct option *options)
 		char str[] = { (char) options[i].val, '\0' };
 		optstring.append(str);
 
-		if (options[i].has_arg)
+		if (options[i].val && options[i].has_arg)
 			optstring.append(":");
 	}
 	return optstring;
@@ -221,7 +221,7 @@ int main(int argc, char **argv)
 			case 'O':
 				g_sOutputName = optarg;
 				break;
-			case 0:; // long options without a short option
+			case 0: // long options without a short option
 				opt_name = gamescope_options[opt_index].name;
 				if (strcmp(opt_name, "help") == 0) {
 					fprintf(stderr, "%s", usage);

@@ -3493,7 +3493,7 @@ steamcompmgr_main (int argc, char **argv)
 			case 'x':
 				useXRes = False;
 				break;
-			case 0:; // long options without a short option
+			case 0: // long options without a short option
 				opt_name = gamescope_options[opt_index].name;
 				if (strcmp(opt_name, "debug-focus") == 0) {
 					debugFocus = True;
