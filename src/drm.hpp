@@ -63,6 +63,8 @@ struct fb {
 struct drm_t {
 	int fd;
 
+	int preferred_width, preferred_height, preferred_refresh;
+
 	uint64_t cursor_width, cursor_height;
 	bool allow_modifiers;
 	struct wlr_drm_format_set formats;
