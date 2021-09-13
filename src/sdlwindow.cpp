@@ -54,7 +54,7 @@ void updateOutputRefresh( void )
 {
 	int display_index = 0;
 	SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
-	
+
 	display_index = SDL_GetWindowDisplayIndex( g_SDLWindow );
 	if ( SDL_GetDesktopDisplayMode( display_index, &mode ) == 0 )
 	{
@@ -116,10 +116,10 @@ void inputSDLThreadRun( void )
 	SDL_SetRelativeMouseMode(SDL_TRUE);
 
 	g_nOldNestedRefresh = g_nNestedRefresh;
-	
+
 	g_bSDLInitOK = true;
 	g_SDLInitLock.unlock();
-	
+
 	while( SDL_WaitEvent( &event ) )
 	{
 		switch( event.type )
@@ -187,9 +187,9 @@ void inputSDLThreadRun( void )
 					case SDL_WINDOWEVENT_SIZE_CHANGED:
 						g_nOutputWidth = event.window.data1;
 						g_nOutputHeight = event.window.data2;
-						
+
 						updateOutputRefresh();
-						
+
 						break;
 					case SDL_WINDOWEVENT_FOCUS_LOST:
 						g_nNestedRefresh = g_nNestedUnfocusedRefresh;
@@ -217,7 +217,7 @@ bool sdlwindow_init( void )
 
 	std::thread inputSDLThread( inputSDLThreadRun );
 	inputSDLThread.detach();
-	
+
 	// When this returns SDL_Init should be over
 	g_SDLInitLock.lock();
 

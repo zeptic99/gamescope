@@ -114,7 +114,7 @@ struct wl_listener xwayland_ready_listener = { .notify = xwayland_ready };
 static void wlserver_handle_modifiers(struct wl_listener *listener, void *data)
 {
 	struct wlserver_keyboard *keyboard = wl_container_of( listener, keyboard, modifiers );
-	
+
 	wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard->device );
 	wlr_seat_keyboard_notify_modifiers( wlserver.wlr.seat, &keyboard->device->keyboard->modifiers );
 }
@@ -140,24 +140,24 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 static void wlserver_movecursor( int x, int y )
 {
 	wlserver.mouse_surface_cursorx += x;
-	
+
 	if ( wlserver.mouse_surface_cursorx > wlserver.mouse_focus_surface->current.width - 1 )
 	{
 		wlserver.mouse_surface_cursorx = wlserver.mouse_focus_surface->current.width - 1;
 	}
-	
+
 	if ( wlserver.mouse_surface_cursorx < 0 )
 	{
 		wlserver.mouse_surface_cursorx = 0;
 	}
-	
+
 	wlserver.mouse_surface_cursory += y;
-	
+
 	if ( wlserver.mouse_surface_cursory > wlserver.mouse_focus_surface->current.height - 1 )
 	{
 		wlserver.mouse_surface_cursory = wlserver.mouse_focus_surface->current.height - 1;
 	}
-	
+
 	if ( wlserver.mouse_surface_cursory < 0 )
 	{
 		wlserver.mouse_surface_cursory = 0;
@@ -168,7 +168,7 @@ static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *d
 {
 	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, motion );
 	struct wlr_event_pointer_motion *event = (struct wlr_event_pointer_motion *) data;
-	
+
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
 		wlserver_movecursor( event->unaccel_dx, event->unaccel_dy );
@@ -182,7 +182,7 @@ static void wlserver_handle_pointer_button(struct wl_listener *listener, void *d
 {
 	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, button );
 	struct wlr_event_pointer_button *event = (struct wlr_event_pointer_button *) data;
-	
+
 	wlr_seat_pointer_notify_button( wlserver.wlr.seat, event->time_msec, event->button, event->state );
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
@@ -207,12 +207,12 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, down );
 	struct wlr_event_touch_down *event = (struct wlr_event_touch_down *) data;
-	
+
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
 		double x = g_bRotated ? event->y : event->x;
 		double y = g_bRotated ? 1.0 - event->x : event->y;
-		
+
 		x *= g_nOutputWidth;
 		y *= g_nOutputHeight;
 
@@ -300,7 +300,7 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, motion );
 	struct wlr_event_touch_motion *event = (struct wlr_event_touch_motion *) data;
-	
+
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
 		double x = g_bRotated ? event->y : event->x;
@@ -347,6 +347,7 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 			struct wlserver_keyboard *pKB = (struct wlserver_keyboard *) calloc( 1, sizeof( struct wlserver_keyboard ) );
 
 			pKB->device = device;
+
 			struct xkb_rule_names rules = { 0 };
 			struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 			rules.rules = getenv("XKB_DEFAULT_RULES");
@@ -361,20 +362,20 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 			xkb_keymap_unref(keymap);
 			xkb_context_unref(context);
 			wlr_keyboard_set_repeat_info(device->keyboard, 25, 600);
-			
+
 			pKB->modifiers.notify = wlserver_handle_modifiers;
 			wl_signal_add( &device->keyboard->events.modifiers, &pKB->modifiers );
-			
+
 			pKB->key.notify = wlserver_handle_key;
 			wl_signal_add( &device->keyboard->events.key, &pKB->key );
-			
+
 			wlr_seat_set_keyboard( wlserver.wlr.seat, device );
 		}
 		break;
 		case WLR_INPUT_DEVICE_POINTER:
 		{
 			struct wlserver_pointer *pointer = (struct wlserver_pointer *) calloc( 1, sizeof( struct wlserver_pointer ) );
-			
+
 			pointer->device = device;
 
 			pointer->motion.notify = wlserver_handle_pointer_motion;
@@ -386,9 +387,9 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 		case WLR_INPUT_DEVICE_TOUCH:
 		{
 			struct wlserver_touch *touch = (struct wlserver_touch *) calloc( 1, sizeof( struct wlserver_touch ) );
-			
+
 			touch->device = device;
-			
+
 			touch->down.notify = wlserver_handle_touch_down;
 			wl_signal_add( &device->touch->events.down, &touch->down );
 			touch->up.notify = wlserver_handle_touch_up;

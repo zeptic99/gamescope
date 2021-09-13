@@ -132,9 +132,9 @@ typedef struct _win {
 	bool skipPager;
 	unsigned int requestedWidth;
 	unsigned int requestedHeight;
-	
+
 	Window transientFor;
-	
+
 	bool nudged;
 	bool ignoreOverrideRedirect;
 
@@ -541,10 +541,10 @@ find_win(Display *dpy, Window id)
 			return w;
 		}
 	}
-	
+
 	if ( dpy == nullptr )
 		return nullptr;
-	
+
 	// Didn't find, must be a children somewhere; try again with parent.
 	Window root = None;
 	Window parent = None;
@@ -750,7 +750,7 @@ bool MouseCursor::setCursorImage(char *data, int w, int h)
 		goto error_gc;
 	}
 
-	XPutImage(m_display, pixmap, gc, ximage, 0, 0, 0, 0, w, h);	
+	XPutImage(m_display, pixmap, gc, ximage, 0, 0, 0, 0, w, h);
 
 	if (!(pictformat = XRenderFindStandardFormat(m_display, PictStandardARGB32)))
 	{
@@ -1201,9 +1201,9 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	{
 		return;
 	}
-	
+
 	bool inGame = false;
-	
+
 	if ( gamesRunningCount || w->appID != 0 )
 	{
 		inGame = true;
@@ -1263,7 +1263,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 					break;
 				}
 			}
-			
+
 			// paint UI unless it's fully hidden, which it communicates to us through opacity=0
 			if ( w->opacity > TRANSLUCENT )
 			{
@@ -1472,7 +1472,7 @@ get_prop(Display *dpy, Window win, Atom prop, unsigned int def, bool *found = nu
 	Atom actual;
 	int format;
 	unsigned long n, left;
-	
+
 	unsigned char *data;
 	int result = XGetWindowProperty(dpy, win, prop, 0L, 1L, false,
 									XA_CARDINAL, &actual, &format,
@@ -1501,7 +1501,7 @@ bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vec
 	Atom actual;
 	int format;
 	unsigned long n, left;
-	
+
 	uint64_t *data;
 	// get up to 16 results in one go, we can add a real loop if we ever need anything beyong that
 	int result = XGetWindowProperty(dpy, win, prop, 0L, 16L, false,
@@ -1510,7 +1510,7 @@ bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vec
 	if (result == Success && data != NULL)
 	{
 		vecResult.clear();
-		
+
 		for ( uint32_t i = 0; i < n; i++ )
 		{
 			vecResult.push_back( data[ i ] );
@@ -1582,7 +1582,7 @@ determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 	win *inputFocus = NULL;
 
 	gameFocused = false;
-	
+
 	Window prevFocusWindow = currentFocusWindow;
 	currentFocusWindow = None;
 	currentFocusWin = nullptr;
@@ -1599,7 +1599,7 @@ determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 			continue;
 		}
 
-		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == false && 
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == false &&
 			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient == true ) )
 		{
 			vecPossibleFocusWindows.push_back( w );
@@ -1623,9 +1623,9 @@ determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 			inputFocus = w;
 		}
 	}
-	
+
 	std::vector< unsigned long > focusable_appids;
-	
+
 	for ( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
 	{
 		unsigned int unAppID = vecPossibleFocusWindows[ i ]->appID;
@@ -1645,7 +1645,7 @@ determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 			}
 		}
 	}
-	
+
 	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSABLE_APPS", false ),
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)focusable_appids.data(),
 					 focusable_appids.size() );
@@ -1674,10 +1674,10 @@ found:
 		focus = vecPossibleFocusWindows[ 0 ];
 		gameFocused = focus->appID != 0;
 	}
-	
+
 	unsigned long focusedWindow = 0;
 	unsigned long focusedAppId = 0;
-	
+
 	if ( inputFocus == NULL )
 	{
 		inputFocus = focus;
@@ -1688,11 +1688,11 @@ found:
 		focusedWindow = focus->id;
 		focusedAppId = inputFocus->appID;
 	}
-	
+
 	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", false ),
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedWindow,
 					 focusedWindow != 0 ? 1 : 0 );
-	
+
 	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_APP", false ),
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedAppId,
 					 focusedAppId != 0 ? 1 : 0 );
@@ -1708,11 +1708,11 @@ found:
 		while ( true )
 		{
 			bool bFoundTransient = false;
-			
+
 			for ( uint32_t i = 0; i < vecPossibleFocusWindows.size(); i++ )
 			{
 				win *candidate = vecPossibleFocusWindows[ i ];
-				
+
 				if ( candidate != focus && candidate->transientFor == focus->id )
 				{
 					bFoundTransient = true;
@@ -1720,7 +1720,7 @@ found:
 					break;
 				}
 			}
-			
+
 			// Hopefully we can't have transient cycles or we'll have to maintain a list of visited windows here
 			if ( bFoundTransient == false )
 				break;
@@ -1768,7 +1768,7 @@ found:
 		currentInputFocusMode != inputFocus->inputFocusMode )
 	{
 		win *keyboardFocusWin = inputFocus;
-		
+
 		if ( debugFocus == true )
 		{
 			xwm_log.debugf( "determine_and_apply_focus inputFocus %lu", inputFocus->id );
@@ -1999,7 +1999,7 @@ map_win(Display *dpy, Window id, unsigned long sequence)
 	if ( steamMode == true )
 	{
 		uint32_t appID = get_prop(dpy, w->id, gameAtom, 0);
-		
+
 		if ( w->appID != 0 && appID != 0 && w->appID != appID )
 		{
 			xwm_log.errorf( "appid clash was %u now %u", w->appID, appID );
@@ -2086,51 +2086,51 @@ static uint32_t
 get_appid_from_pid( pid_t pid )
 {
 	uint32_t unFoundAppId = 0;
-	
+
 	char filename[256];
 	pid_t next_pid = pid;
-	
+
 	while ( 1 )
 	{
 		snprintf( filename, sizeof( filename ), "/proc/%i/stat", next_pid );
 		std::ifstream proc_stat_file( filename );
 		std::string proc_stat;
-		
+
 		std::getline( proc_stat_file, proc_stat );
-		
+
 		char *procName = nullptr;
 		char *lastParens;
-		
+
 		for ( uint32_t i = 0; i < proc_stat.length(); i++ )
 		{
 			if ( procName == nullptr && proc_stat[ i ] == '(' )
 			{
 				procName = &proc_stat[ i + 1 ];
 			}
-			
+
 			if ( proc_stat[ i ] == ')' )
 			{
 				lastParens = &proc_stat[ i ];
 			}
 		}
-		
+
 		*lastParens = '\0';
 		char state;
 		int parent_pid = -1;
-		
+
 		sscanf( lastParens + 1, " %c %d", &state, &parent_pid );
-		
+
 		if ( strcmp( "reaper", procName ) == 0 )
 		{
 			snprintf( filename, sizeof( filename ), "/proc/%i/cmdline", next_pid );
 			std::ifstream proc_cmdline_file( filename );
 			std::string proc_cmdline;
-			
+
 			bool bSteamLaunch = false;
 			uint32_t unAppId = 0;
-			
+
 			std::getline( proc_cmdline_file, proc_cmdline );
-			
+
 			for ( uint32_t j = 0; j < proc_cmdline.length(); j++ )
 			{
 				if ( proc_cmdline[ j ] == '\0' && j + 1 < proc_cmdline.length() )
@@ -2153,7 +2153,7 @@ get_appid_from_pid( pid_t pid )
 				}
 			}
 		}
-		
+
 		if ( parent_pid == -1 || parent_pid == 0 )
 		{
 			break;
@@ -2163,7 +2163,7 @@ get_appid_from_pid( pid_t pid )
 			next_pid = parent_pid;
 		}
 	}
-	
+
 	return unFoundAppId;
 }
 
@@ -2254,7 +2254,7 @@ add_win(Display *dpy, Window id, Window prev, unsigned long sequence)
 	{
 		new_win->appID = id;
 	}
-	
+
 	Window transientFor = None;
 	if ( XGetTransientForHint( dpy, id, &transientFor ) )
 	{
@@ -2267,7 +2267,7 @@ add_win(Display *dpy, Window id, Window prev, unsigned long sequence)
 
 	new_win->title = NULL;
 	new_win->utf8_title = false;
-	
+
 	new_win->isFullscreen = false;
 	new_win->isSysTrayIcon = false;
 	new_win->sizeHintsSpecified = false;
@@ -2492,10 +2492,10 @@ handle_wl_surface_id(win *w, long surfaceID)
 	// let wayland know now.
 	if ( w->id == currentInputFocusWindow )
 		wlserver_mousefocus( surface );
-	
+
 	win *inputFocusWin = find_win( nullptr, currentInputFocusWindow );
 	Window keyboardFocusWindow = currentInputFocusWindow;
-	
+
 	if ( inputFocusWin && inputFocusWin->inputFocusMode )
 		keyboardFocusWindow = currentFocusWindow;
 
@@ -2716,7 +2716,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			uint32_t appID = get_prop(dpy, w->id, gameAtom, 0);
-			
+
 			if ( w->appID != 0 && appID != 0 && w->appID != appID )
 			{
 				xwm_log.errorf( "appid clash was %u now %u", w->appID, appID );
@@ -2996,7 +2996,7 @@ void handle_done_commits( void )
 					{
 						hasRepaint = true;
 					}
-					
+
 					if ( w->isSteamStreamingClientVideo && currentFocusWin && currentFocusWin->isSteamStreamingClient )
 					{
 						hasRepaint = true;
@@ -3269,17 +3269,17 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 			case FocusOut:
 			{
 				win * w = find_win( dpy, ev.xfocus.window );
-				
+
 				// If focus escaped the current desired keyboard focus window, check where it went
 				if ( w && w->id == currentKeyboardFocusWindow )
 				{
 					Window newKeyboardFocus = None;
 					int nRevertMode = 0;
 					XGetInputFocus( dpy, &newKeyboardFocus, &nRevertMode );
-					
+
 					// Find window or its toplevel parent
 					win *kbw = find_win( dpy, newKeyboardFocus );
-					
+
 					if ( kbw )
 					{
 						if ( kbw->id == currentKeyboardFocusWindow )
@@ -3294,7 +3294,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 						}
 					}
 				}
-				
+
 				break;
 			}
 			case ReparentNotify:
