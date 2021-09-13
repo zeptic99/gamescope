@@ -119,26 +119,26 @@ typedef struct _win {
 	bool utf8_title;
 	pid_t pid;
 
-	Bool isSteam;
-	Bool isSteamStreamingClient;
-	Bool isSteamStreamingClientVideo;
+	bool isSteam;
+	bool isSteamStreamingClient;
+	bool isSteamStreamingClientVideo;
 	uint32_t inputFocusMode;
 	uint32_t appID;
-	Bool isOverlay;
-	Bool isFullscreen;
-	Bool isSysTrayIcon;
-	Bool sizeHintsSpecified;
-	Bool skipTaskbar;
-	Bool skipPager;
+	bool isOverlay;
+	bool isFullscreen;
+	bool isSysTrayIcon;
+	bool sizeHintsSpecified;
+	bool skipTaskbar;
+	bool skipPager;
 	unsigned int requestedWidth;
 	unsigned int requestedHeight;
 	
 	Window transientFor;
 	
-	Bool nudged;
-	Bool ignoreOverrideRedirect;
+	bool nudged;
+	bool ignoreOverrideRedirect;
 
-	Bool mouseMoved;
+	bool mouseMoved;
 
 	struct wlserver_surface surface;
 
@@ -149,7 +149,7 @@ static win		*list;
 static int		scr;
 static Window		root;
 static XserverRegion	allDamage;
-static Bool		clipChanged;
+static bool		clipChanged;
 static int		root_height, root_width;
 static ignore		*ignore_head, **ignore_tail = &ignore_head;
 static int		xfixes_event, xfixes_error;
@@ -157,7 +157,7 @@ static int		damage_event, damage_error;
 static int		composite_event, composite_error;
 static int		render_event, render_error;
 static int		xshape_event, xshape_error;
-static Bool		synchronize;
+static bool		synchronize;
 static int		composite_opcode;
 
 uint32_t		currentOutputWidth, currentOutputHeight;
@@ -177,7 +177,7 @@ std::vector< uint32_t > vecFocuscontrolAppIDs;
 
 static Window	ourWindow;
 
-Bool			gameFocused;
+bool			gameFocused;
 
 unsigned int 	gamesRunningCount;
 
@@ -190,17 +190,17 @@ float			focusedWindowScaleY = 1.0f;
 float			focusedWindowOffsetX = 0.0f;
 float			focusedWindowOffsetY = 0.0f;
 
-Bool			focusDirty = False;
+bool			focusDirty = false;
 bool			hasRepaint = false;
 
 unsigned long	damageSequence = 0;
 
 unsigned int	cursorHideTime = 10'000;
 
-Bool			gotXError = False;
+bool			gotXError = false;
 
 win				fadeOutWindow;
-Bool			fadeOutWindowGone;
+bool			fadeOutWindowGone;
 unsigned int	fadeOutStartTime;
 
 extern float g_flMaxWindowScale;
@@ -276,12 +276,12 @@ unsigned int	frameCounter;
 unsigned int	lastSampledFrameTime;
 float			currentFrameRate;
 
-static Bool		debugFocus = False;
-static Bool		drawDebugInfo = False;
-static Bool		debugEvents = False;
-static Bool		steamMode = False;
-static Bool		alwaysComposite = False;
-static Bool		useXRes = True;
+static bool		debugFocus = false;
+static bool		drawDebugInfo = false;
+static bool		debugEvents = false;
+static bool		steamMode = false;
+static bool		alwaysComposite = false;
+static bool		useXRes = true;
 
 std::mutex wayland_commit_lock;
 std::vector<ResListEntry_t> wayland_commit_queue;
@@ -601,7 +601,7 @@ import_commit ( struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dmabuf, co
 {
 	commit.buf = buf;
 
-	if ( BIsNested() == False )
+	if ( BIsNested() == false )
 	{
 		commit.fb_id = drm_fbid_from_dmabuf( &g_DRM, buf, dmabuf );
 	}
@@ -892,7 +892,7 @@ bool MouseCursor::getTexture()
 
 	m_width = image->width;
 	m_height = image->height;
-	if ( BIsNested() == false && alwaysComposite == False )
+	if ( BIsNested() == false && alwaysComposite == false )
 	{
 		m_width = g_DRM.cursor_width;
 		m_height = g_DRM.cursor_height;
@@ -1017,7 +1017,7 @@ void MouseCursor::paint(win *window, struct Composite_t *pComposite,
 
 static void
 paint_window (Display *dpy, win *w, struct Composite_t *pComposite,
-			  struct VulkanPipeline_t *pPipeline, Bool notificationMode, MouseCursor *cursor)
+			  struct VulkanPipeline_t *pPipeline, bool notificationMode, MouseCursor *cursor)
 {
 	uint32_t sourceWidth, sourceHeight;
 	int drawXOffset = 0, drawYOffset = 0;
@@ -1190,7 +1190,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	win *input;
 
 	unsigned int currentTime = get_time_in_milliseconds();
-	Bool fadingOut = ((currentTime - fadeOutStartTime) < FADE_OUT_DURATION && fadeOutWindow.id != None);
+	bool fadingOut = ((currentTime - fadeOutStartTime) < FADE_OUT_DURATION && fadeOutWindow.id != None);
 
 	w = find_win(dpy, currentFocusWindow);
 	overlay = find_win(dpy, currentOverlayWindow);
@@ -1202,11 +1202,11 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		return;
 	}
 	
-	Bool inGame = False;
+	bool inGame = false;
 	
 	if ( gamesRunningCount || w->appID != 0 )
 	{
-		inGame = True;
+		inGame = true;
 	}
 
 	frameCounter++;
@@ -1239,27 +1239,27 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 		// Draw it in the background
 		fadeOutWindow.opacity = (1.0 - newOpacity) * OPAQUE;
-		paint_window(dpy, &fadeOutWindow, &composite, &pipeline, False, cursor);
+		paint_window(dpy, &fadeOutWindow, &composite, &pipeline, false, cursor);
 
 		// Blend new window on top with linear crossfade
 		w->opacity = newOpacity * OPAQUE;
 
-		paint_window(dpy, w, &composite, &pipeline, False, cursor);
+		paint_window(dpy, w, &composite, &pipeline, false, cursor);
 	}
 	else
 	{
 		// If the window we'd paint as the base layer is the streaming client,
 		// find the video underlay and put it up first in the scenegraph
-		if ( w->isSteamStreamingClient == True )
+		if ( w->isSteamStreamingClient == true )
 		{
 			win *videow = NULL;
 
 			for ( videow = list; videow; videow = videow->next )
 			{
-				if ( videow->isSteamStreamingClientVideo == True )
+				if ( videow->isSteamStreamingClientVideo == true )
 				{
 					// TODO: also check matching AppID so we can have several pairs
-					paint_window(dpy, videow, &composite, &pipeline, False, cursor);
+					paint_window(dpy, videow, &composite, &pipeline, false, cursor);
 					break;
 				}
 			}
@@ -1267,13 +1267,13 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			// paint UI unless it's fully hidden, which it communicates to us through opacity=0
 			if ( w->opacity > TRANSLUCENT )
 			{
-				paint_window(dpy, w, &composite, &pipeline, False, cursor);
+				paint_window(dpy, w, &composite, &pipeline, false, cursor);
 			}
 		}
 		else
 		{
 			// Just draw focused window as normal, be it Steam or the game
-			paint_window(dpy, w, &composite, &pipeline, False, cursor);
+			paint_window(dpy, w, &composite, &pipeline, false, cursor);
 		}
 
 		if (fadeOutWindow.id) {
@@ -1281,7 +1281,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			if (fadeOutWindowGone)
 			{
 				// This is the only reference to these resources now.
-				fadeOutWindowGone = False;
+				fadeOutWindowGone = false;
 			}
 			fadeOutWindow.id = None;
 		}
@@ -1293,7 +1293,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	{
 		if (overlay->opacity)
 		{
-			paint_window(dpy, overlay, &composite, &pipeline, False, cursor);
+			paint_window(dpy, overlay, &composite, &pipeline, false, cursor);
 
 			if ( overlay->id == currentInputFocusWindow )
 				touchInputFocusLayer = composite.nLayerCount - 1;
@@ -1312,7 +1312,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 	{
 		if (notification->opacity)
 		{
-			paint_window(dpy, notification, &composite, &pipeline, True, cursor);
+			paint_window(dpy, notification, &composite, &pipeline, true, cursor);
 		}
 	}
 
@@ -1341,7 +1341,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 	bool bCapture = takeScreenshot || pw_buffer != nullptr;
 
-	if ( BIsNested() == false && alwaysComposite == False && bCapture == false )
+	if ( BIsNested() == false && alwaysComposite == false && bCapture == false )
 	{
 		int ret = drm_prepare( &g_DRM, &composite, &pipeline );
 		if ( ret == 0 )
@@ -1362,7 +1362,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			return;
 		}
 
-		if ( BIsNested() == True )
+		if ( BIsNested() == true )
 		{
 			vulkan_present_to_window();
 		}
@@ -1421,7 +1421,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			SDL_FreeSurface( pSDLSurface );
 
 			xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
-			takeScreenshot = False;
+			takeScreenshot = false;
 		}
 
 #if HAVE_PIPEWIRE
@@ -1474,7 +1474,7 @@ get_prop(Display *dpy, Window win, Atom prop, unsigned int def, bool *found = nu
 	unsigned long n, left;
 	
 	unsigned char *data;
-	int result = XGetWindowProperty(dpy, win, prop, 0L, 1L, False,
+	int result = XGetWindowProperty(dpy, win, prop, 0L, 1L, false,
 									XA_CARDINAL, &actual, &format,
 								 &n, &left, &data);
 	if (result == Success && data != NULL)
@@ -1504,7 +1504,7 @@ bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vec
 	
 	uint64_t *data;
 	// get up to 16 results in one go, we can add a real loop if we ever need anything beyong that
-	int result = XGetWindowProperty(dpy, win, prop, 0L, 16L, False,
+	int result = XGetWindowProperty(dpy, win, prop, 0L, 16L, false,
 									XA_CARDINAL, &actual, &format,
 									&n, &left, ( unsigned char** )&data);
 	if (result == Success && data != NULL)
@@ -1581,7 +1581,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 	win *w, *focus = NULL;
 	win *inputFocus = NULL;
 
-	gameFocused = False;
+	gameFocused = false;
 	
 	Window prevFocusWindow = currentFocusWindow;
 	currentFocusWindow = None;
@@ -1599,8 +1599,8 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 			continue;
 		}
 
-		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == False && 
-			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient == True ) )
+		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == false && 
+			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient == true ) )
 		{
 			vecPossibleFocusWindows.push_back( w );
 		}
@@ -1646,7 +1646,7 @@ determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
 		}
 	}
 	
-	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSABLE_APPS", False ),
+	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSABLE_APPS", false ),
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)focusable_appids.data(),
 					 focusable_appids.size() );
 
@@ -1689,11 +1689,11 @@ found:
 		focusedAppId = inputFocus->appID;
 	}
 	
-	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", False ),
+	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", false ),
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedWindow,
 					 focusedWindow != 0 ? 1 : 0 );
 	
-	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_APP", False ),
+	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_APP", false ),
 					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedAppId,
 					 focusedAppId != 0 ? 1 : 0 );
 
@@ -1752,7 +1752,7 @@ found:
 
 		gpuvis_trace_printf( "determine_and_apply_focus focus %lu", focus->id );
 
-		if ( debugFocus == True )
+		if ( debugFocus == true )
 		{
 			xwm_log.debugf( "determine_and_apply_focus focus %lu", focus->id );
 			char buf[512];
@@ -1769,7 +1769,7 @@ found:
 	{
 		win *keyboardFocusWin = inputFocus;
 		
-		if ( debugFocus == True )
+		if ( debugFocus == true )
 		{
 			xwm_log.debugf( "determine_and_apply_focus inputFocus %lu", inputFocus->id );
 		}
@@ -1812,7 +1812,7 @@ found:
 	if (!focus->nudged)
 	{
 		XMoveWindow(dpy, focus->id, 1, 1);
-		focus->nudged = True;
+		focus->nudged = true;
 	}
 
 	if (w->a.x != 0 || w->a.y != 0)
@@ -1860,11 +1860,11 @@ get_size_hints(Display *dpy, win *w)
 		w->requestedWidth = hints.max_width;
 		w->requestedHeight = hints.max_height;
 
-		w->sizeHintsSpecified = True;
+		w->sizeHintsSpecified = true;
 	}
 	else
 	{
-		w->sizeHintsSpecified = False;
+		w->sizeHintsSpecified = false;
 
 		// Below block checks for a pattern that matches old SDL fullscreen applications;
 		// SDL creates a fullscreen overrride-redirect window and reparents the game
@@ -1886,18 +1886,18 @@ get_size_hints(Display *dpy, win *w)
 
 				// If we have a unique children that isn't override-reidrect that is
 				// contained inside this fullscreen window, it's probably it.
-				if (attribs.override_redirect == False &&
+				if (attribs.override_redirect == false &&
 					attribs.width <= w->a.width &&
 					attribs.height <= w->a.height)
 				{
-					w->sizeHintsSpecified = True;
+					w->sizeHintsSpecified = true;
 
 					w->requestedWidth = attribs.width;
 					w->requestedHeight = attribs.height;
 
 					XMoveWindow(dpy, children[0], 0, 0);
 
-					w->ignoreOverrideRedirect = True;
+					w->ignoreOverrideRedirect = true;
 				}
 			}
 
@@ -1947,7 +1947,7 @@ get_net_wm_state(Display *dpy, win *w)
 	unsigned long nitems;
 	unsigned long bytesAfter;
 	unsigned char *data;
-	if (XGetWindowProperty(dpy, w->id, netWMStateAtom, 0, 2048, False,
+	if (XGetWindowProperty(dpy, w->id, netWMStateAtom, 0, 2048, false,
 			AnyPropertyType, &type, &format, &nitems, &bytesAfter, &data) != Success) {
 		return;
 	}
@@ -1955,11 +1955,11 @@ get_net_wm_state(Display *dpy, win *w)
 	Atom *props = (Atom *)data;
 	for (size_t i = 0; i < nitems; i++) {
 		if (props[i] == netWMStateFullscreenAtom) {
-			w->isFullscreen = True;
+			w->isFullscreen = true;
 		} else if (props[i] == netWMStateSkipTaskbarAtom) {
-			w->skipTaskbar = True;
+			w->skipTaskbar = true;
 		} else if (props[i] == netWMStateSkipPagerAtom) {
-			w->skipPager = True;
+			w->skipPager = true;
 		} else {
 			xwm_log.debugf("Unhandled initial NET_WM_STATE property: %s", XGetAtomName(dpy, props[i]));
 		}
@@ -1996,7 +1996,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->isSteamStreamingClient = get_prop(dpy, w->id, steamStreamingClientAtom, 0);
 	w->isSteamStreamingClientVideo = get_prop(dpy, w->id, steamStreamingClientVideoAtom, 0);
 
-	if ( steamMode == True )
+	if ( steamMode == true )
 	{
 		uint32_t appID = get_prop (dpy, w->id, gameAtom, 0);
 		
@@ -2024,7 +2024,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	if ( wmHints != nullptr )
 	{
-		if ( wmHints->flags & (InputHint | StateHint ) && wmHints->input == True && wmHints->initial_state == NormalState )
+		if ( wmHints->flags & (InputHint | StateHint ) && wmHints->input == true && wmHints->initial_state == NormalState )
 		{
 			XRaiseWindow( dpy, w->id );
 		}
@@ -2045,7 +2045,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->damage_sequence = 0;
 	w->map_sequence = sequence;
 
-	focusDirty = True;
+	focusDirty = true;
 }
 
 static void
@@ -2059,25 +2059,25 @@ finish_unmap_win (Display *dpy, win *w)
 
 	if (fadeOutWindow.id == w->id)
 	{
-		fadeOutWindowGone = True;
+		fadeOutWindowGone = true;
 	}
 
 	/* don't care about properties anymore */
 	set_ignore (dpy, NextRequest (dpy));
 	XSelectInput(dpy, w->id, 0);
 
-	clipChanged = True;
+	clipChanged = true;
 }
 
 static void
-unmap_win (Display *dpy, Window id, Bool fade)
+unmap_win (Display *dpy, Window id, bool fade)
 {
 	win *w = find_win (dpy, id);
 	if (!w)
 		return;
 	w->a.map_state = IsUnmapped;
 
-	focusDirty = True;
+	focusDirty = true;
 
 	finish_unmap_win (dpy, w);
 }
@@ -2224,7 +2224,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	}
 	new_win->opacity = OPAQUE;
 
-	if ( useXRes == True )
+	if ( useXRes == true )
 	{
 		new_win->pid = get_win_pid (dpy, id);
 	}
@@ -2233,13 +2233,13 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 		new_win->pid = -1;
 	}
 
-	new_win->isOverlay = False;
-	new_win->isSteam = False;
-	new_win->isSteamStreamingClient = False;
-	new_win->isSteamStreamingClientVideo = False;
+	new_win->isOverlay = false;
+	new_win->isSteam = false;
+	new_win->isSteamStreamingClient = false;
+	new_win->isSteamStreamingClientVideo = false;
 	new_win->inputFocusMode = 0;
 
-	if ( steamMode == True )
+	if ( steamMode == true )
 	{
 		if ( new_win->pid != -1 )
 		{
@@ -2266,17 +2266,17 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	}
 
 	new_win->title = NULL;
-	new_win->utf8_title = False;
+	new_win->utf8_title = false;
 	
-	new_win->isFullscreen = False;
-	new_win->isSysTrayIcon = False;
-	new_win->sizeHintsSpecified = False;
-	new_win->skipTaskbar = False;
-	new_win->skipPager = False;
+	new_win->isFullscreen = false;
+	new_win->isSysTrayIcon = false;
+	new_win->sizeHintsSpecified = false;
+	new_win->skipTaskbar = false;
+	new_win->skipPager = false;
 	new_win->requestedWidth = 0;
 	new_win->requestedHeight = 0;
-	new_win->nudged = False;
-	new_win->ignoreOverrideRedirect = False;
+	new_win->nudged = false;
+	new_win->ignoreOverrideRedirect = false;
 
 	new_win->mouseMoved = 0;
 
@@ -2287,7 +2287,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	if (new_win->a.map_state == IsViewable)
 		map_win (dpy, id, sequence);
 
-	focusDirty = True;
+	focusDirty = true;
 }
 
 static void
@@ -2320,7 +2320,7 @@ restack_win (Display *dpy, win *w, Window new_above)
 		w->next = *prev;
 		*prev = w;
 
-		focusDirty = True;
+		focusDirty = true;
 	}
 }
 
@@ -2347,7 +2347,7 @@ configure_win (Display *dpy, XConfigureEvent *ce)
 	w->a.override_redirect = ce->override_redirect;
 	restack_win (dpy, w, ce->above);
 
-	focusDirty = True;
+	focusDirty = true;
 }
 
 static void
@@ -2364,7 +2364,7 @@ circulate_win (Display *dpy, XCirculateEvent *ce)
 	else
 		new_above = None;
 	restack_win (dpy, w, new_above);
-	clipChanged = True;
+	clipChanged = true;
 }
 
 static void map_request (Display *dpy, XMapRequestEvent *mapRequest)
@@ -2394,7 +2394,7 @@ static void circulate_request ( Display *dpy, XCirculateRequestEvent *circulateR
 }
 
 static void
-finish_destroy_win (Display *dpy, Window id, Bool gone)
+finish_destroy_win (Display *dpy, Window id, bool gone)
 {
 	win	**prev, *w;
 
@@ -2422,7 +2422,7 @@ finish_destroy_win (Display *dpy, Window id, Bool gone)
 }
 
 static void
-destroy_win (Display *dpy, Window id, Bool gone, Bool fade)
+destroy_win (Display *dpy, Window id, bool gone, bool fade)
 {
 	if (currentFocusWindow == id && gone)
 	{
@@ -2437,7 +2437,7 @@ destroy_win (Display *dpy, Window id, Bool gone, Bool fade)
 		currentNotificationWindow = None;
 	if (currentKeyboardFocusWindow == id && gone)
 		currentKeyboardFocusWindow = None;
-	focusDirty = True;
+	focusDirty = true;
 
 	finish_destroy_win (dpy, id, gone);
 }
@@ -2457,14 +2457,14 @@ damage_win (Display *dpy, XDamageNotifyEvent *de)
 	// First damage event we get, compute focus; we only want to focus damaged
 	// windows to have meaningful frames.
 	if (w->appID && w->damage_sequence == 0)
-		focusDirty = True;
+		focusDirty = true;
 
 	w->damage_sequence = damageSequence++;
 
 	// If we just passed the focused window, we might be eliglible to take over
 	if ( !focusControlled && focus && focus != w && w->appID &&
 		w->damage_sequence > focus->damage_sequence)
-		focusDirty = True;
+		focusDirty = true;
 
 	if (w->damage)
 		XDamageSubtract(dpy, w->damage, None, None);
@@ -2509,7 +2509,7 @@ handle_wl_surface_id(win *w, long surfaceID)
 }
 
 static void
-update_net_wm_state(uint32_t action, Bool *value)
+update_net_wm_state(uint32_t action, bool *value)
 {
 	switch (action) {
 	case NET_WM_STATE_REMOVE:
@@ -2534,13 +2534,13 @@ handle_net_wm_state(Display *dpy, win *w, XClientMessageEvent *ev)
 	for (size_t i = 0; i < 2; i++) {
 		if (props[i] == netWMStateFullscreenAtom) {
 			update_net_wm_state(action, &w->isFullscreen);
-			focusDirty = True;
+			focusDirty = true;
 		} else if (props[i] == netWMStateSkipTaskbarAtom) {
 			update_net_wm_state(action, &w->skipTaskbar);
-			focusDirty = True;
+			focusDirty = true;
 		} else if (props[i] == netWMStateSkipPagerAtom) {
 			update_net_wm_state(action, &w->skipPager);
-			focusDirty = True;
+			focusDirty = true;
 		} else if (props[i] != None) {
 			xwm_log.debugf("Unhandled NET_WM_STATE property change: %s", XGetAtomName(dpy, props[i]));
 		}
@@ -2563,7 +2563,7 @@ handle_system_tray_opcode(Display *dpy, XClientMessageEvent *ev)
 
 			win *w = find_win(dpy, embed_id);
 			if (w) {
-				w->isSysTrayIcon = True;
+				w->isSysTrayIcon = true;
 			}
 			break;
 		}
@@ -2670,7 +2670,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteam = get_prop(dpy, w->id, steamAtom, 0);
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == steamInputFocusAtom )
@@ -2679,7 +2679,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			w->inputFocusMode = get_prop(dpy, w->id, steamInputFocusAtom, 0);
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == steamTouchClickModeAtom )
@@ -2693,7 +2693,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteamStreamingClient = get_prop(dpy, w->id, steamStreamingClientAtom, 0);
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == steamStreamingClientVideoAtom)
@@ -2702,13 +2702,13 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteamStreamingClientVideo = get_prop(dpy, w->id, steamStreamingClientVideoAtom, 0);
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == gamescopeCtrlAppIDAtom )
 	{
 		focusControlled = get_prop( dpy, root, gamescopeCtrlAppIDAtom, vecFocuscontrolAppIDs );
-		focusDirty = True;
+		focusDirty = true;
 	}
 	if (ev->atom == gameAtom)
 	{
@@ -2723,7 +2723,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 			}
 			w->appID = appID;
 
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == overlayAtom)
@@ -2732,7 +2732,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isOverlay = get_prop(dpy, w->id, overlayAtom, 0);
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == sizeHintsAtom)
@@ -2741,14 +2741,14 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		if (w)
 		{
 			get_size_hints(dpy, w);
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == gamesRunningAtom)
 	{
 		gamesRunningCount = get_prop(dpy, root, gamesRunningAtom, 0);
 
-		focusDirty = True;
+		focusDirty = true;
 	}
 	if (ev->atom == screenScaleAtom)
 	{
@@ -2763,7 +2763,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 			hasRepaint = true;
 		}
 
-		focusDirty = True;
+		focusDirty = true;
 	}
 	if (ev->atom == screenZoomAtom)
 	{
@@ -2778,7 +2778,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 			hasRepaint = true;
 		}
 
-		focusDirty = True;
+		focusDirty = true;
 	}
 	if (ev->atom == WMTransientForAtom)
 	{
@@ -2794,7 +2794,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 			{
 				w->transientFor = None;
 			}
-			focusDirty = True;
+			focusDirty = true;
 		}
 	}
 	if (ev->atom == XA_WM_NAME || ev->atom == netWMNameAtom)
@@ -2854,7 +2854,7 @@ error (Display *dpy, XErrorEvent *ev)
 			 ev->error_code, (strlen (name) > 0) ? name : "unknown",
 			 ev->request_code, ev->minor_code, ev->serial);
 
-	gotXError = True;
+	gotXError = true;
 	/*    abort ();	    this is just annoying to most people */
 	return 0;
 }
@@ -2876,7 +2876,7 @@ handle_io_error(Display *dpy)
 	pthread_exit(NULL);
 }
 
-static Bool
+static bool
 register_cm (Display *dpy)
 {
 	Window w;
@@ -2884,7 +2884,7 @@ register_cm (Display *dpy)
 	static char net_wm_cm[] = "_NET_WM_CM_Sxx";
 
 	snprintf (net_wm_cm, sizeof (net_wm_cm), "_NET_WM_CM_S%d", scr);
-	a = XInternAtom (dpy, net_wm_cm, False);
+	a = XInternAtom (dpy, net_wm_cm, false);
 
 	w = XGetSelectionOwner (dpy, a);
 	if (w != None)
@@ -2892,13 +2892,13 @@ register_cm (Display *dpy)
 		XTextProperty tp;
 		char **strs;
 		int count;
-		Atom winNameAtom = XInternAtom (dpy, "_NET_WM_NAME", False);
+		Atom winNameAtom = XInternAtom (dpy, "_NET_WM_NAME", false);
 
 		if (!XGetTextProperty (dpy, w, &tp, winNameAtom) &&
 			!XGetTextProperty (dpy, w, &tp, XA_WM_NAME))
 		{
 			xwm_log.errorf("Another composite manager is already running (0x%lx)", (unsigned long) w);
-			return False;
+			return false;
 		}
 		if (XmbTextPropertyToTextList (dpy, &tp, &strs, &count) == Success)
 		{
@@ -2909,7 +2909,7 @@ register_cm (Display *dpy)
 
 		XFree (tp.value);
 
-		return False;
+		return false;
 	}
 
 	w = XCreateSimpleWindow (dpy, RootWindow (dpy, scr), 0, 0, 1, 1, 0, None,
@@ -2918,7 +2918,7 @@ register_cm (Display *dpy)
 	Xutf8SetWMProperties (dpy, w, "steamcompmgr", "steamcompmgr", NULL, 0, NULL, NULL,
 						  NULL);
 
-	Atom atomWmCheck = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", False);
+	Atom atomWmCheck = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", false);
 	XChangeProperty(dpy, root, atomWmCheck,
 					XA_WINDOW, 32, PropModeReplace, (unsigned char *)&w, 1);
 	XChangeProperty(dpy, w, atomWmCheck,
@@ -2926,14 +2926,14 @@ register_cm (Display *dpy)
 
 
 	Atom supportedAtoms[] = {
-		XInternAtom(dpy, "_NET_WM_STATE", False),
-		XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False),
-		XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False),
-		XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False),
-		XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False),
+		XInternAtom(dpy, "_NET_WM_STATE", false),
+		XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", false),
+		XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", false),
+		XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", false),
+		XInternAtom(dpy, "_NET_ACTIVE_WINDOW", false),
 	};
 
-	XChangeProperty(dpy, root, XInternAtom(dpy, "_NET_SUPPORTED", False),
+	XChangeProperty(dpy, root, XInternAtom(dpy, "_NET_SUPPORTED", false),
 					XA_ATOM, 32, PropModeAppend, (unsigned char *)supportedAtoms,
 					sizeof(supportedAtoms) / sizeof(supportedAtoms[0]));
 
@@ -2941,7 +2941,7 @@ register_cm (Display *dpy)
 
 	ourWindow = w;
 
-	return True;
+	return true;
 }
 
 static void
@@ -2951,7 +2951,7 @@ register_systray(Display *dpy)
 
 	snprintf(net_system_tray_name, sizeof(net_system_tray_name),
 			 "_NET_SYSTEM_TRAY_S%d", scr);
-	Atom net_system_tray = XInternAtom(dpy, net_system_tray_name, False);
+	Atom net_system_tray = XInternAtom(dpy, net_system_tray_name, false);
 
 	XSetSelectionOwner(dpy, net_system_tray, ourWindow, 0);
 }
@@ -3065,7 +3065,7 @@ void check_new_wayland_res( void )
 		}
 
 		struct wlr_dmabuf_attributes dmabuf = {};
-		bool result = False;
+		bool result = false;
 		if ( wlr_buffer_get_dmabuf( buf, &dmabuf ) ) {
 			result = true;
 			for ( int i = 0; i < dmabuf.n_planes; i++ ) {
@@ -3247,7 +3247,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 				win * w = find_win(dpy, ev.xdestroywindow.window);
 
 				if (w && w->id == ev.xdestroywindow.window)
-					destroy_win (dpy, ev.xdestroywindow.window, True, True);
+					destroy_win (dpy, ev.xdestroywindow.window, true, true);
 				break;
 			}
 			case MapNotify:
@@ -3263,7 +3263,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 				win * w = find_win(dpy, ev.xunmap.window);
 
 				if (w && w->id == ev.xunmap.window)
-					unmap_win (dpy, ev.xunmap.window, True);
+					unmap_win (dpy, ev.xunmap.window, true);
 				break;
 			}
 			case FocusOut:
@@ -3306,7 +3306,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 
 					if (w && w->id == ev.xreparent.window)
 					{
-						destroy_win (dpy, ev.xreparent.window, False, True);
+						destroy_win (dpy, ev.xreparent.window, false, true);
 					}
 					else
 					{
@@ -3316,7 +3316,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 						if (w)
 						{
 							get_size_hints(dpy, w);
-							focusDirty = True;
+							focusDirty = true;
 						}
 					}
 				}
@@ -3492,25 +3492,25 @@ steamcompmgr_main (int argc, char **argv)
 				cursorHideTime = atoi( optarg );
 				break;
 			case 'v':
-				drawDebugInfo = True;
+				drawDebugInfo = true;
 				break;
 			case 'e':
-				steamMode = True;
+				steamMode = true;
 				break;
 			case 'c':
-				alwaysComposite = True;
+				alwaysComposite = true;
 				break;
 			case 'x':
-				useXRes = False;
+				useXRes = false;
 				break;
 			case 0: // long options without a short option
 				opt_name = gamescope_options[opt_index].name;
 				if (strcmp(opt_name, "debug-focus") == 0) {
-					debugFocus = True;
+					debugFocus = true;
 				} else if (strcmp(opt_name, "synchronous-x11") == 0) {
-					synchronize = True;
+					synchronize = true;
 				} else if (strcmp(opt_name, "debug-events") == 0) {
-					debugEvents = True;
+					debugEvents = true;
 				} else if (strcmp(opt_name, "cursor") == 0) {
 					g_customCursorPath = optarg;
 				}
@@ -3535,7 +3535,7 @@ steamcompmgr_main (int argc, char **argv)
 	const char *pchEnableVkBasalt = getenv( "ENABLE_VKBASALT" );
 	if ( pchEnableVkBasalt != nullptr && pchEnableVkBasalt[0] == '1' )
 	{
-		alwaysComposite = True;
+		alwaysComposite = true;
 	}
 
 	dpy = XOpenDisplay ( wlserver_get_nested_display_name() );
@@ -3603,48 +3603,48 @@ steamcompmgr_main (int argc, char **argv)
 	register_systray(dpy);
 
 	/* get atoms */
-	steamAtom = XInternAtom (dpy, STEAM_PROP, False);
-	steamInputFocusAtom = XInternAtom (dpy, "STEAM_INPUT_FOCUS", False);
-	steamTouchClickModeAtom = XInternAtom (dpy, "STEAM_TOUCH_CLICK_MODE", False);
-	gameAtom = XInternAtom (dpy, GAME_PROP, False);
-	overlayAtom = XInternAtom (dpy, OVERLAY_PROP, False);
-	opacityAtom = XInternAtom (dpy, OPACITY_PROP, False);
-	gamesRunningAtom = XInternAtom (dpy, GAMES_RUNNING_PROP, False);
-	screenScaleAtom = XInternAtom (dpy, SCREEN_SCALE_PROP, False);
-	screenZoomAtom = XInternAtom (dpy, SCREEN_MAGNIFICATION_PROP, False);
-	winTypeAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE", False);
-	winDesktopAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
-	winDockAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
-	winToolbarAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
-	winMenuAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_MENU", False);
-	winUtilAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_UTILITY", False);
-	winSplashAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_SPLASH", False);
-	winDialogAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-	winNormalAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
-	sizeHintsAtom = XInternAtom (dpy, "WM_NORMAL_HINTS", False);
-	netWMStateFullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", False);
-	activeWindowAtom = XInternAtom (dpy, "_NET_ACTIVE_WINDOW", False);
-	netWMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", False);
-	WMTransientForAtom = XInternAtom (dpy, "WM_TRANSIENT_FOR", False);
-	netWMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", False);
-	netWMStateFocusedAtom = XInternAtom (dpy, "_NET_WM_STATE_FOCUSED", False);
-	netWMStateSkipTaskbarAtom = XInternAtom (dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
-	netWMStateSkipPagerAtom = XInternAtom (dpy, "_NET_WM_STATE_SKIP_PAGER", False);
-	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", False);
-	WMStateAtom = XInternAtom (dpy, "WM_STATE", False);
-	utf8StringAtom = XInternAtom (dpy, "UTF8_STRING", False);
-	netWMNameAtom = XInternAtom (dpy, "_NET_WM_NAME", False);
-	netSystemTrayOpcodeAtom = XInternAtom (dpy, "_NET_SYSTEM_TRAY_OPCODE", False);
-	steamStreamingClientAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT", False);
-	steamStreamingClientVideoAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT_VIDEO", False);
-	gamescopeCtrlAppIDAtom = XInternAtom (dpy, "GAMESCOPECTRL_BASELAYER_APPID", False);
-	WMChangeStateAtom = XInternAtom (dpy, "WM_CHANGE_STATE", False);
+	steamAtom = XInternAtom (dpy, STEAM_PROP, false);
+	steamInputFocusAtom = XInternAtom (dpy, "STEAM_INPUT_FOCUS", false);
+	steamTouchClickModeAtom = XInternAtom (dpy, "STEAM_TOUCH_CLICK_MODE", false);
+	gameAtom = XInternAtom (dpy, GAME_PROP, false);
+	overlayAtom = XInternAtom (dpy, OVERLAY_PROP, false);
+	opacityAtom = XInternAtom (dpy, OPACITY_PROP, false);
+	gamesRunningAtom = XInternAtom (dpy, GAMES_RUNNING_PROP, false);
+	screenScaleAtom = XInternAtom (dpy, SCREEN_SCALE_PROP, false);
+	screenZoomAtom = XInternAtom (dpy, SCREEN_MAGNIFICATION_PROP, false);
+	winTypeAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE", false);
+	winDesktopAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", false);
+	winDockAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DOCK", false);
+	winToolbarAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", false);
+	winMenuAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_MENU", false);
+	winUtilAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_UTILITY", false);
+	winSplashAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_SPLASH", false);
+	winDialogAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DIALOG", false);
+	winNormalAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_NORMAL", false);
+	sizeHintsAtom = XInternAtom (dpy, "WM_NORMAL_HINTS", false);
+	netWMStateFullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", false);
+	activeWindowAtom = XInternAtom (dpy, "_NET_ACTIVE_WINDOW", false);
+	netWMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", false);
+	WMTransientForAtom = XInternAtom (dpy, "WM_TRANSIENT_FOR", false);
+	netWMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", false);
+	netWMStateFocusedAtom = XInternAtom (dpy, "_NET_WM_STATE_FOCUSED", false);
+	netWMStateSkipTaskbarAtom = XInternAtom (dpy, "_NET_WM_STATE_SKIP_TASKBAR", false);
+	netWMStateSkipPagerAtom = XInternAtom (dpy, "_NET_WM_STATE_SKIP_PAGER", false);
+	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", false);
+	WMStateAtom = XInternAtom (dpy, "WM_STATE", false);
+	utf8StringAtom = XInternAtom (dpy, "UTF8_STRING", false);
+	netWMNameAtom = XInternAtom (dpy, "_NET_WM_NAME", false);
+	netSystemTrayOpcodeAtom = XInternAtom (dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
+	steamStreamingClientAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT", false);
+	steamStreamingClientVideoAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT_VIDEO", false);
+	gamescopeCtrlAppIDAtom = XInternAtom (dpy, "GAMESCOPECTRL_BASELAYER_APPID", false);
+	WMChangeStateAtom = XInternAtom (dpy, "WM_CHANGE_STATE", false);
 
 	root_width = DisplayWidth (dpy, scr);
 	root_height = DisplayHeight (dpy, scr);
 
 	allDamage = None;
-	clipChanged = True;
+	clipChanged = true;
 
 	int vblankFD = vblank_init();
 	assert( vblankFD >= 0 );
@@ -3674,7 +3674,7 @@ steamcompmgr_main (int argc, char **argv)
 
 	XUngrabServer (dpy);
 
-	XF86VidModeLockModeSwitch(dpy, scr, True);
+	XF86VidModeLockModeSwitch(dpy, scr, true);
 
 	std::unique_ptr<MouseCursor> cursor(new MouseCursor(dpy));
 	if (g_customCursorPath)
@@ -3723,7 +3723,7 @@ steamcompmgr_main (int argc, char **argv)
 
 	for (;;)
 	{
-		focusDirty = False;
+		focusDirty = false;
 		bool vblank = false;
 
 		if ( poll( pollfds, EVENT_COUNT, -1 ) < 0)
@@ -3756,7 +3756,7 @@ steamcompmgr_main (int argc, char **argv)
 			break;
 		}
 
-		if (focusDirty == True)
+		if (focusDirty == true)
 		{
 			determine_and_apply_focus(dpy, cursor.get());
 
