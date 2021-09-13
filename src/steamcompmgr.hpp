@@ -52,6 +52,8 @@ public:
 	// Will take ownership of data.
 	bool setCursorImage(char *data, int w, int h);
 
+	void hide() { m_lastMovedTime = 0; checkSuspension(); }
+
 private:
 	void warp(int x, int y);
 	void checkSuspension();

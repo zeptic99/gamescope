@@ -850,9 +850,7 @@ void MouseCursor::move(int x, int y)
 	}
 
 	// Ignore the first events as it's likely to be non-user-initiated warps
-	// Account for one warp from us, one warp from the app and one warp from
-	// the toolkit.
-	if (!window || window->mouseMoved++ < 3 )
+	if (!window || window->mouseMoved++ < 5 )
 		return;
 
 	m_lastMovedTime = get_time_in_milliseconds();
@@ -1771,6 +1769,11 @@ found:
 	{
 		win *keyboardFocusWin = inputFocus;
 		
+		if ( debugFocus == True )
+		{
+			xwm_log.debugf( "determine_and_apply_focus inputFocus %lu", inputFocus->id );
+		}
+
 		if ( inputFocus->inputFocusMode == 2 )
 			keyboardFocusWin = focus;
 
@@ -1780,18 +1783,22 @@ found:
 
 			if ( inputFocus->surface.wlr != nullptr )
 				wlserver_mousefocus( inputFocus->surface.wlr );
-		
+
 			if ( keyboardFocusWin->surface.wlr != nullptr )
 				wlserver_keyboardfocus( keyboardFocusWin->surface.wlr );
 
 			wlserver_unlock();
 		}
-		
-		XSetInputFocus(dpy, keyboardFocusWin->id, RevertToNone, CurrentTime);
+
+			XSetInputFocus(dpy, keyboardFocusWin->id, RevertToNone, CurrentTime);
 
 		currentInputFocusWindow = inputFocus->id;
 		currentInputFocusMode = inputFocus->inputFocusMode;
 		currentKeyboardFocusWindow = keyboardFocusWin->id;
+
+		// at some point make wlserver_mousefocus smarter with preserving pointer position
+		// for now hide the jarring warp and possible image change in case cursor was still on screen
+		cursor->hide();
 	}
 
 	w = focus;
@@ -2272,7 +2279,7 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new_win->nudged = False;
 	new_win->ignoreOverrideRedirect = False;
 
-	new_win->mouseMoved = False;
+	new_win->mouseMoved = 0;
 
 	wlserver_surface_init( &new_win->surface, id );
 
