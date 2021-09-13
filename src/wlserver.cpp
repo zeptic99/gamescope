@@ -790,11 +790,20 @@ void wlserver_key( uint32_t key, bool press, uint32_t time )
 	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, time, key, press );
 }
 
-void wlserver_mousefocus( struct wlr_surface *wlrsurface )
+void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y /* = 0 */ )
 {
 	wlserver.mouse_focus_surface = wlrsurface;
-	wlserver.mouse_surface_cursorx = wlrsurface->current.width / 2.0;
-	wlserver.mouse_surface_cursory = wlrsurface->current.height / 2.0;
+
+	if ( x < wlrsurface->current.width && y < wlrsurface->current.height )
+	{
+		wlserver.mouse_surface_cursorx = x;
+		wlserver.mouse_surface_cursory = y;
+	}
+	else
+	{
+		wlserver.mouse_surface_cursorx = wlrsurface->current.width / 2.0;
+		wlserver.mouse_surface_cursory = wlrsurface->current.height / 2.0;
+	}
 	wlr_seat_pointer_notify_enter( wlserver.wlr.seat, wlrsurface, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 }
 

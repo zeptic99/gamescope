@@ -1782,7 +1782,7 @@ found:
 			wlserver_lock();
 
 			if ( inputFocus->surface.wlr != nullptr )
-				wlserver_mousefocus( inputFocus->surface.wlr );
+				wlserver_mousefocus( inputFocus->surface.wlr, cursor->x(), cursor->y() );
 
 			if ( keyboardFocusWin->surface.wlr != nullptr )
 				wlserver_keyboardfocus( keyboardFocusWin->surface.wlr );
@@ -1796,8 +1796,7 @@ found:
 		currentInputFocusMode = inputFocus->inputFocusMode;
 		currentKeyboardFocusWindow = keyboardFocusWin->id;
 
-		// at some point make wlserver_mousefocus smarter with preserving pointer position
-		// for now hide the jarring warp and possible image change in case cursor was still on screen
+		// cursor is likely not interactable anymore in its original context, hide
 		cursor->hide();
 	}
 
