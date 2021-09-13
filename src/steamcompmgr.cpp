@@ -138,7 +138,7 @@ typedef struct _win {
 	bool nudged;
 	bool ignoreOverrideRedirect;
 
-	bool mouseMoved;
+	unsigned int mouseMoved;
 
 	struct wlserver_surface surface;
 
