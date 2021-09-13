@@ -435,9 +435,9 @@ static inline void stats_printf( const char* format, ...)
 	static std::string eventstr;
 
 	va_list args;
-	va_start (args, format);
-	vsprintf (buffer,format, args);
-	va_end (args);
+	va_start(args, format);
+	vsprintf(buffer,format, args);
+	va_end(args);
 
 	eventstr = buffer;
 
@@ -482,20 +482,20 @@ void sleep_until_nanos(uint64_t nanos)
 }
 
 unsigned int
-get_time_in_milliseconds (void)
+get_time_in_milliseconds(void)
 {
 	return (unsigned int)(get_time_in_nanos() / 1'000'000ul);
 }
 
 static void
-discard_ignore (Display *dpy, unsigned long sequence)
+discard_ignore(Display *dpy, unsigned long sequence)
 {
 	while (ignore_head)
 	{
 		if ((long) (sequence - ignore_head->sequence) > 0)
 		{
 			ignore  *next = ignore_head->next;
-			free (ignore_head);
+			free(ignore_head);
 			ignore_head = next;
 			if (!ignore_head)
 				ignore_tail = &ignore_head;
@@ -506,9 +506,9 @@ discard_ignore (Display *dpy, unsigned long sequence)
 }
 
 static void
-set_ignore (Display *dpy, unsigned long sequence)
+set_ignore(Display *dpy, unsigned long sequence)
 {
-	ignore  *i = (ignore *)malloc (sizeof (ignore));
+	ignore  *i = (ignore *)malloc(sizeof(ignore));
 	if (!i)
 		return;
 	i->sequence = sequence;
@@ -518,14 +518,14 @@ set_ignore (Display *dpy, unsigned long sequence)
 }
 
 static int
-should_ignore (Display *dpy, unsigned long sequence)
+should_ignore(Display *dpy, unsigned long sequence)
 {
-	discard_ignore (dpy, sequence);
+	discard_ignore(dpy, sequence);
 	return ignore_head && ignore_head->sequence == sequence;
 }
 
 static win *
-find_win (Display *dpy, Window id)
+find_win(Display *dpy, Window id)
 {
 	win	*w;
 
@@ -550,7 +550,7 @@ find_win (Display *dpy, Window id)
 	Window parent = None;
 	Window *children = NULL;
 	unsigned int childrenCount;
-	set_ignore (dpy, NextRequest (dpy));
+	set_ignore(dpy, NextRequest(dpy));
 	XQueryTree(dpy, id, &root, &parent, &children, &childrenCount);
 	if (children)
 		XFree(children);
@@ -577,7 +577,7 @@ static win * find_win( struct wlr_surface *surf )
 }
 
 static void
-release_commit ( commit_t &commit )
+release_commit( commit_t &commit )
 {
 	if ( commit.fb_id != 0 )
 	{
@@ -597,7 +597,7 @@ release_commit ( commit_t &commit )
 }
 
 static bool
-import_commit ( struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dmabuf, commit_t &commit )
+import_commit( struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dmabuf, commit_t &commit )
 {
 	commit.buf = buf;
 
@@ -1016,7 +1016,7 @@ void MouseCursor::paint(win *window, struct Composite_t *pComposite,
 }
 
 static void
-paint_window (Display *dpy, win *w, struct Composite_t *pComposite,
+paint_window(Display *dpy, win *w, struct Composite_t *pComposite,
 			  struct VulkanPipeline_t *pPipeline, bool notificationMode, MouseCursor *cursor)
 {
 	uint32_t sourceWidth, sourceHeight;
@@ -1124,13 +1124,13 @@ paint_window (Display *dpy, win *w, struct Composite_t *pComposite,
 }
 
 static void
-paint_message (const char *message, int Y, float r, float g, float b)
+paint_message(const char *message, int Y, float r, float g, float b)
 {
 
 }
 
 static void
-paint_debug_info (Display *dpy)
+paint_debug_info(Display *dpy)
 {
 	int Y = 100;
 
@@ -1480,8 +1480,8 @@ get_prop(Display *dpy, Window win, Atom prop, unsigned int def, bool *found = nu
 	if (result == Success && data != NULL)
 	{
 		unsigned int i;
-		memcpy (&i, data, sizeof (unsigned int));
-		XFree( (void *) data);
+		memcpy(&i, data, sizeof(unsigned int));
+		XFree((void *) data);
 		if ( found != nullptr )
 		{
 			*found = true;
@@ -1515,7 +1515,7 @@ bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vec
 		{
 			vecResult.push_back( data[ i ] );
 		}
-		XFree( (void *) data);
+		XFree((void *) data);
 		return true;
 	}
 	return false;
@@ -1554,7 +1554,7 @@ win_skip_taskbar_and_pager( win *w )
 static bool
 is_focus_priority_greater( win *a, win *b )
 {
-	if ( win_has_game_id( a ) != win_has_game_id ( b ) )
+	if ( win_has_game_id( a ) != win_has_game_id( b ) )
 		return win_has_game_id( a );
 
 	// We allow using an override redirect window in some cases, but if we have
@@ -1565,7 +1565,7 @@ is_focus_priority_greater( win *a, win *b )
 
 	// Wine sets SKIP_TASKBAR and SKIP_PAGER hints for WS_EX_NOACTIVATE windows.
 	// See https://github.com/Plagman/gamescope/issues/87
-	if ( win_skip_taskbar_and_pager( a ) != win_skip_taskbar_and_pager ( b ) )
+	if ( win_skip_taskbar_and_pager( a ) != win_skip_taskbar_and_pager( b ) )
 		return !win_skip_taskbar_and_pager( a );
 
 	// The damage sequences are only relevant for game windows.
@@ -1576,7 +1576,7 @@ is_focus_priority_greater( win *a, win *b )
 }
 
 static void
-determine_and_apply_focus (Display *dpy, MouseCursor *cursor)
+determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 {
 	win *w, *focus = NULL;
 	win *inputFocus = NULL;
@@ -1834,7 +1834,7 @@ found:
 	unsigned int    nchildren = 0;
 	unsigned int    i = 0;
 
-	XQueryTree (dpy, w->id, &root_return, &parent_return, &children, &nchildren);
+	XQueryTree(dpy, w->id, &root_return, &parent_return, &children, &nchildren);
 
 	while (i < nchildren)
 	{
@@ -1842,7 +1842,7 @@ found:
 		i++;
 	}
 
-	XFree (children);
+	XFree(children);
 }
 
 static void
@@ -1876,13 +1876,13 @@ get_size_hints(Display *dpy, win *w)
 			Window	    *children = NULL;
 			unsigned int    nchildren = 0;
 
-			XQueryTree (dpy, w->id, &root_return, &parent_return, &children, &nchildren);
+			XQueryTree(dpy, w->id, &root_return, &parent_return, &children, &nchildren);
 
 			if (nchildren == 1)
 			{
 				XWindowAttributes attribs;
 
-				XGetWindowAttributes (dpy, children[0], &attribs);
+				XGetWindowAttributes(dpy, children[0], &attribs);
 
 				// If we have a unique children that isn't override-reidrect that is
 				// contained inside this fullscreen window, it's probably it.
@@ -1901,7 +1901,7 @@ get_size_hints(Display *dpy, win *w)
 				}
 			}
 
-			XFree (children);
+			XFree(children);
 		}
 	}
 }
@@ -1912,7 +1912,7 @@ get_win_title(Display *dpy, win *w, Atom atom)
 	assert(atom == XA_WM_NAME || atom == netWMNameAtom);
 
 	XTextProperty tp;
-	XGetTextProperty ( dpy, w->id, &tp, atom );
+	XGetTextProperty( dpy, w->id, &tp, atom );
 
 	bool is_utf8;
 	if (tp.encoding == utf8StringAtom) {
@@ -1969,9 +1969,9 @@ get_net_wm_state(Display *dpy, win *w)
 }
 
 static void
-map_win (Display *dpy, Window id, unsigned long sequence)
+map_win(Display *dpy, Window id, unsigned long sequence)
 {
-	win		*w = find_win (dpy, id);
+	win		*w = find_win(dpy, id);
 
 	if (!w)
 		return;
@@ -1979,13 +1979,13 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	w->a.map_state = IsViewable;
 
 	/* This needs to be here or else we lose transparency messages */
-	XSelectInput (dpy, id, PropertyChangeMask | SubstructureNotifyMask |
+	XSelectInput(dpy, id, PropertyChangeMask | SubstructureNotifyMask |
 		PointerMotionMask | LeaveWindowMask | FocusChangeMask);
 
 	/* This needs to be here since we don't get PropertyNotify when unmapped */
-	w->opacity = get_prop (dpy, w->id, opacityAtom, OPAQUE);
+	w->opacity = get_prop(dpy, w->id, opacityAtom, OPAQUE);
 
-	w->isSteam = get_prop (dpy, w->id, steamAtom, 0);
+	w->isSteam = get_prop(dpy, w->id, steamAtom, 0);
 
 	/* First try to read the UTF8 title prop, then fallback to the non-UTF8 one */
 	get_win_title( dpy, w, netWMNameAtom );
@@ -1998,7 +1998,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 
 	if ( steamMode == true )
 	{
-		uint32_t appID = get_prop (dpy, w->id, gameAtom, 0);
+		uint32_t appID = get_prop(dpy, w->id, gameAtom, 0);
 		
 		if ( w->appID != 0 && appID != 0 && w->appID != appID )
 		{
@@ -2014,7 +2014,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 	{
 		w->appID = w->id;
 	}
-	w->isOverlay = get_prop (dpy, w->id, overlayAtom, 0);
+	w->isOverlay = get_prop(dpy, w->id, overlayAtom, 0);
 
 	get_size_hints(dpy, w);
 
@@ -2049,7 +2049,7 @@ map_win (Display *dpy, Window id, unsigned long sequence)
 }
 
 static void
-finish_unmap_win (Display *dpy, win *w)
+finish_unmap_win(Display *dpy, win *w)
 {
 	// TODO clear done commits here?
 // 	if (fadeOutWindow.id != w->id)
@@ -2063,23 +2063,23 @@ finish_unmap_win (Display *dpy, win *w)
 	}
 
 	/* don't care about properties anymore */
-	set_ignore (dpy, NextRequest (dpy));
+	set_ignore(dpy, NextRequest(dpy));
 	XSelectInput(dpy, w->id, 0);
 
 	clipChanged = true;
 }
 
 static void
-unmap_win (Display *dpy, Window id, bool fade)
+unmap_win(Display *dpy, Window id, bool fade)
 {
-	win *w = find_win (dpy, id);
+	win *w = find_win(dpy, id);
 	if (!w)
 		return;
 	w->a.map_state = IsUnmapped;
 
 	focusDirty = true;
 
-	finish_unmap_win (dpy, w);
+	finish_unmap_win(dpy, w);
 }
 
 static uint32_t
@@ -2168,7 +2168,7 @@ get_appid_from_pid( pid_t pid )
 }
 
 static pid_t
-get_win_pid (Display *dpy, Window id)
+get_win_pid(Display *dpy, Window id)
 {
 	XResClientIdSpec client_spec = {
 		.client = id,
@@ -2191,7 +2191,7 @@ get_win_pid (Display *dpy, Window id)
 }
 
 static void
-add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
+add_win(Display *dpy, Window id, Window prev, unsigned long sequence)
 {
 	win				*new_win = new win;
 	win				**p;
@@ -2207,8 +2207,8 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	else
 		p = &list;
 	new_win->id = id;
-	set_ignore (dpy, NextRequest (dpy));
-	if (!XGetWindowAttributes (dpy, id, &new_win->a))
+	set_ignore(dpy, NextRequest(dpy));
+	if (!XGetWindowAttributes(dpy, id, &new_win->a))
 	{
 		delete new_win;
 		return;
@@ -2220,13 +2220,13 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 		new_win->damage = None;
 	else
 	{
-		new_win->damage = XDamageCreate (dpy, id, XDamageReportRawRectangles);
+		new_win->damage = XDamageCreate(dpy, id, XDamageReportRawRectangles);
 	}
 	new_win->opacity = OPAQUE;
 
 	if ( useXRes == true )
 	{
-		new_win->pid = get_win_pid (dpy, id);
+		new_win->pid = get_win_pid(dpy, id);
 	}
 	else
 	{
@@ -2285,13 +2285,13 @@ add_win (Display *dpy, Window id, Window prev, unsigned long sequence)
 	new_win->next = *p;
 	*p = new_win;
 	if (new_win->a.map_state == IsViewable)
-		map_win (dpy, id, sequence);
+		map_win(dpy, id, sequence);
 
 	focusDirty = true;
 }
 
 static void
-restack_win (Display *dpy, win *w, Window new_above)
+restack_win(Display *dpy, win *w, Window new_above)
 {
 	Window  old_above;
 
@@ -2325,9 +2325,9 @@ restack_win (Display *dpy, win *w, Window new_above)
 }
 
 static void
-configure_win (Display *dpy, XConfigureEvent *ce)
+configure_win(Display *dpy, XConfigureEvent *ce)
 {
-	win		    *w = find_win (dpy, ce->window);
+	win		    *w = find_win(dpy, ce->window);
 
 	if (!w || w->id != ce->window)
 	{
@@ -2345,15 +2345,15 @@ configure_win (Display *dpy, XConfigureEvent *ce)
 	w->a.height = ce->height;
 	w->a.border_width = ce->border_width;
 	w->a.override_redirect = ce->override_redirect;
-	restack_win (dpy, w, ce->above);
+	restack_win(dpy, w, ce->above);
 
 	focusDirty = true;
 }
 
 static void
-circulate_win (Display *dpy, XCirculateEvent *ce)
+circulate_win(Display *dpy, XCirculateEvent *ce)
 {
-	win	    *w = find_win (dpy, ce->window);
+	win	    *w = find_win(dpy, ce->window);
 	Window  new_above;
 
 	if (!w || w->id != ce->window)
@@ -2363,16 +2363,16 @@ circulate_win (Display *dpy, XCirculateEvent *ce)
 		new_above = list->id;
 	else
 		new_above = None;
-	restack_win (dpy, w, new_above);
+	restack_win(dpy, w, new_above);
 	clipChanged = true;
 }
 
-static void map_request (Display *dpy, XMapRequestEvent *mapRequest)
+static void map_request(Display *dpy, XMapRequestEvent *mapRequest)
 {
 	XMapWindow( dpy, mapRequest->window );
 }
 
-static void configure_request (Display *dpy, XConfigureRequestEvent *configureRequest)
+static void configure_request(Display *dpy, XConfigureRequestEvent *configureRequest)
 {
 	XWindowChanges changes =
 	{
@@ -2388,13 +2388,13 @@ static void configure_request (Display *dpy, XConfigureRequestEvent *configureRe
 	XConfigureWindow( dpy, configureRequest->window, configureRequest->value_mask, &changes );
 }
 
-static void circulate_request ( Display *dpy, XCirculateRequestEvent *circulateRequest )
+static void circulate_request( Display *dpy, XCirculateRequestEvent *circulateRequest )
 {
 	XCirculateSubwindows( dpy, circulateRequest->window, circulateRequest->place );
 }
 
 static void
-finish_destroy_win (Display *dpy, Window id, bool gone)
+finish_destroy_win(Display *dpy, Window id, bool gone)
 {
 	win	**prev, *w;
 
@@ -2406,8 +2406,8 @@ finish_destroy_win (Display *dpy, Window id, bool gone)
 			*prev = w->next;
 			if (w->damage != None)
 			{
-				set_ignore (dpy, NextRequest (dpy));
-				XDamageDestroy (dpy, w->damage);
+				set_ignore(dpy, NextRequest(dpy));
+				XDamageDestroy(dpy, w->damage);
 				w->damage = None;
 			}
 
@@ -2422,7 +2422,7 @@ finish_destroy_win (Display *dpy, Window id, bool gone)
 }
 
 static void
-destroy_win (Display *dpy, Window id, bool gone, bool fade)
+destroy_win(Display *dpy, Window id, bool gone, bool fade)
 {
 	if (currentFocusWindow == id && gone)
 	{
@@ -2439,13 +2439,13 @@ destroy_win (Display *dpy, Window id, bool gone, bool fade)
 		currentKeyboardFocusWindow = None;
 	focusDirty = true;
 
-	finish_destroy_win (dpy, id, gone);
+	finish_destroy_win(dpy, id, gone);
 }
 
 static void
-damage_win (Display *dpy, XDamageNotifyEvent *de)
+damage_win(Display *dpy, XDamageNotifyEvent *de)
 {
-	win	*w = find_win (dpy, de->drawable);
+	win	*w = find_win(dpy, de->drawable);
 	win *focus = find_win(dpy, currentFocusWindow);
 
 	if (!w)
@@ -2715,7 +2715,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 		win * w = find_win(dpy, ev->window);
 		if (w)
 		{
-			uint32_t appID = get_prop (dpy, w->id, gameAtom, 0);
+			uint32_t appID = get_prop(dpy, w->id, gameAtom, 0);
 			
 			if ( w->appID != 0 && appID != 0 && w->appID != appID )
 			{
@@ -2807,13 +2807,13 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 }
 
 static int
-error (Display *dpy, XErrorEvent *ev)
+error(Display *dpy, XErrorEvent *ev)
 {
 	int	    o;
 	const char    *name = NULL;
 	static char buffer[256];
 
-	if (should_ignore (dpy, ev->serial))
+	if (should_ignore(dpy, ev->serial))
 		return 0;
 
 	if (ev->request_code == composite_opcode &&
@@ -2846,16 +2846,16 @@ error (Display *dpy, XErrorEvent *ev)
 	if (name == NULL)
 	{
 		buffer[0] = '\0';
-		XGetErrorText (dpy, ev->error_code, buffer, sizeof (buffer));
+		XGetErrorText(dpy, ev->error_code, buffer, sizeof(buffer));
 		name = buffer;
 	}
 
 	xwm_log.errorf("error %d: %s request %d minor %d serial %lu",
-			 ev->error_code, (strlen (name) > 0) ? name : "unknown",
+			 ev->error_code, (strlen(name) > 0) ? name : "unknown",
 			 ev->request_code, ev->minor_code, ev->serial);
 
 	gotXError = true;
-	/*    abort ();	    this is just annoying to most people */
+	/*    abort();	    this is just annoying to most people */
 	return 0;
 }
 
@@ -2877,45 +2877,45 @@ handle_io_error(Display *dpy)
 }
 
 static bool
-register_cm (Display *dpy)
+register_cm(Display *dpy)
 {
 	Window w;
 	Atom a;
 	static char net_wm_cm[] = "_NET_WM_CM_Sxx";
 
-	snprintf (net_wm_cm, sizeof (net_wm_cm), "_NET_WM_CM_S%d", scr);
-	a = XInternAtom (dpy, net_wm_cm, false);
+	snprintf(net_wm_cm, sizeof(net_wm_cm), "_NET_WM_CM_S%d", scr);
+	a = XInternAtom(dpy, net_wm_cm, false);
 
-	w = XGetSelectionOwner (dpy, a);
+	w = XGetSelectionOwner(dpy, a);
 	if (w != None)
 	{
 		XTextProperty tp;
 		char **strs;
 		int count;
-		Atom winNameAtom = XInternAtom (dpy, "_NET_WM_NAME", false);
+		Atom winNameAtom = XInternAtom(dpy, "_NET_WM_NAME", false);
 
-		if (!XGetTextProperty (dpy, w, &tp, winNameAtom) &&
-			!XGetTextProperty (dpy, w, &tp, XA_WM_NAME))
+		if (!XGetTextProperty(dpy, w, &tp, winNameAtom) &&
+			!XGetTextProperty(dpy, w, &tp, XA_WM_NAME))
 		{
 			xwm_log.errorf("Another composite manager is already running (0x%lx)", (unsigned long) w);
 			return false;
 		}
-		if (XmbTextPropertyToTextList (dpy, &tp, &strs, &count) == Success)
+		if (XmbTextPropertyToTextList(dpy, &tp, &strs, &count) == Success)
 		{
 			xwm_log.errorf("Another composite manager is already running (%s)", strs[0]);
 
-			XFreeStringList (strs);
+			XFreeStringList(strs);
 		}
 
-		XFree (tp.value);
+		XFree(tp.value);
 
 		return false;
 	}
 
-	w = XCreateSimpleWindow (dpy, RootWindow (dpy, scr), 0, 0, 1, 1, 0, None,
+	w = XCreateSimpleWindow(dpy, RootWindow(dpy, scr), 0, 0, 1, 1, 0, None,
 							 None);
 
-	Xutf8SetWMProperties (dpy, w, "steamcompmgr", "steamcompmgr", NULL, 0, NULL, NULL,
+	Xutf8SetWMProperties(dpy, w, "steamcompmgr", "steamcompmgr", NULL, 0, NULL, NULL,
 						  NULL);
 
 	Atom atomWmCheck = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", false);
@@ -2937,7 +2937,7 @@ register_cm (Display *dpy)
 					XA_ATOM, 32, PropModeAppend, (unsigned char *)supportedAtoms,
 					sizeof(supportedAtoms) / sizeof(supportedAtoms[0]));
 
-	XSetSelectionOwner (dpy, a, w, 0);
+	XSetSelectionOwner(dpy, a, w, 0);
 
 	ourWindow = w;
 
@@ -3147,7 +3147,7 @@ spawn_client( char **argv )
 					strNewPreload.append( pchPreloadCopy + i );
 				}
 
-				i += strlen ( pchPreloadCopy + i );
+				i += strlen( pchPreloadCopy + i );
 			}
 			else
 			{
@@ -3221,33 +3221,33 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 {
 	do {
 		XEvent ev;
-		int ret = XNextEvent (dpy, &ev);
+		int ret = XNextEvent(dpy, &ev);
 		if (ret != 0)
 		{
 			xwm_log.errorf("XNextEvent failed");
 			break;
 		}
 		if ((ev.type & 0x7f) != KeymapNotify)
-			discard_ignore (dpy, ev.xany.serial);
+			discard_ignore(dpy, ev.xany.serial);
 		if (debugEvents)
 		{
-			gpuvis_trace_printf ("event %d", ev.type);
-			printf ("event %d\n", ev.type);
+			gpuvis_trace_printf("event %d", ev.type);
+			printf("event %d\n", ev.type);
 		}
 		switch (ev.type) {
 			case CreateNotify:
 				if (ev.xcreatewindow.parent == root)
-					add_win (dpy, ev.xcreatewindow.window, 0, ev.xcreatewindow.serial);
+					add_win(dpy, ev.xcreatewindow.window, 0, ev.xcreatewindow.serial);
 				break;
 			case ConfigureNotify:
-				configure_win (dpy, &ev.xconfigure);
+				configure_win(dpy, &ev.xconfigure);
 				break;
 			case DestroyNotify:
 			{
 				win * w = find_win(dpy, ev.xdestroywindow.window);
 
 				if (w && w->id == ev.xdestroywindow.window)
-					destroy_win (dpy, ev.xdestroywindow.window, true, true);
+					destroy_win(dpy, ev.xdestroywindow.window, true, true);
 				break;
 			}
 			case MapNotify:
@@ -3255,7 +3255,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 				win * w = find_win(dpy, ev.xmap.window);
 
 				if (w && w->id == ev.xmap.window)
-					map_win (dpy, ev.xmap.window, ev.xmap.serial);
+					map_win(dpy, ev.xmap.window, ev.xmap.serial);
 				break;
 			}
 			case UnmapNotify:
@@ -3263,7 +3263,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 				win * w = find_win(dpy, ev.xunmap.window);
 
 				if (w && w->id == ev.xunmap.window)
-					unmap_win (dpy, ev.xunmap.window, true);
+					unmap_win(dpy, ev.xunmap.window, true);
 				break;
 			}
 			case FocusOut:
@@ -3299,14 +3299,14 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 			}
 			case ReparentNotify:
 				if (ev.xreparent.parent == root)
-					add_win (dpy, ev.xreparent.window, 0, ev.xreparent.serial);
+					add_win(dpy, ev.xreparent.window, 0, ev.xreparent.serial);
 				else
 				{
 					win * w = find_win(dpy, ev.xreparent.window);
 
 					if (w && w->id == ev.xreparent.window)
 					{
-						destroy_win (dpy, ev.xreparent.window, false, true);
+						destroy_win(dpy, ev.xreparent.window, false, true);
 					}
 					else
 					{
@@ -3362,7 +3362,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 			default:
 				if (ev.type == damage_event + XDamageNotify)
 				{
-					damage_win (dpy, (XDamageNotifyEvent *) &ev);
+					damage_win(dpy, (XDamageNotifyEvent *) &ev);
 				}
 				else if (ev.type == xfixes_event + XFixesCursorNotify)
 				{
@@ -3371,7 +3371,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 				break;
 		}
 		XFlush(dpy);
-	} while (XPending (dpy));
+	} while (XPending(dpy));
 }
 
 static bool
@@ -3458,7 +3458,7 @@ enum event_type {
 const char* g_customCursorPath = nullptr;
 
 void
-steamcompmgr_main (int argc, char **argv)
+steamcompmgr_main(int argc, char **argv)
 {
 	Display	   *dpy;
 	Window	    root_return, parent_return;
@@ -3538,110 +3538,110 @@ steamcompmgr_main (int argc, char **argv)
 		alwaysComposite = true;
 	}
 
-	dpy = XOpenDisplay ( wlserver_get_nested_display_name() );
+	dpy = XOpenDisplay( wlserver_get_nested_display_name() );
 	if (!dpy)
 	{
 		xwm_log.errorf("Can't open display");
-		exit (1);
+		exit(1);
 	}
-	XSetErrorHandler (error);
-	XSetIOErrorHandler (handle_io_error);
+	XSetErrorHandler(error);
+	XSetIOErrorHandler(handle_io_error);
 	if (synchronize)
-		XSynchronize (dpy, 1);
-	scr = DefaultScreen (dpy);
-	root = RootWindow (dpy, scr);
+		XSynchronize(dpy, 1);
+	scr = DefaultScreen(dpy);
+	root = RootWindow(dpy, scr);
 
-	if (!XRenderQueryExtension (dpy, &render_event, &render_error))
+	if (!XRenderQueryExtension(dpy, &render_event, &render_error))
 	{
 		xwm_log.errorf("No render extension");
-		exit (1);
+		exit(1);
 	}
-	if (!XQueryExtension (dpy, COMPOSITE_NAME, &composite_opcode,
+	if (!XQueryExtension(dpy, COMPOSITE_NAME, &composite_opcode,
 		&composite_event, &composite_error))
 	{
 		xwm_log.errorf("No composite extension");
-		exit (1);
+		exit(1);
 	}
-	XCompositeQueryVersion (dpy, &composite_major, &composite_minor);
+	XCompositeQueryVersion(dpy, &composite_major, &composite_minor);
 
-	if (!XDamageQueryExtension (dpy, &damage_event, &damage_error))
+	if (!XDamageQueryExtension(dpy, &damage_event, &damage_error))
 	{
 		xwm_log.errorf("No damage extension");
-		exit (1);
+		exit(1);
 	}
-	if (!XFixesQueryExtension (dpy, &xfixes_event, &xfixes_error))
+	if (!XFixesQueryExtension(dpy, &xfixes_event, &xfixes_error))
 	{
 		xwm_log.errorf("No XFixes extension");
-		exit (1);
+		exit(1);
 	}
-	if (!XShapeQueryExtension (dpy, &xshape_event, &xshape_error))
+	if (!XShapeQueryExtension(dpy, &xshape_event, &xshape_error))
 	{
 		xwm_log.errorf("No XShape extension");
-		exit (1);
+		exit(1);
 	}
-	if (!XFixesQueryExtension (dpy, &xfixes_event, &xfixes_error))
+	if (!XFixesQueryExtension(dpy, &xfixes_event, &xfixes_error))
 	{
 		xwm_log.errorf("No XFixes extension");
-		exit (1);
+		exit(1);
 	}
-	if (!XResQueryVersion (dpy, &xres_major, &xres_minor))
+	if (!XResQueryVersion(dpy, &xres_major, &xres_minor))
 	{
 		xwm_log.errorf("No XRes extension");
-		exit (1);
+		exit(1);
 	}
 	if (xres_major != 1 || xres_minor < 2)
 	{
 		xwm_log.errorf("Unsupported XRes version: have %d.%d, want 1.2", xres_major, xres_minor);
-		exit (1);
+		exit(1);
 	}
 
 	if (!register_cm(dpy))
 	{
-		exit (1);
+		exit(1);
 	}
 
 	register_systray(dpy);
 
 	/* get atoms */
-	steamAtom = XInternAtom (dpy, STEAM_PROP, false);
-	steamInputFocusAtom = XInternAtom (dpy, "STEAM_INPUT_FOCUS", false);
-	steamTouchClickModeAtom = XInternAtom (dpy, "STEAM_TOUCH_CLICK_MODE", false);
-	gameAtom = XInternAtom (dpy, GAME_PROP, false);
-	overlayAtom = XInternAtom (dpy, OVERLAY_PROP, false);
-	opacityAtom = XInternAtom (dpy, OPACITY_PROP, false);
-	gamesRunningAtom = XInternAtom (dpy, GAMES_RUNNING_PROP, false);
-	screenScaleAtom = XInternAtom (dpy, SCREEN_SCALE_PROP, false);
-	screenZoomAtom = XInternAtom (dpy, SCREEN_MAGNIFICATION_PROP, false);
-	winTypeAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE", false);
-	winDesktopAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", false);
-	winDockAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DOCK", false);
-	winToolbarAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", false);
-	winMenuAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_MENU", false);
-	winUtilAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_UTILITY", false);
-	winSplashAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_SPLASH", false);
-	winDialogAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_DIALOG", false);
-	winNormalAtom = XInternAtom (dpy, "_NET_WM_WINDOW_TYPE_NORMAL", false);
-	sizeHintsAtom = XInternAtom (dpy, "WM_NORMAL_HINTS", false);
-	netWMStateFullscreenAtom = XInternAtom (dpy, "_NET_WM_STATE_FULLSCREEN", false);
-	activeWindowAtom = XInternAtom (dpy, "_NET_ACTIVE_WINDOW", false);
-	netWMStateAtom = XInternAtom (dpy, "_NET_WM_STATE", false);
-	WMTransientForAtom = XInternAtom (dpy, "WM_TRANSIENT_FOR", false);
-	netWMStateHiddenAtom = XInternAtom (dpy, "_NET_WM_STATE_HIDDEN", false);
-	netWMStateFocusedAtom = XInternAtom (dpy, "_NET_WM_STATE_FOCUSED", false);
-	netWMStateSkipTaskbarAtom = XInternAtom (dpy, "_NET_WM_STATE_SKIP_TASKBAR", false);
-	netWMStateSkipPagerAtom = XInternAtom (dpy, "_NET_WM_STATE_SKIP_PAGER", false);
-	WLSurfaceIDAtom = XInternAtom (dpy, "WL_SURFACE_ID", false);
-	WMStateAtom = XInternAtom (dpy, "WM_STATE", false);
-	utf8StringAtom = XInternAtom (dpy, "UTF8_STRING", false);
-	netWMNameAtom = XInternAtom (dpy, "_NET_WM_NAME", false);
-	netSystemTrayOpcodeAtom = XInternAtom (dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
-	steamStreamingClientAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT", false);
-	steamStreamingClientVideoAtom = XInternAtom (dpy, "STEAM_STREAMING_CLIENT_VIDEO", false);
-	gamescopeCtrlAppIDAtom = XInternAtom (dpy, "GAMESCOPECTRL_BASELAYER_APPID", false);
-	WMChangeStateAtom = XInternAtom (dpy, "WM_CHANGE_STATE", false);
+	steamAtom = XInternAtom(dpy, STEAM_PROP, false);
+	steamInputFocusAtom = XInternAtom(dpy, "STEAM_INPUT_FOCUS", false);
+	steamTouchClickModeAtom = XInternAtom(dpy, "STEAM_TOUCH_CLICK_MODE", false);
+	gameAtom = XInternAtom(dpy, GAME_PROP, false);
+	overlayAtom = XInternAtom(dpy, OVERLAY_PROP, false);
+	opacityAtom = XInternAtom(dpy, OPACITY_PROP, false);
+	gamesRunningAtom = XInternAtom(dpy, GAMES_RUNNING_PROP, false);
+	screenScaleAtom = XInternAtom(dpy, SCREEN_SCALE_PROP, false);
+	screenZoomAtom = XInternAtom(dpy, SCREEN_MAGNIFICATION_PROP, false);
+	winTypeAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", false);
+	winDesktopAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", false);
+	winDockAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", false);
+	winToolbarAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", false);
+	winMenuAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_MENU", false);
+	winUtilAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_UTILITY", false);
+	winSplashAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_SPLASH", false);
+	winDialogAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", false);
+	winNormalAtom = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_NORMAL", false);
+	sizeHintsAtom = XInternAtom(dpy, "WM_NORMAL_HINTS", false);
+	netWMStateFullscreenAtom = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", false);
+	activeWindowAtom = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", false);
+	netWMStateAtom = XInternAtom(dpy, "_NET_WM_STATE", false);
+	WMTransientForAtom = XInternAtom(dpy, "WM_TRANSIENT_FOR", false);
+	netWMStateHiddenAtom = XInternAtom(dpy, "_NET_WM_STATE_HIDDEN", false);
+	netWMStateFocusedAtom = XInternAtom(dpy, "_NET_WM_STATE_FOCUSED", false);
+	netWMStateSkipTaskbarAtom = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", false);
+	netWMStateSkipPagerAtom = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", false);
+	WLSurfaceIDAtom = XInternAtom(dpy, "WL_SURFACE_ID", false);
+	WMStateAtom = XInternAtom(dpy, "WM_STATE", false);
+	utf8StringAtom = XInternAtom(dpy, "UTF8_STRING", false);
+	netWMNameAtom = XInternAtom(dpy, "_NET_WM_NAME", false);
+	netSystemTrayOpcodeAtom = XInternAtom(dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
+	steamStreamingClientAtom = XInternAtom(dpy, "STEAM_STREAMING_CLIENT", false);
+	steamStreamingClientVideoAtom = XInternAtom(dpy, "STEAM_STREAMING_CLIENT_VIDEO", false);
+	gamescopeCtrlAppIDAtom = XInternAtom(dpy, "GAMESCOPECTRL_BASELAYER_APPID", false);
+	WMChangeStateAtom = XInternAtom(dpy, "WM_CHANGE_STATE", false);
 
-	root_width = DisplayWidth (dpy, scr);
-	root_height = DisplayHeight (dpy, scr);
+	root_width = DisplayWidth(dpy, scr);
+	root_height = DisplayHeight(dpy, scr);
 
 	allDamage = None;
 	clipChanged = true;
@@ -3652,11 +3652,11 @@ steamcompmgr_main (int argc, char **argv)
 	currentOutputWidth = g_nOutputWidth;
 	currentOutputHeight = g_nOutputHeight;
 
-	XGrabServer (dpy);
+	XGrabServer(dpy);
 
-	XCompositeRedirectSubwindows (dpy, root, CompositeRedirectManual);
+	XCompositeRedirectSubwindows(dpy, root, CompositeRedirectManual);
 
-	XSelectInput (dpy, root,
+	XSelectInput(dpy, root,
 				  SubstructureNotifyMask|
 				  ExposureMask|
 				  StructureNotifyMask|
@@ -3665,14 +3665,14 @@ steamcompmgr_main (int argc, char **argv)
 				  PointerMotionMask|
 				  LeaveWindowMask|
 				  PropertyChangeMask);
-	XShapeSelectInput (dpy, root, ShapeNotifyMask);
+	XShapeSelectInput(dpy, root, ShapeNotifyMask);
 	XFixesSelectCursorInput(dpy, root, XFixesDisplayCursorNotifyMask);
-	XQueryTree (dpy, root, &root_return, &parent_return, &children, &nchildren);
+	XQueryTree(dpy, root, &root_return, &parent_return, &children, &nchildren);
 	for (uint32_t i = 0; i < nchildren; i++)
-		add_win (dpy, children[i], i ? children[i-1] : None, 0);
-	XFree (children);
+		add_win(dpy, children[i], i ? children[i-1] : None, 0);
+	XFree(children);
 
-	XUngrabServer (dpy);
+	XUngrabServer(dpy);
 
 	XF86VidModeLockModeSwitch(dpy, scr, true);
 
