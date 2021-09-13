@@ -1774,7 +1774,7 @@ found:
 			xwm_log.debugf( "determine_and_apply_focus inputFocus %lu", inputFocus->id );
 		}
 
-		if ( inputFocus->inputFocusMode == 2 )
+		if ( inputFocus->inputFocusMode )
 			keyboardFocusWin = focus;
 
 		if ( inputFocus->surface.wlr != nullptr || keyboardFocusWin->surface.wlr != nullptr )
@@ -2497,7 +2497,7 @@ handle_wl_surface_id(win *w, long surfaceID)
 	win *inputFocusWin = find_win( nullptr, currentInputFocusWindow );
 	Window keyboardFocusWindow = currentInputFocusWindow;
 	
-	if ( inputFocusWin && inputFocusWin->inputFocusMode == 2 )
+	if ( inputFocusWin && inputFocusWin->inputFocusMode )
 		keyboardFocusWindow = currentFocusWindow;
 
 	if ( w->id == keyboardFocusWindow )
