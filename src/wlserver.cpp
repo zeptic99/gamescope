@@ -379,8 +379,6 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 
 			pKB->key.notify = wlserver_handle_key;
 			wl_signal_add( &device->keyboard->events.key, &pKB->key );
-
-			wlr_seat_set_keyboard( wlserver.wlr.seat, device );
 		}
 		break;
 		case WLR_INPUT_DEVICE_POINTER:
