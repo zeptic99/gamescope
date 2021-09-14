@@ -30,4 +30,4 @@ extern bool g_bNiceCap;
 extern int g_nOldNice;
 extern int g_nNewNice;
 
-int BIsNested( void );
+bool BIsNested( void );

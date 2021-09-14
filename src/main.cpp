@@ -134,9 +134,9 @@ bool g_bIntegerScale = false;
 
 pthread_t g_mainThread;
 
-int BIsNested()
+bool BIsNested()
 {
-	return g_bIsNested == true;
+	return g_bIsNested;
 }
 
 static bool initOutput(int preferredWidth, int preferredHeight, int preferredRefresh);
