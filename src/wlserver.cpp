@@ -707,8 +707,13 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	if ( kbd_dev != nullptr )
 		wl_signal_emit( &wlserver.wlr.multi_backend->events.new_input, kbd_dev );
 
+	int refresh = g_nNestedRefresh;
+	if (refresh == 0) {
+		refresh = g_nOutputRefresh;
+	}
+
 	wlr_output_enable( wlserver.wlr.output, true );
-	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, g_nOutputRefresh * 1000 );
+	wlr_output_set_custom_mode( wlserver.wlr.output, g_nNestedWidth, g_nNestedHeight, refresh * 1000 );
 	if ( !wlr_output_commit( wlserver.wlr.output ) )
 	{
 		wl_log.errorf("Failed to commit noop output");
