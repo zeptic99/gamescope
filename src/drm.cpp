@@ -522,13 +522,59 @@ static bool setup_best_connector(struct drm_t *drm)
 	return true;
 }
 
-bool init_drm(struct drm_t *drm, const char *device_name, int width, int height, int refresh)
+char *find_drm_device_by_devid(dev_t devid)
+{
+	drmDevice *devices[32];
+	int devices_len = drmGetDevices2(0, devices, sizeof(devices) / sizeof(devices[0]));
+	if (devices_len < 0) {
+		drm_log.errorf_errno("drmGetDevices2 failed");
+		return nullptr;
+	}
+
+	char *name = nullptr;
+	for (int i = 0; i < devices_len; i++) {
+		drmDevice *dev = devices[i];
+		if (!(dev->available_nodes & (1 << DRM_NODE_PRIMARY)))
+			continue;
+
+		struct stat dev_stat = {};
+		if (stat(dev->nodes[DRM_NODE_PRIMARY], &dev_stat) != 0) {
+			drm_log.errorf_errno("stat(%s) failed", dev->nodes[DRM_NODE_PRIMARY]);
+			continue;
+		}
+
+		if (dev_stat.st_rdev == devid) {
+			name = strdup(dev->nodes[DRM_NODE_PRIMARY]);
+			break;
+		}
+	}
+
+	drmFreeDevices(devices, devices_len);
+	return name;
+}
+
+bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 {
 	drm->preferred_width = width;
 	drm->preferred_height = height;
 	drm->preferred_refresh = refresh;
 
+	char *device_name = nullptr;
+	if (g_vulkanHasDrmDevId) {
+		device_name = find_drm_device_by_devid(g_vulkanDrmDevId);
+		if (device_name == nullptr) {
+			drm_log.errorf("Failed to find DRM device with device ID %" PRIu64, (uint64_t)g_vulkanDrmDevId);
+			return false;
+		}
+		drm_log.infof("opening DRM node '%s'", device_name);
+	}
+	else
+	{
+		drm_log.infof("warning: picking an arbitrary DRM device");
+	}
+
 	drm->fd = wlsession_open_kms( device_name );
+	free(device_name);
 	if ( drm->fd < 0 )
 	{
 		drm_log.errorf("Could not open KMS device");

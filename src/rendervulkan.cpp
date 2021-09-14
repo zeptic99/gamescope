@@ -27,8 +27,6 @@ const VkApplicationInfo appInfo = {
 	.apiVersion = VK_API_VERSION_1_1,
 };
 
-std::vector< const char * > g_vecSDLInstanceExts;
-
 VkInstance instance;
 
 #define k_nMaxSets 8 // should only need one or two per output tops
@@ -1495,15 +1493,17 @@ bool vulkan_remake_output_images( void )
 	return bRet;
 }
 
-bool vulkan_make_output( VulkanOutput_t *pOutput )
+bool vulkan_make_output( void )
 {
+	VulkanOutput_t *pOutput = &g_output;
+
 	VkResult result;
 	
 	if ( BIsNested() == true )
 	{
 		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &pOutput->surface ) )
 		{
-			vk_log.errorf( "SDL_Vulkan_CreateSurface failed" );
+			vk_log.errorf( "SDL_Vulkan_CreateSurface failed: %s", SDL_GetError() );
 			return false;
 		}
 
@@ -1604,13 +1604,25 @@ bool vulkan_make_output( VulkanOutput_t *pOutput )
 	return true;
 }
 
-bool vulkan_init(void)
+bool vulkan_init( void )
 {
 	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
-	
+
 	std::vector< const char * > vecEnabledInstanceExtensions;
-	vecEnabledInstanceExtensions.insert( vecEnabledInstanceExtensions.end(), g_vecSDLInstanceExts.begin(), g_vecSDLInstanceExts.end() );
-	
+	if ( BIsNested() )
+	{
+		if ( SDL_Vulkan_LoadLibrary( nullptr ) != 0 )
+		{
+			fprintf(stderr, "SDL_Vulkan_LoadLibrary failed: %s\n", SDL_GetError());
+			return false;
+		}
+
+		unsigned int extCount = 0;
+		SDL_Vulkan_GetInstanceExtensions( nullptr, &extCount, nullptr );
+		vecEnabledInstanceExtensions.resize( extCount );
+		SDL_Vulkan_GetInstanceExtensions( nullptr, &extCount, vecEnabledInstanceExtensions.data() );
+	}
+
 	const VkInstanceCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 		.pApplicationInfo = &appInfo,
@@ -1638,12 +1650,6 @@ bool vulkan_init(void)
 
 	dyn_vkGetImageDrmFormatModifierPropertiesEXT = (PFN_vkGetImageDrmFormatModifierPropertiesEXT)vkGetDeviceProcAddr( device, "vkGetImageDrmFormatModifierPropertiesEXT" );
 	
-	if ( vulkan_make_output( &g_output ) == false )
-	{
-		vk_log.errorf( "vulkan_make_output failed" );
-		return false;
-	}
-
 	CVulkanTexture::createFlags texCreateFlags;
 	uint32_t bits = 0;
 	g_emptyTex = vulkan_create_texture_from_bits( 1, 1, VK_FORMAT_R8G8B8A8_UNORM, texCreateFlags, &bits );

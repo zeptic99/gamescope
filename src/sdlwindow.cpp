@@ -68,13 +68,6 @@ void inputSDLThreadRun( void )
 	SDL_Keymod mod;
 	uint32_t key;
 
-	if ( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS ) != 0 )
-	{
-		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-		g_SDLInitLock.unlock();
-		return;
-	}
-
 	g_unSDLUserEventID = SDL_RegisterEvents( 1 );
 
 	g_SDLUserEvent.type = g_unSDLUserEventID;
@@ -105,13 +98,6 @@ void inputSDLThreadRun( void )
 		g_SDLInitLock.unlock();
 		return;
 	}
-
-	unsigned int extCount = 0;
-	SDL_Vulkan_GetInstanceExtensions( g_SDLWindow, &extCount, nullptr );
-
-	g_vecSDLInstanceExts.resize( extCount );
-
-	SDL_Vulkan_GetInstanceExtensions( g_SDLWindow, &extCount, g_vecSDLInstanceExts.data() );
 
 	SDL_SetRelativeMouseMode(SDL_TRUE);
 

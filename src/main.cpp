@@ -293,10 +293,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( !initOutput( nPreferredOutputWidth, nPreferredOutputHeight, g_nNestedRefresh ) )
+	if ( BIsNested() )
 	{
-		fprintf( stderr, "Failed to initialize output\n" );
-		return 1;
+		if ( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS ) != 0 )
+		{
+			fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+			return false;
+		}
 	}
 
 	if ( !vulkan_init() )
@@ -305,21 +308,16 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	// TODO: get the DRM device from the Vulkan device
-	if ( g_bIsNested == false && g_vulkanHasDrmDevId )
+	if ( !initOutput( nPreferredOutputWidth, nPreferredOutputHeight, g_nNestedRefresh ) )
 	{
-		struct stat drmStat = {};
-		if ( fstat( g_DRM.fd, &drmStat ) != 0 )
-		{
-			perror( "fstat failed on DRM FD" );
-			return 1;
-		}
+		fprintf( stderr, "Failed to initialize output\n" );
+		return 1;
+	}
 
-		if ( drmStat.st_rdev != g_vulkanDrmDevId )
-		{
-			fprintf( stderr, "Mismatch between DRM and Vulkan devices\n" );
-			return 1;
-		}
+	if ( !vulkan_make_output() )
+	{
+		fprintf( stderr, "vulkan_make_output failed\n" );
+		return 1;
 	}
 
 	// Prevent our clients from connecting to the parent compositor
@@ -416,7 +414,7 @@ static bool initOutput( int preferredWidth, int preferredHeight, int preferredRe
 	}
 	else
 	{
-		return init_drm( &g_DRM, nullptr, preferredWidth, preferredHeight, preferredRefresh );
+		return init_drm( &g_DRM, preferredWidth, preferredHeight, preferredRefresh );
 	}
 }
 

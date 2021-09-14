@@ -124,13 +124,13 @@ public:
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
 };
 
-extern std::vector< const char * > g_vecSDLInstanceExts;
 extern bool g_vulkanSupportsModifiers;
 
 extern bool g_vulkanHasDrmDevId;
 extern dev_t g_vulkanDrmDevId;
 
 bool vulkan_init(void);
+bool vulkan_make_output(void);
 
 VulkanTexture_t vulkan_create_texture_from_dmabuf( struct wlr_dmabuf_attributes *pDMA );
 VulkanTexture_t vulkan_create_texture_from_bits( uint32_t width, uint32_t height, VkFormat format, CVulkanTexture::createFlags texCreateFlags, void *bits );
