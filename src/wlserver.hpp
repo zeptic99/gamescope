@@ -79,7 +79,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
 bool wlsession_init( void );
 int wlsession_open_kms( const char *device_name );
 
-bool wlserver_init( int argc, char **argv, bool bIsNested );
+bool wlserver_init( void );
 
 void wlserver_run(void);
 

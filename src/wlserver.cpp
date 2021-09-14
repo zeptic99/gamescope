@@ -606,10 +606,10 @@ int wlsession_open_kms( const char *device_name ) {
 	return device->fd;
 }
 
-bool wlserver_init(int argc, char **argv, bool bIsNested) {
+bool wlserver_init( void ) {
 	assert( wlserver.display != nullptr );
 
-	bool bIsDRM = bIsNested == false;
+	bool bIsDRM = !BIsNested();
 
 	wl_list_init(&pending_surfaces);
 

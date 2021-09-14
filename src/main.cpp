@@ -356,7 +356,7 @@ int main(int argc, char **argv)
 	if ( g_nNestedWidth == 0 )
 		g_nNestedWidth = g_nNestedHeight * 16 / 9;
 
-	if ( !wlserver_init(argc, argv, g_bIsNested == true ) )
+	if ( !wlserver_init() )
 	{
 		fprintf( stderr, "Failed to initialize wlserver\n" );
 		return 1;
