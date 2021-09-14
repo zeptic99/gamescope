@@ -172,8 +172,8 @@ static Window	currentNotificationWindow;
 
 bool hasFocusWindow;
 
-bool focusControlled;
 std::vector< uint32_t > vecFocuscontrolAppIDs;
+static Window focusControlWindow;
 
 static Window	ourWindow;
 
@@ -244,7 +244,12 @@ static Atom		netWMNameAtom;
 static Atom		netSystemTrayOpcodeAtom;
 static Atom		steamStreamingClientAtom;
 static Atom		steamStreamingClientVideoAtom;
+static Atom		gamescopeFocusableAppsAtom;
+static Atom		gamescopeFocusableWindowsAtom;
+static Atom		gamescopeFocusedWindowAtom;
+static Atom		gamescopeFocusedAppAtom;
 static Atom		gamescopeCtrlAppIDAtom;
+static Atom		gamescopeCtrlWindowAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -1502,6 +1507,7 @@ bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vec
 	int format;
 	unsigned long n, left;
 
+	vecResult.clear();
 	uint64_t *data;
 	// get up to 16 results in one go, we can add a real loop if we ever need anything beyong that
 	int result = XGetWindowProperty(dpy, win, prop, 0L, 16L, false,
@@ -1509,8 +1515,6 @@ bool get_prop( Display *dpy, Window win, Atom prop, std::vector< uint32_t > &vec
 									&n, &left, ( unsigned char** )&data);
 	if (result == Success && data != NULL)
 	{
-		vecResult.clear();
-
 		for ( uint32_t i = 0; i < n; i++ )
 		{
 			vecResult.push_back( data[ i ] );
@@ -1625,6 +1629,7 @@ determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 	}
 
 	std::vector< unsigned long > focusable_appids;
+	std::vector< unsigned long > focusable_windows;
 
 	for ( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
 	{
@@ -1644,17 +1649,36 @@ determine_and_apply_focus(Display *dpy, MouseCursor *cursor)
 				focusable_appids.push_back( unAppID );
 			}
 		}
+
+		// list of [window, appid, pid] triplets
+		focusable_windows.push_back( vecPossibleFocusWindows[ i ]->id );
+		focusable_windows.push_back( vecPossibleFocusWindows[ i ]->appID );
+		focusable_windows.push_back( vecPossibleFocusWindows[ i ]->pid );
 	}
 
-	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSABLE_APPS", false ),
-					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)focusable_appids.data(),
-					 focusable_appids.size() );
+	XChangeProperty( dpy, root, gamescopeFocusableAppsAtom, XA_CARDINAL, 32, PropModeReplace,
+					 (unsigned char *)focusable_appids.data(), focusable_appids.size() );
+
+	XChangeProperty( dpy, root, gamescopeFocusableWindowsAtom, XA_CARDINAL, 32, PropModeReplace,
+					 (unsigned char *)focusable_windows.data(), focusable_windows.size() );
 
 	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
 					  is_focus_priority_greater );
 
-	if ( focusControlled == true )
+	if ( focusControlWindow != None || vecFocuscontrolAppIDs.size() > 0 )
 	{
+		if ( focusControlWindow != None )
+		{
+			for ( unsigned long i = 0; i < vecPossibleFocusWindows.size(); i++ )
+			{
+				if ( vecPossibleFocusWindows[ i ]->id == focusControlWindow )
+				{
+					focus = vecPossibleFocusWindows[ i ];
+					goto found;
+				}
+			}
+		}
+
 		for ( unsigned long i = 0; i < vecFocuscontrolAppIDs.size(); i++ )
 		{
 			for ( unsigned long j = 0; j < vecPossibleFocusWindows.size(); j++ )
@@ -1689,13 +1713,11 @@ found:
 		focusedAppId = inputFocus->appID;
 	}
 
-	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", false ),
-					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedWindow,
-					 focusedWindow != 0 ? 1 : 0 );
+	XChangeProperty( dpy, root, gamescopeFocusedAppAtom, XA_CARDINAL, 32, PropModeReplace,
+					 (unsigned char *)&focusedAppId, focusedAppId != 0 ? 1 : 0 );
 
-	XChangeProperty( dpy, root, XInternAtom( dpy, "GAMESCOPE_FOCUSED_APP", false ),
-					 XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&focusedAppId,
-					 focusedAppId != 0 ? 1 : 0 );
+	XChangeProperty( dpy, root, gamescopeFocusedWindowAtom, XA_CARDINAL, 32, PropModeReplace,
+					 (unsigned char *)&focusedWindow, focusedWindow != 0 ? 1 : 0 );
 
 	if (!focus)
 	{
@@ -2462,7 +2484,7 @@ damage_win(Display *dpy, XDamageNotifyEvent *de)
 	w->damage_sequence = damageSequence++;
 
 	// If we just passed the focused window, we might be eliglible to take over
-	if ( !focusControlled && focus && focus != w && w->appID &&
+	if ( focus && focus != w && w->appID &&
 		w->damage_sequence > focus->damage_sequence)
 		focusDirty = true;
 
@@ -2707,7 +2729,12 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 	}
 	if (ev->atom == gamescopeCtrlAppIDAtom )
 	{
-		focusControlled = get_prop( dpy, root, gamescopeCtrlAppIDAtom, vecFocuscontrolAppIDs );
+		get_prop( dpy, root, gamescopeCtrlAppIDAtom, vecFocuscontrolAppIDs );
+		focusDirty = true;
+	}
+	if (ev->atom == gamescopeCtrlWindowAtom )
+	{
+		focusControlWindow = get_prop( dpy, root, gamescopeCtrlWindowAtom, None );
 		focusDirty = true;
 	}
 	if (ev->atom == gameAtom)
@@ -3637,7 +3664,12 @@ steamcompmgr_main(int argc, char **argv)
 	netSystemTrayOpcodeAtom = XInternAtom(dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
 	steamStreamingClientAtom = XInternAtom(dpy, "STEAM_STREAMING_CLIENT", false);
 	steamStreamingClientVideoAtom = XInternAtom(dpy, "STEAM_STREAMING_CLIENT_VIDEO", false);
+	gamescopeFocusableAppsAtom = XInternAtom(dpy, "GAMESCOPE_FOCUSABLE_APPS", false);
+	gamescopeFocusableWindowsAtom = XInternAtom(dpy, "GAMESCOPE_FOCUSABLE_WINDOWS", false);
+	gamescopeFocusedAppAtom = XInternAtom( dpy, "GAMESCOPE_FOCUSED_APP", false );
+	gamescopeFocusedWindowAtom = XInternAtom( dpy, "GAMESCOPE_FOCUSED_WINDOW", false );
 	gamescopeCtrlAppIDAtom = XInternAtom(dpy, "GAMESCOPECTRL_BASELAYER_APPID", false);
+	gamescopeCtrlWindowAtom = XInternAtom(dpy, "GAMESCOPECTRL_BASELAYER_WINDOW", false);
 	WMChangeStateAtom = XInternAtom(dpy, "WM_CHANGE_STATE", false);
 
 	root_width = DisplayWidth(dpy, scr);
