@@ -804,10 +804,10 @@ void wlserver_run(void)
 void wlserver_keyboardfocus( struct wlr_surface *surface )
 {
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard( wlserver.wlr.seat );
-	if ( keyboard != NULL )
-	{
+	if ( keyboard == nullptr )
+		wlr_seat_keyboard_notify_enter( wlserver.wlr.seat, surface, nullptr, 0, nullptr);
+	else
 		wlr_seat_keyboard_notify_enter( wlserver.wlr.seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-	}
 }
 
 void wlserver_key( uint32_t key, bool press, uint32_t time )
