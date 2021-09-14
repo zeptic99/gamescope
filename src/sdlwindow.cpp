@@ -65,7 +65,6 @@ void updateOutputRefresh( void )
 void inputSDLThreadRun( void )
 {
 	SDL_Event event;
-	SDL_Keymod mod;
 	uint32_t key;
 
 	g_unSDLUserEventID = SDL_RegisterEvents( 1 );
@@ -130,10 +129,9 @@ void inputSDLThreadRun( void )
 				break;
 			case SDL_KEYDOWN:
 			case SDL_KEYUP:
-				mod = SDL_GetModState();
 				key = SDLScancodeToLinuxKey( event.key.keysym.scancode );
 
-				if ( event.type == SDL_KEYUP && mod & KMOD_LGUI )
+				if ( event.type == SDL_KEYUP && ( event.key.keysym.mod & KMOD_LGUI ) )
 				{
 					bool handled = true;
 					switch ( key )
