@@ -522,12 +522,11 @@ static bool setup_best_connector(struct drm_t *drm)
 	return true;
 }
 
-int init_drm(struct drm_t *drm, const char *device_name)
+int init_drm(struct drm_t *drm, const char *device_name, int width, int height, int refresh)
 {
-	// These are updated when mode-setting, so copy their initial values over
-	drm->preferred_width = g_nOutputWidth;
-	drm->preferred_height = g_nOutputHeight;
-	drm->preferred_refresh = g_nNestedRefresh;
+	drm->preferred_width = width;
+	drm->preferred_height = height;
+	drm->preferred_refresh = refresh;
 
 	drm->fd = wlsession_open_kms( device_name );
 	if ( drm->fd < 0 )

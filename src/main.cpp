@@ -115,7 +115,7 @@ int g_nNestedUnfocusedRefresh = 0;
 
 uint32_t g_nOutputWidth = 0;
 uint32_t g_nOutputHeight = 0;
-int g_nOutputRefresh = 60;
+int g_nOutputRefresh = 0;
 
 bool g_bFullscreen = false;
 
@@ -139,7 +139,7 @@ int BIsNested()
 	return g_bIsNested == true;
 }
 
-static int initOutput(void);
+static int initOutput(int preferredWidth, int preferredHeight, int preferredRefresh);
 static void steamCompMgrThreadRun(int argc, char **argv);
 
 static std::string build_optstring(const struct option *options)
@@ -176,6 +176,9 @@ static void handle_signal( int sig )
 
 int main(int argc, char **argv)
 {
+	int nPreferredOutputWidth = 0;
+	int nPreferredOutputHeight = 0;
+
 	static std::string optstring = build_optstring(gamescope_options);
 	gamescope_optstring = optstring.c_str();
 
@@ -191,14 +194,14 @@ int main(int argc, char **argv)
 			case 'h':
 				g_nNestedHeight = atoi( optarg );
 				break;
-			case 'W':
-				g_nOutputWidth = atoi( optarg );
-				break;
-			case 'H':
-				g_nOutputHeight = atoi( optarg );
-				break;
 			case 'r':
 				g_nNestedRefresh = atoi( optarg );
+				break;
+			case 'W':
+				nPreferredOutputWidth = atoi( optarg );
+				break;
+			case 'H':
+				nPreferredOutputHeight = atoi( optarg );
 				break;
 			case 'o':
 				g_nNestedUnfocusedRefresh = atoi( optarg );
@@ -237,18 +240,6 @@ int main(int argc, char **argv)
 				return 1;
 		}
 	}
-
-	if ( g_nOutputHeight == 0 )
-	{
-		if ( g_nOutputWidth != 0 )
-		{
-			fprintf( stderr, "Cannot specify -W without -H\n" );
-			return 1;
-		}
-		g_nOutputHeight = 720;
-	}
-	if ( g_nOutputWidth == 0 )
-		g_nOutputWidth = g_nOutputHeight * 16 / 9;
 
 	cap_t caps;
 	caps = cap_get_proc();
@@ -302,7 +293,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( initOutput() != 0 )
+	if ( initOutput( nPreferredOutputWidth, nPreferredOutputHeight, g_nNestedRefresh ) != 0 )
 	{
 		fprintf( stderr, "Failed to initialize output\n" );
 		return 1;
@@ -399,15 +390,33 @@ static void steamCompMgrThreadRun(int argc, char **argv)
 	pthread_kill( g_mainThread, SIGINT );
 }
 
-static int initOutput(void)
+static int initOutput( int preferredWidth, int preferredHeight, int preferredRefresh )
 {
 	if ( g_bIsNested == true )
 	{
+		g_nOutputWidth = preferredWidth;
+		g_nOutputHeight = preferredHeight;
+		g_nOutputRefresh = preferredRefresh;
+
+		if ( g_nOutputHeight == 0 )
+		{
+			if ( g_nOutputWidth != 0 )
+			{
+				fprintf( stderr, "Cannot specify -W without -H\n" );
+				return 1;
+			}
+			g_nOutputHeight = 720;
+		}
+		if ( g_nOutputWidth == 0 )
+			g_nOutputWidth = g_nOutputHeight * 16 / 9;
+		if ( g_nOutputRefresh == 0 )
+			g_nOutputRefresh = 60;
+
 		return sdlwindow_init() == false;
 	}
 	else
 	{
-		return init_drm( &g_DRM, nullptr );
+		return init_drm( &g_DRM, nullptr, preferredWidth, preferredHeight, preferredRefresh );
 	}
 }
 
