@@ -655,6 +655,8 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wlr_input_device_init(kbd_dev, WLR_INPUT_DEVICE_KEYBOARD, nullptr, "noop", 0, 0);
 		kbd_dev->keyboard = kbd;
 
+		wlserver.wlr.virtual_keyboard_device = kbd_dev;
+
 		// We need to wait for the backend to be started before adding the device
 	}
 
@@ -812,6 +814,8 @@ void wlserver_keyboardfocus( struct wlr_surface *surface )
 
 void wlserver_key( uint32_t key, bool press, uint32_t time )
 {
+	assert( wlserver.wlr.virtual_keyboard_device != nullptr );
+	wlr_seat_set_keyboard( wlserver.wlr.seat, wlserver.wlr.virtual_keyboard_device );
 	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, time, key, press );
 }
 

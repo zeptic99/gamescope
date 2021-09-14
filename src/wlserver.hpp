@@ -25,6 +25,9 @@ struct wlserver_t {
 		struct wlr_session *session;	
 		struct wlr_seat *seat;
 		struct wlr_output *output;
+
+		// Used to simulate key events when nested
+		struct wlr_input_device *virtual_keyboard_device;
 	} wlr;
 	
 	struct wlr_surface *mouse_focus_surface;
