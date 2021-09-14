@@ -155,6 +155,10 @@ void inputSDLThreadRun( void )
 					}
 				}
 
+				// On Wayland, clients handle key repetition
+				if ( event.key.repeat )
+					break;
+
 				wlserver_lock();
 				wlserver_key( key, event.type == SDL_KEYDOWN, event.key.timestamp );
 				wlserver_unlock();
