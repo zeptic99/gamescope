@@ -241,12 +241,10 @@ int main(int argc, char **argv)
 		}
 	}
 
-	cap_t caps;
-	caps = cap_get_proc();
-	cap_flag_value_t nicecapvalue = CAP_CLEAR;
-
+	cap_t caps = cap_get_proc();
 	if ( caps != nullptr )
 	{
+		cap_flag_value_t nicecapvalue = CAP_CLEAR;
 		cap_get_flag( caps, CAP_SYS_NICE, CAP_EFFECTIVE, &nicecapvalue );
 
 		if ( nicecapvalue == CAP_SET )
