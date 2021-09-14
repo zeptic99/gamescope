@@ -541,25 +541,25 @@ static void handle_wlr_log(enum wlr_log_importance importance, const char *fmt, 
 	wl_log.vlogf(prio, fmt, args);
 }
 
-int wlsession_init( void ) {
+bool wlsession_init( void ) {
 	wlr_log_init(WLR_DEBUG, handle_wlr_log);
 
 	wlserver.display = wl_display_create();
 
 	if ( BIsNested() )
-		return 0;
+		return true;
 
 	wlserver.wlr.session = wlr_session_create( wlserver.display );
 	if ( wlserver.wlr.session == nullptr )
 	{
 		wl_log.errorf( "Failed to create session" );
-		return 1;
+		return false;
 	}
 
 	wlserver.session_active.notify = handle_session_active;
 	wl_signal_add( &wlserver.wlr.session->events.active, &wlserver.session_active );
 
-	return 0;
+	return true;
 }
 
 static void kms_device_handle_change( struct wl_listener *listener, void *data )
@@ -606,7 +606,7 @@ int wlsession_open_kms( const char *device_name ) {
 	return device->fd;
 }
 
-int wlserver_init(int argc, char **argv, bool bIsNested) {
+bool wlserver_init(int argc, char **argv, bool bIsNested) {
 	assert( wlserver.display != nullptr );
 
 	bool bIsDRM = bIsNested == false;
@@ -617,14 +617,14 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 
 	wlserver.wlr.multi_backend = wlr_multi_backend_create(wlserver.display);
 
-	assert( wlserver.display && wlserver.event_loop && wlserver.wlr.multi_backend );
+	assert( wlserver.event_loop && wlserver.wlr.multi_backend );
 
 	wl_signal_add( &wlserver.wlr.multi_backend->events.new_input, &new_input_listener );
 
 	wlserver.wlr.headless_backend = wlr_headless_backend_create( wlserver.display );
 	if ( wlserver.wlr.headless_backend == NULL )
 	{
-		return 1;
+		return false;
 	}
 	wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.headless_backend );
 
@@ -639,7 +639,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wlserver.wlr.libinput_backend = wlr_libinput_backend_create( wlserver.display, wlserver.wlr.session );
 		if ( wlserver.wlr.libinput_backend == NULL)
 		{
-			return 1;
+			return false;
 		}
 		wlr_multi_backend_add( wlserver.wlr.multi_backend, wlserver.wlr.libinput_backend );
 	}
@@ -688,7 +688,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	{
 		wl_log.errorf_errno("Unable to open wayland socket");
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
-		return 1;
+		return false;
 	}
 
 	wlserver.wlr.seat = wlr_seat_create(wlserver.display, "seat0");
@@ -701,7 +701,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wl_log.errorf("Failed to start backend");
 		wlr_backend_destroy( wlserver.wlr.multi_backend );
 		wl_display_destroy(wlserver.display);
-		return 1;
+		return false;
 	}
 
 	if ( kbd_dev != nullptr )
@@ -717,7 +717,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	if ( !wlr_output_commit( wlserver.wlr.output ) )
 	{
 		wl_log.errorf("Failed to commit noop output");
-		return 1;
+		return false;
 	}
 
 	wlr_output_create_global( wlserver.wlr.output );
@@ -733,7 +733,7 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 		wl_display_flush_clients(wlserver.display);
 		if (wl_event_loop_dispatch(wlserver.event_loop, -1) < 0) {
 			wl_log.errorf("wl_event_loop_dispatch failed\n");
-			return 1;
+			return false;
 		}
 	}
 
@@ -741,10 +741,10 @@ int wlserver_init(int argc, char **argv, bool bIsNested) {
 	if ( g_XWLDpy == nullptr )
 	{
 		wl_log.errorf( "Failed to connect to X11 server" );
-		return 1;
+		return false;
 	}
 
-	return 0;
+	return true;
 }
 
 pthread_mutex_t waylock = PTHREAD_MUTEX_INITIALIZER;

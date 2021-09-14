@@ -522,7 +522,7 @@ static bool setup_best_connector(struct drm_t *drm)
 	return true;
 }
 
-int init_drm(struct drm_t *drm, const char *device_name, int width, int height, int refresh)
+bool init_drm(struct drm_t *drm, const char *device_name, int width, int height, int refresh)
 {
 	drm->preferred_width = width;
 	drm->preferred_height = height;
@@ -532,12 +532,12 @@ int init_drm(struct drm_t *drm, const char *device_name, int width, int height, 
 	if ( drm->fd < 0 )
 	{
 		drm_log.errorf("Could not open KMS device");
-		return -1;
+		return false;
 	}
 
 	if (drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
 		drm_log.errorf("drmSetClientCap(ATOMIC) failed");
-		return -1;
+		return false;
 	}
 
 	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_WIDTH, &drm->cursor_width) != 0) {
@@ -553,14 +553,14 @@ int init_drm(struct drm_t *drm, const char *device_name, int width, int height, 
 	}
 
 	if (!get_resources(drm)) {
-		return -1;
+		return false;
 	}
 
 	drm->lo_device = liftoff_device_create( drm->fd );
 	if ( drm->lo_device == nullptr )
-		return -1;
+		return false;
 	if ( liftoff_device_register_all_planes( drm->lo_device ) < 0 )
-		return -1;
+		return false;
 
 	drm_log.infof("Connectors:");
 	for (size_t i = 0; i < drm->connectors.size(); i++) {
@@ -576,24 +576,24 @@ int init_drm(struct drm_t *drm, const char *device_name, int width, int height, 
 	drm->connector_priorities = parse_connector_priorities( g_sOutputName );
 
 	if (!setup_best_connector(drm)) {
-		return -1;
+		return false;
 	}
 
 	// Fetch formats which can be scanned out
 	for (size_t i = 0; i < drm->planes.size(); i++) {
 		struct plane *plane = &drm->planes[i];
 		if (!get_plane_formats(drm, plane, &drm->formats))
-			return -1;
+			return false;
 	}
 
 	if (!get_plane_formats(drm, drm->primary, &drm->primary_formats)) {
-		return -1;
+		return false;
 	}
 
 	g_nDRMFormat = pick_plane_format(&drm->primary_formats);
 	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
 		drm_log.errorf("Primary plane doesn't support XRGB8888 nor ARGB8888");
-		return -1;
+		return false;
 	}
 
 	drm->kms_in_fence_fd = -1;
@@ -608,7 +608,7 @@ int init_drm(struct drm_t *drm, const char *device_name, int width, int height, 
 	drm->flipcount = 0;
 	drm->needs_modeset = true;
 
-	return 0;
+	return true;
 }
 
 static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::string, const drmModePropertyRes *> &props, const char *name, uint64_t value)

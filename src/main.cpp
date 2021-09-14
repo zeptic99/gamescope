@@ -139,7 +139,7 @@ int BIsNested()
 	return g_bIsNested == true;
 }
 
-static int initOutput(int preferredWidth, int preferredHeight, int preferredRefresh);
+static bool initOutput(int preferredWidth, int preferredHeight, int preferredRefresh);
 static void steamCompMgrThreadRun(int argc, char **argv);
 
 static std::string build_optstring(const struct option *options)
@@ -287,13 +287,13 @@ int main(int argc, char **argv)
 		g_bIsNested = true;
 	}
 
-	if ( wlsession_init() != 0 )
+	if ( !wlsession_init() )
 	{
 		fprintf( stderr, "Failed to initialize Wayland session\n" );
 		return 1;
 	}
 
-	if ( initOutput( nPreferredOutputWidth, nPreferredOutputHeight, g_nNestedRefresh ) != 0 )
+	if ( !initOutput( nPreferredOutputWidth, nPreferredOutputHeight, g_nNestedRefresh ) )
 	{
 		fprintf( stderr, "Failed to initialize output\n" );
 		return 1;
@@ -356,7 +356,7 @@ int main(int argc, char **argv)
 	if ( g_nNestedWidth == 0 )
 		g_nNestedWidth = g_nNestedHeight * 16 / 9;
 
-	if ( wlserver_init(argc, argv, g_bIsNested == true ) != 0 )
+	if ( !wlserver_init(argc, argv, g_bIsNested == true ) )
 	{
 		fprintf( stderr, "Failed to initialize wlserver\n" );
 		return 1;
@@ -390,7 +390,7 @@ static void steamCompMgrThreadRun(int argc, char **argv)
 	pthread_kill( g_mainThread, SIGINT );
 }
 
-static int initOutput( int preferredWidth, int preferredHeight, int preferredRefresh )
+static bool initOutput( int preferredWidth, int preferredHeight, int preferredRefresh )
 {
 	if ( g_bIsNested == true )
 	{
@@ -412,7 +412,7 @@ static int initOutput( int preferredWidth, int preferredHeight, int preferredRef
 		if ( g_nOutputRefresh == 0 )
 			g_nOutputRefresh = 60;
 
-		return sdlwindow_init() == false;
+		return sdlwindow_init();
 	}
 	else
 	{
