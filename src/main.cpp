@@ -238,7 +238,7 @@ int main(int argc, char **argv)
 				}
 				break;
 			case '?':
-				fprintf( stderr, "Unknown option\n" );
+				fprintf( stderr, "See --help for a list of options.\n" );
 				return 1;
 		}
 	}
