@@ -149,6 +149,8 @@ static std::string build_optstring(const struct option *options)
 		if (!options[i].name || !options[i].val)
 			continue;
 
+		assert(optstring.find((char) options[i].val) == std::string::npos);
+
 		char str[] = { (char) options[i].val, '\0' };
 		optstring.append(str);
 
