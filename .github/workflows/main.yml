@@ -24,10 +24,10 @@ jobs:
       - name: Build with gcc
         run: |
           export CC=gcc CXX=g++
-          meson build-gcc/ --werror=true
+          meson build-gcc/ --werror
           ninja -C build-gcc/
       - name: Build with clang
         run: |
           export CC=clang CXX=clang++
-          meson build-clang/ --werror=true
+          meson build-clang/ --werror
           ninja -C build-clang/
