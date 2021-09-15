@@ -50,10 +50,12 @@ wlroots_dep = dependency(
   default_options: ['default_library=static', 'examples=false', 'xwayland=enabled', 'backends=libinput', 'renderers=[]'],
 )
 
-wlroots_has_xwayland = wlroots_dep.get_variable('have_xwayland') == 'true'
-if not wlroots_has_xwayland
-  error('Cannot use wlroots built without Xwayland support')
-endif
+required_wlroots_features = ['xwayland', 'libinput_backend']
+foreach feat : required_wlroots_features
+  if wlroots_dep.get_variable('have_' + feat) != 'true'
+    error('Cannot use wlroots built without ' + feat + ' support')
+  endif
+endforeach
 
 shadercompiler = find_program('glslangValidator', native: true)
 
