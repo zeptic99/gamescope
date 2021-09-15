@@ -522,8 +522,10 @@ static bool setup_best_connector(struct drm_t *drm)
 	return true;
 }
 
-char *find_drm_device_by_devid(dev_t devid)
+char *find_drm_node_by_devid(dev_t devid)
 {
+	// TODO: replace all of this with drmGetDeviceFromDevId once it's available
+
 	drmDevice *devices[32];
 	int devices_len = drmGetDevices2(0, devices, sizeof(devices) / sizeof(devices[0]));
 	if (devices_len < 0) {
@@ -534,19 +536,28 @@ char *find_drm_device_by_devid(dev_t devid)
 	char *name = nullptr;
 	for (int i = 0; i < devices_len; i++) {
 		drmDevice *dev = devices[i];
-		if (!(dev->available_nodes & (1 << DRM_NODE_PRIMARY)))
-			continue;
 
-		struct stat dev_stat = {};
-		if (stat(dev->nodes[DRM_NODE_PRIMARY], &dev_stat) != 0) {
-			drm_log.errorf_errno("stat(%s) failed", dev->nodes[DRM_NODE_PRIMARY]);
-			continue;
+		const int node_types[] = { DRM_NODE_PRIMARY, DRM_NODE_RENDER };
+		for (size_t j = 0; j < sizeof(node_types) / sizeof(node_types[0]); j++) {
+			int node = node_types[j];
+
+			if (!(dev->available_nodes & (1 << node)))
+				continue;
+
+			struct stat dev_stat = {};
+			if (stat(dev->nodes[node], &dev_stat) != 0) {
+				drm_log.errorf_errno("stat(%s) failed", dev->nodes[node]);
+				continue;
+			}
+
+			if (dev_stat.st_rdev == devid) {
+				name = strdup(dev->nodes[node]);
+				break;
+			}
 		}
 
-		if (dev_stat.st_rdev == devid) {
-			name = strdup(dev->nodes[DRM_NODE_PRIMARY]);
+		if (name != nullptr)
 			break;
-		}
 	}
 
 	drmFreeDevices(devices, devices_len);
@@ -561,7 +572,7 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 
 	char *device_name = nullptr;
 	if (g_vulkanHasDrmDevId) {
-		device_name = find_drm_device_by_devid(g_vulkanDrmDevId);
+		device_name = find_drm_node_by_devid(g_vulkanDrmDevId);
 		if (device_name == nullptr) {
 			drm_log.errorf("Failed to find DRM device with device ID %" PRIu64, (uint64_t)g_vulkanDrmDevId);
 			return false;
