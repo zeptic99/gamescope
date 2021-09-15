@@ -50,7 +50,7 @@ wlroots_dep = dependency(
   default_options: ['default_library=static', 'examples=false', 'xwayland=enabled', 'backends=libinput', 'renderers=[]'],
 )
 
-wlroots_has_xwayland = wlroots_dep.get_variable(pkgconfig: 'have_xwayland', internal: 'have_xwayland') == 'true'
+wlroots_has_xwayland = wlroots_dep.get_variable('have_xwayland') == 'true'
 if not wlroots_has_xwayland
   error('Cannot use wlroots built without Xwayland support')
 endif
