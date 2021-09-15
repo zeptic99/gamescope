@@ -47,7 +47,7 @@ wlroots_dep = dependency(
   'wlroots',
   version: ['>= 0.15.0', '< 0.16.0'],
   fallback: ['wlroots', 'wlroots'],
-  default_options: ['default_library=static', 'examples=false', 'xwayland=enabled'],
+  default_options: ['default_library=static', 'examples=false', 'xwayland=enabled', 'backends=libinput', 'renderers=[]'],
 )
 
 wlroots_has_xwayland = wlroots_dep.get_variable(pkgconfig: 'have_xwayland', internal: 'have_xwayland') == 'true'
