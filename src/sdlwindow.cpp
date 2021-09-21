@@ -13,17 +13,17 @@
 
 #include "sdlscancodetable.hpp"
 
-bool g_bSDLInitOK = false;
-std::mutex g_SDLInitLock;
+static bool g_bSDLInitOK = false;
+static std::mutex g_SDLInitLock;
 
-bool g_bWindowShown = false;
+static bool g_bWindowShown = false;
 
-int g_nOldNestedRefresh = 0;
-bool g_bWindowFocused = true;
+static int g_nOldNestedRefresh = 0;
+static bool g_bWindowFocused = true;
 
 SDL_Window *g_SDLWindow;
-uint32_t g_unSDLUserEventID;
-SDL_Event g_SDLUserEvent;
+static uint32_t g_unSDLUserEventID;
+static SDL_Event g_SDLUserEvent;
 
 //-----------------------------------------------------------------------------
 // Purpose: Convert from the remote scancode to a Linux event keycode
