@@ -730,6 +730,8 @@ void finish_drm(struct drm_t *drm)
 		add_plane_property(req, plane, "CRTC_H", 0);
 		if (plane->props.count("rotation") > 0)
 			add_plane_property(req, plane, "rotation", DRM_MODE_ROTATE_0);
+		if (plane->props.count("alpha") > 0)
+			add_plane_property(req, plane, "alpha", 0xFFFF);
 	}
 	// We can't do a non-blocking commit here or else risk EBUSY in case the
 	// previous page-flip is still in flight.
