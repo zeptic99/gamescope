@@ -162,10 +162,10 @@ struct {
 	bool bNeedsSwizzle; // swap the R and the B channels
 	bool bHasAlpha;
 } s_DRMVKFormatTable[] = {
-	{ DRM_FORMAT_XRGB8888, VK_FORMAT_B8G8R8A8_UNORM, false, false },
 	{ DRM_FORMAT_ARGB8888, VK_FORMAT_B8G8R8A8_UNORM, false, true },
-	{ DRM_FORMAT_XRGB8888, VK_FORMAT_R8G8B8A8_UNORM, true, false },
+	{ DRM_FORMAT_XRGB8888, VK_FORMAT_B8G8R8A8_UNORM, false, false },
 	{ DRM_FORMAT_ARGB8888, VK_FORMAT_R8G8B8A8_UNORM, true, true },
+	{ DRM_FORMAT_XRGB8888, VK_FORMAT_R8G8B8A8_UNORM, true, false },
 	{ DRM_FORMAT_NV12, VK_FORMAT_G8_B8R8_2PLANE_420_UNORM, false, false },
 	{ DRM_FORMAT_INVALID, VK_FORMAT_UNDEFINED, false, false },
 };
@@ -670,8 +670,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 	createInfo.components.r = bSwapChannels ? VK_COMPONENT_SWIZZLE_B : VK_COMPONENT_SWIZZLE_IDENTITY;
 	createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 	createInfo.components.b = bSwapChannels ? VK_COMPONENT_SWIZZLE_R : VK_COMPONENT_SWIZZLE_IDENTITY;
-// 	createInfo.components.a = bHasAlpha ? VK_COMPONENT_SWIZZLE_IDENTITY : VK_COMPONENT_SWIZZLE_ONE;
-	createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	createInfo.components.a = bHasAlpha ? VK_COMPONENT_SWIZZLE_IDENTITY : VK_COMPONENT_SWIZZLE_ONE;
 	createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	createInfo.subresourceRange.baseMipLevel = 0;
 	createInfo.subresourceRange.levelCount = 1;
