@@ -72,7 +72,7 @@ spirv_shader = custom_target('shader_target',
 
 liftoff_dep = dependency(
   'libliftoff',
-  version: ['>= 0.1.0', '< 0.2.0'],
+  version: ['>= 0.2.0', '< 0.3.0'],
   fallback: ['libliftoff', 'liftoff'],
   default_options: ['default_library=static'],
 )

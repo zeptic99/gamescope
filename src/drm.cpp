@@ -1097,15 +1097,10 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
 
 	int ret = liftoff_output_apply( drm->lo_output, drm->req, drm->flags );
 
-	int scanoutLayerCount = 0;
 	if ( ret == 0 )
 	{
-		for ( int i = 0; i < k_nMaxLayers; i++ )
-		{
-			if ( liftoff_layer_get_plane( drm->lo_layers[ i ] ) != NULL )
-				scanoutLayerCount++;
-		}
-		if ( scanoutLayerCount != pComposite->nLayerCount )
+		// We don't support partial composition yet
+		if ( liftoff_output_needs_composition( drm->lo_output ) )
 			ret = -EINVAL;
 	}
 
