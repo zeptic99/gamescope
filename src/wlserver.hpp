@@ -71,6 +71,7 @@ enum wlserver_touch_click_mode {
 	WLSERVER_TOUCH_CLICK_PASSTHROUGH = 4,
 };
 
+extern enum wlserver_touch_click_mode g_nDefaultTouchClickMode;
 extern enum wlserver_touch_click_mode g_nTouchClickMode;
 
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);

@@ -65,7 +65,8 @@ struct wlserver_content_override {
 
 static std::map<uint32_t, struct wlserver_content_override *> content_overrides;
 
-enum wlserver_touch_click_mode g_nTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
+enum wlserver_touch_click_mode g_nDefaultTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
+enum wlserver_touch_click_mode g_nTouchClickMode = g_nDefaultTouchClickMode;
 
 static struct wl_list pending_surfaces = {0};
 

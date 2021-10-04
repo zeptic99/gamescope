@@ -2711,8 +2711,7 @@ handle_property_notify(Display *dpy, XPropertyEvent *ev)
 	}
 	if (ev->atom == steamTouchClickModeAtom )
 	{
-		// Default to 1, left click
-		g_nTouchClickMode = (enum wlserver_touch_click_mode) get_prop(dpy, root, steamTouchClickModeAtom, 1 );
+		g_nTouchClickMode = (enum wlserver_touch_click_mode) get_prop(dpy, root, steamTouchClickModeAtom, g_nDefaultTouchClickMode );
 	}
 	if (ev->atom == steamStreamingClientAtom)
 	{

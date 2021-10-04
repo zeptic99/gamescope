@@ -46,6 +46,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "disable-layers", no_argument, nullptr, 0 },
 	{ "debug-layers", no_argument, nullptr, 0 },
 	{ "prefer-output", required_argument, nullptr, 'O' },
+	{ "default-touch-mode", required_argument, nullptr, 0 },
 
 	// steamcompmgr options
 	{ "cursor", required_argument, nullptr, 0 },
@@ -89,6 +90,7 @@ const char usage[] =
 	"\n"
 	"Embedded mode options:\n"
 	"  -O, --prefer-output            list of connectors in order of preference\n"
+	"  --default-touch-mode           0: hover, 1: left, 2: right, 3: middle, 4: passthrough\n"
 	"\n"
 	"Debug options:\n"
 	"  --disable-layers               disable libliftoff (hardware planes)\n"
@@ -235,6 +237,9 @@ int main(int argc, char **argv)
 					g_bUseLayers = false;
 				} else if (strcmp(opt_name, "debug-layers") == 0) {
 					g_bDebugLayers = true;
+				} else if (strcmp(opt_name, "default-touch-mode") == 0) {
+					g_nDefaultTouchClickMode = (enum wlserver_touch_click_mode) atoi( optarg );
+					g_nTouchClickMode = g_nDefaultTouchClickMode;
 				}
 				break;
 			case '?':
