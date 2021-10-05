@@ -15,6 +15,8 @@
 
 #include "composite.h"
 
+bool g_bIsCompositeDebug = false;
+
 PFN_vkGetMemoryFdKHR dyn_vkGetMemoryFdKHR;
 PFN_vkGetImageDrmFormatModifierPropertiesEXT dyn_vkGetImageDrmFormatModifierPropertiesEXT;
 PFN_vkGetFenceFdKHR dyn_vkGetFenceFdKHR;
@@ -1078,6 +1080,8 @@ retry:
 	vecEnabledDeviceExtensions.push_back( VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME );
 
 	vecEnabledDeviceExtensions.push_back( VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME );
+
+	vecEnabledDeviceExtensions.push_back( VK_KHR_SHADER_CLOCK_EXTENSION_NAME );
 	
 	VkDeviceCreateInfo deviceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -1244,7 +1248,7 @@ retry:
 	VkPushConstantRange pushConstantRange = {
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.offset = 0,
-		.size = sizeof(Composite_t::CompositeData_t)
+		.size = uint32_t(sizeof(Composite_t::CompositeData_t) + (g_bIsCompositeDebug ? sizeof(uint32_t) : 0))
 	};
 	
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
@@ -1264,7 +1268,7 @@ retry:
 		return false;
 	}
 
-	const std::array<VkSpecializationMapEntry, 3> specializationEntries = {{
+	const std::array<VkSpecializationMapEntry, 4> specializationEntries = {{
 		{
 			.constantID = 0,
 			.offset     = 0,
@@ -1280,6 +1284,11 @@ retry:
 			.offset     = sizeof(uint32_t) + sizeof(uint32_t),
 			.size       = sizeof(uint32_t)
 		},
+		{
+			.constantID = 3,
+			.offset     = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t),
+			.size       = sizeof(uint32_t)
+		},
 	}};
 	
 	for (uint32_t layerCount = 0; layerCount < k_nMaxLayers; layerCount++) {
@@ -1289,10 +1298,12 @@ retry:
 					uint32_t layerCount;
 					VkBool32 swapChannels;
 					uint32_t ycbcrMask;
+					uint32_t debug;
 				} specializationData = {
 					.layerCount   = layerCount + 1,
 					.swapChannels = swapChannels,
 					.ycbcrMask    = ycbcrMask,
+					.debug        = g_bIsCompositeDebug,
 				};
 
 				VkSpecializationInfo specializationInfo = {
@@ -1980,6 +1991,8 @@ bool float_is_integer(float x)
 	return fabsf(ceilf(x) - x) <= 0.0001f;
 }
 
+static uint32_t s_frameId = 0;
+
 void vulkan_update_descriptor( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, int nYCBCRMask )
 {
 	{
@@ -2182,6 +2195,10 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 							pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 
 	vkCmdPushConstants(curCommandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pComposite->data), &pComposite->data);
+	if (g_bIsCompositeDebug) {
+		vkCmdPushConstants(curCommandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(pComposite->data), sizeof(uint32_t), &s_frameId);
+		s_frameId++;
+	}
 	
 	uint32_t nGroupCountX = currentOutputWidth % 8 ? currentOutputWidth / 8 + 1: currentOutputWidth / 8;
 	uint32_t nGroupCountY = currentOutputHeight % 8 ? currentOutputHeight / 8 + 1: currentOutputHeight / 8;
