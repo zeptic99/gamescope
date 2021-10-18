@@ -190,6 +190,9 @@ float			focusedWindowScaleY = 1.0f;
 float			focusedWindowOffsetX = 0.0f;
 float			focusedWindowOffsetY = 0.0f;
 
+uint32_t		inputCounter;
+uint32_t		lastPublishedInputCounter;
+
 bool			focusDirty = false;
 bool			hasRepaint = false;
 
@@ -250,6 +253,7 @@ static Atom		gamescopeFocusedWindowAtom;
 static Atom		gamescopeFocusedAppAtom;
 static Atom		gamescopeCtrlAppIDAtom;
 static Atom		gamescopeCtrlWindowAtom;
+static Atom		gamescopeInputCounterAtom;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
 #define OPACITY_PROP		"_NET_WM_WINDOW_OPACITY"
@@ -3669,6 +3673,7 @@ steamcompmgr_main(int argc, char **argv)
 	gamescopeCtrlAppIDAtom = XInternAtom(dpy, "GAMESCOPECTRL_BASELAYER_APPID", false);
 	gamescopeCtrlWindowAtom = XInternAtom(dpy, "GAMESCOPECTRL_BASELAYER_WINDOW", false);
 	WMChangeStateAtom = XInternAtom(dpy, "WM_CHANGE_STATE", false);
+	gamescopeInputCounterAtom = XInternAtom(dpy, "GAMESCOPE_INPUT_COUNTER", false);
 
 	root_width = DisplayWidth(dpy, scr);
 	root_height = DisplayHeight(dpy, scr);
@@ -3784,6 +3789,14 @@ steamcompmgr_main(int argc, char **argv)
 		if ( g_bRun == false )
 		{
 			break;
+		}
+
+		if ( inputCounter != lastPublishedInputCounter )
+		{
+			XChangeProperty( dpy, root, gamescopeInputCounterAtom, XA_CARDINAL, 32, PropModeReplace,
+							 (unsigned char *)&inputCounter, 1 );
+
+			lastPublishedInputCounter = inputCounter;
 		}
 
 		if (focusDirty == true)
