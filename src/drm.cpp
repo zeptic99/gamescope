@@ -1286,9 +1286,17 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 
 bool drm_set_refresh( struct drm_t *drm, int refresh )
 {
+	int width = g_nOutputWidth;
+	int height = g_nOutputHeight;
+	if ( g_bRotated ) {
+		int tmp = width;
+		width = height;
+		height = tmp;
+	}
+
 	drmModeConnector *connector = drm->connector->connector;
-	const drmModeModeInfo *existing_mode = find_mode(connector, g_nOutputWidth, g_nOutputHeight, refresh);
-	drmModeModeInfo mode;
+	const drmModeModeInfo *existing_mode = find_mode(connector, width, height, refresh);
+	drmModeModeInfo mode = {0};
 	if ( existing_mode )
 	{
 		mode = *existing_mode;
@@ -1296,7 +1304,7 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 	else
 	{
 		/* TODO: check refresh is within the EDID limits */
-		generate_cvt_mode( &mode, g_nOutputWidth, g_nOutputHeight, refresh, true, false );
+		generate_cvt_mode( &mode, width, height, refresh, true, false );
 	}
 
 	return drm_set_mode(drm, &mode);
