@@ -58,6 +58,12 @@ foreach feat : required_wlroots_features
   endif
 endforeach
 
+# Vulkan headers are installed separately from the loader (which ships the
+# pkg-config file)
+if not cppc.check_header('vulkan/vulkan.h', dependencies: vulkan_dep)
+  error('Missing vulkan-headers')
+endif
+
 shadercompiler = find_program('glslangValidator', native: true)
 
 spirv_shader = custom_target('shader_target',
