@@ -1,7 +1,7 @@
 project(
   'gamescope',
   'cpp',
-  meson_version: '>=0.54.0',
+  meson_version: '>=0.55.0',
   default_options: [
     'cpp_std=c++14',
     'warning_level=2',
