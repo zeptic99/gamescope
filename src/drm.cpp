@@ -1307,6 +1307,8 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 		generate_cvt_mode( &mode, width, height, refresh, true, false );
 	}
 
+	mode.type = DRM_MODE_TYPE_USERDEF;
+
 	return drm_set_mode(drm, &mode);
 }
 
