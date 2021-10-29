@@ -1371,7 +1371,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 	if ( bDoComposite == true )
 	{
-		CVulkanTexture *pCaptureTexture = nullptr;
+		std::shared_ptr<CVulkanTexture> pCaptureTexture = nullptr;
 
 		bool bResult = vulkan_composite( &composite, &pipeline, bCapture ? &pCaptureTexture : nullptr );
 
@@ -1422,8 +1422,7 @@ paint_all(Display *dpy, MouseCursor *cursor)
 			assert( pCaptureTexture != nullptr );
 			assert( pCaptureTexture->m_format == VK_FORMAT_B8G8R8A8_UNORM );
 
-			pCaptureTexture->nLockRefs++;
-			auto screenshotThread = std::thread([=] {
+			std::thread screenshotThread = std::thread([=] {
 				pthread_setname_np( pthread_self(), "gamescope-scrsh" );
 
 				const uint8_t *mappedData = reinterpret_cast<const uint8_t *>(pCaptureTexture->m_pMappedData);
@@ -1443,7 +1442,6 @@ paint_all(Display *dpy, MouseCursor *cursor)
 						imageData[y * pitch + x * comp + 3] = 255;
 					}
 				}
-				pCaptureTexture->nLockRefs--;
 
 				char pTimeBuffer[1024];
 				time_t currentTime = time(0);

@@ -49,6 +49,7 @@ struct Composite_t
 
 #include "drm.hpp"
 
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <atomic>
@@ -122,8 +123,6 @@ public:
 	void *m_pMappedData = nullptr;
 
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
-
-	std::atomic<uint32_t> nLockRefs;
 };
 
 extern bool g_vulkanSupportsModifiers;
@@ -144,7 +143,7 @@ int vulkan_texture_get_fence( VulkanTexture_t vulkanTex );
 
 void vulkan_free_texture( VulkanTexture_t vulkanTex );
 
-bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, CVulkanTexture **pScreenshotTexture );
+bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, std::shared_ptr<CVulkanTexture> *pScreenshotTexture );
 uint32_t vulkan_get_last_composite_fbid( void );
 
 void vulkan_present_to_window( void );

@@ -6,7 +6,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <array>
-#include <memory>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -58,7 +57,7 @@ struct VulkanOutput_t
 	VkFence fence;
 	int fenceFD;
 
-	std::array<std::unique_ptr<CVulkanTexture>, 8> pScreenshotImages;
+	std::array<std::shared_ptr<CVulkanTexture>, 8> pScreenshotImages;
 };
 
 
@@ -2112,7 +2111,7 @@ void vulkan_update_descriptor( struct Composite_t *pComposite, struct VulkanPipe
 	}
 }
 
-bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, CVulkanTexture **pScreenshotTexture )
+bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *pPipeline, std::shared_ptr<CVulkanTexture> *pScreenshotTexture )
 {
 	VkImage compositeImage;
 
@@ -2197,13 +2196,13 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 
 	if ( pScreenshotTexture != nullptr )
 	{
-		CVulkanTexture *pFoundScreenshotImage = nullptr;
+		std::shared_ptr<CVulkanTexture> pFoundScreenshotImage = nullptr;
 
 		for (auto& pScreenshotImage : g_output.pScreenshotImages)
 		{
 			if (pScreenshotImage == nullptr)
 			{
-				pScreenshotImage = std::make_unique<CVulkanTexture>();
+				pScreenshotImage = std::make_shared<CVulkanTexture>();
 
 				CVulkanTexture::createFlags screenshotImageFlags;
 				screenshotImageFlags.bMappable = true;
@@ -2238,10 +2237,10 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 									0, 0, nullptr, 0, nullptr, 1, &memoryBarrier );
 			}
 
-			if (pScreenshotImage->nLockRefs)
+			if (pScreenshotImage.use_count() > 1)
 				continue;
 
-			pFoundScreenshotImage = pScreenshotImage.get();
+			pFoundScreenshotImage = pScreenshotImage;
 			break;
 		}
 
