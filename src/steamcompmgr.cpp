@@ -1424,6 +1424,8 @@ paint_all(Display *dpy, MouseCursor *cursor)
 
 			pCaptureTexture->nLockRefs++;
 			auto screenshotThread = std::thread([=] {
+				pthread_setname_np( pthread_self(), "gamescope-scrsh" );
+
 				const uint8_t *mappedData = reinterpret_cast<const uint8_t *>(pCaptureTexture->m_pMappedData);
 
 				// Make our own copy of the image to remove the alpha channel.
