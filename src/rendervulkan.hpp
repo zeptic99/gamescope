@@ -112,6 +112,7 @@ public:
 	
 	VkImageView m_vkImageView = VK_NULL_HANDLE;
 
+	uint32_t m_width = 0, m_height = 0;
 	uint32_t m_unRowPitch = 0;
 	
 	uint32_t m_FBID = 0;

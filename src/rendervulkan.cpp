@@ -452,7 +452,9 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, VkFormat format, cr
 		
 		imageInfo.pNext = &externalImageCreateInfo;
 	}
-	
+
+	m_width = width;
+	m_height = height;
 	m_format = imageInfo.format;
 
 	res = vkCreateImage(device, &imageInfo, nullptr, &m_vkImage);
