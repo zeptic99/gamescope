@@ -1467,22 +1467,9 @@ paint_all(Display *dpy, MouseCursor *cursor)
 		if ( pw_buffer != nullptr )
 		{
 			assert( pCaptureTexture != nullptr );
-			assert( pCaptureTexture->m_format == VK_FORMAT_B8G8R8A8_UNORM );
+			assert( pw_buffer->texture == nullptr );
 
-			if ( pw_buffer->video_info.size.width != currentOutputWidth || pw_buffer->video_info.size.height != currentOutputHeight )
-			{
-				// Push black frames until the PipeWire thread realizes the stream size has changed
-				memset( pw_buffer->data, 0, pw_buffer->stride * pw_buffer->video_info.size.height );
-			}
-			else
-			{
-				// TODO: avoid this memcpy by using multiple capture textures
-				int bpp = 4;
-				for ( unsigned int i = 0; i < currentOutputHeight; i++ )
-				{
-					memcpy( pw_buffer->data + i * pw_buffer->stride, (uint8_t *) pCaptureTexture->m_pMappedData + i * pCaptureTexture->m_unRowPitch, bpp * currentOutputWidth );
-				}
-			}
+			pw_buffer->texture = pCaptureTexture;
 
 			push_pipewire_buffer(pw_buffer);
 			// TODO: make sure the buffer isn't lost in one of the failure
