@@ -124,6 +124,7 @@ public:
 			bTransferSrc = false;
 			bTransferDst = false;
 			bLinear = false;
+			bExportable = false;
 		}
 
 		bool bFlippable : 1;
@@ -133,6 +134,7 @@ public:
 		bool bTransferSrc : 1;
 		bool bTransferDst : 1;
 		bool bLinear : 1;
+		bool bExportable : 1;
 	};
 
 	bool BInit( uint32_t width, uint32_t height, uint32_t drmFormat, createFlags flags, wlr_dmabuf_attributes *pDMA = nullptr );
@@ -161,6 +163,8 @@ public:
 	void *m_pMappedData = nullptr;
 
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
+
+	struct wlr_dmabuf_attributes m_dmabuf = {};
 };
 
 extern bool g_vulkanSupportsModifiers;

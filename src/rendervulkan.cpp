@@ -365,6 +365,11 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 		usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 	}
 
+	if ( flags.bFlippable == true )
+	{
+		flags.bExportable = true;
+	}
+
 	if ( flags.bTransferSrc == true )
 	{
 		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -547,7 +552,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = findMemoryType(properties, memRequirements.memoryTypeBits );
 	
-	if ( flags.bFlippable == true || pDMA != nullptr )
+	if ( flags.bExportable == true || pDMA != nullptr )
 	{
 		memory_dedicated_info.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
 		memory_dedicated_info.image = m_vkImage;
@@ -557,7 +562,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 		allocInfo.pNext = &memory_dedicated_info;
 	}
 	
-	if ( flags.bFlippable == true && pDMA == nullptr )
+	if ( flags.bExportable == true && pDMA == nullptr )
 	{
 		// We'll export it to DRM
 		memory_export_info.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
@@ -625,7 +630,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 		m_unRowPitch = image_layout.rowPitch;
 	}
 	
-	if ( flags.bFlippable == true )
+	if ( flags.bExportable == true )
 	{
 		// We assume we own the memory when doing this right now.
 		// We could support the import scenario as well if needed (but we
@@ -716,13 +721,16 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 			dmabuf.stride[0] = subresourceLayout.rowPitch;
 		}
 
-		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &dmabuf );
+		m_dmabuf = dmabuf;
+	}
+
+	if ( flags.bFlippable == true )
+	{
+		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &m_dmabuf );
 		if ( m_FBID == 0 ) {
 			vk_log.errorf( "drm_fbid_from_dmabuf failed" );
 			return false;
 		}
-
-		wlr_dmabuf_attributes_finish( &dmabuf );
 	}
 
 	bool bHasAlpha = pDMA ? DRMFormatHasAlpha( pDMA->format ) : true;
@@ -792,6 +800,8 @@ CVulkanTexture::CVulkanTexture( void )
 
 CVulkanTexture::~CVulkanTexture( void )
 {
+	wlr_dmabuf_attributes_finish( &m_dmabuf );
+
 	if ( m_pMappedData != nullptr )
 	{
 		vkUnmapMemory( device, m_vkImageMemory );
