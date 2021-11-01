@@ -54,13 +54,30 @@ static void request_buffer(struct pipewire_state *state)
 		return;
 	}
 
-	struct spa_buffer *spa_buffer = pw_buffer->buffer;
 	struct pipewire_buffer *buffer = (struct pipewire_buffer *) pw_buffer->user_data;
+	buffer->copying = true;
+
+	// Past this exchange, the PipeWire thread shares the buffer with the
+	// steamcompmgr thread
+	struct pipewire_buffer *old = out_buffer.exchange(buffer);
+	assert(old == nullptr);
+}
+
+static void copy_buffer(struct pipewire_state *state, struct pipewire_buffer *buffer)
+{
+	std::shared_ptr<CVulkanTexture> tex = std::move(buffer->texture);
+	assert(tex != nullptr);
+	assert(tex->m_format == VK_FORMAT_B8G8R8A8_UNORM);
+
+	struct pw_buffer *pw_buffer = buffer->buffer;
+	struct spa_buffer *spa_buffer = pw_buffer->buffer;
+
+	bool needs_reneg = buffer->video_info.size.width != tex->m_width || buffer->video_info.size.height != tex->m_height;
 
 	struct spa_meta_header *header = (struct spa_meta_header *) spa_buffer_find_meta_data(spa_buffer, SPA_META_Header, sizeof(*header));
 	if (header != nullptr) {
 		header->pts = -1;
-		header->flags = 0;
+		header->flags = needs_reneg ? SPA_META_HEADER_FLAG_CORRUPTED : 0;
 		header->seq = state->seq++;
 		header->dts_offset = 0;
 	}
@@ -69,13 +86,14 @@ static void request_buffer(struct pipewire_state *state)
 	chunk->offset = 0;
 	chunk->size = state->video_info.size.height * state->stride;
 	chunk->stride = state->stride;
+	chunk->flags = needs_reneg ? SPA_CHUNK_FLAG_CORRUPTED : 0;
 
-	buffer->copying = true;
-
-	// Past this exchange, the PipeWire thread shares the buffer with the
-	// steamcompmgr thread
-	struct pipewire_buffer *old = out_buffer.exchange(buffer);
-	assert(old == nullptr);
+	if (!needs_reneg) {
+		int bpp = 4;
+		for (uint32_t i = 0; i < tex->m_height; i++) {
+			memcpy(buffer->data + i * buffer->stride, (uint8_t *) tex->m_pMappedData + i * tex->m_unRowPitch, bpp * tex->m_width);
+		}
+	}
 }
 
 static void dispatch_nudge(struct pipewire_state *state, int fd)
@@ -108,26 +126,9 @@ static void dispatch_nudge(struct pipewire_state *state, int fd)
 
 		buffer->copying = false;
 
-		{
-			std::shared_ptr<CVulkanTexture> tex = std::move(buffer->texture);
-			assert( tex->m_format == VK_FORMAT_B8G8R8A8_UNORM );
-
-			if ( buffer->video_info.size.width != tex->m_width || buffer->video_info.size.height != tex->m_height )
-			{
-				// Push black frames until the PipeWire thread realizes the stream size has changed
-				memset( buffer->data, 0, buffer->stride * buffer->video_info.size.height );
-			}
-			else
-			{
-				int bpp = 4;
-				for ( unsigned int i = 0; i < tex->m_height; i++ )
-				{
-					memcpy( buffer->data + i * buffer->stride, (uint8_t *) tex->m_pMappedData + i * tex->m_unRowPitch, bpp * tex->m_width );
-				}
-			}
-		}
-
 		if (buffer->buffer != nullptr) {
+			copy_buffer(state, buffer);
+
 			int ret = pw_stream_queue_buffer(state->stream, buffer->buffer);
 			if (ret < 0) {
 				pwr_log.errorf("pw_stream_queue_buffer failed");
