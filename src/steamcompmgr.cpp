@@ -1802,8 +1802,6 @@ found:
 					PropModeReplace, (unsigned char *)wmState,
 					sizeof(wmState) / sizeof(wmState[0]));
 
-		hasRepaint = true;
-
 		gpuvis_trace_printf( "determine_and_apply_focus focus %lu", focus->id );
 
 		if ( debugFocus == true )
