@@ -3,4 +3,4 @@
 	url = https://gitlab.freedesktop.org/wlroots/wlroots.git
 [submodule "subprojects/libliftoff"]
 	path = subprojects/libliftoff
-	url = https://github.com/emersion/libliftoff.git
+	url = https://gitlab.freedesktop.org/emersion/libliftoff.git
