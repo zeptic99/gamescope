@@ -107,8 +107,8 @@ struct commit_t
 std::mutex listCommitsDoneLock;
 std::vector< uint64_t > listCommitsDone;
 
-typedef struct _win {
-	struct _win		*next;
+struct win {
+	struct win		*next;
 	Window		id;
 	XWindowAttributes	a;
 	int			mode;
@@ -145,7 +145,7 @@ typedef struct _win {
 	struct wlserver_surface surface;
 
 	std::vector< commit_t > commit_queue;
-} win;
+};
 
 static win		*list;
 static int		scr;

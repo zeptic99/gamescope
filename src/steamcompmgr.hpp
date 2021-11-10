@@ -30,7 +30,7 @@ struct ResListEntry_t {
 };
 
 struct _XDisplay;
-struct _win;
+struct win;
 
 class MouseCursor
 {
@@ -45,7 +45,7 @@ public:
 	void constrainPosition();
 	void resetPosition();
 
-	void paint(struct _win *window, struct Composite_t *pComposite,
+	void paint(struct win *window, struct Composite_t *pComposite,
 			   struct VulkanPipeline_t *pPipeline);
 	void setDirty();
 
