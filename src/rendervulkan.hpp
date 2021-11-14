@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <stdint.h>
 
 typedef uint32_t VulkanTexture_t;
@@ -103,6 +104,7 @@ public:
 
 	bool BInit( uint32_t width, uint32_t height, VkFormat format, createFlags flags, wlr_dmabuf_attributes *pDMA = nullptr );
 
+	CVulkanTexture( void );
 	~CVulkanTexture( void );
 	
 	bool m_bInitialized = false;
@@ -117,7 +119,7 @@ public:
 	
 	uint32_t m_FBID = 0;
 	
-	int32_t nRefCount = 1;
+	std::atomic<int32_t> nRefCount;
 	
 	VulkanTexture_t handle = 0;
 
