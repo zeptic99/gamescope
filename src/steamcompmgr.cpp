@@ -3605,6 +3605,9 @@ spawn_client( char **argv )
 static void
 dispatch_x11( Display *dpy, MouseCursor *cursor )
 {
+	bool bShouldResetCursor = false;
+	bool bSetFocus = false;
+
 	do {
 		XEvent ev;
 		int ret = XNextEvent(dpy, &ev);
@@ -3676,7 +3679,7 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 						else
 						{
 							// focus went elsewhere, correct it
-							XSetInputFocus(dpy, currentKeyboardFocusWindow, RevertToNone, CurrentTime);
+							bSetFocus = true;
 						}
 					}
 				}
@@ -3730,10 +3733,9 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 			case LeaveNotify:
 				if (ev.xcrossing.window == currentInputFocusWindow)
 				{
-					// This shouldn't happen due to our pointer barriers,
-					// but there is a known X server bug; warp to last good
-					// position.
-					cursor->resetPosition();
+					// Josh: need to defer this as we could have a destroy later on
+					// and end up submitting commands with the currentInputFocusWIndow
+					bShouldResetCursor = true;
 				}
 				break;
 			case MotionNotify:
@@ -3758,6 +3760,19 @@ dispatch_x11( Display *dpy, MouseCursor *cursor )
 		}
 		XFlush(dpy);
 	} while (XPending(dpy));
+
+	if ( bShouldResetCursor )
+	{
+		// This shouldn't happen due to our pointer barriers,
+		// but there is a known X server bug; warp to last good
+		// position.
+		cursor->resetPosition();
+	}
+
+	if ( bSetFocus )
+	{
+		XSetInputFocus(dpy, currentKeyboardFocusWindow, RevertToNone, CurrentTime);
+	}
 }
 
 static bool
