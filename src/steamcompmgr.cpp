@@ -774,7 +774,8 @@ get_window_last_done_commit( win *w, std::shared_ptr<commit_t> &commit )
 		return;
 	}
 
-	commit = w->commit_queue[ lastCommit ];
+	if ( commit != w->commit_queue[ lastCommit ] )
+		commit = w->commit_queue[ lastCommit ];
 }
 
 /**
@@ -2208,6 +2209,9 @@ found:
 			sprintf( buf,  "xwininfo -id 0x%lx; xprop -id 0x%lx; xwininfo -root -tree", focus->id, focus->id );
 			system( buf );
 		}
+
+		if ( !focus->isSteamStreamingClient )
+			get_window_last_done_commit( focus, g_HeldCommits[ HELD_COMMIT_BASE ] );
 	}
 
 	currentFocusWindow = focus->id;
