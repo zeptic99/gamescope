@@ -817,6 +817,8 @@ void wlserver_unlock(void)
 	pthread_mutex_unlock(&waylock);
 }
 
+extern std::mutex g_SteamCompMgrXWaylandServerMutex;
+
 void wlserver_run(void)
 {
 	struct pollfd pollfd = {
@@ -851,6 +853,8 @@ void wlserver_run(void)
 		}
 	}
 
+	// Released when steamcompmgr closes.
+	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise
 	// wlroots will restart it automatically.
 	wlserver.wlr.xwayland_servers.clear();

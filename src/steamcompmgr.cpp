@@ -213,6 +213,8 @@ extern bool g_bIntegerScale;
 
 bool			synchronize;
 
+std::mutex g_SteamCompMgrXWaylandServerMutex;
+
 enum HeldCommitTypes_t
 {
 	HELD_COMMIT_BASE,
@@ -4285,6 +4287,8 @@ steamcompmgr_main(int argc, char **argv)
 
 	int vblankFD = vblank_init();
 	assert( vblankFD >= 0 );
+
+	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
 
 	// Initialize any xwayland ctxs we have
 	{
