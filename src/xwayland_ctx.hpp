@@ -121,5 +121,7 @@ struct xwayland_ctx_t
 		Atom gamescopeColorLinearGainBlend;
 
 		Atom gamescopeXWaylandModeControl;
+
+		Atom gamescopeFPSLimit;
 	} atoms;
 };
