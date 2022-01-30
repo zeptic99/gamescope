@@ -1613,11 +1613,16 @@ paint_all()
 		}
 	}
 
+	bool bDrewCursor = false;
+
 	// Draw cursor if we need to
 	if (input) {
+		int nLayerCountBefore = composite.nLayerCount;
 		global_focus.cursor->paint(
 			input, w == input ? override : nullptr,
 			&composite, &pipeline);
+		int nLayerCountAfter = composite.nLayerCount;
+		bDrewCursor = nLayerCountAfter > nLayerCountBefore;
 	}
 
 	if ( !bValidContents || ( BIsNested() == false && g_DRM.paused == true ) )
@@ -1657,6 +1662,7 @@ paint_all()
 	bNeedsComposite |= bWasFirstFrame;
 	bNeedsComposite |= composite.useFSRLayer0;
 	bNeedsComposite |= bNeedsNearest;
+	bNeedsComposite |= bDrewCursor;
 
 	if ( !bNeedsComposite )
 	{
