@@ -72,7 +72,7 @@ glsl_compiler = find_program('glslangValidator', native: true)
 
 # Use --depfile to rebuild shaders when included files have changed. Sadly debian based
 # distros don't have up-to-date glslang so we need to check for support first.
-if run_command(glsl_compiler, ['--version', '--depfile', 'dummy.dep']).returncode() == 0
+if run_command(glsl_compiler, ['--version', '--depfile', 'dummy.dep'], check: false).returncode() == 0
   glsl_generator = generator(
     glsl_compiler,
     output    : ['@BASENAME@.h'],
