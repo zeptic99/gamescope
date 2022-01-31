@@ -229,6 +229,10 @@ std::mutex g_FrameLimitCommitsMutex;
 std::queue< std::shared_ptr<commit_t> > g_FrameLimitCommits;
 
 static int g_nSteamCompMgrTargetFPS = 0;
+static uint64_t g_uDynamicRefreshEqualityTime = 0;
+static bool g_bDynamicRefreshEnabled = false;
+// Delay to stop modes flickering back and forth.
+static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
@@ -1713,6 +1717,18 @@ paint_all()
 #else
 	const bool bOverrideCompositeHack = false;
 #endif
+
+	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_bDynamicRefreshEnabled && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
+		? g_nSteamCompMgrTargetFPS
+		: drm_get_default_refresh( &g_DRM );
+
+	uint64_t now = get_time_in_nanos();
+
+	if ( g_nOutputRefresh == nTargetRefresh )
+		g_uDynamicRefreshEqualityTime = now;
+
+	if ( !BIsNested() && g_nOutputRefresh != nTargetRefresh && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
+		drm_set_refresh( &g_DRM, nTargetRefresh );
 
 	bool bNeedsNearest = !g_bFilterGameWindow && composite.data.vScale[0].x != 1.0f && composite.data.vScale[0].y != 1.0f;
 
@@ -3719,6 +3735,10 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		steamcompmgr_set_target_fps( get_prop( ctx, ctx->root, ctx->atoms.gamescopeFPSLimit, 0 ) );
 	}
+	if ( ev->atom == ctx->atoms.gamescopeDynamicRefresh )
+	{
+		g_bDynamicRefreshEnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDynamicRefresh, 0 );
+	}
 }
 
 static int
@@ -4576,6 +4596,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeColorLinearGainBlend = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LINEARGAIN_BLEND", false );
 	ctx->atoms.gamescopeXWaylandModeControl = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_MODE_CONTROL", false );
 	ctx->atoms.gamescopeFPSLimit = XInternAtom( ctx->dpy, "GAMESCOPE_FPS_LIMIT", false );
+	ctx->atoms.gamescopeDynamicRefresh = XInternAtom( ctx->dpy, "GAMESCOPE_DYNAMIC_REFRESH", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);

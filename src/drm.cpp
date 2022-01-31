@@ -1533,3 +1533,19 @@ bool drm_set_resolution( struct drm_t *drm, int width, int height )
 
 	return drm_set_mode(drm, mode);
 }
+
+int drm_get_default_refresh(struct drm_t *drm)
+{
+	if ( drm->preferred_refresh )
+		return drm->preferred_refresh;
+
+	if ( drm->connector && drm->connector->connector )
+	{
+		drmModeConnector *connector = drm->connector->connector;
+		const drmModeModeInfo *mode = find_mode( connector, g_nOutputWidth, g_nOutputHeight, 0);
+		if ( mode )
+			return mode->vrefresh;
+	}
+
+	return 60;
+}
