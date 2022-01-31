@@ -268,17 +268,15 @@ void generate_cvt_mode(drmModeModeInfo *mode, int hdisplay, int vdisplay,
 	}
 }
 
-void generate_fixed_mode(drmModeModeInfo *mode, const drmModeModeInfo *base, float vrefresh)
+void generate_fixed_mode(drmModeModeInfo *mode, const drmModeModeInfo *base, int vrefresh)
 {
 	*mode = *base;
 
-	if (!vrefresh) {
-		vrefresh = 60.0;
-	}
+	if (!vrefresh)
+		vrefresh = 60;
 
-	mode->clock = (mode->htotal * mode->vtotal) / 1000.0 * vrefresh;
-	mode->vrefresh = (1000.0 * ((float) mode->clock)) /
-		((float) (mode->htotal * mode->vtotal));
+	mode->clock = ( ( mode->htotal * mode->vtotal * vrefresh ) + 499 ) / 1000;
+	mode->vrefresh = (1000 * mode->clock) / (mode->htotal * mode->vtotal);
 
-	snprintf(mode->name, sizeof(mode->name), "%dx%d@%.2f", mode->hdisplay, mode->vdisplay, vrefresh);
+	snprintf(mode->name, sizeof(mode->name), "%dx%d@%d.00", mode->hdisplay, mode->vdisplay, vrefresh);
 }
