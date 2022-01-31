@@ -1424,6 +1424,23 @@ paint_all()
 	override = global_focus.overrideWindow;
 	input = global_focus.inputFocusWindow;
 
+	if (++frameCounter == 300)
+	{
+		currentFrameRate = 300 * 1000.0f / (currentTime - lastSampledFrameTime);
+		lastSampledFrameTime = currentTime;
+		frameCounter = 0;
+
+		stats_printf( "fps=%f\n", currentFrameRate );
+
+		if ( w && w->isSteam )
+		{
+			stats_printf( "focus=steam\n" );
+		}
+		else
+		{
+			stats_printf( "focus=%i\n", w ? w->appID : 0 );
+		}
+	}
 
 	struct Composite_t composite = {};
 	struct VulkanPipeline_t pipeline = {};
