@@ -83,6 +83,7 @@ struct wlserver_t {
 	} wlr;
 	
 	struct wlr_surface *mouse_focus_surface;
+	struct wlr_surface *kb_focus_surface;
 	double mouse_surface_cursorx;
 	double mouse_surface_cursory;
 	

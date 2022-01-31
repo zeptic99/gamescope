@@ -1,3 +1,4 @@
+#include <xkbcommon/xkbcommon-keysyms.h>
 #define _GNU_SOURCE 1
 
 #include <assert.h>
@@ -170,6 +171,21 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 		unsigned vt = keysym - XKB_KEY_XF86Switch_VT_1 + 1;
 		wlr_session_change_vt(wlserver.wlr.session, vt);
 		return;
+	}
+
+	if ( ( event->state == WL_KEYBOARD_KEY_STATE_PRESSED || event->state == WL_KEYBOARD_KEY_STATE_RELEASED ) && ( keysym == XKB_KEY_XF86AudioLowerVolume || keysym == XKB_KEY_XF86AudioRaiseVolume ) )
+	{
+		// Always send volume+/- to root server only, to avoid it reaching the game.
+		struct wlr_surface *old_kb_surf = wlserver.kb_focus_surface;
+		struct wlr_surface *new_kb_surf = steamcompmgr_get_server_input_surface( 0 );
+		if ( new_kb_surf )
+		{
+			wlserver_keyboardfocus( new_kb_surf );
+			wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard->device );
+			wlr_seat_keyboard_notify_key( wlserver.wlr.seat, event->time_msec, event->keycode, event->state );
+			wlserver_keyboardfocus( old_kb_surf );
+			return;
+		}
 	}
 
 	wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard->device);
@@ -869,6 +885,8 @@ void wlserver_keyboardfocus( struct wlr_surface *surface )
 		wlr_seat_keyboard_notify_enter( wlserver.wlr.seat, surface, nullptr, 0, nullptr);
 	else
 		wlr_seat_keyboard_notify_enter( wlserver.wlr.seat, surface, keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+
+	wlserver.kb_focus_surface = surface;
 }
 
 void wlserver_key( uint32_t key, bool press, uint32_t time )
@@ -1031,6 +1049,11 @@ void wlserver_surface_finish( struct wlserver_surface *surf )
 	if ( surf->wlr == wlserver.mouse_focus_surface )
 	{
 		wlserver.mouse_focus_surface = nullptr;
+	}
+
+	if ( surf->wlr == wlserver.kb_focus_surface )
+	{
+		wlserver.kb_focus_surface = nullptr;
 	}
 
 	surf->wl_id = 0;

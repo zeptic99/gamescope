@@ -4659,3 +4659,11 @@ gamescope_xwayland_server_t *steamcompmgr_get_focused_server()
 
 	return wlserver_get_xwayland_server(0);
 }
+
+struct wlr_surface *steamcompmgr_get_server_input_surface( size_t idx )
+{
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( idx );
+	if ( server && server->ctx && server->ctx->focus.inputFocusWindow && server->ctx->focus.inputFocusWindow->surface.wlr )
+		return server->ctx->focus.inputFocusWindow->surface.wlr;
+	return NULL;
+}
