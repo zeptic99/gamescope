@@ -3495,6 +3495,35 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_uVBlankRateOfDecayPercentage = (uint64_t)get_prop( ctx, ctx->root, ctx->atoms.gamescopeTuneableRateOfDecay, g_uDefaultVBlankRateOfDecayPercentage );
 	}
+	if ( ev->atom == ctx->atoms.gamescopeScalingFilter )
+	{
+		int nScalingMode = get_prop( ctx, ctx->root, ctx->atoms.gamescopeScalingFilter, 0 );
+		switch ( nScalingMode )
+		{
+		default:
+		case 0:
+			g_bFilterGameWindow = true;
+			g_bIntegerScale = false;
+			g_fsrUpscale = false;
+			break;
+		case 1:
+			g_bFilterGameWindow = false;
+			g_bIntegerScale = false;
+			g_fsrUpscale = false;
+			break;
+		case 2:
+			g_bFilterGameWindow = false;
+			g_bIntegerScale = true;
+			g_fsrUpscale = false;
+			break;
+		case 3:
+			g_bFilterGameWindow = true;
+			g_bIntegerScale = false;
+			g_fsrUpscale = true;
+			break;
+		}
+		hasRepaint = true;
+	}
 }
 
 static int
@@ -4337,6 +4366,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	// In nanoseconds...
 	ctx->atoms.gamescopeTuneableVBlankRedZone = XInternAtom( ctx->dpy, "GAMESCOPE_TUNEABLE_VBLANK_REDZONE", false );
 	ctx->atoms.gamescopeTuneableRateOfDecay = XInternAtom( ctx->dpy, "GAMESCOPE_TUNEABLE_VBLANK_RATE_OF_DECAY_PERCENTAGE", false );
+
+	ctx->atoms.gamescopeScalingFilter = XInternAtom( ctx->dpy, "GAMESCOPE_SCALING_FILTER", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);

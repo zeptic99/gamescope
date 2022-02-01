@@ -112,5 +112,7 @@ struct xwayland_ctx_t
 
 		Atom gamescopeTuneableVBlankRedZone;
 		Atom gamescopeTuneableRateOfDecay;
+
+		Atom gamescopeScalingFilter;
 	} atoms;
 };
