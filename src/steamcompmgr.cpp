@@ -3524,6 +3524,12 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		}
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeFSRSharpness )
+	{
+		g_fsrSharpness = clamp( get_prop( ctx, ctx->root, ctx->atoms.gamescopeFSRSharpness, 2 ), 0, 20 );
+		if ( g_fsrUpscale )
+			hasRepaint = true;
+	}
 }
 
 static int
@@ -4368,6 +4374,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeTuneableRateOfDecay = XInternAtom( ctx->dpy, "GAMESCOPE_TUNEABLE_VBLANK_RATE_OF_DECAY_PERCENTAGE", false );
 
 	ctx->atoms.gamescopeScalingFilter = XInternAtom( ctx->dpy, "GAMESCOPE_SCALING_FILTER", false );
+	ctx->atoms.gamescopeFSRSharpness = XInternAtom( ctx->dpy, "GAMESCOPE_FSR_SHARPNESS", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);
