@@ -1637,7 +1637,9 @@ paint_all()
 	const bool bOverrideCompositeHack = false;
 #endif
 
-	if ( BIsNested() == false && alwaysComposite == false && bCapture == false && bOverrideCompositeHack == false && bWasFirstFrame == false && composite.useFSRLayer0 == false)
+	bool bNeedsNearest = !g_bFilterGameWindow && composite.data.vScale[0].x != 1.0f && composite.data.vScale[0].y != 1.0f;
+
+	if ( BIsNested() == false && alwaysComposite == false && bCapture == false && bOverrideCompositeHack == false && bWasFirstFrame == false && composite.useFSRLayer0 == false && bNeedsNearest == false )
 	{
 		int ret = drm_prepare( &g_DRM, &composite, &pipeline );
 		if ( ret == 0 )
