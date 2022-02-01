@@ -2072,6 +2072,15 @@ found:;
 			out->focusWindow = focus;
 		else
 			out->outdatedInteractiveFocus = true;
+
+		// Always update X's idea of focus, but still dirty
+		// the it being outdated so we can resolve that globally later.
+		//
+		// Only affecting X and not the WL idea of focus here,
+		// we always want to think the window is focused.
+		// but our real presenting focus and input focus can be elsewhere.
+		if ( !globalFocus )
+			out->focusWindow = focus;
 	}
 	out->overrideWindow = override_focus;
 
