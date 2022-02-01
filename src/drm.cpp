@@ -739,6 +739,7 @@ void finish_drm(struct drm_t *drm)
 	}
 	for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
+		add_crtc_property(req, &drm->crtcs[i], "GAMMA_LUT", 0);
 		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
 	}
 	for ( size_t i = 0; i < drm->planes.size(); i++ ) {
@@ -846,6 +847,8 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 		{
 			if ( drm->current.mode_id )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.mode_id);
+			if ( drm->current.gamma_lut_id )
+				drmModeDestroyPropertyBlob(drm->fd, drm->current.gamma_lut_id);
 			drm->crtcs[i].current = drm->crtcs[i].pending;
 		}
 	}
@@ -1184,6 +1187,8 @@ drm_prepare_liftoff( struct drm_t *drm, const struct Composite_t *pComposite, co
  * error or if the scene-graph can't be presented directly. */
 int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const struct VulkanPipeline_t *pPipeline )
 {
+	drm_update_gamma_lut(drm);
+
 	drm->fbids_in_req.clear();
 
 	bool needs_modeset = drm->needs_modeset.exchange(false);
@@ -1213,6 +1218,8 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "MODE_ID", 0) < 0)
 				return false;
+			if (add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0)
+				return false;
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0) < 0)
 				return false;
 			drm->crtcs[i].pending.active = 0;
@@ -1225,9 +1232,16 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 
 		if (add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id) < 0)
 			return false;
+		if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
+			return false;
 		if (add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1) < 0)
 			return false;
 		drm->crtc->pending.active = 1;
+	}
+	else if ( drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
+	{
+		if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
+			return false;	
 	}
 
 	drm->flags = flags;
@@ -1327,6 +1341,75 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 
 	drm->connector = conn;
 	drm->needs_modeset = true;
+
+	return true;
+}
+
+inline float srgb_to_linear( float fVal )
+{
+    return ( fVal < 0.04045f ) ? fVal / 12.92f : std::pow( ( fVal + 0.055f) / 1.055f, 2.4f );
+}
+
+inline float linear_to_srgb( float fVal )
+{
+    return ( fVal < 0.0031308f ) ? fVal * 12.92f : std::pow( fVal, 1.0f / 2.4f ) * 1.055f - 0.055f;
+}
+
+inline int quantize( float fVal, float fMaxVal )
+{
+    return std::max( 0.f, std::min( fMaxVal, roundf( fVal * fMaxVal ) ) );
+}
+
+bool drm_set_color_gains(struct drm_t *drm, float *gains)
+{
+	for (int i = 0; i < 3; i++)
+		drm->pending.color_gain[i] = gains[i];
+
+	for (int i = 0; i < 3; i++)
+	{
+		if ( drm->current.color_gain[i] != drm->pending.color_gain[i] )
+			return true;
+	}
+	return false;
+}
+
+bool drm_update_gamma_lut(struct drm_t *drm)
+{
+	if (drm->pending.color_gain[0] == drm->current.color_gain[0] &&
+		drm->pending.color_gain[1] == drm->current.color_gain[1] &&
+		drm->pending.color_gain[2] == drm->current.color_gain[2])
+	{
+		return true;
+	}
+
+	if (drm->pending.color_gain[0] == 1.0f &&
+		drm->pending.color_gain[1] == 1.0f &&
+		drm->pending.color_gain[2] == 1.0f)
+	{
+		drm->pending.gamma_lut_id = 0;
+		return true;
+	}
+
+	const int lut_entries = drm->crtc->initial_prop_values["GAMMA_LUT_SIZE"];
+	drm_color_lut *gamma_lut = new drm_color_lut[lut_entries];
+	for ( int i = 0; i < lut_entries; i++ )
+	{
+        float input = float(i) / float(lut_entries - 1);
+        gamma_lut[i].red   = quantize( linear_to_srgb( drm->pending.color_gain[0] * srgb_to_linear( input ) ), (float)UINT16_MAX );
+        gamma_lut[i].green = quantize( linear_to_srgb( drm->pending.color_gain[1] * srgb_to_linear( input ) ), (float)UINT16_MAX );
+        gamma_lut[i].blue  = quantize( linear_to_srgb( drm->pending.color_gain[2] * srgb_to_linear( input ) ), (float)UINT16_MAX );
+	}
+
+	uint32_t blob_id = 0;	
+	if (drmModeCreatePropertyBlob(drm->fd, gamma_lut,
+			lut_entries * sizeof(struct drm_color_lut), &blob_id) != 0) {
+		drm_log.errorf_errno("Unable to create gamma LUT property blob");
+		delete[] gamma_lut;
+		return false;
+	}
+	delete[] gamma_lut;
+
+	drm->pending.gamma_lut_id = blob_id;
 
 	return true;
 }

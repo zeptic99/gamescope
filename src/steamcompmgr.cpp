@@ -3305,6 +3305,14 @@ handle_client_message(xwayland_ctx_t *ctx, XClientMessageEvent *ev)
 	}
 }
 
+
+template<typename T, typename J>
+T bit_cast(const J& src) {
+	T dst;
+	memcpy(&dst, &src, sizeof(T));
+	return dst;
+}
+
 static void
 handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 {
@@ -3557,6 +3565,21 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_fsrSharpness = (int)clamp( get_prop( ctx, ctx->root, ctx->atoms.gamescopeFSRSharpness, 2 ), 0u, 20u );
 		if ( g_fsrUpscale )
+			hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeColorLinearGain )
+	{
+		std::vector< uint32_t > user_gains;
+		bool bHasColor = get_prop( ctx, ctx->root, ctx->atoms.gamescopeColorLinearGain, user_gains );
+		
+		float gains[3] = { 1.0f, 0.0f, 1.0f };
+		if ( bHasColor && user_gains.size() == 3 )
+		{
+			for (int i = 0; i < 3; i++)
+				gains[i] = bit_cast<float>( user_gains[i] );
+		}
+
+		if ( drm_set_color_gains( &g_DRM, gains ) )
 			hasRepaint = true;
 	}
 }
@@ -4404,6 +4427,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 	ctx->atoms.gamescopeScalingFilter = XInternAtom( ctx->dpy, "GAMESCOPE_SCALING_FILTER", false );
 	ctx->atoms.gamescopeFSRSharpness = XInternAtom( ctx->dpy, "GAMESCOPE_FSR_SHARPNESS", false );
+
+	ctx->atoms.gamescopeColorLinearGain = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LINEARGAIN", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);

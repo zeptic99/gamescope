@@ -95,6 +95,8 @@ struct drm_t {
 
 	struct {
 		uint32_t mode_id;
+		uint32_t gamma_lut_id;
+		float color_gain[3] = { 1.0f, 1.0f, 1.0f };
 	} current, pending;
 
 	/* FBs in the atomic request, but not yet submitted to KMS */
@@ -152,5 +154,7 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn );
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode );
 bool drm_set_refresh( struct drm_t *drm, int refresh );
 bool drm_set_resolution( struct drm_t *drm, int width, int height );
+bool drm_set_color_gains(struct drm_t *drm, float *gains);
+bool drm_update_gamma_lut(struct drm_t *drm);
 
 char *find_drm_node_by_devid(dev_t devid);
