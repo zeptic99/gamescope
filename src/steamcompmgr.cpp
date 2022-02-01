@@ -3526,7 +3526,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeFSRSharpness )
 	{
-		g_fsrSharpness = clamp( get_prop( ctx, ctx->root, ctx->atoms.gamescopeFSRSharpness, 2 ), 0, 20 );
+		g_fsrSharpness = (int)clamp( get_prop( ctx, ctx->root, ctx->atoms.gamescopeFSRSharpness, 2 ), 0u, 20u );
 		if ( g_fsrUpscale )
 			hasRepaint = true;
 	}
