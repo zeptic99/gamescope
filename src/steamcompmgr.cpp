@@ -1639,7 +1639,15 @@ paint_all()
 
 	bool bNeedsNearest = !g_bFilterGameWindow && composite.data.vScale[0].x != 1.0f && composite.data.vScale[0].y != 1.0f;
 
-	if ( BIsNested() == false && alwaysComposite == false && bCapture == false && bOverrideCompositeHack == false && bWasFirstFrame == false && composite.useFSRLayer0 == false && bNeedsNearest == false )
+	bool bNeedsComposite = BIsNested();
+	bNeedsComposite |= alwaysComposite;
+	bNeedsComposite |= bCapture;
+	bNeedsComposite |= bOverrideCompositeHack;
+	bNeedsComposite |= bWasFirstFrame;
+	bNeedsComposite |= composite.useFSRLayer0;
+	bNeedsComposite |= bNeedsNearest;
+
+	if ( !bNeedsComposite )
 	{
 		int ret = drm_prepare( &g_DRM, &composite, &pipeline );
 		if ( ret == 0 )
