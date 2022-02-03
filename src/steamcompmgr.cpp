@@ -3572,7 +3572,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		std::vector< uint32_t > user_gains;
 		bool bHasColor = get_prop( ctx, ctx->root, ctx->atoms.gamescopeColorLinearGain, user_gains );
 		
-		float gains[3] = { 1.0f, 0.0f, 1.0f };
+		float gains[3] = { 1.0f, 1.0f, 1.0f };
 		if ( bHasColor && user_gains.size() == 3 )
 		{
 			for (int i = 0; i < 3; i++)
