@@ -2265,9 +2265,15 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 		// Cannot simply XWarpPointer here as we immediately go on to
 		// do wlserver_mousefocus and need to update m_x and m_y of the cursor.
 		if ( bResetToCorner )
+		{
+			inputFocus->mouseMoved = 0;
 			ctx->cursor->forcePosition(inputFocus->a.width, inputFocus->a.height);
+		}
 		else if ( bResetToCenter )
+		{
+			inputFocus->mouseMoved = 0;
 			ctx->cursor->forcePosition(inputFocus->a.width / 2, inputFocus->a.height / 2);
+		}
 	}
 
 	Window	    root_return = None, parent_return = None;
