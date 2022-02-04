@@ -845,9 +845,9 @@ int drm_commit(struct drm_t *drm, struct Composite_t *pComposite, struct VulkanP
 
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ )
 		{
-			if ( drm->current.mode_id )
+			if ( drm->pending.mode_id != drm->current.mode_id )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.mode_id);
-			if ( drm->current.gamma_lut_id )
+			if ( drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.gamma_lut_id);
 			drm->crtcs[i].current = drm->crtcs[i].pending;
 		}
