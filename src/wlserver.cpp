@@ -524,9 +524,20 @@ void gamescope_xwayland_server_t::handle_override_window_content( struct wl_clie
 
 static void gamescope_xwayland_handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window )
 {
-	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
-	gamescope_xwayland_server_t *server = (gamescope_xwayland_server_t *)surface->data;
-	assert(server);
+	// This should ideally use the surface's xwayland, but we don't know it.
+	// We probably need to change our override_window_content protocol to add a
+	// xwayland socket name.
+	//
+	// Right now, the surface -> xwayland association comes from the
+	// handle_wl_id stuff from steamcompmgr.
+	// However, this surface has no associated X window, and won't recieve
+	// wl_id stuff as it's meant to replace another window's surface
+	// which we can't do without knowing the x11_window's xwayland server
+	// here for it to do that override logic in the first place.
+	//
+	// So... Just assume it comes from server 0 for now.
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( 0 );
+	assert( server );
 	server->handle_override_window_content(client, resource, surface_resource, x11_window);
 }
 
