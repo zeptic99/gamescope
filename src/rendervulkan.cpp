@@ -2420,8 +2420,8 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 
 		pPipeline->layerBindings[i].bFilter &= !bForceNearest;
 
-		pComposite->data.vOffset[ i ].x += pComposite->data.vScale[ i ].x / 2.0f;
-		pComposite->data.vOffset[ i ].y += pComposite->data.vScale[ i ].y / 2.0f;
+		pComposite->data.vOffset[ i ].x += 0.5f / pComposite->data.vScale[ i ].x;
+		pComposite->data.vOffset[ i ].y += 0.5f / pComposite->data.vScale[ i ].y;
 	}
 
 
