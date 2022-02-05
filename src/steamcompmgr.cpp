@@ -1150,14 +1150,19 @@ void MouseCursor::paint(win *window, win *fit, struct Composite_t *pComposite,
 		sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->a.y + fit->a.height, 0, currentOutputHeight ) );
 	}
 
+	float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
+	float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
+	float outputScaleRatio = (XOutputRatio < YOutputRatio) ? XOutputRatio : YOutputRatio;
+
 	float scaledX, scaledY;
 	float currentScaleRatio = 1.0;
-	float XRatio = (float)currentOutputWidth / sourceWidth;
-	float YRatio = (float)currentOutputHeight / sourceHeight;
+	float XRatio = (float)g_nNestedWidth / sourceWidth;
+	float YRatio = (float)g_nNestedHeight / sourceHeight;
 	int cursorOffsetX, cursorOffsetY;
 
 	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 	currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
+	currentScaleRatio *= outputScaleRatio;
 	if (g_bIntegerScale)
 		currentScaleRatio = floor(currentScaleRatio);
 
@@ -1323,11 +1328,16 @@ paint_window(win *w, win *scaleW, struct Composite_t *pComposite,
 
 	if (sourceWidth != currentOutputWidth || sourceHeight != currentOutputHeight || globalScaleRatio != 1.0f)
 	{
-		float XRatio = (float)currentOutputWidth / sourceWidth;
-		float YRatio = (float)currentOutputHeight / sourceHeight;
+		float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
+		float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
+		float outputScaleRatio = (XOutputRatio < YOutputRatio) ? XOutputRatio : YOutputRatio;
+
+		float XRatio = (float)g_nNestedWidth / sourceWidth;
+		float YRatio = (float)g_nNestedHeight / sourceHeight;
 
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
+		currentScaleRatio *= outputScaleRatio;
 		if (g_bIntegerScale)
 			currentScaleRatio = floor(currentScaleRatio);
 		currentScaleRatio *= globalScaleRatio;
