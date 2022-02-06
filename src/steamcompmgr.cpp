@@ -4719,6 +4719,11 @@ steamcompmgr_main(int argc, char **argv)
 			}
 			else
 			{
+				if ( steamMode && g_nXWaylandCount > 1 )
+				{
+					g_nNestedHeight = ( g_nNestedWidth * g_nOutputHeight ) / g_nOutputWidth;
+				}
+
 				vulkan_remake_output_images();
 			}
 
