@@ -47,6 +47,8 @@ public:
 	void handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window );
 	void destroy_content_override(struct wlserver_content_override *co);
 
+	struct wl_client *get_client();
+
 private:
 	struct wlr_xwayland_server *xwayland_server = NULL;
 	struct wl_listener xwayland_ready_listener = { .notify = xwayland_ready_callback };
@@ -167,3 +169,5 @@ struct wlserver_surface
 
 void wlserver_surface_init( struct wlserver_surface *surf, long x11_id );
 void wlserver_surface_finish( struct wlserver_surface *surf );
+
+void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh );

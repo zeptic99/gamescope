@@ -522,6 +522,11 @@ void gamescope_xwayland_server_t::handle_override_window_content( struct wl_clie
 	content_overrides[ x11_window ] = co;
 }
 
+struct wl_client *gamescope_xwayland_server_t::get_client()
+{
+	return xwayland_server->client;
+}
+
 static void gamescope_xwayland_handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window )
 {
 	// This should ideally use the surface's xwayland, but we don't know it.
@@ -1059,4 +1064,23 @@ void wlserver_surface_finish( struct wlserver_surface *surf )
 	surf->wlr = nullptr;
 	wl_list_remove( &surf->pending_link );
 	wl_list_remove( &surf->destroy.link );
+}
+
+void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh )
+{
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( idx );
+	if ( !server )
+		return;
+	wl_client *client = server->get_client();
+
+	struct wl_resource *resource;
+	wl_resource_for_each( resource, &wlserver.wlr.output->resources )
+	{
+		if ( wl_resource_get_client( resource ) == client )
+		{
+			wl_output_send_mode( resource, WL_OUTPUT_MODE_CURRENT, w, h, refresh * 1000 );
+			wl_output_send_done( resource );
+			wl_log.infof( "Updating mode for xwayland server %zu %dx%d@%d - client %p - resource %p", idx, w, h, refresh, client, resource );
+		}
+	}
 }
