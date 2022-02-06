@@ -3001,6 +3001,7 @@ configure_win(xwayland_ctx_t *ctx, XConfigureEvent *ce)
 		{
 			ctx->root_width = ce->width;
 			ctx->root_height = ce->height;
+			focusDirty = true;
 		}
 		return;
 	}
