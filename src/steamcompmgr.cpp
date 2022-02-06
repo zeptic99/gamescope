@@ -4722,6 +4722,10 @@ steamcompmgr_main(int argc, char **argv)
 				if ( steamMode && g_nXWaylandCount > 1 )
 				{
 					g_nNestedHeight = ( g_nNestedWidth * g_nOutputHeight ) / g_nOutputWidth;
+					wlserver_lock();
+					// Update only Steam, the root ctx, with the new output size for now
+					wlserver_set_xwayland_server_mode( 0, g_nOutputWidth, g_nOutputHeight, g_nOutputRefresh );
+					wlserver_unlock();
 				}
 
 				vulkan_remake_output_images();
