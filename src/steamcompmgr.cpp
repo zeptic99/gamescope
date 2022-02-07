@@ -761,6 +761,12 @@ window_wants_no_focus_when_mouse_hidden( win *w )
 	return w && w->appID == 769;
 }
 
+static bool
+window_is_fullscreen( win *w )
+{
+	return w && ( w->appID == 769 || w->isFullscreen );
+}
+
 /**
  * Constructor for a cursor. It is hidden in the beginning (normally until moved by user).
  */
@@ -2259,11 +2265,11 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 	if (w->a.x != 0 || w->a.y != 0)
 		XMoveWindow(ctx->dpy, ctx->focus.focusWindow->id, 0, 0);
 
-	if ( ctx->focus.focusWindow->isFullscreen && ( w->a.width != ctx->root_width || w->a.height != ctx->root_height || globalScaleRatio != 1.0f ) )
+	if ( window_is_fullscreen( ctx->focus.focusWindow ) && ( w->a.width != ctx->root_width || w->a.height != ctx->root_height || globalScaleRatio != 1.0f ) )
 	{
 		XResizeWindow(ctx->dpy, ctx->focus.focusWindow->id, ctx->root_width, ctx->root_height);
 	}
-	else if (!ctx->focus.focusWindow->isFullscreen && ctx->focus.focusWindow->sizeHintsSpecified &&
+	else if ( !window_is_fullscreen( ctx->focus.focusWindow ) && ctx->focus.focusWindow->sizeHintsSpecified &&
 		((unsigned)ctx->focus.focusWindow->a.width != ctx->focus.focusWindow->requestedWidth ||
 		(unsigned)ctx->focus.focusWindow->a.height != ctx->focus.focusWindow->requestedHeight))
 	{
@@ -4489,6 +4495,9 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	}
 }
 
+extern int g_nPreferredOutputWidth;
+extern int g_nPreferredOutputHeight;
+
 void
 steamcompmgr_main(int argc, char **argv)
 {
@@ -4568,8 +4577,8 @@ steamcompmgr_main(int argc, char **argv)
 		alwaysComposite = true;
 	}
 
-	currentOutputWidth = g_nOutputWidth;
-	currentOutputHeight = g_nOutputHeight;
+	currentOutputWidth = g_nPreferredOutputWidth;
+	currentOutputHeight = g_nPreferredOutputHeight;
 
 	int vblankFD = vblank_init();
 	assert( vblankFD >= 0 );

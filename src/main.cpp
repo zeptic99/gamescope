@@ -212,10 +212,12 @@ static void handle_signal( int sig )
 	}
 }
 
+int g_nPreferredOutputWidth = 0;
+int g_nPreferredOutputHeight = 0;
+
 int main(int argc, char **argv)
 {
-	int nPreferredOutputWidth = 0;
-	int nPreferredOutputHeight = 0;
+
 
 	static std::string optstring = build_optstring(gamescope_options);
 	gamescope_optstring = optstring.c_str();
@@ -236,10 +238,10 @@ int main(int argc, char **argv)
 				g_nNestedRefresh = atoi( optarg );
 				break;
 			case 'W':
-				nPreferredOutputWidth = atoi( optarg );
+				g_nPreferredOutputWidth = atoi( optarg );
 				break;
 			case 'H':
-				nPreferredOutputHeight = atoi( optarg );
+				g_nPreferredOutputHeight = atoi( optarg );
 				break;
 			case 'o':
 				g_nNestedUnfocusedRefresh = atoi( optarg );
@@ -358,7 +360,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( !initOutput( nPreferredOutputWidth, nPreferredOutputHeight, g_nNestedRefresh ) )
+	if ( !initOutput( g_nPreferredOutputWidth, g_nPreferredOutputHeight, g_nNestedRefresh ) )
 	{
 		fprintf( stderr, "Failed to initialize output\n" );
 		return 1;
