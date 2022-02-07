@@ -29,6 +29,7 @@
  *   says above. Not that I can really do anything about it
  */
 
+#include <X11/Xlib.h>
 #include <cstdint>
 #include <memory>
 #include <thread>
@@ -3008,6 +3009,11 @@ configure_win(xwayland_ctx_t *ctx, XConfigureEvent *ce)
 			ctx->root_width = ce->width;
 			ctx->root_height = ce->height;
 			focusDirty = true;
+
+			gamescope_xwayland_server_t *root_server = wlserver_get_xwayland_server(0);
+			xwayland_ctx_t *root_ctx = root_server->ctx.get();
+			XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeXWaylandModeControl );
+			XFlush( root_ctx->dpy );
 		}
 		return;
 	}
@@ -3604,6 +3610,42 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 
 		if ( drm_set_color_gains( &g_DRM, gains ) )
 			hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeXWaylandModeControl )
+	{
+		std::vector< uint32_t > xwayland_mode_ctl;
+		bool hasModeCtrl = get_prop( ctx, ctx->root, ctx->atoms.gamescopeXWaylandModeControl, xwayland_mode_ctl );
+		if ( hasModeCtrl && xwayland_mode_ctl.size() == 4 )
+		{
+			size_t server_idx = size_t{ xwayland_mode_ctl[ 0 ] };
+			int width = xwayland_mode_ctl[ 1 ];
+			int height = xwayland_mode_ctl[ 2 ];
+			bool allowSuperRes = !!xwayland_mode_ctl[ 3 ];
+
+			if ( !allowSuperRes )
+			{
+				width = std::min<int>(width, currentOutputWidth);
+				height = std::min<int>(height, currentOutputHeight);
+			}
+
+			gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( server_idx );
+			if ( server )
+			{
+				bool root_size_identical = server->ctx->root_width == width && server->ctx->root_height == height;
+
+				wlserver_lock();
+				wlserver_set_xwayland_server_mode( server_idx, width, height, g_nOutputRefresh );
+				wlserver_unlock();
+
+				if ( root_size_identical )
+				{
+					gamescope_xwayland_server_t *root_server = wlserver_get_xwayland_server(0);
+					xwayland_ctx_t *root_ctx = root_server->ctx.get();
+					XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeXWaylandModeControl );
+					XFlush( root_ctx->dpy );
+				}
+			}
+		}
 	}
 }
 
@@ -4452,6 +4494,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeFSRSharpness = XInternAtom( ctx->dpy, "GAMESCOPE_FSR_SHARPNESS", false );
 
 	ctx->atoms.gamescopeColorLinearGain = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LINEARGAIN", false );
+	ctx->atoms.gamescopeXWaylandModeControl = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_MODE_CONTROL", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);
