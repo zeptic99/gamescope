@@ -237,7 +237,7 @@ static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
-	return g_nSteamCompMgrTargetFPS != 0 && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
+	return g_nSteamCompMgrTargetFPS != 0 && w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
 }
 
 void steamcompmgr_fpslimit_add_commit( std::shared_ptr<commit_t> commit )
