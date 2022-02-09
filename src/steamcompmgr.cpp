@@ -152,6 +152,7 @@ struct win {
 	bool skipPager;
 	unsigned int requestedWidth;
 	unsigned int requestedHeight;
+	bool is_dialog;
 
 	Window transientFor;
 
@@ -2005,6 +2006,12 @@ is_focus_priority_greater( win *a, win *b )
 	if ( win_skip_taskbar_and_pager( a ) != win_skip_taskbar_and_pager( b ) )
 		return !win_skip_taskbar_and_pager( a );
 
+	// Prefer normal windows over dialogs
+	// if we are an override redirect.
+	if ( win_is_override_redirect( a ) == win_is_override_redirect( b ) &&
+		a->is_dialog != b->is_dialog && b->is_dialog )
+		return true;
+
 	// The damage sequences are only relevant for game windows.
 	if ( win_has_game_id( a ) && a->damage_sequence != b->damage_sequence )
 		return a->damage_sequence > b->damage_sequence;
@@ -2585,6 +2592,28 @@ determine_and_apply_focus()
 }
 
 static void
+get_win_type(xwayland_ctx_t *ctx, win *w)
+{
+	w->is_dialog = !!w->transientFor;
+
+	std::vector<unsigned int> atoms;
+	if ( get_prop( ctx, w->id, ctx->atoms.winTypeAtom, atoms ) )
+	{
+		for ( unsigned int atom : atoms )
+		{
+			if ( atom == ctx->atoms.winDialogAtom )
+			{
+				w->is_dialog = true;
+			}
+			if ( atom == ctx->atoms.winNormalAtom )
+			{
+				w->is_dialog = false;
+			}
+		}
+	}
+}
+
+static void
 get_size_hints(xwayland_ctx_t *ctx, win *w)
 {
 	XSizeHints hints;
@@ -2784,6 +2813,8 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 		w->transientFor = None;
 	}
 
+	get_win_type( ctx, w );
+
 	w->damage_sequence = 0;
 	w->map_sequence = sequence;
 
@@ -2974,6 +3005,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	new_win->isSteamStreamingClient = false;
 	new_win->isSteamStreamingClientVideo = false;
 	new_win->inputFocusMode = 0;
+	new_win->is_dialog = false;
 
 	if ( steamMode == true )
 	{
@@ -3000,6 +3032,8 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	{
 		new_win->transientFor = None;
 	}
+
+	get_win_type( ctx, new_win );
 
 	new_win->title = NULL;
 	new_win->utf8_title = false;
@@ -3547,6 +3581,15 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			focusDirty = true;
 		}
 	}
+	if (ev->atom == ctx->atoms.winTypeAtom)
+	{
+		win * w = find_win(ctx, ev->window);
+		if (w)
+		{
+			get_win_type(ctx, w);
+			focusDirty = true;
+		}		
+	}
 	if (ev->atom == ctx->atoms.sizeHintsAtom)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -3602,6 +3645,8 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			{
 				w->transientFor = None;
 			}
+			get_win_type( ctx, w );
+
 			focusDirty = true;
 		}
 	}
