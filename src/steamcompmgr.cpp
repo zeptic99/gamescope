@@ -3884,6 +3884,8 @@ handle_io_error(Display *dpy)
 
 	fpslimit_shutdown();
 
+	steamcompmgr_fpslimit_release_all();
+
 	pthread_exit(NULL);
 }
 
