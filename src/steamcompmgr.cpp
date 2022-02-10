@@ -2300,12 +2300,16 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 		else if ( window_wants_no_focus_when_mouse_hidden(inputFocus) != window_wants_no_focus_when_mouse_hidden(ctx->focus.inputFocusWindow) )
 			bResetToCenter = true;
 
+		// cursor is likely not interactable anymore in its original context, hide
+		// don't care if we change kb focus window due to that happening when
+		// going from override -> focus and we don't want to hide then as it's probably a dropdown.
+		if ( ctx->focus.inputFocusWindow != inputFocus ||
+			 ctx->focus.inputFocusMode != inputFocus->inputFocusMode )
+			ctx->cursor->hide();
+
 		ctx->focus.inputFocusWindow = inputFocus;
 		ctx->focus.inputFocusMode = inputFocus->inputFocusMode;
 		ctx->currentKeyboardFocusWindow = keyboardFocusWin->id;
-
-		// cursor is likely not interactable anymore in its original context, hide
-		ctx->cursor->hide();
 	}
 
 	w = ctx->focus.focusWindow;
@@ -2500,7 +2504,9 @@ determine_and_apply_focus()
 		// Hide cursor on transitioning between xwaylands
 		// We already do this when transitioning input focus inside of an
 		// xwayland ctx.
-		if ( global_focus.cursor )
+		// don't care if we change kb focus window due to that happening when
+		// going from override -> focus and we don't want to hide then as it's probably a dropdown.
+		if ( global_focus.cursor && global_focus.inputFocusWindow != previous_focus.inputFocusWindow )
 			global_focus.cursor->hide();
 	}
 
