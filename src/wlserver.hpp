@@ -171,3 +171,5 @@ void wlserver_surface_init( struct wlserver_surface *surf, long x11_id );
 void wlserver_surface_finish( struct wlserver_surface *surf );
 
 void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh );
+
+extern std::atomic<bool> g_bPendingTouchMovement;

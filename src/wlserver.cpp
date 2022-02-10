@@ -273,6 +273,8 @@ static inline uint32_t steamcompmgr_button_to_wlserver_button( int button )
 	}
 }
 
+std::atomic<bool> g_bPendingTouchMovement = { false };
+
 static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 {
 	struct wlserver_touch *touch = wl_container_of( listener, touch, down );
@@ -307,6 +309,8 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 		}
 		else
 		{
+			g_bPendingTouchMovement = true;
+
 			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 
@@ -392,6 +396,8 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 		}
 		else
 		{
+			g_bPendingTouchMovement = true;
+
 			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 		}

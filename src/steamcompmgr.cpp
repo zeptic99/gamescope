@@ -1077,7 +1077,10 @@ void MouseCursor::move(int x, int y)
 	}
 
 	// Ignore the first events as it's likely to be non-user-initiated warps
-	if (!window || window->mouseMoved++ < 5 )
+	if (!window )
+		return;
+
+	if ( ( window != global_focus.inputFocusWindow || !g_bPendingTouchMovement.exchange(false) ) && window->mouseMoved++ < 5 )
 		return;
 
 	m_lastMovedTime = get_time_in_milliseconds();
