@@ -2493,6 +2493,12 @@ determine_and_apply_focus()
 				wlserver_keyboardfocus( global_focus.keyboardFocusWindow->surface.wlr );
 			wlserver_unlock();
 		}
+
+		// Hide cursor on transitioning between xwaylands
+		// We already do this when transitioning input focus inside of an
+		// xwayland ctx.
+		if ( global_focus.cursor )
+			global_focus.cursor->hide();
 	}
 
 	// Determine if we need to repaints
