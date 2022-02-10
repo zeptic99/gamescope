@@ -169,6 +169,8 @@ void steamcompmgr_send_frame_done_to_focus_window();
 // Probably way too low, but a starting point.
 uint64_t g_uFPSLimiterRedZoneNS = 700'000;
 
+bool g_bFPSLimitThreadRun = true;
+
 void fpslimitThreadRun( void )
 {
 	pthread_setname_np( pthread_self(), "gamescope-fps" );
@@ -185,6 +187,10 @@ void fpslimitThreadRun( void )
 
 		{
 			std::unique_lock<std::mutex> lock( g_TargetFPSMutex );
+
+			if ( !g_bFPSLimitThreadRun )
+				return;
+
 			nTargetFPS = g_nFpsLimitTargetFPS;
 			if ( nTargetFPS == 0 )
 			{
@@ -294,6 +300,16 @@ void fpslimit_init( void )
 {
 	std::thread fpslimitThread( fpslimitThreadRun );
 	fpslimitThread.detach();
+}
+
+void fpslimit_shutdown( void )
+{
+	{
+		std::unique_lock<std::mutex> lock(g_TargetFPSMutex);
+		g_bFPSLimitThreadRun = false;
+	}
+
+	g_TargetFPSCondition.notify_all();
 }
 
 void fpslimit_mark_frame( void )

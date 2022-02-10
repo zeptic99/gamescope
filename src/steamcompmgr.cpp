@@ -3882,6 +3882,8 @@ handle_io_error(Display *dpy)
 		statsThreadSem.signal();
 	}
 
+	fpslimit_shutdown();
+
 	pthread_exit(NULL);
 }
 
@@ -5059,6 +5061,10 @@ steamcompmgr_main(int argc, char **argv)
 		statsThreadRun = false;
 		statsThreadSem.signal();
 	}
+
+	fpslimit_shutdown();
+
+	steamcompmgr_fpslimit_release_all();
 
 	finish_drm( &g_DRM );
 }

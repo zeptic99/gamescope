@@ -19,3 +19,5 @@ void fpslimit_mark_frame( void );
 bool fpslimit_use_frame_callbacks_for_focus_window( int nTargetFPS, int nVBlankCount );
 
 void fpslimit_set_target( int nTargetFPS );
+
+void fpslimit_shutdown( void );
