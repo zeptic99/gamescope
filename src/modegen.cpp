@@ -275,7 +275,7 @@ void generate_fixed_mode(drmModeModeInfo *mode, const drmModeModeInfo *base, int
 	if (!vrefresh)
 		vrefresh = 60;
 
-	mode->clock = ( ( mode->htotal * mode->vtotal * vrefresh ) + 499 ) / 1000;
+	mode->clock = ( ( mode->htotal * mode->vtotal * vrefresh ) + 999 ) / 1000;
 	mode->vrefresh = (1000 * mode->clock) / (mode->htotal * mode->vtotal);
 
 	snprintf(mode->name, sizeof(mode->name), "%dx%d@%d.00", mode->hdisplay, mode->vdisplay, vrefresh);
