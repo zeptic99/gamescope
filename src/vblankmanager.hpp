@@ -6,8 +6,8 @@ void vblank_mark_possible_vblank( uint64_t nanos );
 
 extern std::atomic<uint64_t> g_uVblankDrawTimeNS;
 
-const unsigned int g_uDefaultVBlankRedZone = 2'000'000;
-const unsigned int g_uDefaultVBlankRateOfDecayPercentage = 93;
+const unsigned int g_uDefaultVBlankRedZone = 1'650'000;
+const unsigned int g_uDefaultVBlankRateOfDecayPercentage = 980;
 
 extern uint64_t g_uVblankDrawBufferRedZoneNS;
 extern uint64_t g_uVBlankRateOfDecayPercentage;

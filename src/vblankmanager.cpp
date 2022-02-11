@@ -42,7 +42,7 @@ uint64_t g_uVblankDrawBufferRedZoneNS = g_uDefaultVBlankRedZone;
 // The rate of decay (as a percentage) of the rolling average -> current draw time
 uint64_t g_uVBlankRateOfDecayPercentage = g_uDefaultVBlankRateOfDecayPercentage;
 
-const uint64_t g_uVBlankRateOfDecayMax = 100;
+const uint64_t g_uVBlankRateOfDecayMax = 1000;
 
 static std::atomic<uint64_t> g_uRollingMaxDrawTime = { g_uStartingDrawTime };
 
@@ -70,7 +70,12 @@ void vblankThreadRun( void )
 		// eg. if we suddenly spike up (eg. because of test commits taking a stupid long time),
 		// we will then be able to deal with spikes in the long term, even if several commits after
 		// we get back into a good state and then regress again.
-		rollingMaxDrawTime = ( ( alpha * std::max( rollingMaxDrawTime, drawTime ) ) + ( range - alpha ) * drawTime ) / range;
+
+		// If we go over half of our deadzone, be more defensive about things.
+		if ( int64_t(drawTime) - int64_t(g_uVblankDrawBufferRedZoneNS / 2) > int64_t(rollingMaxDrawTime) )
+			rollingMaxDrawTime = drawTime;
+		else
+			rollingMaxDrawTime = ( ( alpha * rollingMaxDrawTime ) + ( range - alpha ) * drawTime ) / range;
 
 		// If we need to offset for our draw more than half of our vblank, something is very wrong.
 		// Clamp our max time to half of the vblank if we can.
@@ -166,8 +171,8 @@ void steamcompmgr_send_frame_done_to_focus_window();
 // Dump some stats.
 //#define FPS_LIMIT_DEBUG
 
-// Probably way too low, but a starting point.
-uint64_t g_uFPSLimiterRedZoneNS = 700'000;
+// 1.2ms for the app's deadzone to account for varying GPU clocks, other variances, etc
+uint64_t g_uFPSLimiterRedZoneNS = 1'200'000;
 
 bool g_bFPSLimitThreadRun = true;
 
@@ -240,7 +245,7 @@ void fpslimitThreadRun( void )
 			const uint64_t vblankInterval = 1'000'000'000ul / refresh;
 
 			// Currently,
-			// Only affect rolling max frame time by 2%
+			// Only affect rolling max frame time by 0.07%
 			// Tends to be much more varied than the vblank timings.
 			// Try to be much more defensive about it.
 			//
@@ -251,10 +256,14 @@ void fpslimitThreadRun( void )
 			// Maybe we want to tweak this alpha value to like 99.something% or change this rolling max to something even more defensive
 			// to keep a more consistent latency. However, I also cannot feel this judder given how small it is, so maybe it doesn't matter?
 			// We can tune this later by tweaking alpha + range anyway...
-			const uint64_t alpha = 98;
-			rollingMaxFrameTime = ( ( alpha * std::max( rollingMaxFrameTime, frameTime ) ) + ( range - alpha ) * frameTime ) / range;
+			const uint64_t alpha = 993;
+			// If we go over half of our deadzone, be more defensive about things.
+			if ( int64_t(frameTime) - int64_t(g_uFPSLimiterRedZoneNS / 2) > int64_t(rollingMaxFrameTime) )
+				rollingMaxFrameTime = frameTime;
+			else
+				rollingMaxFrameTime = ( ( alpha * rollingMaxFrameTime ) + ( range - alpha ) * frameTime ) / range;
 
-			rollingMaxFrameTime = std::min( rollingMaxFrameTime + g_uFPSLimiterRedZoneNS, targetInterval ) - g_uFPSLimiterRedZoneNS;
+			rollingMaxFrameTime = std::min( rollingMaxFrameTime, targetInterval );
 
 			int64_t targetPoint;
 			int64_t sleepyTime = targetInterval;
