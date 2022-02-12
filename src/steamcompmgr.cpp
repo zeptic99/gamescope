@@ -235,6 +235,8 @@ static bool g_bDynamicRefreshEnabled = false;
 // Delay to stop modes flickering back and forth.
 static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
+bool g_bFSRActive = false;
+
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
 	return g_nSteamCompMgrTargetFPS != 0 && w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
@@ -1636,6 +1638,8 @@ paint_all()
 		if ( g_HeldCommits[HELD_COMMIT_BASE] )
 			paint_cached_base_layer(g_HeldCommits[HELD_COMMIT_BASE], g_CachedPlanes[HELD_COMMIT_BASE], &composite, &pipeline, 1.0f);
 	}
+
+	g_bFSRActive = composite.useFSRLayer0;
 
 	// TODO: We want to paint this at the same scale as the normal window and probably
 	// with an offset.
@@ -4662,6 +4666,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeFPSLimit = XInternAtom( ctx->dpy, "GAMESCOPE_FPS_LIMIT", false );
 	ctx->atoms.gamescopeDynamicRefresh = XInternAtom( ctx->dpy, "GAMESCOPE_DYNAMIC_REFRESH", false );
 
+	ctx->atoms.gamescopeFSRFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_FSR_FEEDBACK", false );
+
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);
 
@@ -4706,6 +4712,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
+
+static bool g_bWasFSRActive = false;
 
 void
 steamcompmgr_main(int argc, char **argv)
@@ -4912,6 +4920,15 @@ steamcompmgr_main(int argc, char **argv)
 							 (unsigned char *)&inputCounter, 1 );
 
 			lastPublishedInputCounter = inputCounter;
+		}
+
+		if ( g_bFSRActive != g_bWasFSRActive )
+		{
+			uint32_t active = g_bFSRActive ? 1 : 0;
+			XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFSRFeedback, XA_CARDINAL, 32, PropModeReplace,
+					(unsigned char *)&active, 1 );
+
+			g_bWasFSRActive = g_bFSRActive;
 		}
 
 		if (focusDirty)

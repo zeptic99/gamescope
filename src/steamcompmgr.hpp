@@ -100,6 +100,8 @@ extern float focusedWindowScaleY;
 extern float focusedWindowOffsetX;
 extern float focusedWindowOffsetY;
 
+extern bool g_bFSRActive;
+
 extern uint32_t inputCounter;
 
 void nudge_steamcompmgr( void );

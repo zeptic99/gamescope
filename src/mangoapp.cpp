@@ -42,7 +42,7 @@ void mangoapp_update(){
     now = get_time_in_nanos();
     mangoapp_msg_v1.frametime_ns = now - last_frametime;
     last_frametime = now;
-    mangoapp_msg_v1.fsrUpscale = g_fsrUpscale;
+    mangoapp_msg_v1.fsrUpscale = g_bFSRActive;
     mangoapp_msg_v1.fsrSharpness = g_fsrSharpness;
     msgsnd(msgid, &mangoapp_msg_v1, sizeof(mangoapp_msg_v1), IPC_NOWAIT);
 }
