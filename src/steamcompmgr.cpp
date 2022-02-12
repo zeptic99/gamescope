@@ -237,6 +237,9 @@ static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
 bool g_bFSRActive = false;
 
+int g_nAppBufferCount = 0;
+int g_nMaxAppBufferCount = 0;
+
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
 	return g_nSteamCompMgrTargetFPS != 0 && w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
@@ -245,14 +248,22 @@ bool steamcompmgr_window_should_limit_fps( win *w )
 void steamcompmgr_fpslimit_add_commit( std::shared_ptr<commit_t> commit )
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
+	g_nAppBufferCount++;
+	g_nMaxAppBufferCount = std::max( g_nMaxAppBufferCount, g_nAppBufferCount );
 	g_FrameLimitCommits.push( commit );
 }
 
 void steamcompmgr_fpslimit_release_commit()
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
-	if ( !g_FrameLimitCommits.empty() )
-		g_FrameLimitCommits.pop();
+	// Only allow 1 latent buffer -- essentially go to only "double
+	// buffering" when we are falling behind.
+	if ( g_nAppBufferCount >= g_nMaxAppBufferCount - 1 )
+	{
+		if ( !g_FrameLimitCommits.empty() )
+			g_FrameLimitCommits.pop();
+		g_nAppBufferCount--;
+	}
 }
 
 
@@ -260,6 +271,8 @@ void steamcompmgr_fpslimit_release_all()
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
 	g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
+	g_nAppBufferCount = 0;
+	g_nMaxAppBufferCount = 0;
 }
 
 void steamcompmgr_set_target_fps( int nTarget )
