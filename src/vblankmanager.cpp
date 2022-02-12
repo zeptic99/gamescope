@@ -171,8 +171,8 @@ void steamcompmgr_send_frame_done_to_focus_window();
 // Dump some stats.
 //#define FPS_LIMIT_DEBUG
 
-// 1.2ms for the app's deadzone to account for varying GPU clocks, other variances, etc
-uint64_t g_uFPSLimiterRedZoneNS = 1'200'000;
+// 1.80ms for the app's deadzone to account for varying GPU clocks, other variances, etc
+uint64_t g_uFPSLimiterRedZoneNS = 1'800'000;
 
 bool g_bFPSLimitThreadRun = true;
 
