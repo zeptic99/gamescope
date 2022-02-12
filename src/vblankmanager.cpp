@@ -282,6 +282,8 @@ void fpslimitThreadRun( void )
 				sleepyTime -= g_uRollingMaxDrawTime.load();
 				sleepyTime -= g_uVblankDrawBufferRedZoneNS;
 
+				sleepyTime = std::max( sleepyTime, 0l );
+
 				vblank = g_lastVblank;
 				while ( vblank < t1 )
 					vblank += vblankInterval;
