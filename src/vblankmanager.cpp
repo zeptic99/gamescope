@@ -279,6 +279,9 @@ void fpslimitThreadRun( void )
 				// so that we don't go over the target interval - expected vblank time
 				sleepyTime -= std::min( rollingMaxFrameTime, targetInterval - g_uFPSLimiterRedZoneNS );
 				sleepyTime -= g_uRollingMaxDrawTime.load();
+				// Don't roll back before current vblank
+				// based on varying draw time otherwise we can become divergent
+				// if these value change how we do not expect and get stuck in a feedback loop.
 				sleepyTime = std::max( sleepyTime, 0l );
 				sleepyTime -= g_uFPSLimiterRedZoneNS;
 				sleepyTime -= g_uVblankDrawBufferRedZoneNS;
