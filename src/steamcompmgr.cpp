@@ -295,7 +295,9 @@ void steamcompmgr_set_target_fps( int nTarget )
 	{
 		g_nSteamCompMgrTargetFPS = nTarget;
 		fpslimit_set_target( nTarget );
-		steamcompmgr_fpslimit_release_all();
+
+		if ( nTarget == 0 )
+			steamcompmgr_fpslimit_release_all();
 	}
 }
 
