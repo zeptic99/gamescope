@@ -275,10 +275,12 @@ void fpslimitThreadRun( void )
 			int64_t sleepyTime = targetInterval;
 			if ( refresh % nTargetFPS == 0 )
 			{
-				sleepyTime -= rollingMaxFrameTime;
+				// Take the min of it to the target interval - the fps limiter redzone
+				// so that we don't go over the target interval - expected vblank time
+				sleepyTime -= std::min( rollingMaxFrameTime, targetInterval - g_uFPSLimiterRedZoneNS );
+				sleepyTime -= g_uFPSLimiterRedZoneNS;
 				sleepyTime -= g_uRollingMaxDrawTime.load();
 				sleepyTime -= g_uVblankDrawBufferRedZoneNS;
-				sleepyTime -= g_uFPSLimiterRedZoneNS;
 
 				vblank = g_lastVblank;
 				while ( vblank < t1 )
