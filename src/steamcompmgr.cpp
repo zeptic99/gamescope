@@ -253,16 +253,30 @@ void steamcompmgr_fpslimit_add_commit( std::shared_ptr<commit_t> commit )
 	g_FrameLimitCommits.push( commit );
 }
 
-void steamcompmgr_fpslimit_release_commit()
+void steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
+
+	// If we have missed as many frames as we have buffers
+	// the app may have stalled due to swapchain recreation or something
+	// release all our buffers instantly.
+	if ( consecutive_missed_frame_count > g_nMaxAppBufferCount )
+	{
+		g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
+		g_nAppBufferCount = 0;
+		g_nMaxAppBufferCount = 0;
+		return;
+	}
+
 	// Only allow 1 latent buffer -- essentially go to only "double
 	// buffering" when we are falling behind.
 	if ( g_nAppBufferCount >= g_nMaxAppBufferCount - 1 )
 	{
 		if ( !g_FrameLimitCommits.empty() )
+		{
 			g_FrameLimitCommits.pop();
-		g_nAppBufferCount--;
+			g_nAppBufferCount--;
+		}
 	}
 }
 

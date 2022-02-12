@@ -164,7 +164,7 @@ static std::mutex g_TargetFPSMutex;
 static std::condition_variable g_TargetFPSCondition;
 static int g_nFpsLimitTargetFPS = 0;
 
-void steamcompmgr_fpslimit_release_commit();
+void steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count );
 void steamcompmgr_fpslimit_release_all();
 void steamcompmgr_send_frame_done_to_focus_window();
 
@@ -184,6 +184,7 @@ void fpslimitThreadRun( void )
 	const uint64_t range = g_uVBlankRateOfDecayMax;
 	uint64_t rollingMaxFrameTime = g_uStartingDrawTime;
 	uint64_t vblank = 0;
+	int consecutive_missed_frame_count = 0;
 	while ( true )
 	{
 		int nTargetFPS;
@@ -216,6 +217,11 @@ void fpslimitThreadRun( void )
 			}
 			nTargetFPS = g_nFpsLimitTargetFPS;
 		}
+
+		if ( no_frame )
+			consecutive_missed_frame_count++;
+		else
+		 	consecutive_missed_frame_count = 0;
 
 		if ( nTargetFPS )
 		{
@@ -293,7 +299,7 @@ void fpslimitThreadRun( void )
 
 			sleep_until_nanos( targetPoint );
 			lastCommitReleased = get_time_in_nanos();
-			steamcompmgr_fpslimit_release_commit();
+			steamcompmgr_fpslimit_release_commit( consecutive_missed_frame_count );
 
 			// If we aren't vblank aligned, nudge ourselves to process done commits now.
 			if ( !useFrameCallbacks )
