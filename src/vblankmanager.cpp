@@ -79,7 +79,7 @@ void vblankThreadRun( void )
 
 		// If we need to offset for our draw more than half of our vblank, something is very wrong.
 		// Clamp our max time to half of the vblank if we can.
-		rollingMaxDrawTime = std::min( rollingMaxDrawTime + g_uVblankDrawBufferRedZoneNS, nsecInterval / 2 ) - g_uVblankDrawBufferRedZoneNS;
+		rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - g_uVblankDrawBufferRedZoneNS );
 
 		g_uRollingMaxDrawTime = rollingMaxDrawTime;
 
@@ -169,7 +169,7 @@ void steamcompmgr_fpslimit_release_all();
 void steamcompmgr_send_frame_done_to_focus_window();
 
 // Dump some stats.
-//#define FPS_LIMIT_DEBUG
+#define FPS_LIMIT_DEBUG
 
 // 1.80ms for the app's deadzone to account for varying GPU clocks, other variances, etc
 uint64_t g_uFPSLimiterRedZoneNS = 1'800'000;
@@ -185,6 +185,7 @@ void fpslimitThreadRun( void )
 	uint64_t rollingMaxFrameTime = g_uStartingDrawTime;
 	uint64_t vblank = 0;
 	int consecutive_missed_frame_count = 0;
+	bool last_frame_was_late = false;
 	while ( true )
 	{
 		int nTargetFPS;
@@ -218,102 +219,112 @@ void fpslimitThreadRun( void )
 			nTargetFPS = g_nFpsLimitTargetFPS;
 		}
 
-		if ( no_frame )
-			consecutive_missed_frame_count++;
-		else
-		 	consecutive_missed_frame_count = 0;
-
-		if ( nTargetFPS )
+		// If the last frame was late, and this isn't a late frame
+		// ignore it, as this is that late frame.
+		if ( !last_frame_was_late || no_frame )
 		{
-			targetInterval = 1'000'000'000ul / nTargetFPS;
-
-			// Check if we are unaligned or not, as to whether
-			// we call frame callbacks from this thread instead of steamcompmgr based
-			// on vblank count.
-			bool useFrameCallbacks = fpslimit_use_frame_callbacks_for_focus_window( nTargetFPS, 0 );
-
-			uint64_t t0 = lastCommitReleased;
-			uint64_t t1 = get_time_in_nanos();
-		
-			// Not the actual frame time of the game
-			// this is the time of the amount of work a 'frame' has done.
-			uint64_t frameTime = t1 - t0;
-			// If we didn't get a frame, set our frame time as the target interval.
-			if ( no_frame || !frameTime )
-			{
-#ifdef FPS_LIMIT_DEBUG
-				fprintf( stderr, "no frame\n" );
-#endif
-				frameTime = targetInterval;
-			}
-
-			const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
-			const uint64_t vblankInterval = 1'000'000'000ul / refresh;
-
-			// Currently,
-			// Only affect rolling max frame time by 0.07%
-			// Tends to be much more varied than the vblank timings.
-			// Try to be much more defensive about it.
-			//
-			// Do we want something better here? Right now, because this moves around all the time
-			// sometimes we can see judder in the mangoapp frametime graph when gpu clocks are changing around
-			// in the downtime when we aren't rendering as it measures done->done time,
-			// rather than present->present time, and done->done time changes as we move buffers around.
-			// Maybe we want to tweak this alpha value to like 99.something% or change this rolling max to something even more defensive
-			// to keep a more consistent latency. However, I also cannot feel this judder given how small it is, so maybe it doesn't matter?
-			// We can tune this later by tweaking alpha + range anyway...
-			const uint64_t alpha = 993;
-			// If we go over half of our deadzone, be more defensive about things.
-			if ( int64_t(frameTime) - int64_t(g_uFPSLimiterRedZoneNS / 2) > int64_t(rollingMaxFrameTime) )
-				rollingMaxFrameTime = frameTime;
+			if ( no_frame )
+				consecutive_missed_frame_count++;
 			else
-				rollingMaxFrameTime = ( ( alpha * rollingMaxFrameTime ) + ( range - alpha ) * frameTime ) / range;
+				consecutive_missed_frame_count = 0;
 
-			rollingMaxFrameTime = std::min( rollingMaxFrameTime, targetInterval );
-
-			int64_t targetPoint;
-			int64_t sleepyTime = targetInterval;
-			if ( refresh % nTargetFPS == 0 )
+			if ( nTargetFPS )
 			{
-				// Take the min of it to the target interval - the fps limiter redzone
-				// so that we don't go over the target interval - expected vblank time
-				sleepyTime -= std::min( rollingMaxFrameTime, targetInterval - g_uFPSLimiterRedZoneNS );
-				sleepyTime -= g_uRollingMaxDrawTime.load();
-				// Don't roll back before current vblank
-				// based on varying draw time otherwise we can become divergent
-				// if these value change how we do not expect and get stuck in a feedback loop.
-				sleepyTime = std::max( sleepyTime, 0l );
-				sleepyTime -= g_uFPSLimiterRedZoneNS;
-				sleepyTime -= g_uVblankDrawBufferRedZoneNS;
+				targetInterval = 1'000'000'000ul / nTargetFPS;
 
-				vblank = g_lastVblank;
-				while ( vblank < t1 )
-					vblank += vblankInterval;
-				targetPoint = vblank + sleepyTime;
-			}
-			else
-			{
-				sleepyTime -= frameTime;
-				targetPoint = t1 + sleepyTime;
-			}
+				// Check if we are unaligned or not, as to whether
+				// we call frame callbacks from this thread instead of steamcompmgr based
+				// on vblank count.
+				bool useFrameCallbacks = fpslimit_use_frame_callbacks_for_focus_window( nTargetFPS, 0 );
+
+				uint64_t t0 = lastCommitReleased;
+				uint64_t t1 = get_time_in_nanos();
+			
+				// Not the actual frame time of the game
+				// this is the time of the amount of work a 'frame' has done.
+				uint64_t frameTime = t1 - t0;
+				// If we didn't get a frame, set our frame time as the target interval.
+				if ( no_frame || !frameTime )
+				{
+		#ifdef FPS_LIMIT_DEBUG
+					fprintf( stderr, "no frame\n" );
+		#endif
+					frameTime = targetInterval;
+				}
+
+				const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+				const uint64_t vblankInterval = 1'000'000'000ul / refresh;
+
+				// Currently,
+				// Only affect rolling max frame time by 0.07%
+				// Tends to be much more varied than the vblank timings.
+				// Try to be much more defensive about it.
+				//
+				// Do we want something better here? Right now, because this moves around all the time
+				// sometimes we can see judder in the mangoapp frametime graph when gpu clocks are changing around
+				// in the downtime when we aren't rendering as it measures done->done time,
+				// rather than present->present time, and done->done time changes as we move buffers around.
+				// Maybe we want to tweak this alpha value to like 99.something% or change this rolling max to something even more defensive
+				// to keep a more consistent latency. However, I also cannot feel this judder given how small it is, so maybe it doesn't matter?
+				// We can tune this later by tweaking alpha + range anyway...
+				const uint64_t alpha = 993;
+				// If we go over half of our deadzone, be more defensive about things.
+				if ( int64_t(frameTime) - int64_t(g_uFPSLimiterRedZoneNS / 2) > int64_t(rollingMaxFrameTime) )
+					rollingMaxFrameTime = frameTime;
+				else
+					rollingMaxFrameTime = ( ( alpha * rollingMaxFrameTime ) + ( range - alpha ) * frameTime ) / range;
+
+				rollingMaxFrameTime = std::min( rollingMaxFrameTime, targetInterval );
+
+				int64_t targetPoint;
+				int64_t sleepyTime = targetInterval;
+				uint64_t rollingMaxDrawTime = g_uRollingMaxDrawTime.load();
+
+				if ( refresh % nTargetFPS == 0 )
+				{
+
+					// Take the min of it to the target interval - the fps limiter redzone
+					// so that we don't go over the target interval - expected vblank time
+					sleepyTime -= std::min<int64_t>( rollingMaxFrameTime, targetInterval - g_uFPSLimiterRedZoneNS );
+					sleepyTime -= int64_t(g_uFPSLimiterRedZoneNS);
+					// Don't roll back before current vblank
+					// based on varying frame time otherwise we can become divergent
+					// if these value change how we do not expect and get stuck in a feedback loop.
+					sleepyTime = std::max<int64_t>( sleepyTime, 0 );
+					sleepyTime -= int64_t(rollingMaxDrawTime);
+					sleepyTime -= int64_t(g_uVblankDrawBufferRedZoneNS);
+
+					vblank = g_lastVblank;
+					while ( vblank < t1 )
+						vblank += vblankInterval;
+					targetPoint = int64_t(vblank) + sleepyTime;
+				}
+				else
+				{
+					sleepyTime -= int64_t(frameTime);
+					targetPoint = int64_t(t1) + sleepyTime;
+				}
 
 
-#ifdef FPS_LIMIT_DEBUG
-			fprintf( stderr, "Sleeping from %lu to %ld (%ld - %.2fms) to reach %d fps - vblank: %lu sleepytime: %.2fms rollingMaxFrameTime: %.2fms frametime: %.2fms\n", t1, targetPoint, targetPoint - t1, (targetPoint - t1) / 1'000'000.0, nTargetFPS, vblank, sleepyTime  / 1'000'000.0, rollingMaxFrameTime / 1'000'000.0, frameTime  / 1'000'000.0 );
-#endif
+		#ifdef FPS_LIMIT_DEBUG
+				fprintf( stderr, "Sleeping from %lu to %ld (%ld - %.2fms) to reach %d fps - rollingMaxDrawTime: %.2fms vblank: %lu sleepytime: %.2fms rollingMaxFrameTime: %.2fms frametime: %.2fms\n", t1, targetPoint, targetPoint - int64_t(t1), (targetPoint - int64_t(t1)) / 1'000'000.0, nTargetFPS, rollingMaxDrawTime / 1'000'000.0, vblank, sleepyTime  / 1'000'000.0, rollingMaxFrameTime / 1'000'000.0, frameTime  / 1'000'000.0 );
+		#endif
 
 
-			sleep_until_nanos( targetPoint );
-			lastCommitReleased = get_time_in_nanos();
-			steamcompmgr_fpslimit_release_commit( consecutive_missed_frame_count );
+				sleep_until_nanos( targetPoint );
+				lastCommitReleased = get_time_in_nanos();
+				steamcompmgr_fpslimit_release_commit( consecutive_missed_frame_count );
 
-			// If we aren't vblank aligned, nudge ourselves to process done commits now.
-			if ( !useFrameCallbacks )
-			{
-				steamcompmgr_send_frame_done_to_focus_window();
-				nudge_steamcompmgr();
+				// If we aren't vblank aligned, nudge ourselves to process done commits now.
+				if ( !useFrameCallbacks )
+				{
+					steamcompmgr_send_frame_done_to_focus_window();
+					nudge_steamcompmgr();
+				}
 			}
 		}
+
+		last_frame_was_late = no_frame;
 	}
 }
 
