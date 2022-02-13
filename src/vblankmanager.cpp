@@ -28,13 +28,16 @@ const uint64_t g_uStartingDrawTime = 3'000'000;
 // This is the last time a draw took.
 std::atomic<uint64_t> g_uVblankDrawTimeNS = { g_uStartingDrawTime };
 
-// Tuneable
-// 2.0ms by default. (g_DefaultVBlankRedZone)
-// This is the leeway we always apply to our buffer.
-// This also accounts for some time we cannot account for (which (I think) is the drm_commit -> triggering the pageflip)
+// 1.3ms by default. (g_uDefaultMinVBlankTime)
+// This accounts for some time we cannot account for (which (I think) is the drm_commit -> triggering the pageflip)
 // It would be nice to make this lower if we can find a way to track that effectively
 // Perhaps the missing time is spent elsewhere, but given we track from the pipe write
 // to after the return from `drm_commit` -- I am very doubtful.
+uint64_t g_uMinVblankTime = g_uDefaultMinVBlankTime;
+
+// Tuneable
+// 0.3ms by default. (g_uDefaultVBlankRedZone)
+// This is the leeway we always apply to our buffer.
 uint64_t g_uVblankDrawBufferRedZoneNS = g_uDefaultVBlankRedZone;
 
 // Tuneable
@@ -81,9 +84,11 @@ void vblankThreadRun( void )
 		// Clamp our max time to half of the vblank if we can.
 		rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - g_uVblankDrawBufferRedZoneNS );
 
-		g_uRollingMaxDrawTime = rollingMaxDrawTime;
+		uint64_t thisMaxDrawTime = std::max<uint64_t>( rollingMaxDrawTime, g_uMinVblankTime );
 
-		uint64_t offset = rollingMaxDrawTime + g_uVblankDrawBufferRedZoneNS;
+		g_uRollingMaxDrawTime = thisMaxDrawTime;
+
+		uint64_t offset = thisMaxDrawTime + g_uVblankDrawBufferRedZoneNS;
 
 #ifdef VBLANK_DEBUG
 		// Debug stuff for logging missed vblanks
@@ -96,10 +101,10 @@ void vblankThreadRun( void )
 			if ( drawTime > lastOffset )
 				fprintf( stderr, " !! missed vblank " );
 
-			fprintf( stderr, "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
+			fprintf( stderr, "redZone: %.2fms decayRate: %lu%% - thisMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
 				g_uVblankDrawBufferRedZoneNS / 1'000'000.0,
 				g_uVBlankRateOfDecayPercentage,
-				rollingMaxDrawTime / 1'000'000.0,
+				thisMaxDrawTime / 1'000'000.0,
 				lastDrawTime / 1'000'000.0,
 				lastOffset / 1'000'000.0,
 				drawTime / 1'000'000.0,
@@ -173,6 +178,11 @@ void steamcompmgr_send_frame_done_to_focus_window();
 
 // 1.80ms for the app's deadzone to account for varying GPU clocks, other variances, etc
 uint64_t g_uFPSLimiterRedZoneNS = 1'800'000;
+
+// 1.0ms as the minimum time we consider a 'frame' for scheduling purposes.
+// If the app is running at 1000s of FPS, its probably going to vary a lot.
+// so best to keep this stable at some minimum.
+uint64_t g_uMinFPSLimiter = 1'000'000;
 
 bool g_bFPSLimitThreadRun = true;
 
@@ -285,7 +295,7 @@ void fpslimitThreadRun( void )
 
 					// Take the min of it to the target interval - the fps limiter redzone
 					// so that we don't go over the target interval - expected vblank time
-					sleepyTime -= std::min<int64_t>( rollingMaxFrameTime, targetInterval - g_uFPSLimiterRedZoneNS );
+					sleepyTime -= std::min<int64_t>( std::max( rollingMaxFrameTime, g_uMinFPSLimiter ), targetInterval - g_uFPSLimiterRedZoneNS );
 					sleepyTime -= int64_t(g_uFPSLimiterRedZoneNS);
 					// Don't roll back before current vblank
 					// based on varying frame time otherwise we can become divergent
