@@ -294,9 +294,14 @@ void fpslimitThreadRun( void )
 					sleepyTime -= int64_t(rollingMaxDrawTime);
 					sleepyTime -= int64_t(g_uVblankDrawBufferRedZoneNS);
 
-					vblank = g_lastVblank;
-					while ( vblank < t1 )
-						vblank += vblankInterval;
+					uint64_t currentVBlank = g_lastVblank.load();
+					uint64_t lastTargetVBlank = vblank ? vblank : currentVBlank;
+
+					vblank = currentVBlank;
+					// We could have finished our frame on the previous vblank if we were targeting 30 fps
+					// so account for that here by making sure we are always ahead of our last target vblank.
+					while ( vblank <= std::max( lastTargetVBlank, t1 ) )
+						vblank += targetInterval;
 					targetPoint = int64_t(vblank) + sleepyTime;
 				}
 				else
