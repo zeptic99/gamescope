@@ -332,6 +332,8 @@ void fpslimitThreadRun( void )
 
 					targetPoint = int64_t(vblank) + sleepyTime;
 					latency = -(sleepyTime - int64_t(targetInterval));
+					if ( isLatent )
+						latency = 0; // invalid info, record as 0.
 				}
 				else
 				{
@@ -342,7 +344,7 @@ void fpslimitThreadRun( void )
 
 				if ( !no_frame )
 				{
-					mangoapp_update( isLatent ? donetodonetime : targetInterval, frameTime, isLatent ? 0 : latency );
+					mangoapp_update( isLatent ? donetodonetime : targetInterval, frameTime, latency );
 				}
 
 		#ifdef FPS_LIMIT_DEBUG
@@ -366,7 +368,7 @@ void fpslimitThreadRun( void )
 		{
 			if ( nTargetFPS )
 			{
-				mangoapp_update( donetodonetime, donetodonetime, 0 );
+				mangoapp_update( donetodonetime, donetodonetime, ( refresh % nTargetFPS == 0 ) ? 0 : uint64_t(~0ull) );
 			}
 		}
 
