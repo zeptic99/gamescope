@@ -3427,7 +3427,7 @@ handle_net_wm_state(xwayland_ctx_t *ctx, win *w, XClientMessageEvent *ev)
 	}
 }
 
-bool g_bLowLatency = false;
+bool g_bLowLatency = true;
 
 static void
 handle_system_tray_opcode(xwayland_ctx_t *ctx, XClientMessageEvent *ev)

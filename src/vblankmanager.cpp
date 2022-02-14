@@ -289,7 +289,7 @@ void fpslimitThreadRun( void )
 					rollingMaxFrameTime = ( ( alpha * rollingMaxFrameTime ) + ( range - alpha ) * frameTime ) / range;
 				}
 
-				rollingMaxFrameTime = std::min( rollingMaxFrameTime, targetInterval );
+				rollingMaxFrameTime = std::min( rollingMaxFrameTime, targetInterval + targetInterval / 2 );
 
 				int64_t targetPoint;
 				int64_t sleepyTime = targetInterval;
@@ -300,14 +300,17 @@ void fpslimitThreadRun( void )
 				{
 					// Take the min of it to the target interval - the fps limiter redzone
 					// so that we don't go over the target interval - expected vblank time
-					sleepyTime -= std::min<int64_t>( std::max( rollingMaxFrameTime, g_uMinFPSLimiter ), targetInterval - g_uFPSLimiterRedZoneNS );
+					sleepyTime -= std::max( rollingMaxFrameTime, g_uMinFPSLimiter );
 					sleepyTime -= int64_t(g_uFPSLimiterRedZoneNS);
 					// Don't roll back before current vblank
 					// based on varying frame time otherwise we can become divergent
 					// if these value change how we do not expect and get stuck in a feedback loop.
+					const int64_t min_sleepy_time = -int64_t(targetInterval) / 2;
 					if ( !g_bLowLatency )
-						sleepyTime = 0;
-					sleepyTime = std::max<int64_t>( sleepyTime, 0 );
+					{
+						sleepyTime = min_sleepy_time;
+					}
+					sleepyTime = std::max<int64_t>( sleepyTime, min_sleepy_time );
 					sleepyTime -= int64_t(std::min<uint64_t>(rollingMaxDrawTime, g_uDefaultMinVBlankTime));
 					sleepyTime -= int64_t(g_uVblankDrawBufferRedZoneNS);
 
@@ -315,7 +318,7 @@ void fpslimitThreadRun( void )
 
 					vblank = ( ( t1 / targetInterval ) * targetInterval ) + ( g_lastVblank.load() % vblankInterval );
 					// Make sure we are on the other side of the last vblank.
-					while ( vblank < last_vblank + targetInterval / 2 )
+					while ( vblank < last_vblank + targetInterval / 2 + 1'000'000 )
 						vblank += targetInterval;
 
 					targetPoint = int64_t(vblank) + sleepyTime;
