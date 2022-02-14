@@ -342,7 +342,7 @@ void fpslimitThreadRun( void )
 
 				if ( !no_frame )
 				{
-					mangoapp_update( isLatent ? donetodonetime : targetInterval, frameTime, latency );
+					mangoapp_update( isLatent ? donetodonetime : targetInterval, frameTime, isLatent ? 0 : latency );
 				}
 
 		#ifdef FPS_LIMIT_DEBUG
@@ -366,7 +366,7 @@ void fpslimitThreadRun( void )
 		{
 			if ( nTargetFPS )
 			{
-				mangoapp_update( donetodonetime, donetodonetime, uint64_t(~0ull) );
+				mangoapp_update( donetodonetime, donetodonetime, 0 );
 			}
 		}
 
