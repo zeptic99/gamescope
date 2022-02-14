@@ -355,7 +355,7 @@ void fpslimitThreadRun( void )
 
 				uint64_t latency = uint64_t(~0ull);
 				if ( refresh % nTargetFPS == 0 )
-					latency = targetInterval;
+					latency = frametime;
 
 				mangoapp_update( frametime, frametime, latency );
 			}
