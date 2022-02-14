@@ -3892,7 +3892,11 @@ error(Display *dpy, XErrorEvent *ev)
 			}
 		}
 	}
-	assert(ctx);
+	if ( !ctx )
+	{
+		// Not for us!
+		return;
+	}
 	int	    o;
 	const char    *name = NULL;
 	static char buffer[256];
