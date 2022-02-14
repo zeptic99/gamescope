@@ -3895,7 +3895,7 @@ error(Display *dpy, XErrorEvent *ev)
 	if ( !ctx )
 	{
 		// Not for us!
-		return;
+		return 0;
 	}
 	int	    o;
 	const char    *name = NULL;
