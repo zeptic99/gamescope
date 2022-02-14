@@ -309,7 +309,7 @@ static const struct pw_stream_events stream_events = {
 	.process = nullptr,
 };
 
-enum event_type {
+enum pipewire_event_type {
 	EVENT_PIPEWIRE,
 	EVENT_NUDGE,
 	EVENT_COUNT // keep last

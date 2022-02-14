@@ -4581,7 +4581,7 @@ load_mouse_cursor( MouseCursor *cursor, const char *path, int hx, int hy )
 	return cursor->setCursorImage((char *)data, w, h, hx, hy);
 }
 
-enum event_type {
+enum steamcompmgr_event_type {
 	EVENT_VBLANK,
 	EVENT_NUDGE,
 	EVENT_X11,
