@@ -85,11 +85,9 @@ void vblankThreadRun( void )
 		// Clamp our max time to half of the vblank if we can.
 		rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - g_uVblankDrawBufferRedZoneNS );
 
-		uint64_t thisMaxDrawTime = std::max<uint64_t>( rollingMaxDrawTime, g_uMinVblankTime );
+		g_uRollingMaxDrawTime = rollingMaxDrawTime;
 
-		g_uRollingMaxDrawTime = thisMaxDrawTime;
-
-		uint64_t offset = thisMaxDrawTime + g_uVblankDrawBufferRedZoneNS;
+		uint64_t offset = rollingMaxDrawTime + g_uVblankDrawBufferRedZoneNS;
 
 #ifdef VBLANK_DEBUG
 		// Debug stuff for logging missed vblanks
@@ -102,10 +100,10 @@ void vblankThreadRun( void )
 			if ( drawTime > lastOffset )
 				fprintf( stderr, " !! missed vblank " );
 
-			fprintf( stderr, "redZone: %.2fms decayRate: %lu%% - thisMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
+			fprintf( stderr, "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
 				g_uVblankDrawBufferRedZoneNS / 1'000'000.0,
 				g_uVBlankRateOfDecayPercentage,
-				thisMaxDrawTime / 1'000'000.0,
+				rollingMaxDrawTime / 1'000'000.0,
 				lastDrawTime / 1'000'000.0,
 				lastOffset / 1'000'000.0,
 				drawTime / 1'000'000.0,
@@ -302,7 +300,7 @@ void fpslimitThreadRun( void )
 					// based on varying frame time otherwise we can become divergent
 					// if these value change how we do not expect and get stuck in a feedback loop.
 					sleepyTime = std::max<int64_t>( sleepyTime, 0 );
-					sleepyTime -= int64_t(rollingMaxDrawTime);
+					sleepyTime -= int64_t(std::min<uint64_t>(rollingMaxDrawTime, g_uDefaultMinVBlankTime));
 					sleepyTime -= int64_t(g_uVblankDrawBufferRedZoneNS);
 
 					uint64_t last_vblank = vblank;
