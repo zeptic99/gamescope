@@ -107,7 +107,7 @@ extern uint32_t inputCounter;
 void nudge_steamcompmgr( void );
 void take_screenshot( void );
 
-extern void mangoapp_update();
+extern void mangoapp_update( uint64_t visible_frametime, uint64_t app_frametime_ns, uint64_t latency_ns );
 gamescope_xwayland_server_t *steamcompmgr_get_focused_server();
 struct wlr_surface *steamcompmgr_get_server_input_surface( size_t idx );
 

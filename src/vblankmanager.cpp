@@ -1,5 +1,6 @@
 // Try to figure out when vblank is and notify steamcompmgr to render some time before it
 
+#include <cstdint>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -229,6 +230,9 @@ void fpslimitThreadRun( void )
 			nTargetFPS = g_nFpsLimitTargetFPS;
 		}
 
+		const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+		const uint64_t vblankInterval = 1'000'000'000ul / refresh;
+
 		// If the last frame was late, and this isn't a late frame
 		// ignore it, as this is that late frame.
 		if ( !last_frame_was_late || no_frame )
@@ -262,9 +266,6 @@ void fpslimitThreadRun( void )
 					frameTime = targetInterval;
 				}
 
-				const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
-				const uint64_t vblankInterval = 1'000'000'000ul / refresh;
-
 				// Currently,
 				// Only affect rolling max frame time by 0.07%
 				// Tends to be much more varied than the vblank timings.
@@ -289,10 +290,10 @@ void fpslimitThreadRun( void )
 				int64_t targetPoint;
 				int64_t sleepyTime = targetInterval;
 				uint64_t rollingMaxDrawTime = g_uRollingMaxDrawTime.load();
+				uint64_t latency = 0;
 
 				if ( refresh % nTargetFPS == 0 )
 				{
-
 					// Take the min of it to the target interval - the fps limiter redzone
 					// so that we don't go over the target interval - expected vblank time
 					sleepyTime -= std::min<int64_t>( std::max( rollingMaxFrameTime, g_uMinFPSLimiter ), targetInterval - g_uFPSLimiterRedZoneNS );
@@ -312,13 +313,19 @@ void fpslimitThreadRun( void )
 						vblank += targetInterval;
 
 					targetPoint = int64_t(vblank) + sleepyTime;
+					latency = -(sleepyTime - int64_t(targetInterval));
 				}
 				else
 				{
 					sleepyTime -= int64_t(frameTime);
 					targetPoint = int64_t(t1) + sleepyTime;
+					latency = uint64_t(~0ull);
 				}
 
+				if ( !no_frame )
+				{
+					mangoapp_update( targetInterval, frameTime, latency );
+				}
 
 		#ifdef FPS_LIMIT_DEBUG
 				fprintf( stderr, "Sleeping from %lu to %ld (%ld - %.2fms) to reach %d fps - rollingMaxDrawTime: %.2fms vblank: %lu sleepytime: %.2fms rollingMaxFrameTime: %.2fms frametime: %.2fms\n", t1, targetPoint, targetPoint - int64_t(t1), (targetPoint - int64_t(t1)) / 1'000'000.0, nTargetFPS, rollingMaxDrawTime / 1'000'000.0, vblank, sleepyTime  / 1'000'000.0, rollingMaxFrameTime / 1'000'000.0, frameTime  / 1'000'000.0 );
@@ -335,6 +342,22 @@ void fpslimitThreadRun( void )
 					steamcompmgr_send_frame_done_to_focus_window();
 					nudge_steamcompmgr();
 				}
+			}
+		}
+		else if ( last_frame_was_late && !no_frame )
+		{
+			if ( nTargetFPS )
+			{
+				uint64_t t0 = lastCommitReleased;
+				uint64_t t1 = get_time_in_nanos();
+
+				uint64_t frametime = t1 - t0 + targetInterval;
+
+				uint64_t latency = uint64_t(~0ull);
+				if ( refresh % nTargetFPS == 0 )
+					latency = targetInterval;
+
+				mangoapp_update( frametime, frametime, latency );
 			}
 		}
 

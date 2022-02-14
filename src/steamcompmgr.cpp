@@ -289,15 +289,31 @@ void steamcompmgr_fpslimit_release_all()
 	g_nMaxAppBufferCount = 0;
 }
 
+
+void steamcompmgr_fpslimit_set_fps( int nTarget )
+{
+	static int g_nSteamCompMgrTargetFPSFpsLimiter = 0;
+
+	if ( g_nSteamCompMgrTargetFPSFpsLimiter != nTarget )
+	{
+		g_nSteamCompMgrTargetFPSFpsLimiter = nTarget;
+		fpslimit_set_target( nTarget );
+
+		if ( nTarget == 0 )
+			steamcompmgr_fpslimit_release_all();
+	}
+}
+
 void steamcompmgr_set_target_fps( int nTarget )
 {
 	if ( g_nSteamCompMgrTargetFPS != nTarget )
 	{
 		g_nSteamCompMgrTargetFPS = nTarget;
-		fpslimit_set_target( nTarget );
 
-		if ( nTarget == 0 )
-			steamcompmgr_fpslimit_release_all();
+		if ( steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) )
+			steamcompmgr_fpslimit_set_fps( nTarget );
+		else
+			steamcompmgr_fpslimit_set_fps( 0 );
 	}
 }
 
@@ -419,6 +435,7 @@ struct WaitListEntry_t
 {
 	xwayland_ctx_t *ctx;
 	int fence;
+	bool fps_nudge;
 	// Josh: Whether or not to nudge mangoapp that we got
 	// a frame as soon as we know this commit is done.
 	// This could technically be out of date if we change windows
@@ -477,6 +494,14 @@ retry:
 
 	close( entry.fence );
 
+	uint64_t now = get_time_in_nanos();
+	static uint64_t lastFrameTime = now;
+	uint64_t frametime = now - lastFrameTime;
+	lastFrameTime = now;
+
+	if ( entry.fps_nudge )
+		fpslimit_mark_frame();
+
 	{
 		std::unique_lock< std::mutex > lock( entry.ctx->listCommitsDoneLock );
 		entry.ctx->listCommitsDone.push_back( entry.commitID );
@@ -485,10 +510,7 @@ retry:
 	nudge_steamcompmgr();
 
 	if ( entry.mangoapp_nudge )
-	{
-		fpslimit_mark_frame();
-		mangoapp_update();
-	}
+		mangoapp_update( frametime, frametime, uint64_t(~0ull) );	
 
 	goto retry;
 }
@@ -1754,6 +1776,12 @@ paint_all()
 #else
 	const bool bOverrideCompositeHack = false;
 #endif
+
+	int nTargetFPS = steamcompmgr_window_should_limit_fps( global_focus.focusWindow )
+		? g_nSteamCompMgrTargetFPS
+		: 0;
+
+	steamcompmgr_fpslimit_set_fps( nTargetFPS );
 
 	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_bDynamicRefreshEnabled && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
 		? g_nSteamCompMgrTargetFPS
@@ -4140,6 +4168,8 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 			const bool mango_nudge = ( w == global_focus.focusWindow && !w->isSteamStreamingClient ) ||
 									 ( global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient && w->isSteamStreamingClientVideo );
 
+			const bool fps_nudge = w == global_focus.focusWindow;
+
 			gpuvis_trace_printf( "pushing wait for commit %lu win %lx", newCommit->commitID, w->id );
 			{
 				std::unique_lock< std::mutex > lock( waitListLock );
@@ -4147,7 +4177,8 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 				{
 					.ctx = ctx,
 					.fence = fence,
-					.mangoapp_nudge = mango_nudge,
+					.fps_nudge = fps_nudge,
+					.mangoapp_nudge = mango_nudge && !steamcompmgr_window_should_limit_fps( w ),
 					.commitID = newCommit->commitID,
 				};
 				waitList.push_back( entry );
