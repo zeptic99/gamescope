@@ -305,7 +305,7 @@ void fpslimitThreadRun( void )
 					// Don't roll back before current vblank
 					// based on varying frame time otherwise we can become divergent
 					// if these value change how we do not expect and get stuck in a feedback loop.
-					const int64_t min_sleepy_time = -int64_t(targetInterval) / 2;
+					const int64_t min_sleepy_time = 0;//-int64_t(targetInterval) / 2;
 					if ( !g_bLowLatency )
 					{
 						sleepyTime = min_sleepy_time;
