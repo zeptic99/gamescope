@@ -253,7 +253,7 @@ void steamcompmgr_fpslimit_add_commit( std::shared_ptr<commit_t> commit )
 	g_FrameLimitCommits.push( commit );
 }
 
-void steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
+bool steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
 
@@ -265,19 +265,23 @@ void steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
 		g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
 		g_nAppBufferCount = 0;
 		g_nMaxAppBufferCount = 0;
-		return;
+		return true;
 	}
 
 	// Only allow 1 latent buffer -- essentially go to only "double
 	// buffering" when we are falling behind.
-	if ( g_nAppBufferCount >= g_nMaxAppBufferCount - 1 )
+	if ( g_nAppBufferCount == g_nMaxAppBufferCount )
 	{
 		if ( !g_FrameLimitCommits.empty() )
 		{
 			g_FrameLimitCommits.pop();
 			g_nAppBufferCount--;
 		}
+
+		return false;
 	}
+
+	return true;
 }
 
 
@@ -494,13 +498,17 @@ retry:
 
 	close( entry.fence );
 
-	uint64_t now = get_time_in_nanos();
-	static uint64_t lastFrameTime = now;
-	uint64_t frametime = now - lastFrameTime;
-	lastFrameTime = now;
+	uint64_t frametime;
+	if ( entry.fps_nudge || entry.mangoapp_nudge )
+	{
+		uint64_t now = get_time_in_nanos();
+		static uint64_t lastFrameTime = now;
+		frametime = now - lastFrameTime;
+		lastFrameTime = now;
+	}
 
 	if ( entry.fps_nudge )
-		fpslimit_mark_frame();
+		fpslimit_mark_frame( frametime );
 
 	{
 		std::unique_lock< std::mutex > lock( entry.ctx->listCommitsDoneLock );

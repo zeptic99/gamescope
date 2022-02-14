@@ -168,12 +168,12 @@ static std::mutex g_TargetFPSMutex;
 static std::condition_variable g_TargetFPSCondition;
 static int g_nFpsLimitTargetFPS = 0;
 
-void steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count );
+bool steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count );
 void steamcompmgr_fpslimit_release_all();
 void steamcompmgr_send_frame_done_to_focus_window();
 
 // Dump some stats.
-//#define FPS_LIMIT_DEBUG
+#define FPS_LIMIT_DEBUG
 
 // 1.80ms for the app's deadzone to account for varying GPU clocks, other variances, etc
 uint64_t g_uFPSLimiterRedZoneNS = 1'800'000;
@@ -187,6 +187,9 @@ bool g_bFPSLimitThreadRun = true;
 
 extern bool g_bLowLatency;
 
+uint64_t g_uFPSLimitLastFullFrameTime = 0;
+uint64_t g_uFPSLimitDoneToDoneTime = 0;
+
 void fpslimitThreadRun( void )
 {
 	pthread_setname_np( pthread_self(), "gamescope-fps" );
@@ -197,6 +200,10 @@ void fpslimitThreadRun( void )
 	uint64_t vblank = 0;
 	int consecutive_missed_frame_count = 0;
 	bool last_frame_was_late = false;
+	g_uFPSLimitLastFullFrameTime = get_time_in_nanos();
+	uint64_t lastFullFrameTime = 0;
+	uint64_t donetodonetime = 0;
+	bool isLatent = false;
 	while ( true )
 	{
 		int nTargetFPS;
@@ -228,6 +235,8 @@ void fpslimitThreadRun( void )
 				}
 			}
 			nTargetFPS = g_nFpsLimitTargetFPS;
+			lastFullFrameTime = g_uFPSLimitLastFullFrameTime;
+			donetodonetime = g_uFPSLimitDoneToDoneTime;
 		}
 
 		const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
@@ -252,7 +261,7 @@ void fpslimitThreadRun( void )
 				bool useFrameCallbacks = fpslimit_use_frame_callbacks_for_focus_window( nTargetFPS, 0 );
 
 				uint64_t t0 = lastCommitReleased;
-				uint64_t t1 = get_time_in_nanos();
+				uint64_t t1 = lastFullFrameTime;
 			
 				// Not the actual frame time of the game
 				// this is the time of the amount of work a 'frame' has done.
@@ -333,7 +342,7 @@ void fpslimitThreadRun( void )
 
 				if ( !no_frame )
 				{
-					mangoapp_update( targetInterval, frameTime, latency );
+					mangoapp_update( isLatent ? donetodonetime : targetInterval, frameTime, latency );
 				}
 
 		#ifdef FPS_LIMIT_DEBUG
@@ -343,7 +352,7 @@ void fpslimitThreadRun( void )
 
 				sleep_until_nanos( targetPoint );
 				lastCommitReleased = get_time_in_nanos();
-				steamcompmgr_fpslimit_release_commit( consecutive_missed_frame_count );
+				isLatent = steamcompmgr_fpslimit_release_commit( consecutive_missed_frame_count );
 
 				// If we aren't vblank aligned, nudge ourselves to process done commits now.
 				if ( !useFrameCallbacks )
@@ -357,16 +366,7 @@ void fpslimitThreadRun( void )
 		{
 			if ( nTargetFPS )
 			{
-				uint64_t t0 = lastCommitReleased;
-				uint64_t t1 = get_time_in_nanos();
-
-				uint64_t frametime = t1 - t0 + targetInterval;
-
-				uint64_t latency = uint64_t(~0ull);
-				if ( refresh % nTargetFPS == 0 )
-					latency = frametime;
-
-				mangoapp_update( frametime, frametime, latency );
+				mangoapp_update( donetodonetime, donetodonetime, uint64_t(~0ull) );
 			}
 		}
 
@@ -390,13 +390,23 @@ void fpslimit_shutdown( void )
 	g_TargetFPSCondition.notify_all();
 }
 
-void fpslimit_mark_frame( void )
+void fpslimit_mark_frame( uint64_t frametime )
 {
+	uint64_t now = get_time_in_nanos();
+	{
+		std::unique_lock<std::mutex> lock(g_TargetFPSMutex);
+		g_uFPSLimitLastFullFrameTime = now;
+		g_uFPSLimitDoneToDoneTime = frametime;
+	}
 	g_TargetFPSCondition.notify_all();
 }
 
 bool fpslimit_use_frame_callbacks_for_focus_window( int nTargetFPS, int nVBlankCount ) 
 {
+	// Avoids a race incase the surface changes
+	// We don't use this anymore since we force no-fifo
+	return true;
+#if 0
 	if ( !nTargetFPS )
 		return true;
 
@@ -412,6 +422,7 @@ bool fpslimit_use_frame_callbacks_for_focus_window( int nTargetFPS, int nVBlankC
 		// call them from fpslimit
 		return false;
 	}
+#endif
 }
 
 // Called from steamcompmgr thread
