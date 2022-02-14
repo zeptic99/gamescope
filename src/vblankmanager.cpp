@@ -276,12 +276,16 @@ void fpslimitThreadRun( void )
 				// Maybe we want to tweak this alpha value to like 99.something% or change this rolling max to something even more defensive
 				// to keep a more consistent latency. However, I also cannot feel this judder given how small it is, so maybe it doesn't matter?
 				// We can tune this later by tweaking alpha + range anyway...
-				const uint64_t alpha = 993;
 				// If we go over half of our deadzone, be more defensive about things.
-				if ( int64_t(frameTime) - int64_t(g_uFPSLimiterRedZoneNS / 2) > int64_t(rollingMaxFrameTime) )
+				if ( int64_t(frameTime) - int64_t(g_uFPSLimiterRedZoneNS * 2 / 3) > int64_t(rollingMaxFrameTime) )
 					rollingMaxFrameTime = frameTime;
 				else
+				{
+					const uint64_t alphaUp = 980;
+					const uint64_t alphaDown = 993;
+					const uint64_t alpha = frameTime > rollingMaxFrameTime ? alphaUp : alphaDown;
 					rollingMaxFrameTime = ( ( alpha * rollingMaxFrameTime ) + ( range - alpha ) * frameTime ) / range;
+				}
 
 				rollingMaxFrameTime = std::min( rollingMaxFrameTime, targetInterval );
 
