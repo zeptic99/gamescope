@@ -1485,6 +1485,54 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	return true;
 }
 
+#define EDID_ID(a, b, c) (((a & 0x1f) << 10) | ((b & 0x1f) << 5) | (c & 0x1f))
+
+struct edid_data_t
+{
+	uint16_t make;
+	char model[16];
+	char serial[16];
+};
+
+// from wlroots... mostly
+void parse_edid(edid_data_t *output, const uint8_t *data, size_t len) {
+	if (!data || len < 128) {
+		output->make = 0;
+		snprintf(output->model, sizeof(output->model), "<Unknown>");
+		return;
+	}
+
+	output->make = (data[8] << 8) | data[9];
+
+	uint16_t model = data[10] | (data[11] << 8);
+	snprintf(output->model, sizeof(output->model), "0x%04X", model);
+
+	uint32_t serial = data[12] | (data[13] << 8) | (data[14] << 8) | (data[15] << 8);
+	snprintf(output->serial, sizeof(output->serial), "0x%08X", serial);
+
+	for (size_t i = 72; i <= 108; i += 18) {
+		uint16_t flag = (data[i] << 8) | data[i + 1];
+		if (flag == 0 && data[i + 3] == 0xFC) {
+			sprintf(output->model, "%.13s", &data[i + 5]);
+
+			// Monitor names are terminated by newline if they're too short
+			char *nl = strchr(output->model, '\n');
+			if (nl) {
+				*nl = '\0';
+			}
+		} else if (flag == 0 && data[i + 3] == 0xFF) {
+			sprintf(output->serial, "%.13s", &data[i + 5]);
+
+			// Monitor serial numbers are terminated by newline if they're too
+			// short
+			char *nl = strchr(output->serial, '\n');
+			if (nl) {
+				*nl = '\0';
+			}
+		}
+	}
+}
+
 bool drm_set_refresh( struct drm_t *drm, int refresh )
 {
 	int width = g_nOutputWidth;
@@ -1511,9 +1559,34 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 			generate_cvt_mode( &mode, width, height, refresh, true, false );
 			break;
 		case DRM_MODE_GENERATE_FIXED:
-			const drmModeModeInfo *preferred_mode = find_mode(connector, 0, 0, 0);
-			generate_fixed_mode( &mode, preferred_mode, refresh );
-			break;
+			{
+				bool is_steam_deck_display = false;
+				if ( drm->connector->props.find( "EDID" ) != drm->connector->props.end() )
+				{
+					uint64_t blob_id = drm->connector->initial_prop_values["EDID"];
+
+					drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
+					if (blob) {
+						edid_data_t edid_data = {};
+						parse_edid( &edid_data, (const unsigned char *)blob->data, blob->length );
+
+						is_steam_deck_display = 
+							( edid_data.make == EDID_ID( 'W', 'L', 'C' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
+							( edid_data.make == EDID_ID( 'A', 'N', 'X' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
+							( edid_data.make == EDID_ID( 'V', 'L', 'V' ) && !strncmp( edid_data.model, "Jupiter", sizeof( edid_data.model ) ) );
+
+						drmModeFreePropertyBlob(blob);
+					}
+					else
+					{
+						drm_log.errorf_errno("drmModeGetPropertyBlob(EDID) failed");
+					}
+				}
+
+				const drmModeModeInfo *preferred_mode = find_mode(connector, 0, 0, 0);
+				generate_fixed_mode( &mode, preferred_mode, refresh, is_steam_deck_display );
+				break;
+			}
 		}
 	}
 

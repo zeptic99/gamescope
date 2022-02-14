@@ -268,12 +268,25 @@ void generate_cvt_mode(drmModeModeInfo *mode, int hdisplay, int vdisplay,
 	}
 }
 
-void generate_fixed_mode(drmModeModeInfo *mode, const drmModeModeInfo *base, int vrefresh)
+void generate_fixed_mode(drmModeModeInfo *mode, const drmModeModeInfo *base, int vrefresh, bool use_tuned_clocks)
 {
 	*mode = *base;
 
 	if (!vrefresh)
 		vrefresh = 60;
+
+	if ( use_tuned_clocks )
+	{
+		mode->hdisplay = 800;
+		mode->hsync_start = 840;
+		mode->hsync_end = 844;
+		mode->htotal = 884;
+
+		mode->vdisplay = 1280;
+		mode->vsync_start = 1310;
+		mode->vsync_end = 1314;
+		mode->vtotal = 1322;
+	}
 
 	mode->clock = ( ( mode->htotal * mode->vtotal * vrefresh ) + 999 ) / 1000;
 	mode->vrefresh = (1000 * mode->clock) / (mode->htotal * mode->vtotal);
