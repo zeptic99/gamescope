@@ -124,6 +124,7 @@ struct xwayland_ctx_t
 
 		Atom gamescopeFPSLimit;
 		Atom gamescopeDynamicRefresh;
+		Atom gamescopeLowLatency;
 
 		Atom gamescopeFSRFeedback;
 	} atoms;

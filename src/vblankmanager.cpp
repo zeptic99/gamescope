@@ -185,6 +185,8 @@ uint64_t g_uMinFPSLimiter = 1'000'000;
 
 bool g_bFPSLimitThreadRun = true;
 
+extern bool g_bLowLatency;
+
 void fpslimitThreadRun( void )
 {
 	pthread_setname_np( pthread_self(), "gamescope-fps" );
@@ -303,6 +305,8 @@ void fpslimitThreadRun( void )
 					// Don't roll back before current vblank
 					// based on varying frame time otherwise we can become divergent
 					// if these value change how we do not expect and get stuck in a feedback loop.
+					if ( !g_bLowLatency )
+						sleepyTime = 0;
 					sleepyTime = std::max<int64_t>( sleepyTime, 0 );
 					sleepyTime -= int64_t(std::min<uint64_t>(rollingMaxDrawTime, g_uDefaultMinVBlankTime));
 					sleepyTime -= int64_t(g_uVblankDrawBufferRedZoneNS);

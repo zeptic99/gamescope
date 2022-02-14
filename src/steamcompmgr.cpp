@@ -3427,6 +3427,8 @@ handle_net_wm_state(xwayland_ctx_t *ctx, win *w, XClientMessageEvent *ev)
 	}
 }
 
+bool g_bLowLatency = false;
+
 static void
 handle_system_tray_opcode(xwayland_ctx_t *ctx, XClientMessageEvent *ev)
 {
@@ -3859,6 +3861,10 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if ( ev->atom == ctx->atoms.gamescopeDynamicRefresh )
 	{
 		g_bDynamicRefreshEnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDynamicRefresh, 0 );
+	}
+	if ( ev->atom == ctx->atoms.gamescopeLowLatency )
+	{
+		g_bLowLatency = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeLowLatency, 1 );
 	}
 }
 
@@ -4725,6 +4731,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeXWaylandModeControl = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_MODE_CONTROL", false );
 	ctx->atoms.gamescopeFPSLimit = XInternAtom( ctx->dpy, "GAMESCOPE_FPS_LIMIT", false );
 	ctx->atoms.gamescopeDynamicRefresh = XInternAtom( ctx->dpy, "GAMESCOPE_DYNAMIC_REFRESH", false );
+	ctx->atoms.gamescopeLowLatency = XInternAtom( ctx->dpy, "GAMESCOPE_LOW_LATENCY", false );
 
 	ctx->atoms.gamescopeFSRFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_FSR_FEEDBACK", false );
 
