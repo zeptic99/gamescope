@@ -2359,22 +2359,24 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 		if ( !ctx->focus.overrideWindow || ctx->focus.overrideWindow != keyboardFocusWin )
 			XSetInputFocus(ctx->dpy, keyboardFocusWin->id, RevertToNone, CurrentTime);
 
-		// If the window doesn't want focus when hidden, move it away
-		// as we are going to hide it straight after.
-		// otherwise, if we switch from wanting it to not
-		// (steam -> game)
-		// put us back in the centre of the screen.
-		if (window_wants_no_focus_when_mouse_hidden(inputFocus))
-			bResetToCorner = true;
-		else if ( window_wants_no_focus_when_mouse_hidden(inputFocus) != window_wants_no_focus_when_mouse_hidden(ctx->focus.inputFocusWindow) )
-			bResetToCenter = true;
-
-		// cursor is likely not interactable anymore in its original context, hide
-		// don't care if we change kb focus window due to that happening when
-		// going from override -> focus and we don't want to hide then as it's probably a dropdown.
 		if ( ctx->focus.inputFocusWindow != inputFocus ||
 			 ctx->focus.inputFocusMode != inputFocus->inputFocusMode )
+		{
+			// If the window doesn't want focus when hidden, move it away
+			// as we are going to hide it straight after.
+			// otherwise, if we switch from wanting it to not
+			// (steam -> game)
+			// put us back in the centre of the screen.
+			if (window_wants_no_focus_when_mouse_hidden(inputFocus))
+				bResetToCorner = true;
+			else if ( window_wants_no_focus_when_mouse_hidden(inputFocus) != window_wants_no_focus_when_mouse_hidden(ctx->focus.inputFocusWindow) )
+				bResetToCenter = true;
+
+			// cursor is likely not interactable anymore in its original context, hide
+			// don't care if we change kb focus window due to that happening when
+			// going from override -> focus and we don't want to hide then as it's probably a dropdown.
 			ctx->cursor->hide();
+		}
 
 		ctx->focus.inputFocusWindow = inputFocus;
 		ctx->focus.inputFocusMode = inputFocus->inputFocusMode;
