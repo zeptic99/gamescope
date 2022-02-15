@@ -2344,6 +2344,12 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 
 	Window keyboardFocusWindow = keyboardFocusWin ? keyboardFocusWin->id : None;
 
+	// If the top level parent of our current keyboard window is the same as our target (top level) input focus window
+	// then keep focus on that and don't yank it away to the top level input focus window.
+	// Fixes dropdowns in Steam CEF.
+	if ( keyboardFocusWindow && ctx->currentKeyboardFocusWindow && find_win( ctx, ctx->currentKeyboardFocusWindow ) == keyboardFocusWin )
+		keyboardFocusWindow = ctx->currentKeyboardFocusWindow;
+
 	bool bResetToCorner = false;
 	bool bResetToCenter = false;
 
@@ -2380,7 +2386,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 
 		ctx->focus.inputFocusWindow = inputFocus;
 		ctx->focus.inputFocusMode = inputFocus->inputFocusMode;
-		ctx->currentKeyboardFocusWindow = keyboardFocusWin->id;
+		ctx->currentKeyboardFocusWindow = keyboardFocusWindow;
 	}
 
 	w = ctx->focus.focusWindow;
