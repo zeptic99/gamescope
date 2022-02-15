@@ -1446,7 +1446,7 @@ paint_window(win *w, win *scaleW, struct Composite_t *pComposite,
 		}
 	}
 
-	if (sourceWidth != currentOutputWidth || sourceHeight != currentOutputHeight || globalScaleRatio != 1.0f)
+	if (sourceWidth != currentOutputWidth || sourceHeight != currentOutputHeight || ( ( w->a.x || w->a.y ) && w != scaleW ) || globalScaleRatio != 1.0f)
 	{
 		float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
 		float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
