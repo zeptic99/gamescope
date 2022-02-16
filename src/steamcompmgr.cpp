@@ -237,8 +237,7 @@ static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
 bool g_bFSRActive = false;
 
-int g_nAppBufferCount = 0;
-int g_nMaxAppBufferCount = 0;
+std::atomic<int> g_nMaxAppBufferCount = { 0 };
 
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
@@ -248,14 +247,15 @@ bool steamcompmgr_window_should_limit_fps( win *w )
 void steamcompmgr_fpslimit_add_commit( std::shared_ptr<commit_t> commit )
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
-	g_nAppBufferCount++;
-	g_nMaxAppBufferCount = std::max( g_nMaxAppBufferCount, g_nAppBufferCount );
 	g_FrameLimitCommits.push( commit );
+	g_nMaxAppBufferCount = std::max<int>( g_nMaxAppBufferCount.load(), g_FrameLimitCommits.size() );
 }
 
 bool steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
+
+	//fprintf( stderr, "a - consecutive_missed_frame_count %d, g_nAppBufferCount: %d, g_nMaxAppBufferCount: %d\n", consecutive_missed_frame_count, int(g_FrameLimitCommits.size()), g_nMaxAppBufferCount );
 
 	// If we have missed as many frames as we have buffers
 	// the app may have stalled due to swapchain recreation or something
@@ -263,25 +263,19 @@ bool steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
 	if ( consecutive_missed_frame_count > g_nMaxAppBufferCount )
 	{
 		g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
-		g_nAppBufferCount = 0;
 		g_nMaxAppBufferCount = 0;
 		return true;
 	}
 
-	// Only allow 1 latent buffer -- essentially go to only "double
+	// Only allow 2 latent buffers -- essentially go to only "double
 	// buffering" when we are falling behind.
-	if ( g_nAppBufferCount == g_nMaxAppBufferCount )
+	if (!g_FrameLimitCommits.empty() && int(g_FrameLimitCommits.size()) >= g_nMaxAppBufferCount.load() - 2 )
 	{
-		if ( !g_FrameLimitCommits.empty() )
-		{
-			g_FrameLimitCommits.pop();
-			g_nAppBufferCount--;
-		}
-
-		return false;
+		g_FrameLimitCommits.pop();
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 
@@ -289,7 +283,6 @@ void steamcompmgr_fpslimit_release_all()
 {
 	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
 	g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
-	g_nAppBufferCount = 0;
 	g_nMaxAppBufferCount = 0;
 }
 
@@ -3443,7 +3436,7 @@ handle_net_wm_state(xwayland_ctx_t *ctx, win *w, XClientMessageEvent *ev)
 	}
 }
 
-bool g_bLowLatency = true;
+bool g_bLowLatency = false;
 
 static void
 handle_system_tray_opcode(xwayland_ctx_t *ctx, XClientMessageEvent *ev)
@@ -3880,7 +3873,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeLowLatency )
 	{
-		g_bLowLatency = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeLowLatency, 1 );
+		g_bLowLatency = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeLowLatency, 0 );
 	}
 }
 
@@ -4204,7 +4197,7 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 					.ctx = ctx,
 					.fence = fence,
 					.fps_nudge = fps_nudge,
-					.mangoapp_nudge = mango_nudge && !steamcompmgr_window_should_limit_fps( w ),
+					.mangoapp_nudge = mango_nudge, //&& !steamcompmgr_window_should_limit_fps( w ),
 					.commitID = newCommit->commitID,
 				};
 				waitList.push_back( entry );
