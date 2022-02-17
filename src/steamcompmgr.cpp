@@ -226,9 +226,6 @@ std::mutex g_SteamCompMgrXWaylandServerMutex;
 
 uint64_t g_SteamCompMgrVBlankTime = 0;
 
-std::mutex g_FrameLimitCommitsMutex;
-std::queue< std::shared_ptr<commit_t> > g_FrameLimitCommits;
-
 static int g_nSteamCompMgrTargetFPS = 0;
 static uint64_t g_uDynamicRefreshEqualityTime = 0;
 static bool g_bDynamicRefreshEnabled = false;
@@ -237,81 +234,9 @@ static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
 bool g_bFSRActive = false;
 
-std::atomic<int> g_nMaxAppBufferCount = { 0 };
-
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
 	return g_nSteamCompMgrTargetFPS != 0 && w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
-}
-
-void steamcompmgr_fpslimit_add_commit( std::shared_ptr<commit_t> commit )
-{
-	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
-	g_FrameLimitCommits.push( commit );
-	g_nMaxAppBufferCount = std::max<int>( g_nMaxAppBufferCount.load(), g_FrameLimitCommits.size() );
-}
-
-bool steamcompmgr_fpslimit_release_commit( int consecutive_missed_frame_count )
-{
-	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
-
-	//fprintf( stderr, "a - consecutive_missed_frame_count %d, g_nAppBufferCount: %d, g_nMaxAppBufferCount: %d\n", consecutive_missed_frame_count, int(g_FrameLimitCommits.size()), g_nMaxAppBufferCount );
-
-	// If we have missed as many frames as we have buffers
-	// the app may have stalled due to swapchain recreation or something
-	// release all our buffers instantly.
-	if ( consecutive_missed_frame_count > g_nMaxAppBufferCount )
-	{
-		g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
-		g_nMaxAppBufferCount = 0;
-		return true;
-	}
-
-	// Only allow 2 latent buffers -- essentially go to only "double
-	// buffering" when we are falling behind.
-	if (!g_FrameLimitCommits.empty() && int(g_FrameLimitCommits.size()) >= g_nMaxAppBufferCount.load() - 2 )
-	{
-		g_FrameLimitCommits.pop();
-		return true;
-	}
-
-	return false;
-}
-
-
-void steamcompmgr_fpslimit_release_all()
-{
-	std::unique_lock<std::mutex> lock(g_FrameLimitCommitsMutex);
-	g_FrameLimitCommits = std::queue< std::shared_ptr<commit_t> >();
-	g_nMaxAppBufferCount = 0;
-}
-
-
-void steamcompmgr_fpslimit_set_fps( int nTarget )
-{
-	static int g_nSteamCompMgrTargetFPSFpsLimiter = 0;
-
-	if ( g_nSteamCompMgrTargetFPSFpsLimiter != nTarget )
-	{
-		g_nSteamCompMgrTargetFPSFpsLimiter = nTarget;
-		fpslimit_set_target( nTarget );
-
-		if ( nTarget == 0 )
-			steamcompmgr_fpslimit_release_all();
-	}
-}
-
-void steamcompmgr_set_target_fps( int nTarget )
-{
-	if ( g_nSteamCompMgrTargetFPS != nTarget )
-	{
-		g_nSteamCompMgrTargetFPS = nTarget;
-
-		if ( steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) )
-			steamcompmgr_fpslimit_set_fps( nTarget );
-		else
-			steamcompmgr_fpslimit_set_fps( 0 );
-	}
 }
 
 enum HeldCommitTypes_t
@@ -432,7 +357,6 @@ struct WaitListEntry_t
 {
 	xwayland_ctx_t *ctx;
 	int fence;
-	bool fps_nudge;
 	// Josh: Whether or not to nudge mangoapp that we got
 	// a frame as soon as we know this commit is done.
 	// This could technically be out of date if we change windows
@@ -492,16 +416,13 @@ retry:
 	close( entry.fence );
 
 	uint64_t frametime;
-	if ( entry.fps_nudge || entry.mangoapp_nudge )
+	if ( entry.mangoapp_nudge )
 	{
 		uint64_t now = get_time_in_nanos();
 		static uint64_t lastFrameTime = now;
 		frametime = now - lastFrameTime;
 		lastFrameTime = now;
 	}
-
-	if ( entry.fps_nudge )
-		fpslimit_mark_frame( frametime );
 
 	{
 		std::unique_lock< std::mutex > lock( entry.ctx->listCommitsDoneLock );
@@ -1778,12 +1699,6 @@ paint_all()
 	const bool bOverrideCompositeHack = false;
 #endif
 
-	int nTargetFPS = steamcompmgr_window_should_limit_fps( global_focus.focusWindow )
-		? g_nSteamCompMgrTargetFPS
-		: 0;
-
-	steamcompmgr_fpslimit_set_fps( nTargetFPS );
-
 	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_bDynamicRefreshEnabled && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
 		? g_nSteamCompMgrTargetFPS
 		: drm_get_default_refresh( &g_DRM );
@@ -2589,9 +2504,6 @@ determine_and_apply_focus()
 	{
 		hasRepaint = true;
 	}
-
-	if ( previous_focus.focusWindow != global_focus.focusWindow )
-		steamcompmgr_fpslimit_release_all();
 
 	// Backchannel to Steam
 	unsigned long focusedWindow = 0;
@@ -3865,7 +3777,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeFPSLimit )
 	{
-		steamcompmgr_set_target_fps( get_prop( ctx, ctx->root, ctx->atoms.gamescopeFPSLimit, 0 ) );
+		g_nSteamCompMgrTargetFPS = get_prop( ctx, ctx->root, ctx->atoms.gamescopeFPSLimit, 0 );
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDynamicRefresh )
 	{
@@ -3971,10 +3883,6 @@ steamcompmgr_exit(void)
 		statsThreadRun = false;
 		statsThreadSem.signal();
 	}
-
-	fpslimit_shutdown();
-
-	steamcompmgr_fpslimit_release_all();
 
 	finish_drm( &g_DRM );
 
@@ -4116,10 +4024,6 @@ void handle_done_commits( xwayland_ctx_t *ctx )
 					if ( w == global_focus.focusWindow && !w->isSteamStreamingClient )
 					{
 						g_HeldCommits[ HELD_COMMIT_BASE ] = w->commit_queue[ j ];
-						if ( steamcompmgr_window_should_limit_fps( w ) )
-						{
-							steamcompmgr_fpslimit_add_commit( w->commit_queue[ j ] );
-						}
 						hasRepaint = true;
 					}
 
@@ -4206,8 +4110,6 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 			const bool mango_nudge = ( w == global_focus.focusWindow && !w->isSteamStreamingClient ) ||
 									 ( global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient && w->isSteamStreamingClientVideo );
 
-			const bool fps_nudge = w == global_focus.focusWindow;
-
 			gpuvis_trace_printf( "pushing wait for commit %lu win %lx", newCommit->commitID, w->id );
 			{
 				std::unique_lock< std::mutex > lock( waitListLock );
@@ -4215,8 +4117,7 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 				{
 					.ctx = ctx,
 					.fence = fence,
-					.fps_nudge = fps_nudge,
-					.mangoapp_nudge = mango_nudge, //&& !steamcompmgr_window_should_limit_fps( w ),
+					.mangoapp_nudge = mango_nudge,
 					.commitID = newCommit->commitID,
 				};
 				waitList.push_back( entry );
@@ -4616,8 +4517,6 @@ xwayland_ctx_t g_ctx;
 
 static bool setup_error_handlers = false;
 
-static int g_nVBlankCount = 0;
-
 void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 {
 	assert(!xwayland_server->ctx);
@@ -4899,8 +4798,6 @@ steamcompmgr_main(int argc, char **argv)
 	int vblankFD = vblank_init();
 	assert( vblankFD >= 0 );
 
-	fpslimit_init();
-
 	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
 
 	// Initialize any xwayland ctxs we have
@@ -5124,8 +5021,6 @@ steamcompmgr_main(int argc, char **argv)
 		// Ask for a new surface every vblank
 		if ( vblank == true )
 		{
-			bool bFocusWindowFrameCallbacks = fpslimit_use_frame_callbacks_for_focus_window( g_nSteamCompMgrTargetFPS, g_nVBlankCount++ );
-
 			{
 				gamescope_xwayland_server_t *server = NULL;
 				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
@@ -5133,8 +5028,6 @@ steamcompmgr_main(int argc, char **argv)
 					for (win *w = server->ctx->list; w; w = w->next)
 					{
 						bool bSendCallback = w->surface.wlr != nullptr;
-						if ( w == global_focus.focusWindow && steamcompmgr_window_should_limit_fps( w ) && !bFocusWindowFrameCallbacks )
-							bSendCallback = false;
 
 						if ( bSendCallback )
 						{

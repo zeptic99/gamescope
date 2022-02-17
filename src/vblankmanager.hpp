@@ -12,13 +12,3 @@ const unsigned int g_uDefaultVBlankRateOfDecayPercentage = 980;
 
 extern uint64_t g_uVblankDrawBufferRedZoneNS;
 extern uint64_t g_uVBlankRateOfDecayPercentage;
-
-void fpslimit_init( void );
-
-void fpslimit_mark_frame( uint64_t frametime );
-
-bool fpslimit_use_frame_callbacks_for_focus_window( int nTargetFPS, int nVBlankCount );
-
-void fpslimit_set_target( int nTargetFPS );
-
-void fpslimit_shutdown( void );
