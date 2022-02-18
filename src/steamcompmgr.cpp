@@ -228,7 +228,7 @@ uint64_t g_SteamCompMgrVBlankTime = 0;
 
 static int g_nSteamCompMgrTargetFPS = 0;
 static uint64_t g_uDynamicRefreshEqualityTime = 0;
-static bool g_bDynamicRefreshEnabled = false;
+static int g_nDynamicRefreshRate = 0;
 // Delay to stop modes flickering back and forth.
 static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
@@ -1728,8 +1728,8 @@ paint_all()
 	const bool bOverrideCompositeHack = false;
 #endif
 
-	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_bDynamicRefreshEnabled && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
-		? g_nSteamCompMgrTargetFPS
+	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_nDynamicRefreshRate && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
+		? g_nDynamicRefreshRate
 		: drm_get_default_refresh( &g_DRM );
 
 	uint64_t now = get_time_in_nanos();
@@ -3816,7 +3816,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDynamicRefresh )
 	{
-		g_bDynamicRefreshEnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDynamicRefresh, 0 );
+		g_nDynamicRefreshRate = get_prop( ctx, ctx->root, ctx->atoms.gamescopeDynamicRefresh, 0 );
 	}
 	if ( ev->atom == ctx->atoms.gamescopeLowLatency )
 	{
