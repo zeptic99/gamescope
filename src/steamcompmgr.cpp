@@ -5085,6 +5085,7 @@ steamcompmgr_main(int argc, char **argv)
 		// Ask for a new surface every vblank
 		if ( vblank == true )
 		{
+			static int vblank_idx = 0;
 			{
 				gamescope_xwayland_server_t *server = NULL;
 				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
@@ -5092,6 +5093,16 @@ steamcompmgr_main(int argc, char **argv)
 					for (win *w = server->ctx->list; w; w = w->next)
 					{
 						bool bSendCallback = w->surface.wlr != nullptr;
+
+						int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+						int nTargetFPS = g_nSteamCompMgrTargetFPS;
+						if ( steamcompmgr_window_should_limit_fps( w ) && nRefresh > nTargetFPS )
+						{
+							int nVblankDivisor = nRefresh / nTargetFPS;
+
+							if ( vblank_idx % nVblankDivisor != 0 )
+								bSendCallback = false;
+						}
 
 						if ( bSendCallback )
 						{
@@ -5108,6 +5119,7 @@ steamcompmgr_main(int argc, char **argv)
 					}
 				}
 			}
+			vblank_idx++;
 		}
 
 		vulkan_garbage_collect();
