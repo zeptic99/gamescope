@@ -101,6 +101,7 @@ struct xwayland_ctx_t
 		Atom gamescopeFocusableWindowsAtom;
 		Atom gamescopeFocusedWindowAtom;
 		Atom gamescopeFocusedAppAtom;
+		Atom gamescopeFocusedAppGfxAtom;
 		Atom gamescopeCtrlAppIDAtom;
 		Atom gamescopeCtrlWindowAtom;
 		Atom gamescopeInputCounterAtom;

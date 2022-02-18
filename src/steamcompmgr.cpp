@@ -2538,6 +2538,7 @@ determine_and_apply_focus()
 	// Backchannel to Steam
 	unsigned long focusedWindow = 0;
 	unsigned long focusedAppId = 0;
+	unsigned long focusedBaseAppId = 0;
 	const char *focused_display = root_ctx->xwayland_server->get_nested_display_name();
 	const char *focused_keyboard_display = root_ctx->xwayland_server->get_nested_display_name();
 	const char *focused_mouse_display = root_ctx->xwayland_server->get_nested_display_name();
@@ -2545,6 +2546,7 @@ determine_and_apply_focus()
 	if ( global_focus.focusWindow )
 	{
 		focusedWindow = global_focus.focusWindow->id;
+		focusedBaseAppId = global_focus.focusWindow->appID;
 		focusedAppId = global_focus.inputFocusWindow->appID;
 		focused_display = global_focus.focusWindow->ctx->xwayland_server->get_nested_display_name();
 	}
@@ -2561,6 +2563,9 @@ determine_and_apply_focus()
 
 	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppAtom, XA_CARDINAL, 32, PropModeReplace,
 					 (unsigned char *)&focusedAppId, focusedAppId != 0 ? 1 : 0 );
+
+	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppGfxAtom, XA_CARDINAL, 32, PropModeReplace,
+					 (unsigned char *)&focusedBaseAppId, focusedBaseAppId != 0 ? 1 : 0 );
 
 	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedWindowAtom, XA_CARDINAL, 32, PropModeReplace,
 					 (unsigned char *)&focusedWindow, focusedWindow != 0 ? 1 : 0 );
@@ -4692,6 +4697,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeFocusableAppsAtom = XInternAtom(ctx->dpy, "GAMESCOPE_FOCUSABLE_APPS", false);
 	ctx->atoms.gamescopeFocusableWindowsAtom = XInternAtom(ctx->dpy, "GAMESCOPE_FOCUSABLE_WINDOWS", false);
 	ctx->atoms.gamescopeFocusedAppAtom = XInternAtom( ctx->dpy, "GAMESCOPE_FOCUSED_APP", false );
+	ctx->atoms.gamescopeFocusedAppGfxAtom = XInternAtom( ctx->dpy, "GAMESCOPE_FOCUSED_APP_GFX", false );
 	ctx->atoms.gamescopeFocusedWindowAtom = XInternAtom( ctx->dpy, "GAMESCOPE_FOCUSED_WINDOW", false );
 	ctx->atoms.gamescopeCtrlAppIDAtom = XInternAtom(ctx->dpy, "GAMESCOPECTRL_BASELAYER_APPID", false);
 	ctx->atoms.gamescopeCtrlWindowAtom = XInternAtom(ctx->dpy, "GAMESCOPECTRL_BASELAYER_WINDOW", false);
