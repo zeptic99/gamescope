@@ -109,7 +109,7 @@ size_t nCurrentDescriptorSet = 0;
 
 VkPipeline easuPipeline;
 std::array<VkShaderModule, SHADER_TYPE_COUNT> shaderModules;
-std::array<std::array<std::array<std::array<VkPipeline,  SHADER_TYPE_COUNT>, kMaxBlurRadius>, k_nMaxYcbcrMask>, k_nMaxLayers> pipelines = {};
+std::array<std::array<std::array<std::array<std::array<VkPipeline, k_nMaxBlurLayers>, SHADER_TYPE_COUNT>, kMaxBlurRadius>, k_nMaxYcbcrMask>, k_nMaxLayers> pipelines = {};
 std::mutex pipelineMutex;
 
 VkBuffer uploadBuffer;
@@ -948,27 +948,32 @@ static bool is_vulkan_1_1_device(VkPhysicalDevice device)
 	return properties.apiVersion >= VK_API_VERSION_1_1;
 }
 
-static VkPipeline compile_vk_pipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type)
+static VkPipeline compile_vk_pipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count)
 {
-	const std::array<VkSpecializationMapEntry, 4> specializationEntries = {{
+	const std::array<VkSpecializationMapEntry, 5> specializationEntries = {{
 		{
 			.constantID = 0,
-			.offset     = 0,
+			.offset     = sizeof(uint32_t) * 0,
 			.size       = sizeof(uint32_t)
 		},
 		{
 			.constantID = 1,
-			.offset     = sizeof(uint32_t),
+			.offset     = sizeof(uint32_t) * 1,
 			.size       = sizeof(uint32_t)
 		},
 		{
 			.constantID = 2,
-			.offset     = sizeof(uint32_t) + sizeof(uint32_t),
+			.offset     = sizeof(uint32_t) * 2,
 			.size       = sizeof(uint32_t)
 		},
 		{
 			.constantID = 3,
 			.offset     = sizeof(uint32_t) * 3,
+			.size       = sizeof(uint32_t)
+		},
+		{
+			.constantID = 4,
+			.offset     = sizeof(uint32_t) * 4,
 			.size       = sizeof(uint32_t)
 		},
 	}};
@@ -978,11 +983,13 @@ static VkPipeline compile_vk_pipeline(uint32_t layerCount, uint32_t ycbcrMask, u
 		uint32_t ycbcrMask;
 		uint32_t debug;
 		uint32_t radius;
+		uint32_t blur_layer_count;
 	} specializationData = {
 		.layerCount   = layerCount + 1,
 		.ycbcrMask    = ycbcrMask,
 		.debug        = g_bIsCompositeDebug,
 		.radius       = radius ? (radius * 2) - 1 : 0,
+		.blur_layer_count = blur_layer_count,
 	};
 
 	VkSpecializationInfo specializationInfo = {
@@ -1027,20 +1034,26 @@ static void compile_all_pipelines(void)
 		for (uint32_t layerCount = 0; layerCount < k_nMaxLayers; layerCount++) {
 			for (uint32_t ycbcrMask = 0; ycbcrMask < k_nMaxYcbcrMask; ycbcrMask++) {
 				for (uint32_t radius = 0; radius < kMaxBlurRadius; radius++) {
-					if (ycbcrMask >= (1u << (layerCount + 1)))
-						continue;
-					if (radius && type != SHADER_TYPE_BLUR && type != SHADER_TYPE_BLUR_COND && type != SHADER_TYPE_BLUR_FIRST_PASS)
-						continue;
-					if ((ycbcrMask > 1 || layerCount > 0) && type == SHADER_TYPE_BLUR_FIRST_PASS)
-						continue;
-
-					VkPipeline newPipeline = compile_vk_pipeline(layerCount, ycbcrMask, radius, type);
-					{
-						std::lock_guard<std::mutex> lock(pipelineMutex);
-						if (pipelines[layerCount][ycbcrMask][radius][type])
-							vkDestroyPipeline(device, newPipeline, nullptr);
-						else
-							pipelines[layerCount][ycbcrMask][radius][type] = newPipeline;
+					for (uint32_t blur_layers = 0; blur_layers < k_nMaxBlurLayers; blur_layers++) {
+						if (ycbcrMask >= (1u << (layerCount + 1)))
+							continue;
+						if (radius && type != SHADER_TYPE_BLUR && type != SHADER_TYPE_BLUR_COND && type != SHADER_TYPE_BLUR_FIRST_PASS)
+							continue;
+						if ((ycbcrMask > 1 || layerCount > 1) && type == SHADER_TYPE_BLUR_FIRST_PASS)
+							continue;
+						if (blur_layers != 0 && type != SHADER_TYPE_BLUR && type != SHADER_TYPE_BLUR_COND)
+							continue;
+						if (blur_layers > layerCount)
+							continue;
+						
+						VkPipeline newPipeline = compile_vk_pipeline(layerCount, ycbcrMask, radius, type, blur_layers);
+						{
+							std::lock_guard<std::mutex> lock(pipelineMutex);
+							if (pipelines[layerCount][ycbcrMask][radius][type][blur_layers])
+								vkDestroyPipeline(device, newPipeline, nullptr);
+							else
+								pipelines[layerCount][ycbcrMask][radius][type][blur_layers] = newPipeline;
+						}
 					}
 				}
 			}
@@ -1048,14 +1061,14 @@ static void compile_all_pipelines(void)
 	}
 }
 
-static VkPipeline get_vk_pipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type)
+static VkPipeline get_vk_pipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count = 0)
 {
 
 	std::lock_guard<std::mutex> lock(pipelineMutex);
-	if (!pipelines[layerCount][ycbcrMask][radius][type])
-		pipelines[layerCount][ycbcrMask][radius][type] = compile_vk_pipeline(layerCount, ycbcrMask, radius, type);
+	if (!pipelines[layerCount][ycbcrMask][radius][type][blur_layer_count])
+		pipelines[layerCount][ycbcrMask][radius][type][blur_layer_count] = compile_vk_pipeline(layerCount, ycbcrMask, radius, type, blur_layer_count);
 
-	return pipelines[layerCount][ycbcrMask][radius][type];
+	return pipelines[layerCount][ycbcrMask][radius][type][blur_layer_count];
 }
 
 static bool init_device()
@@ -2617,13 +2630,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 		struct VulkanPipeline_t blurLayers = *pPipeline;
 		blurLayers.layerBindings[0].bFilter = true;
 
-		uint32_t inputX = blurLayers.layerBindings[0].tex->m_width;
-		uint32_t inputY = blurLayers.layerBindings[0].tex->m_height;
-
-		uint32_t tempX = float(inputX) / blurComposite.data.vScale[0].x;
-		uint32_t tempY = float(inputY) / blurComposite.data.vScale[0].y;
-
-		update_tmp_images(tempX, tempY);
+		update_tmp_images(currentOutputWidth, currentOutputHeight);
 
 		memoryBarrier.image = g_output.tmpOutput->m_vkImage;
 		vkCmdPipelineBarrier( curCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2631,17 +2638,22 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 
 		ShaderType type = SHADER_TYPE_BLUR_FIRST_PASS;
 
-		vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, get_vk_pipeline(0, blurComposite.nYCBCRMask & 0x1u, blurComposite.blurRadius, type));
+		uint32_t blur_layer_count = 0;
+		// Also blur the override on top if we have one.
+		if (blurComposite.nLayerCount >= 2 && blurLayers.layerBindings[1].zpos == g_zposOverride)
+			blur_layer_count++;
 
-		VkDescriptorSet descriptorSet = vulkan_update_descriptor( &blurLayers, pComposite->nYCBCRMask, false, true, g_output.tmpOutput->m_srgbView );
+		vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, get_vk_pipeline(blur_layer_count, blurComposite.nYCBCRMask & 0x1u, blurComposite.blurRadius, type));
+
+		VkDescriptorSet descriptorSet = vulkan_update_descriptor( &blurLayers, pComposite->nYCBCRMask, false, false, g_output.tmpOutput->m_srgbView );
 
 		vkCmdBindDescriptorSets(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 								pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 
 		vkCmdPushConstants(curCommandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(blurComposite.data), &blurComposite.data);
 
-		uint32_t nGroupCountX = tempX % 8 ? tempX / 8 + 1: tempX / 8;
-		uint32_t nGroupCountY = tempY % 8 ? tempY / 8 + 1: tempY / 8;
+		uint32_t nGroupCountX = currentOutputWidth % 8 ? currentOutputWidth / 8 + 1: currentOutputWidth / 8;
+		uint32_t nGroupCountY = currentOutputHeight % 8 ? currentOutputHeight / 8 + 1: currentOutputHeight / 8;
 
 		vkCmdDispatch( curCommandBuffer, nGroupCountX, nGroupCountY, 1 );
 
@@ -2667,7 +2679,7 @@ bool vulkan_composite( struct Composite_t *pComposite, struct VulkanPipeline_t *
 
 		type = pComposite->blurLayer0 == BLUR_MODE_COND ? SHADER_TYPE_BLUR_COND : SHADER_TYPE_BLUR;
 
-		vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, get_vk_pipeline(blurComposite.nLayerCount - 1, blurComposite.nYCBCRMask, blurComposite.blurRadius, type));
+		vkCmdBindPipeline(curCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, get_vk_pipeline(blurComposite.nLayerCount - 1, blurComposite.nYCBCRMask, blurComposite.blurRadius, type, blur_layer_count));
 
 		vkCmdPushConstants(curCommandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(blurComposite.data), &blurComposite.data);
 		if (g_bIsCompositeDebug) {

@@ -24,6 +24,8 @@
 #define k_nMaxLayers 6
 #define k_nMaxYcbcrMask 16
 
+#define k_nMaxBlurLayers 2
+
 #define kMaxBlurRadius (37u / 2 + 1)
 
 enum BlurMode {

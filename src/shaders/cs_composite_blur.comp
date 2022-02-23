@@ -39,23 +39,10 @@ void main() {
     vec2 uv = vec2(coord);
     vec3 outputValue = vec3(0.0f);
 
-    if (c_layerCount > 0) {
-        vec2 texSize = textureSize(s_sampler_extra, 0);
+    if (c_layerCount > 0)
+        outputValue = gaussian_blur(s_sampler_extra, 0, vec2(coord), c_blur_radius, true, true).rgb;
 
-        vec2 layer0coord = coord + u_offset[0];
-
-        if (layer0coord.x < 0.0f       || layer0coord.y < 0.0f ||
-            layer0coord.x >= texSize.x || layer0coord.y >= texSize.y) {
-            outputValue = vec3(0);
-        } else {
-            vec2 pos = coord + u_offset[0];
-            outputValue = gaussian_blur(s_sampler_extra, pos, c_blur_radius, true, true).rgb;
-        }
-        //outputValue = sampleLayer(s_samplers[0], 0, coord, true).rgb;
-    }
-
-
-    for (int i = 1; i < c_layerCount; i++) {
+    for (int i = c_blur_layer_count + 1; i < c_layerCount; i++) {
         vec4 layerColor = sampleLayer(i, uv);
         float opacity = u_opacity[i];
         float layerAlpha = opacity * layerColor.a;

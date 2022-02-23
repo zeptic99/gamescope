@@ -314,12 +314,6 @@ static int g_nudgePipe[2] = {-1, -1};
 
 static LogScope xwm_log("xwm");
 
-static const uint32_t g_zposBase = 0;
-static const uint32_t g_zposOverride = 1;
-static const uint32_t g_zposExternalOverlay = 2;
-static const uint32_t g_zposOverlay = 3;
-static const uint32_t g_zposCursor = 4;
-
 // poor man's semaphore
 class sem
 {

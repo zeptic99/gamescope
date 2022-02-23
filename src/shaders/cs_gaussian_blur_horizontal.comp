@@ -27,12 +27,29 @@ void main()
     uvec2 coord = uvec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     vec2 pos = coord;
 
-    vec3 outputValue;
-    if ((c_ycbcrMask & 1) != 0)
-        outputValue = gaussian_blur(s_ycbcr_samplers[0], pos, c_blur_radius, false, false).rgb;
-    else
-        outputValue = gaussian_blur(s_samplers[0], pos, c_blur_radius, false, true).rgb;
+    vec3 outputValue = vec3(0);
 
+    if (c_layerCount > 0) {
+        if ((c_ycbcrMask & 1) != 0)
+            outputValue = gaussian_blur(s_ycbcr_samplers[0], 0, pos, c_blur_radius, false, false).rgb * u_opacity[0];
+        else
+            outputValue = gaussian_blur(s_samplers[0], 0, pos, c_blur_radius, false, true).rgb * u_opacity[0];
+    }
+
+    for (int i = 1; i < c_layerCount; i++) {
+        vec4 layerColor;
+        // YCBCR technically has incorrect blending here but... meh.
+        if ((c_ycbcrMask & (1 << i)) != 0)
+            layerColor = srgbToLinear(gaussian_blur(s_ycbcr_samplers[i], i, pos, c_blur_radius, false, false));
+        else
+            layerColor = gaussian_blur(s_samplers[i], i, pos, c_blur_radius, false, true);
+
+        float opacity = u_opacity[i];
+        float layerAlpha = opacity * layerColor.a;
+        outputValue = layerColor.rgb * opacity + outputValue * (1.0f - layerAlpha);
+    }
+
+    outputValue = linearToSrgb(outputValue);
     imageStore(dst, ivec2(coord), vec4(outputValue, 0));
 }
 

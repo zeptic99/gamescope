@@ -1,18 +1,25 @@
 
-vec4 textureCond(sampler2D layerSampler, vec2 pos, bool unnormalized) {
+vec4 textureCond(sampler2D layerSampler, uint layerIdx, vec2 pos, bool unnormalized) {
     vec2 texSize = textureSize(layerSampler, 0);
+    vec2 coord = pos;
 #ifndef BLUR_DONT_SCALE
-    pos *= u_scale[0];
+    coord = ((coord + u_offset[layerIdx]) * u_scale[layerIdx]);
+
+    if (coord.x < 0.0f       || coord.y < 0.0f ||
+        coord.x >= texSize.x || coord.y >= texSize.y) {
+        float border = (u_borderMask & (1u << layerIdx)) != 0 ? 1.0f : 0.0f;
+        return vec4(0.0f, 0.0f, 0.0f, border);
+    }
 #endif
 
     if (!unnormalized)
         pos /= texSize;
 
-    return textureLod(layerSampler, pos, 0.0f);
+    return textureLod(layerSampler, coord, 0.0f);
 }
 
 // everything except pos has to be at least spec constant
-vec4 gaussian_blur(sampler2D layerSampler, vec2 pos, uint radius, bool vertical, bool unnormalized) {
+vec4 gaussian_blur(sampler2D layerSampler, uint layerIdx, vec2 pos, uint radius, bool vertical, bool unnormalized) {
     float offsets[20];
     float weights[20];
     int steps;
@@ -483,8 +490,8 @@ vec4 gaussian_blur(sampler2D layerSampler, vec2 pos, uint radius, bool vertical,
             posOffset = vec2(offsets[i], 0);
 
 
-        color += textureCond(layerSampler, pos - posOffset, unnormalized) * weights[i];
-        color += textureCond(layerSampler, pos + posOffset, unnormalized) * weights[i];
+        color += textureCond(layerSampler, layerIdx, pos - posOffset, unnormalized) * weights[i];
+        color += textureCond(layerSampler, layerIdx, pos + posOffset, unnormalized) * weights[i];
     }
 
     return color;
