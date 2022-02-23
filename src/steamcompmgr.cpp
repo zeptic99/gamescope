@@ -2252,7 +2252,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 
 	win *keyboardFocusWin = inputFocus;
 
-	if ( inputFocus && inputFocus->inputFocusMode )
+	if ( inputFocus && inputFocus->inputFocusMode == 2 )
 		keyboardFocusWin = ctx->focus.focusWindow;
 
 	Window keyboardFocusWindow = keyboardFocusWin ? keyboardFocusWin->id : None;
@@ -2468,7 +2468,7 @@ determine_and_apply_focus()
 	if (global_focus.inputFocusWindow)
 		global_focus.inputFocusMode = global_focus.inputFocusWindow->inputFocusMode;
 
-	if ( global_focus.inputFocusMode )
+	if ( global_focus.inputFocusMode == 2 )
 	{
 		global_focus.keyboardFocusWindow = global_focus.overrideWindow
 			? global_focus.overrideWindow
@@ -3307,7 +3307,7 @@ handle_wl_surface_id(xwayland_ctx_t *ctx, win *w, long surfaceID)
 
 	win *keyboardFocusWindow = global_focus.inputFocusWindow;
 
-	if ( keyboardFocusWindow && keyboardFocusWindow->inputFocusMode )
+	if ( keyboardFocusWindow && keyboardFocusWindow->inputFocusMode == 2 )
 		keyboardFocusWindow = global_focus.focusWindow;
 
 	if ( w == keyboardFocusWindow )
