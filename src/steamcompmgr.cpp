@@ -153,6 +153,7 @@ struct win {
 	unsigned int requestedWidth;
 	unsigned int requestedHeight;
 	bool is_dialog;
+	bool maybe_an_override;
 
 	Window transientFor;
 
@@ -2151,6 +2152,42 @@ found:;
 		if ( !globalFocus )
 			out->focusWindow = focus;
 	}
+
+	if ( !override_focus )
+	{
+		if ( controlledFocus )
+		{
+			for ( auto focusable_appid : ctxFocusControlAppIDs )
+			{
+				for ( win *focusable_window : vecPossibleFocusWindows )
+				{
+					if ( focusable_window->appID == focusable_appid )
+					{
+						if ( focusable_window->maybe_an_override && win_skip_taskbar_and_pager( focusable_window ) )
+						{
+							override_focus = focusable_window;
+							goto found2;
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			for ( win *focusable_window : vecPossibleFocusWindows )
+			{
+				if ( focusable_window->maybe_an_override && win_skip_taskbar_and_pager( focusable_window ) )
+				{
+					override_focus = focusable_window;
+					goto found2;
+				}
+			}	
+		}
+		
+		found2:;
+		resolveTransientOverrides();
+	}
+
 	out->overrideWindow = override_focus;
 
 	return localGameFocused;
@@ -2634,6 +2671,16 @@ get_size_hints(xwayland_ctx_t *ctx, win *w)
 	long hintsSpecified = 0;
 
 	XGetWMNormalHints(ctx->dpy, w->id, &hints, &hintsSpecified);
+
+	if (( hintsSpecified & (PPosition | PWinGravity) ) &&
+		hints.x && hints.y && hints.win_gravity == StaticGravity )
+	{
+		w->maybe_an_override = true;
+	}
+	else
+	{
+		w->maybe_an_override = false;
+	}
 
 	if (hintsSpecified & (PMaxSize | PMinSize) &&
 		hints.max_width && hints.max_height && hints.min_width && hints.min_height &&
