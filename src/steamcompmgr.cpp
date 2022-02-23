@@ -314,26 +314,11 @@ static int g_nudgePipe[2] = {-1, -1};
 
 static LogScope xwm_log("xwm");
 
-// Right now there's a suuuper duper rare bug where if we change the zposes
-// from these values the overlay can render behind the base layer
-// or the override can render above the overlay which is very very wrong.
-// So for now, if we have both an override, just force composition
-// and keep these zpos values the same.
-#define WORKAROUND_ZPOS_BUG
-
-#ifdef WORKAROUND_ZPOS_BUG
-static const uint32_t g_zposBase = 0;
-static const uint32_t g_zposOverride = 0;
-static const uint32_t g_zposExternalOverlay = 1;
-static const uint32_t g_zposOverlay = 2;
-static const uint32_t g_zposCursor = 3;
-#else
 static const uint32_t g_zposBase = 0;
 static const uint32_t g_zposOverride = 1;
 static const uint32_t g_zposExternalOverlay = 2;
 static const uint32_t g_zposOverlay = 3;
 static const uint32_t g_zposCursor = 4;
-#endif
 
 // poor man's semaphore
 class sem
@@ -1724,12 +1709,6 @@ paint_all()
 #endif
 
 	bool bCapture = takeScreenshot || pw_buffer != nullptr;
-	
-#ifdef WORKAROUND_ZPOS_BUG
-	const bool bOverrideCompositeHack = override != nullptr;
-#else
-	const bool bOverrideCompositeHack = false;
-#endif
 
 	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_nDynamicRefreshRate && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
 		? g_nDynamicRefreshRate
@@ -1748,7 +1727,6 @@ paint_all()
 	bool bNeedsComposite = BIsNested();
 	bNeedsComposite |= alwaysComposite;
 	bNeedsComposite |= bCapture;
-	bNeedsComposite |= bOverrideCompositeHack;
 	bNeedsComposite |= bWasFirstFrame;
 	bNeedsComposite |= composite.useFSRLayer0;
 	bNeedsComposite |= composite.blurLayer0;
