@@ -1185,7 +1185,7 @@ void MouseCursor::paint(win *window, win *fit, struct Composite_t *pComposite,
 	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 	currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 	currentScaleRatio *= outputScaleRatio;
-	if (g_bIntegerScale)
+	if (g_bIntegerScale && currentScaleRatio > 1.0f)
 		currentScaleRatio = floor(currentScaleRatio);
 
 	cursorOffsetX = (currentOutputWidth - sourceWidth * currentScaleRatio * globalScaleRatio) / 2.0f;
@@ -1360,7 +1360,7 @@ paint_window(win *w, win *scaleW, struct Composite_t *pComposite,
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 		currentScaleRatio *= outputScaleRatio;
-		if (g_bIntegerScale)
+		if (g_bIntegerScale && currentScaleRatio > 1.0f)
 			currentScaleRatio = floor(currentScaleRatio);
 		currentScaleRatio *= globalScaleRatio;
 
