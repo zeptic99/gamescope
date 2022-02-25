@@ -2407,6 +2407,13 @@ determine_and_apply_focus()
 
 	for ( win *focusable_window : vecPossibleFocusWindows )
 	{
+		// Exclude windows that are 1x1, skip taskbar + pager or override redirect windows
+		// from the reported focusable windows to Steam.
+		if ( ( focusable_window->a.width == 1 && focusable_window->a.height == 1 ) ||
+			win_skip_taskbar_and_pager( focusable_window ) ||
+			focusable_window->a.override_redirect )
+			continue;
+
 		unsigned int unAppID = focusable_window->appID;
 		if ( unAppID != 0 )
 		{
