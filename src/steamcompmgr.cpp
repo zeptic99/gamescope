@@ -2010,7 +2010,10 @@ static bool is_good_override_candidate( win *override, win* focus )
 	// Some Chrome/Edge dropdowns (ie. FH5 xbox login) will automatically close themselves if you
 	// focus them while they are meant to be offscreen (-1,-1 and 1x1) so check that the
 	// override's position is on-screen.
-	return win_is_override_redirect(override) && override != focus && override->a.x >= 0 && override->a.y >= 0;
+	if ( !focus )
+		return false;
+
+	return override != focus && override->a.x >= 0 && override->a.y >= 0;
 } 
 
 static bool
@@ -2116,7 +2119,7 @@ found:;
 		{
 			for ( win *override : vecPossibleFocusWindows )
 			{
-				if ( is_good_override_candidate(override, focus) && override->appID == focus->appID ) {
+				if ( win_is_override_redirect(override) && is_good_override_candidate(override, focus) && override->appID == focus->appID ) {
 					override_focus = override;
 					break;
 				}
@@ -2126,7 +2129,7 @@ found:;
 		{
 			for ( win *override : vecPossibleFocusWindows )
 			{
-				if ( is_good_override_candidate(override, focus) ) {
+				if ( win_is_override_redirect(override) && is_good_override_candidate(override, focus) ) {
 					override_focus = override;
 					break;
 				}
@@ -2153,19 +2156,19 @@ found:;
 			out->focusWindow = focus;
 	}
 
-	if ( !override_focus )
+	if ( !override_focus && focus )
 	{
 		if ( controlledFocus )
 		{
 			for ( auto focusable_appid : ctxFocusControlAppIDs )
 			{
-				for ( win *focusable_window : vecPossibleFocusWindows )
+				for ( win *fake_override : vecPossibleFocusWindows )
 				{
-					if ( focusable_window->appID == focusable_appid )
+					if ( fake_override->appID == focusable_appid )
 					{
-						if ( focusable_window->maybe_an_override && win_skip_taskbar_and_pager( focusable_window ) )
+						if ( fake_override->maybe_an_override && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
 						{
-							override_focus = focusable_window;
+							override_focus = fake_override;
 							goto found2;
 						}
 					}
@@ -2174,11 +2177,11 @@ found:;
 		}
 		else
 		{
-			for ( win *focusable_window : vecPossibleFocusWindows )
+			for ( win *fake_override : vecPossibleFocusWindows )
 			{
-				if ( focusable_window->maybe_an_override && win_skip_taskbar_and_pager( focusable_window ) )
+				if ( fake_override->maybe_an_override && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) )
 				{
-					override_focus = focusable_window;
+					override_focus = fake_override;
 					goto found2;
 				}
 			}	
