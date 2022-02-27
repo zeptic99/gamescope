@@ -2010,7 +2010,7 @@ static bool is_good_override_candidate( win *override, win* focus )
 	// Some Chrome/Edge dropdowns (ie. FH5 xbox login) will automatically close themselves if you
 	// focus them while they are meant to be offscreen (-1,-1 and 1x1) so check that the
 	// override's position is on-screen.
-	return win_is_override_redirect(override) && override != focus && override->a.x > 0 && override->a.y > 0;
+	return win_is_override_redirect(override) && override != focus && override->a.x >= 0 && override->a.y >= 0;
 } 
 
 static bool
