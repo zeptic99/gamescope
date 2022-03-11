@@ -1705,7 +1705,7 @@ paint_all()
 
 	bool bCapture = takeScreenshot || pw_buffer != nullptr;
 
-	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_nDynamicRefreshRate && steamcompmgr_window_should_limit_fps( global_focus.focusWindow ) && !global_focus.overlayWindow
+	int nTargetRefresh = g_nSteamCompMgrTargetFPS && g_nDynamicRefreshRate && steamcompmgr_window_should_limit_fps( global_focus.focusWindow )// && !global_focus.overlayWindow
 		? g_nDynamicRefreshRate
 		: drm_get_default_refresh( &g_DRM );
 
