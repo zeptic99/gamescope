@@ -33,4 +33,5 @@ extern int g_nNewNice;
 
 extern int g_nXWaylandCount;
 
+void restore_fd_limit( void );
 bool BIsNested( void );

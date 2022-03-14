@@ -7,6 +7,8 @@
 #include <cstring>
 #include <sys/capability.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include <getopt.h>
 #include <signal.h>
@@ -212,6 +214,51 @@ static void handle_signal( int sig )
 	}
 }
 
+static struct rlimit g_originalFdLimit;
+static bool g_fdLimitRaised = false;
+
+void restore_fd_limit( void )
+{
+	if (!g_fdLimitRaised) {
+		return;
+	}
+
+	if ( setrlimit( RLIMIT_NOFILE, &g_originalFdLimit ) )
+	{
+		fprintf( stderr, "Failed to reset the maximum number of open files in child process\n" );
+		fprintf( stderr, "Use of select() may fail.\n" );
+	}
+
+	g_fdLimitRaised = false;
+}
+
+static void raise_fd_limit( void )
+{
+	struct rlimit newFdLimit;
+
+	memset(&g_originalFdLimit, 0, sizeof(g_originalFdLimit));
+	if ( getrlimit( RLIMIT_NOFILE, &g_originalFdLimit ) != 0 )
+	{
+		fprintf( stderr, "Could not query maximum number of open files. Leaving at default value.\n" );
+		return;
+	}
+
+	if ( g_originalFdLimit.rlim_cur >= g_originalFdLimit.rlim_max )
+	{
+		return;
+	}
+
+	memcpy(&newFdLimit, &g_originalFdLimit, sizeof(newFdLimit));
+	newFdLimit.rlim_cur = newFdLimit.rlim_max;
+
+	if ( setrlimit( RLIMIT_NOFILE, &newFdLimit ) )
+	{
+		fprintf( stderr, "Failed to raise the maximum number of open files. Leaving at default value.\n" );
+	}
+
+	g_fdLimitRaised = true;
+}
+
 int g_nPreferredOutputWidth = 0;
 int g_nPreferredOutputHeight = 0;
 
@@ -325,6 +372,8 @@ int main(int argc, char **argv)
 	{
 		fprintf( stderr, "No CAP_SYS_NICE, falling back to regular-priority compute and threads.\nPerformance will be affected.\n" );
 	}
+
+	raise_fd_limit();
 
 	if ( gpuvis_trace_init() != -1 )
 	{

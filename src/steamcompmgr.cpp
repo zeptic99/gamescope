@@ -4368,6 +4368,9 @@ spawn_client( char **argv )
 			nice( g_nOldNice - g_nNewNice );
 		}
 
+		// Restore prior rlimit in case child uses select()
+		restore_fd_limit();
+
 		// Set modified LD_PRELOAD if needed
 		if ( pchCurrentPreload != nullptr )
 		{
