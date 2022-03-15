@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -412,6 +413,11 @@ static bool refresh_state( drm_t *drm )
 			return false;
 		}
 
+		crtc->has_gamma_lut = (crtc->props.find( "GAMMA_LUT" ) != crtc->props.end());
+		if (!crtc->has_gamma_lut)
+			drm_log.infof("CRTC %" PRIu32 " has no gamma LUT support", crtc->id);
+
+
 		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
 	}
 
@@ -778,7 +784,8 @@ void finish_drm(struct drm_t *drm)
 	}
 	for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
-		add_crtc_property(req, &drm->crtcs[i], "GAMMA_LUT", 0);
+		if ( drm->crtcs[i].has_gamma_lut )
+			add_crtc_property(req, &drm->crtcs[i], "GAMMA_LUT", 0);
 		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
 	}
 	for ( size_t i = 0; i < drm->planes.size(); i++ ) {
@@ -1258,7 +1265,8 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "MODE_ID", 0) < 0)
 				return false;
-			if (add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0)
+			if (drm->crtcs[i].has_gamma_lut &&
+				(add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0))
 				return false;
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0) < 0)
 				return false;
@@ -1272,16 +1280,17 @@ int drm_prepare( struct drm_t *drm, const struct Composite_t *pComposite, const 
 
 		if (add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id) < 0)
 			return false;
-		if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
-			return false;
+		if (drm->crtc->has_gamma_lut)
+			if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
+				return false;
 		if (add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1) < 0)
 			return false;
 		drm->crtc->pending.active = 1;
 	}
-	else if ( drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
+	else if ( drm->pending.gamma_lut_id != drm->current.gamma_lut_id && drm->crtc->has_gamma_lut )
 	{
 		if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
-			return false;	
+			return false;
 	}
 
 	drm->flags = flags;
@@ -1447,6 +1456,9 @@ inline uint16_t drm_calc_lut_value( float input, float flLinearGain, float flGai
 
 bool drm_update_gamma_lut(struct drm_t *drm)
 {
+	if ( !drm->crtc->has_gamma_lut )
+		return true;
+
 	if (drm->pending.color_gain[0] == drm->current.color_gain[0] &&
 		drm->pending.color_gain[1] == drm->current.color_gain[1] &&
 		drm->pending.color_gain[2] == drm->current.color_gain[2] &&

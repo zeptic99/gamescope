@@ -35,6 +35,7 @@ struct crtc {
 	drmModeCrtc *crtc;
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
+	bool has_gamma_lut;
 
 	struct {
 		bool active;
