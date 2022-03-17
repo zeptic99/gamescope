@@ -2684,8 +2684,9 @@ get_size_hints(xwayland_ctx_t *ctx, win *w)
 
 	XGetWMNormalHints(ctx->dpy, w->id, &hints, &hintsSpecified);
 
-	if (( hintsSpecified & (PPosition | PWinGravity) ) &&
-		hints.x && hints.y && hints.win_gravity == StaticGravity )
+	const bool bHasPositionAndGravityHints = ( hintsSpecified & ( PPosition | PWinGravity ) ) == ( PPosition | PWinGravity );
+	if ( bHasPositionAndGravityHints &&
+		 hints.x && hints.y && hints.win_gravity == StaticGravity )
 	{
 		w->maybe_a_dropdown = true;
 	}
