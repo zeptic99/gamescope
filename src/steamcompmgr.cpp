@@ -2003,9 +2003,9 @@ is_focus_priority_greater( win *a, win *b )
 
 	// Prefer normal windows over dialogs
 	// if we are an override redirect/dropdown window.
-	if ( win_maybe_a_dropdown( a ) == win_maybe_a_dropdown( b ) &&
-		a->is_dialog != b->is_dialog && b->is_dialog )
-		return true;
+	if ( win_maybe_a_dropdown( a ) && win_maybe_a_dropdown( b ) &&
+		a->is_dialog != b->is_dialog )
+		return !a->is_dialog;
 
 	// Attempt to tie-break dropdowns by transient-for.
 	if ( win_maybe_a_dropdown( a ) && win_maybe_a_dropdown( b ) &&
