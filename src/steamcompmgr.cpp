@@ -153,7 +153,7 @@ struct win {
 	unsigned int requestedWidth;
 	unsigned int requestedHeight;
 	bool is_dialog;
-	bool maybe_an_override;
+	bool maybe_a_dropdown;
 
 	Window transientFor;
 
@@ -1963,6 +1963,12 @@ win_skip_taskbar_and_pager( win *w )
 	return w->skipTaskbar && w->skipPager;
 }
 
+static bool
+win_maybe_a_dropdown( win *w )
+{
+	return w->maybe_a_dropdown || win_is_override_redirect( w );
+}
+
 /* Returns true if a's focus priority > b's.
  *
  * This function establishes a list of criteria to decide which window should
@@ -1987,14 +1993,17 @@ is_focus_priority_greater( win *a, win *b )
 	if ( win_is_override_redirect( a ) != win_is_override_redirect( b ) )
 		return !win_is_override_redirect( a );
 
+	if ( win_maybe_a_dropdown( a ) != win_maybe_a_dropdown( b ) )
+		return !win_maybe_a_dropdown( a );
+
 	// Wine sets SKIP_TASKBAR and SKIP_PAGER hints for WS_EX_NOACTIVATE windows.
 	// See https://github.com/Plagman/gamescope/issues/87
 	if ( win_skip_taskbar_and_pager( a ) != win_skip_taskbar_and_pager( b ) )
 		return !win_skip_taskbar_and_pager( a );
 
 	// Prefer normal windows over dialogs
-	// if we are an override redirect.
-	if ( win_is_override_redirect( a ) == win_is_override_redirect( b ) &&
+	// if we are an override redirect/dropdown window.
+	if ( win_maybe_a_dropdown( a ) == win_maybe_a_dropdown( b ) &&
 		a->is_dialog != b->is_dialog && b->is_dialog )
 		return true;
 
@@ -2166,7 +2175,7 @@ found:;
 				{
 					if ( fake_override->appID == focusable_appid )
 					{
-						if ( fake_override->maybe_an_override && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
+						if ( fake_override->maybe_a_dropdown && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
 						{
 							override_focus = fake_override;
 							goto found2;
@@ -2179,7 +2188,7 @@ found:;
 		{
 			for ( win *fake_override : vecPossibleFocusWindows )
 			{
-				if ( fake_override->maybe_an_override && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) )
+				if ( fake_override->maybe_a_dropdown && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) )
 				{
 					override_focus = fake_override;
 					goto found2;
@@ -2678,11 +2687,11 @@ get_size_hints(xwayland_ctx_t *ctx, win *w)
 	if (( hintsSpecified & (PPosition | PWinGravity) ) &&
 		hints.x && hints.y && hints.win_gravity == StaticGravity )
 	{
-		w->maybe_an_override = true;
+		w->maybe_a_dropdown = true;
 	}
 	else
 	{
-		w->maybe_an_override = false;
+		w->maybe_a_dropdown = false;
 	}
 
 	if (hintsSpecified & (PMaxSize | PMinSize) &&
