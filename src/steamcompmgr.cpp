@@ -2088,7 +2088,7 @@ found:;
 			{
 				if ( ( !override_focus || candidate != override_focus ) && candidate != focus &&
 					( ( !override_focus && candidate->transientFor == focus->id ) || ( override_focus && candidate->transientFor == override_focus->id ) ) &&
-					candidate->a.override_redirect )
+					win_maybe_a_dropdown( candidate ) )
 				{
 					bFoundTransient = true;
 					override_focus = candidate;
@@ -2111,7 +2111,7 @@ found:;
 
 			for ( win *candidate : vecPossibleFocusWindows )
 			{
-				if ( candidate != focus && candidate->transientFor == focus->id && !candidate->a.override_redirect )
+				if ( candidate != focus && candidate->transientFor == focus->id && !win_maybe_a_dropdown( candidate ) )
 				{
 					bFoundTransient = true;
 					focus = candidate;
@@ -2180,7 +2180,7 @@ found:;
 				{
 					if ( fake_override->appID == focusable_appid )
 					{
-						if ( fake_override->maybe_a_dropdown && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
+						if ( win_maybe_a_dropdown( fake_override ) && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
 						{
 							override_focus = fake_override;
 							goto found2;
@@ -2193,7 +2193,7 @@ found:;
 		{
 			for ( win *fake_override : vecPossibleFocusWindows )
 			{
-				if ( fake_override->maybe_a_dropdown && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) )
+				if ( win_maybe_a_dropdown( fake_override ) && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) )
 				{
 					override_focus = fake_override;
 					goto found2;
