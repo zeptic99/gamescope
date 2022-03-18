@@ -2189,7 +2189,7 @@ found:;
 				{
 					if ( fake_override->appID == focusable_appid )
 					{
-						if ( win_maybe_a_dropdown( fake_override ) && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
+						if ( win_maybe_a_dropdown( fake_override ) && is_good_override_candidate( fake_override, focus ) && fake_override->appID == focus->appID )
 						{
 							override_focus = fake_override;
 							goto found2;
@@ -2202,7 +2202,7 @@ found:;
 		{
 			for ( win *fake_override : vecPossibleFocusWindows )
 			{
-				if ( win_maybe_a_dropdown( fake_override ) && win_skip_taskbar_and_pager( fake_override ) && is_good_override_candidate( fake_override, focus ) )
+				if ( win_maybe_a_dropdown( fake_override ) && is_good_override_candidate( fake_override, focus ) )
 				{
 					override_focus = fake_override;
 					goto found2;
