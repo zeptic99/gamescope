@@ -2002,6 +2002,10 @@ is_focus_priority_greater( win *a, win *b )
 	if ( win_is_override_redirect( a ) != win_is_override_redirect( b ) )
 		return !win_is_override_redirect( a );
 
+	// If the window is 1x1 then prefer anything else we have.
+	if ( win_is_useless( a ) != win_is_useless( b ) )
+		return !win_is_useless( a );
+
 	if ( win_maybe_a_dropdown( a ) != win_maybe_a_dropdown( b ) )
 		return !win_maybe_a_dropdown( a );
 
