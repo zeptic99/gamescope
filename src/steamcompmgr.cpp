@@ -1952,9 +1952,18 @@ win_has_game_id( win *w )
 }
 
 static bool
+win_is_useless( win *w )
+{
+	// Windows that are 1x1 are pretty useless for override redirects.
+	// Just ignore them.
+	// Fixes the Xbox Login in Age of Empires 2: DE.
+	return w->a.width == 1 && w->a.height == 1;
+}
+
+static bool
 win_is_override_redirect( win *w )
 {
-	return w->a.override_redirect && !w->ignoreOverrideRedirect;
+	return w->a.override_redirect && !w->ignoreOverrideRedirect && !win_is_useless( w );
 }
 
 static bool
@@ -1966,7 +1975,7 @@ win_skip_taskbar_and_pager( win *w )
 static bool
 win_maybe_a_dropdown( win *w )
 {
-	return w->maybe_a_dropdown || win_is_override_redirect( w );
+	return ( w->maybe_a_dropdown || win_is_override_redirect( w ) ) && !win_is_useless( w );
 }
 
 /* Returns true if a's focus priority > b's.
@@ -2461,9 +2470,9 @@ determine_and_apply_focus()
 
 	for ( win *focusable_window : vecPossibleFocusWindows )
 	{
-		// Exclude windows that are 1x1, skip taskbar + pager or override redirect windows
+		// Exclude windows that are useless (1x1), skip taskbar + pager or override redirect windows
 		// from the reported focusable windows to Steam.
-		if ( ( focusable_window->a.width == 1 && focusable_window->a.height == 1 ) ||
+		if ( win_is_useless( focusable_window ) ||
 			win_skip_taskbar_and_pager( focusable_window ) ||
 			focusable_window->a.override_redirect )
 			continue;
