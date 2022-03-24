@@ -1977,7 +1977,9 @@ win_skip_taskbar_and_pager( win *w )
 static bool
 win_maybe_a_dropdown( win *w )
 {
-	return ( w->maybe_a_dropdown || win_is_override_redirect( w ) ) && !win_is_useless( w );
+	bool valid_maybe_a_dropdown =
+		w->maybe_a_dropdown && ( ( !w->is_dialog || win_skip_taskbar_and_pager( w ) ) && ( w->skipPager || w->skipTaskbar ) );
+	return ( valid_maybe_a_dropdown || win_is_override_redirect( w ) ) && !win_is_useless( w );
 }
 
 /* Returns true if a's focus priority > b's.
@@ -2092,7 +2094,7 @@ found:;
 		}
 	}
 
-	auto resolveTransientOverrides = [&]()
+	auto resolveTransientOverrides = [&](bool maybe)
 	{
 		// Do some searches to find transient links to override redirects too.
 		while ( true )
@@ -2101,9 +2103,10 @@ found:;
 
 			for ( win *candidate : vecPossibleFocusWindows )
 			{
+				bool is_dropdown = maybe ? win_maybe_a_dropdown( candidate ) : win_is_override_redirect( candidate );
 				if ( ( !override_focus || candidate != override_focus ) && candidate != focus &&
 					( ( !override_focus && candidate->transientFor == focus->id ) || ( override_focus && candidate->transientFor == override_focus->id ) ) &&
-					win_maybe_a_dropdown( candidate ) )
+					 is_dropdown)
 				{
 					bFoundTransient = true;
 					override_focus = candidate;
@@ -2138,8 +2141,6 @@ found:;
 			if ( bFoundTransient == false )
 				break;
 		}
-
-		resolveTransientOverrides();
 	}
 
 	if ( !override_focus && focus )
@@ -2165,7 +2166,7 @@ found:;
 			}
 		}
 
-		resolveTransientOverrides();
+		resolveTransientOverrides( false );
 	}
 
 	if ( focus )
@@ -2217,7 +2218,7 @@ found:;
 		}
 		
 		found2:;
-		resolveTransientOverrides();
+		resolveTransientOverrides( true );
 	}
 
 	out->overrideWindow = override_focus;
