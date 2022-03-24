@@ -2029,6 +2029,9 @@ is_focus_priority_greater( win *a, win *b )
 		!a->transientFor != !b->transientFor )
 		return !a->transientFor;
 
+	if ( win_has_game_id( a ) && a->map_sequence != b->map_sequence )
+		return a->map_sequence > b->map_sequence;
+
 	// The damage sequences are only relevant for game windows.
 	if ( win_has_game_id( a ) && a->damage_sequence != b->damage_sequence )
 		return a->damage_sequence > b->damage_sequence;
