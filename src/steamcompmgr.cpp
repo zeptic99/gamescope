@@ -2439,7 +2439,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 
 	while (i < nchildren)
 	{
-		XSelectInput( ctx->dpy, children[i], PointerMotionMask | FocusChangeMask );
+		XSelectInput( ctx->dpy, children[i], FocusChangeMask );
 		i++;
 	}
 
@@ -2847,7 +2847,7 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 
 	/* This needs to be here or else we lose transparency messages */
 	XSelectInput(ctx->dpy, id, PropertyChangeMask | SubstructureNotifyMask |
-		PointerMotionMask | LeaveWindowMask | FocusChangeMask);
+		LeaveWindowMask | FocusChangeMask);
 
 	XFlush(ctx->dpy);
 
@@ -4534,15 +4534,6 @@ dispatch_x11( xwayland_ctx_t *ctx )
 					bShouldResetCursor = true;
 				}
 				break;
-			case MotionNotify:
-				{
-					win * w = find_win(ctx, ev.xmotion.window);
-					if (w && w == ctx->focus.inputFocusWindow)
-					{
-						cursor->move(ev.xmotion.x, ev.xmotion.y);
-					}
-					break;
-				}
 			default:
 				if (ev.type == ctx->damage_event + XDamageNotify)
 				{
