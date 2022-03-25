@@ -121,14 +121,15 @@ const uint32_t k_nScratchCmdBufferCount = 1000;
 struct scratchCmdBuffer_t
 {
 	VkCommandBuffer cmdBuf;
-	VkFence fence;
 	
 	std::vector<std::shared_ptr<CVulkanTexture>> refs;
 	
-	std::atomic<bool> haswaiter;
-	std::atomic<bool> busy;
+	std::atomic<uint64_t> seqNo = { 0 };
 };
 
+
+VkSemaphore g_scratchTimelineSemaphore;
+std::atomic<uint64_t> g_submissionSeqNo = { 0 };
 scratchCmdBuffer_t g_scratchCommandBuffers[ k_nScratchCmdBufferCount ];
 
 struct VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -1338,6 +1339,12 @@ retry:
 		.pEnabledFeatures = 0,
 	};
 
+	VkPhysicalDeviceVulkan12Features vulkan12Features = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		.pNext = std::exchange(features2.pNext, &vulkan12Features),
+		.timelineSemaphore = VK_TRUE,
+	};
+
 	VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbcrFeatures = {};
 	ycbcrFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
 	ycbcrFeatures.pNext = std::exchange(features2.pNext, &ycbcrFeatures);
@@ -1693,22 +1700,28 @@ retry:
 			vk_errorf( res, "vkAllocateCommandBuffers failed" );
 			return false;
 		}
-		
-		VkFenceCreateInfo fenceCreateInfo =
-		{
-			.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
-		};
-		
-		res = vkCreateFence( device, &fenceCreateInfo, nullptr, &g_scratchCommandBuffers[ i ].fence );
-		if ( res != VK_SUCCESS )
-		{
-			vk_errorf( res, "vkCreateFence failed" );
-			return false;
-		}
-		
-		g_scratchCommandBuffers[ i ].busy = false;
 	}
 	
+	VkSemaphoreTypeCreateInfo timelineCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+		.pNext = NULL,
+		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		.initialValue = 0,
+	};
+
+	VkSemaphoreCreateInfo semCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		.pNext = &timelineCreateInfo,
+		.flags = 0,
+	};
+
+	res = vkCreateSemaphore( device, &semCreateInfo, NULL, &g_scratchTimelineSemaphore );
+	if ( res != VK_SUCCESS )
+	{
+		vk_errorf( res, "vkCreateSemaphore failed" );
+		return false;
+	}
+
 	return true;
 }
 
@@ -2071,17 +2084,17 @@ static void update_tmp_images( uint32_t width, uint32_t height )
 	}
 }
 
-static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence *pFence )
+static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf )
 {
+	uint64_t currentSeqNo;
+	VkResult res = vkGetSemaphoreCounterValue(device, g_scratchTimelineSemaphore, &currentSeqNo);
+	assert( res == VK_SUCCESS );
+
 	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
 	{
-		if ( g_scratchCommandBuffers[ i ].busy == false )
+		if ( g_scratchCommandBuffers[ i ].seqNo <= currentSeqNo )
 		{
 			cmdBuf = g_scratchCommandBuffers[ i ].cmdBuf;
-			if ( pFence != nullptr )
-			{
-				*pFence = g_scratchCommandBuffers[ i ].fence;
-			}
 			
 			VkCommandBufferBeginInfo commandBufferBeginInfo = {
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -2097,10 +2110,6 @@ static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence *pFe
 			
 			g_scratchCommandBuffers[ i ].refs.clear();
 			
-			g_scratchCommandBuffers[ i ].haswaiter = pFence != nullptr;
-			
-			g_scratchCommandBuffers[ i ].busy = true;
-			
 			return i;
 		}
 	}
@@ -2111,28 +2120,53 @@ static inline uint32_t get_command_buffer( VkCommandBuffer &cmdBuf, VkFence *pFe
 
 static inline void submit_command_buffer( uint32_t handle, std::vector<std::shared_ptr<CVulkanTexture>> &vecRefs )
 {
-	VkCommandBuffer cmdBuf = g_scratchCommandBuffers[ handle ].cmdBuf;
-	VkFence fence = g_scratchCommandBuffers[ handle ].fence;
-	
-	VkResult res = vkEndCommandBuffer( cmdBuf );
+	auto &buf = g_scratchCommandBuffers[ handle ];
+
+	VkResult res = vkEndCommandBuffer( buf.cmdBuf );
 	
 	if ( res != VK_SUCCESS )
 	{
 		assert( 0 );
 	}
 	
+	// The seq no of the last submission.
+	const uint64_t lastSubmissionSeqNo = g_submissionSeqNo++;
+
+	// This is the seq no of the command buffer we are going to submit.
+	const uint64_t nextSeqNo = lastSubmissionSeqNo + 1;
+
+	VkTimelineSemaphoreSubmitInfo timelineInfo = {
+		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+		.pNext = NULL,
+		// Ensure order of scratch cmd buffer submission
+		.waitSemaphoreValueCount = 1,
+		.pWaitSemaphoreValues = &lastSubmissionSeqNo,
+		.signalSemaphoreValueCount = 1,
+		.pSignalSemaphoreValues = &nextSeqNo,
+	};
+
+	const VkPipelineStageFlags wait_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
 	VkSubmitInfo submitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		. commandBufferCount = 1,
-		.pCommandBuffers = &cmdBuf,
+		.pNext = &timelineInfo,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = &g_scratchTimelineSemaphore,
+		.pWaitDstStageMask = &wait_mask,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &buf.cmdBuf,
+		.signalSemaphoreCount = 1,
+		.pSignalSemaphores = &g_scratchTimelineSemaphore,
 	};
 	
-	res = vkQueueSubmit( queue, 1, &submitInfo, fence );
+	res = vkQueueSubmit( queue, 1, &submitInfo, VK_NULL_HANDLE );
 	
 	if ( res != VK_SUCCESS )
 	{
 		assert( 0 );
 	}
+	
+	buf.seqNo = nextSeqNo;
 	
 	for( uint32_t i = 0; i < vecRefs.size(); i++ )
 		g_scratchCommandBuffers[ handle ].refs.push_back( std::move(vecRefs[ i ]) );
@@ -2142,21 +2176,20 @@ void vulkan_garbage_collect( void )
 {
 	// If we ever made anything calling get_command_buffer() multi-threaded we'd have to rethink this
 	// Probably just differentiate "busy" and "submitted"
+	uint64_t currentSeqNo;
+	VkResult res = vkGetSemaphoreCounterValue(device, g_scratchTimelineSemaphore, &currentSeqNo);
+	assert( res == VK_SUCCESS );
+
 	for ( uint32_t i = 0; i < k_nScratchCmdBufferCount; i++ )
 	{
-		if ( g_scratchCommandBuffers[ i ].busy == true &&
-			g_scratchCommandBuffers[ i ].haswaiter == false )
+		// We reset seqNo to 0 when we know it's not busy.
+		const uint64_t buffer_seq_no = g_scratchCommandBuffers[ i ].seqNo;
+		if ( buffer_seq_no && buffer_seq_no <= currentSeqNo )
 		{
-			VkResult res = vkGetFenceStatus( device, g_scratchCommandBuffers[ i ].fence );
+			vkResetCommandBuffer( g_scratchCommandBuffers[ i ].cmdBuf, 0 );
 			
-			if ( res == VK_SUCCESS )
-			{
-				vkResetCommandBuffer( g_scratchCommandBuffers[ i ].cmdBuf, 0 );
-				vkResetFences( device, 1, &g_scratchCommandBuffers[ i ].fence );
-				
-				g_scratchCommandBuffers[ i ].refs.clear();
-				g_scratchCommandBuffers[ i ].busy = false;
-			}
+			g_scratchCommandBuffers[ i ].refs.clear();
+			g_scratchCommandBuffers[ i ].seqNo = 0;
 		}
 	}
 }
@@ -2187,7 +2220,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_bits( uint32_t width,
 	memcpy( pUploadBuffer, bits, width * height * 4 );
 	
 	VkCommandBuffer commandBuffer;
-	uint32_t handle = get_command_buffer( commandBuffer, nullptr );
+	uint32_t handle = get_command_buffer( commandBuffer );
 	
 	VkBufferImageCopy region = {};
 	
@@ -3088,7 +3121,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struct wl
 		return nullptr;
 
 	VkCommandBuffer commandBuffer;
-	uint32_t handle = get_command_buffer( commandBuffer, nullptr );
+	uint32_t handle = get_command_buffer( commandBuffer );
 
 	VkBufferImageCopy region = {};
 	region.imageSubresource = {
