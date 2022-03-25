@@ -508,7 +508,11 @@ static void content_override_handle_surface_destroy( struct wl_listener *listene
 	struct wlserver_content_override *co = wl_container_of( listener, co, surface_destroy_listener );
 	assert(co->surface);
 	gamescope_xwayland_server_t *server = (gamescope_xwayland_server_t *)co->surface->data;
-	assert(server);
+	if (!server)
+	{
+		wl_log.errorf( "Unable to destroy content override for surface %p - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
+		return;
+	}
 	server->destroy_content_override( co );
 }
 
