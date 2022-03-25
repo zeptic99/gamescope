@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <array>
 #include <thread>
-#include <vulkan/vulkan_core.h>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -1314,8 +1313,6 @@ retry:
 			vecEnabledDeviceExtensions.push_back( VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME );
 	}
 
-	vecEnabledDeviceExtensions.push_back( VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME );
-
 	vecEnabledDeviceExtensions.push_back( VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME );
 	vecEnabledDeviceExtensions.push_back( VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME );
 
@@ -2166,8 +2163,6 @@ static inline void submit_command_buffer( uint32_t handle, std::vector<std::shar
 
 void vulkan_garbage_collect( void )
 {
-	// If we ever made anything calling get_command_buffer() multi-threaded we'd have to rethink this
-	// Probably just differentiate "busy" and "submitted"
 	uint64_t currentSeqNo;
 	VkResult res = vkGetSemaphoreCounterValue(device, g_scratchTimelineSemaphore, &currentSeqNo);
 	assert( res == VK_SUCCESS );
