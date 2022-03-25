@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <thread>
+#include <vulkan/vulkan_core.h>
 
 #include "rendervulkan.hpp"
 #include "main.hpp"
@@ -1264,16 +1265,16 @@ retry:
 
 	if ( supportsFp16 )
 	{
-		VkPhysicalDeviceShaderFloat16Int8Features fp16Features = {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,
+		VkPhysicalDeviceVulkan12Features vulkan12Features = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		};
 		VkPhysicalDeviceFeatures2 features2 = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-			.pNext = &fp16Features,
+			.pNext = &vulkan12Features,
 		};
 		vkGetPhysicalDeviceFeatures2( physicalDevice, &features2 );
 
-		if ( !fp16Features.shaderFloat16 || !features2.features.shaderInt16 )
+		if ( !vulkan12Features.shaderFloat16 || !features2.features.shaderInt16 )
 			supportsFp16 = false;
 	}
 
@@ -1320,9 +1321,6 @@ retry:
 
 	vecEnabledDeviceExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
 
-	if ( supportsFp16 )
-		vecEnabledDeviceExtensions.push_back( VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME );
-
 	VkPhysicalDeviceFeatures2 features2 = {};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	features2.features.shaderInt16 = supportsFp16;
@@ -1342,6 +1340,7 @@ retry:
 	VkPhysicalDeviceVulkan12Features vulkan12Features = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.pNext = std::exchange(features2.pNext, &vulkan12Features),
+		.shaderFloat16 = supportsFp16,
 		.timelineSemaphore = VK_TRUE,
 	};
 
@@ -1354,13 +1353,6 @@ retry:
 	robustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
 	robustness2Features.pNext = std::exchange(features2.pNext, &robustness2Features);
 	robustness2Features.nullDescriptor = VK_TRUE;
-
-	VkPhysicalDeviceShaderFloat16Int8Features fp16Features = {};
-	fp16Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
-	fp16Features.shaderFloat16 = VK_TRUE;
-
-	if ( supportsFp16 )
-		fp16Features.pNext = std::exchange(features2.pNext, &fp16Features);
 
 	VkResult res = vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device);
 	if ( res != VK_SUCCESS )
