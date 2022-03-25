@@ -39,7 +39,7 @@ const VkApplicationInfo appInfo = {
 	.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 	.pEngineName = "just some code",
 	.engineVersion = VK_MAKE_VERSION(1, 0, 0),
-	.apiVersion = VK_API_VERSION_1_1,
+	.apiVersion = VK_API_VERSION_1_2,
 };
 
 VkInstance instance;
@@ -940,12 +940,12 @@ bool vulkan_init_formats()
 	return true;
 }
 
-static bool is_vulkan_1_1_device(VkPhysicalDevice device)
+static bool is_vulkan_1_2_device(VkPhysicalDevice device)
 {
 	VkPhysicalDeviceProperties properties;
 	vkGetPhysicalDeviceProperties(device, &properties);
 
-	return properties.apiVersion >= VK_API_VERSION_1_1;
+	return properties.apiVersion >= VK_API_VERSION_1_2;
 }
 
 static VkPipeline compile_vk_pipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count)
@@ -1093,7 +1093,7 @@ static bool init_device()
 retry:
 	for (uint32_t i = 0; i < physicalDeviceCount; ++i)
 	{
-		if (!is_vulkan_1_1_device(deviceHandles[i]))
+		if (!is_vulkan_1_2_device(deviceHandles[i]))
 			continue;
 
 		uint32_t queueFamilyCount = 0;
