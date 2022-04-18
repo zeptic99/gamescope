@@ -1977,8 +1977,19 @@ win_skip_taskbar_and_pager( win *w )
 static bool
 win_maybe_a_dropdown( win *w )
 {
+	// Josh:
+	// The logic here is as follows. The window will be treated as a dropdown if:
+	// 
+	// If this window has a fixed position on the screen + static gravity:
+	//  - If the window has either skipPage or skipTaskbar
+	//    - If the window isn't a dialog, always treat it as a dropdown, as it's
+	//      probably meant to be some form of popup.
+	//    - If the window is a dialog 
+	// 		- If the window has transient for, disregard it, as it is trying to redirecting us elsewhere
+	//        ie. a settings menu dialog popup or something.
+	//      - If the window has both skip taskbar and pager, treat it as a dialog.
 	bool valid_maybe_a_dropdown =
-		w->maybe_a_dropdown && ( ( !w->is_dialog || win_skip_taskbar_and_pager( w ) ) && ( w->skipPager || w->skipTaskbar ) );
+		w->maybe_a_dropdown && ( ( !w->is_dialog || ( !w->transientFor && win_skip_taskbar_and_pager( w ) ) ) && ( w->skipPager || w->skipTaskbar ) );
 	return ( valid_maybe_a_dropdown || win_is_override_redirect( w ) ) && !win_is_useless( w );
 }
 
