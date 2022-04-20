@@ -184,6 +184,10 @@ void inputSDLThreadRun( void )
 			case SDL_WINDOWEVENT:
 				switch( event.window.event )
 				{
+					case SDL_WINDOWEVENT_CLOSE:
+						g_bRun = false;
+						nudge_steamcompmgr();
+						break;
 					default:
 						break;
 					case SDL_WINDOWEVENT_MOVED:
