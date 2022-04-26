@@ -2617,11 +2617,14 @@ determine_and_apply_focus()
 		focused_keyboard_display = global_focus.keyboardFocusWindow->ctx->xwayland_server->get_nested_display_name();
 	}
 
-	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppAtom, XA_CARDINAL, 32, PropModeReplace,
-					 (unsigned char *)&focusedAppId, focusedAppId != 0 ? 1 : 0 );
+	if ( steamMode )
+	{
+		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppAtom, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)&focusedAppId, focusedAppId != 0 ? 1 : 0 );
 
-	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppGfxAtom, XA_CARDINAL, 32, PropModeReplace,
-					 (unsigned char *)&focusedBaseAppId, focusedBaseAppId != 0 ? 1 : 0 );
+		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppGfxAtom, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)&focusedBaseAppId, focusedBaseAppId != 0 ? 1 : 0 );
+	}
 
 	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedWindowAtom, XA_CARDINAL, 32, PropModeReplace,
 					 (unsigned char *)&focusedWindow, focusedWindow != 0 ? 1 : 0 );
