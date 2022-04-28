@@ -247,7 +247,7 @@ pid_t focusWindow_pid;
 
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
-	return g_nSteamCompMgrTargetFPS != 0 && w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
+	return w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
 }
 
 
@@ -5197,7 +5197,7 @@ steamcompmgr_main(int argc, char **argv)
 
 						int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 						int nTargetFPS = g_nSteamCompMgrTargetFPS;
-						if ( steamcompmgr_window_should_limit_fps( w ) && nRefresh > nTargetFPS )
+						if ( g_nSteamCompMgrTargetFPS && steamcompmgr_window_should_limit_fps( w ) && nRefresh > nTargetFPS )
 						{
 							int nVblankDivisor = nRefresh / nTargetFPS;
 
