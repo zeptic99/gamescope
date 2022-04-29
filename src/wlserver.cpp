@@ -262,13 +262,13 @@ static inline uint32_t steamcompmgr_button_to_wlserver_button( int button )
 	switch ( button )
 	{
 		default:
-		case 0:
+		case WLSERVER_TOUCH_CLICK_HOVER:
 			return 0;
-		case 1:
+		case WLSERVER_TOUCH_CLICK_LEFT:
 			return BTN_LEFT;
-		case 2:
+		case WLSERVER_TOUCH_CLICK_RIGHT:
 			return BTN_RIGHT;
-		case 3:
+		case WLSERVER_TOUCH_CLICK_MIDDLE:
 			return BTN_MIDDLE;
 	}
 }
@@ -306,6 +306,10 @@ static void wlserver_handle_touch_down(struct wl_listener *listener, void *data)
 
 				wlserver.touch_down[ event->touch_id ] = true;
 			}
+		}
+		else if ( g_nTouchClickMode == WLSERVER_TOUCH_CLICK_DISABLED )
+		{
+			return;
 		}
 		else
 		{
@@ -393,6 +397,10 @@ static void wlserver_handle_touch_motion(struct wl_listener *listener, void *dat
 		if ( g_nTouchClickMode == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
 		{
 			wlr_seat_touch_notify_motion( wlserver.wlr.seat, event->time_msec, event->touch_id, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+		}
+		else if ( g_nTouchClickMode == WLSERVER_TOUCH_CLICK_DISABLED )
+		{
+			return;
 		}
 		else
 		{

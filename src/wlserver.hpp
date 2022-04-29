@@ -126,6 +126,7 @@ enum wlserver_touch_click_mode {
 	WLSERVER_TOUCH_CLICK_RIGHT = 2,
 	WLSERVER_TOUCH_CLICK_MIDDLE = 3,
 	WLSERVER_TOUCH_CLICK_PASSTHROUGH = 4,
+	WLSERVER_TOUCH_CLICK_DISABLED = 5,
 };
 
 extern enum wlserver_touch_click_mode g_nDefaultTouchClickMode;
