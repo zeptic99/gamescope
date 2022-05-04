@@ -416,7 +416,9 @@ static bool refresh_state( drm_t *drm )
 		crtc->has_gamma_lut = (crtc->props.find( "GAMMA_LUT" ) != crtc->props.end());
 		if (!crtc->has_gamma_lut)
 			drm_log.infof("CRTC %" PRIu32 " has no gamma LUT support", crtc->id);
-
+		crtc->has_ctm = (crtc->props.find( "CTM" ) != crtc->props.end());
+		if (!crtc->has_ctm)
+			drm_log.infof("CRTC %" PRIu32 " has no CTM support", crtc->id);
 
 		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
 	}
@@ -786,6 +788,8 @@ void finish_drm(struct drm_t *drm)
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
 		if ( drm->crtcs[i].has_gamma_lut )
 			add_crtc_property(req, &drm->crtcs[i], "GAMMA_LUT", 0);
+		if ( drm->crtcs[i].has_ctm )
+			add_crtc_property(req, &drm->crtcs[i], "CTM", 0);
 		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
 	}
 	for ( size_t i = 0; i < drm->planes.size(); i++ ) {
@@ -1234,6 +1238,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 {
 	drm_update_gamma_lut(drm);
+	drm_update_color_mtx(drm);
 
 	drm->fbids_in_req.clear();
 
@@ -1265,9 +1270,16 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "MODE_ID", 0) < 0)
 				return false;
-			if (drm->crtcs[i].has_gamma_lut &&
-				(add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0))
-				return false;
+			if (drm->crtcs[i].has_gamma_lut)
+			{
+				if (add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0)
+					return false;
+			}
+			if (drm->crtcs[i].has_ctm)
+			{
+				if (add_crtc_property(drm->req, &drm->crtcs[i], "CTM", 0) < 0)
+					return false;
+			}
 			if (add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0) < 0)
 				return false;
 			drm->crtcs[i].pending.active = 0;
@@ -1280,17 +1292,36 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 		if (add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id) < 0)
 			return false;
+
 		if (drm->crtc->has_gamma_lut)
+		{
 			if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
 				return false;
+		}
+
+		if (drm->crtc->has_ctm)
+		{
+			if (add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id) < 0)
+				return false;
+		}
+
 		if (add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1) < 0)
 			return false;
 		drm->crtc->pending.active = 1;
 	}
-	else if ( drm->pending.gamma_lut_id != drm->current.gamma_lut_id && drm->crtc->has_gamma_lut )
+	else
 	{
-		if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
-			return false;
+		if ( drm->crtc->has_gamma_lut && drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
+		{
+			if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
+				return false;	
+		}
+
+		if ( drm->crtc->has_ctm && drm->pending.ctm_id != drm->current.ctm_id )
+		{
+			if (add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id) < 0)
+				return false;
+		}
 	}
 
 	drm->flags = flags;
@@ -1435,6 +1466,19 @@ bool drm_set_color_linear_gains(struct drm_t *drm, float *gains)
 	return false;
 }
 
+bool drm_set_color_mtx(struct drm_t *drm, float *mtx)
+{
+	for (int i = 0; i < 9; i++)
+		drm->pending.color_mtx[i] = mtx[i];
+
+	for (int i = 0; i < 9; i++)
+	{
+		if ( drm->current.color_mtx[i] != drm->pending.color_mtx[i] )
+			return true;
+	}
+	return false;
+}
+
 bool drm_set_color_gain_blend(struct drm_t *drm, float blend)
 {
 	drm->pending.gain_blend = blend;
@@ -1452,6 +1496,80 @@ inline uint16_t drm_calc_lut_value( float input, float flLinearGain, float flGai
 {
     float flValue = lerp( flGain * input, linear_to_srgb( flLinearGain * srgb_to_linear( input ) ), flBlend );
 	return (uint16_t)quantize( flValue, (float)UINT16_MAX );
+}
+
+bool drm_update_color_mtx(struct drm_t *drm)
+{
+	if ( !drm->crtc->has_ctm )
+		return true;
+
+	static constexpr float g_identity_mtx[9] =
+	{
+		1.0f, 0.0f, 0.0f,
+		0.0f, 1.0f, 0.0f,
+		0.0f, 0.0f, 1.0f,
+	};
+
+	bool dirty = false;
+	for (int i = 0; i < 9; i++)
+	{
+		if (drm->pending.color_mtx[i] != drm->current.color_mtx[i])
+			dirty = true;
+	}
+
+	if (!dirty)
+		return true;
+
+	bool identity = true;
+	for (int i = 0; i < 9; i++)
+	{
+		if (drm->pending.color_mtx[i] != g_identity_mtx[i])
+			identity = false;
+	}
+
+
+	if (identity)
+	{
+		drm->pending.ctm_id = 0;
+		return true;
+	}
+
+	struct drm_color_ctm drm_ctm;
+	for (int i = 0; i < 9; i++)
+	{
+		const float val = drm->pending.color_mtx[i];
+
+		// S31.32 sign-magnitude
+		float integral;
+		float fractional = modf( fabsf( val ), &integral );
+
+		union
+		{
+			struct
+			{
+				uint64_t fractional : 32;
+				uint64_t integral   : 31;
+				uint64_t sign_part  : 1;
+			} s31_32_bits;
+			uint64_t s31_32;
+		} color;
+
+		color.s31_32_bits.sign_part  = val < 0 ? 1 : 0;
+		color.s31_32_bits.integral   = uint64_t( integral );
+		color.s31_32_bits.fractional = uint64_t( fractional * float( 1ull << 32 ) );
+
+		drm_ctm.matrix[i] = color.s31_32;
+	}
+
+	uint32_t blob_id = 0;	
+	if (drmModeCreatePropertyBlob(drm->fd, &drm_ctm,
+			sizeof(struct drm_color_ctm), &blob_id) != 0) {
+		drm_log.errorf_errno("Unable to create CTM property blob");
+		return false;
+	}
+
+	drm->pending.ctm_id = blob_id;
+	return true;
 }
 
 bool drm_update_gamma_lut(struct drm_t *drm)

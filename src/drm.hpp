@@ -36,6 +36,7 @@ struct crtc {
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 	bool has_gamma_lut;
+	bool has_ctm;
 
 	struct {
 		bool active;
@@ -97,8 +98,15 @@ struct drm_t {
 	struct {
 		uint32_t mode_id;
 		uint32_t gamma_lut_id;
+		uint32_t ctm_id;
 		float color_gain[3] = { 1.0f, 1.0f, 1.0f };
 		float color_linear_gain[3] = { 1.0f, 1.0f, 1.0f };
+		float color_mtx[9] =
+		{
+			1.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 1.0f,
+		};
 		float gain_blend = 0.0f;
 	} current, pending;
 
@@ -159,8 +167,10 @@ bool drm_set_refresh( struct drm_t *drm, int refresh );
 bool drm_set_resolution( struct drm_t *drm, int width, int height );
 bool drm_set_color_linear_gains(struct drm_t *drm, float *gains);
 bool drm_set_color_gains(struct drm_t *drm, float *gains);
+bool drm_set_color_mtx(struct drm_t *drm, float *mtx);
 bool drm_set_color_gain_blend(struct drm_t *drm, float blend);
 bool drm_update_gamma_lut(struct drm_t *drm);
+bool drm_update_color_mtx(struct drm_t *drm);
 
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);
