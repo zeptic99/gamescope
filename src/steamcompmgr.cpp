@@ -158,6 +158,7 @@ struct motif_hints_t
 	unsigned long functions;
 	unsigned long decorations;
 	long input_mode;
+	unsigned long status;
 };
 
 struct win {
@@ -2020,6 +2021,16 @@ win_skip_taskbar_and_pager( win *w )
 static bool
 win_maybe_a_dropdown( win *w )
 {
+	// Josh:
+	// Right now we don't get enough info from Wine
+	// about the true nature of windows to distringuish
+	// something like the Fallout 4 Options menu from the
+	// Warframe language dropdown. Until we get more stuff
+	// exposed for that, there is this workaround to let that work.
+	if ( w->appID == 230410 && w->maybe_a_dropdown && w->transientFor && ( w->skipPager || w->skipTaskbar ) )
+		return !win_is_useless( w );
+
+
 	// Josh:
 	// The logic here is as follows. The window will be treated as a dropdown if:
 	// 
