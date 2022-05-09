@@ -124,6 +124,42 @@ struct commit_t
 	bool done = false;
 };
 
+#define MWM_HINTS_FUNCTIONS   1
+#define MWM_HINTS_DECORATIONS 2
+#define MWM_HINTS_INPUT_MODE  4
+#define MWM_HINTS_STATUS      8
+
+#define MWM_FUNC_ALL          0x01
+#define MWM_FUNC_RESIZE       0x02
+#define MWM_FUNC_MOVE         0x04
+#define MWM_FUNC_MINIMIZE     0x08
+#define MWM_FUNC_MAXIMIZE     0x10
+#define MWM_FUNC_CLOSE        0x20
+
+#define MWM_DECOR_ALL         0x01
+#define MWM_DECOR_BORDER      0x02
+#define MWM_DECOR_RESIZEH     0x04
+#define MWM_DECOR_TITLE       0x08
+#define MWM_DECOR_MENU        0x10
+#define MWM_DECOR_MINIMIZE    0x20
+#define MWM_DECOR_MAXIMIZE    0x40
+
+#define MWM_INPUT_MODELESS                  0
+#define MWM_INPUT_PRIMARY_APPLICATION_MODAL 1
+#define MWM_INPUT_SYSTEM_MODAL              2
+#define MWM_INPUT_FULL_APPLICATION_MODAL    3
+#define MWM_INPUT_APPLICATION_MODAL         1
+
+#define MWM_TEAROFF_WINDOW 1
+
+struct motif_hints_t
+{
+	unsigned long flags;
+	unsigned long functions;
+	unsigned long decorations;
+	long input_mode;
+};
+
 struct win {
 	struct win		*next;
 	Window		id;
@@ -154,6 +190,8 @@ struct win {
 	unsigned int requestedHeight;
 	bool is_dialog;
 	bool maybe_a_dropdown;
+
+	motif_hints_t *motif_hints;
 
 	Window transientFor;
 
@@ -2793,6 +2831,20 @@ get_size_hints(xwayland_ctx_t *ctx, win *w)
 }
 
 static void
+get_motif_hints( xwayland_ctx_t *ctx, win *w )
+{
+	if ( w->motif_hints )
+		XFree( w->motif_hints );
+
+	Atom actual_type;
+	int actual_format;
+	unsigned long nitems, bytesafter;
+	XGetWindowProperty(ctx->dpy, w->id, ctx->atoms.motifWMHints, 0L, 20L, False,
+		ctx->atoms.motifWMHints, &actual_type, &actual_format, &nitems,
+		&bytesafter, (unsigned char **)&w->motif_hints );
+}
+
+static void
 get_win_title(xwayland_ctx_t *ctx, win *w, Atom atom)
 {
 	assert(atom == XA_WM_NAME || atom == ctx->atoms.netWMNameAtom);
@@ -2906,6 +2958,7 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 	w->isExternalOverlay = get_prop(ctx, w->id, ctx->atoms.externalOverlayAtom, 0);
 
 	get_size_hints(ctx, w);
+	get_motif_hints(ctx, w);
 
 	get_net_wm_state(ctx, w);
 
@@ -3125,6 +3178,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	new_win->inputFocusMode = 0;
 	new_win->is_dialog = false;
 	new_win->maybe_a_dropdown = false;
+	new_win->motif_hints = nullptr;
 
 	if ( steamMode == true )
 	{
@@ -3801,6 +3855,14 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 				get_win_title(ctx, w, ev->atom);
 				sdlwindow_title( w->title );
 			}
+		}
+	}
+	if (ev->atom == ctx->atoms.motifWMHints)
+	{
+		win *w = find_win(ctx, ev->window);
+		if (w) {
+			get_motif_hints(ctx, w);
+			focusDirty = true;
 		}
 	}
 	if ( ev->atom == ctx->atoms.gamescopeTuneableVBlankRedZone )
@@ -4794,6 +4856,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.WMStateAtom = XInternAtom(ctx->dpy, "WM_STATE", false);
 	ctx->atoms.utf8StringAtom = XInternAtom(ctx->dpy, "UTF8_STRING", false);
 	ctx->atoms.netWMNameAtom = XInternAtom(ctx->dpy, "_NET_WM_NAME", false);
+	ctx->atoms.motifWMHints = XInternAtom(ctx->dpy, "_MOTIF_WM_HINTS", false);
 	ctx->atoms.netSystemTrayOpcodeAtom = XInternAtom(ctx->dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
 	ctx->atoms.steamStreamingClientAtom = XInternAtom(ctx->dpy, "STEAM_STREAMING_CLIENT", false);
 	ctx->atoms.steamStreamingClientVideoAtom = XInternAtom(ctx->dpy, "STEAM_STREAMING_CLIENT_VIDEO", false);
