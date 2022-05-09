@@ -3124,6 +3124,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	new_win->isSteamStreamingClientVideo = false;
 	new_win->inputFocusMode = 0;
 	new_win->is_dialog = false;
+	new_win->maybe_a_dropdown = false;
 
 	if ( steamMode == true )
 	{
