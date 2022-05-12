@@ -897,7 +897,7 @@ void MouseCursor::checkSuspension()
 			{
 				m_lastX = m_x;
 				m_lastY = m_y;
-				XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, window->a.width, window->a.height);
+				XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, window->a.width - 1, window->a.height - 1);
 			}
 		}
 
@@ -1047,7 +1047,7 @@ void MouseCursor::constrainPosition()
 
 	if ( rootX >= x2 || rootY >= y2 || rootX < x1 || rootY < y1 ) {
 		if ( window_wants_no_focus_when_mouse_hidden( window ) && m_hideForMovement )
-			warp(window->a.width, window->a.height);
+			warp(window->a.width - 1, window->a.height - 1);
 		else
 			warp(window->a.width / 2, window->a.height / 2);
 
@@ -2486,7 +2486,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 		if ( bResetToCorner )
 		{
 			inputFocus->mouseMoved = 0;
-			ctx->cursor->forcePosition(inputFocus->a.width, inputFocus->a.height);
+			ctx->cursor->forcePosition(inputFocus->a.width - 1, inputFocus->a.height - 1);
 		}
 		else if ( bResetToCenter )
 		{
