@@ -373,6 +373,8 @@ int main(int argc, char **argv)
 		fprintf( stderr, "No CAP_SYS_NICE, falling back to regular-priority compute and threads.\nPerformance will be affected.\n" );
 	}
 
+	setenv( "XWAYLAND_FORCE_ENABLE_EXTRA_MODES", "1", 1 );
+
 	raise_fd_limit();
 
 	if ( gpuvis_trace_init() != -1 )
