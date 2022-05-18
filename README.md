@@ -54,6 +54,8 @@ gamescope -r 30 -- %command%
 gamescope -w 1920 -h 1080 -W 3440 -H 1440 -b -- %command%
 ```
 
+> **_NOTE:_** If you are running on **NVIDIA**, you will need the `nvidia-drm.modeset=1` kernel parameter.
+
 ## Options
 
 See `gamescope --help` for a full list of options.
