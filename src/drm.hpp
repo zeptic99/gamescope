@@ -36,6 +36,7 @@ struct crtc {
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 	bool has_gamma_lut;
+	bool has_degamma_lut;
 	bool has_ctm;
 
 	struct {
@@ -98,9 +99,12 @@ struct drm_t {
 	struct {
 		uint32_t mode_id;
 		uint32_t gamma_lut_id;
+		uint32_t degamma_lut_id;
 		uint32_t ctm_id;
 		float color_gain[3] = { 1.0f, 1.0f, 1.0f };
 		float color_linear_gain[3] = { 1.0f, 1.0f, 1.0f };
+		float color_gamma_exponent[3] = { 1.0f, 1.0f, 1.0f };
+		float color_degamma_exponent[3] = { 1.0f, 1.0f, 1.0f };
 		float color_mtx[9] =
 		{
 			1.0f, 0.0f, 0.0f,
@@ -141,6 +145,7 @@ extern uint32_t g_nDRMFormat;
 
 extern bool g_bUseLayers;
 extern bool g_bRotated;
+extern bool g_bFlipped;
 extern bool g_bDebugLayers;
 extern const char *g_sOutputName;
 
@@ -170,7 +175,10 @@ bool drm_set_color_gains(struct drm_t *drm, float *gains);
 bool drm_set_color_mtx(struct drm_t *drm, float *mtx);
 bool drm_set_color_gain_blend(struct drm_t *drm, float blend);
 bool drm_update_gamma_lut(struct drm_t *drm);
+bool drm_update_degamma_lut(struct drm_t *drm);
 bool drm_update_color_mtx(struct drm_t *drm);
+bool drm_set_gamma_exponent(struct drm_t *drm, float *vec);
+bool drm_set_degamma_exponent(struct drm_t *drm, float *vec);
 
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);

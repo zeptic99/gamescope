@@ -416,6 +416,9 @@ static bool refresh_state( drm_t *drm )
 		crtc->has_gamma_lut = (crtc->props.find( "GAMMA_LUT" ) != crtc->props.end());
 		if (!crtc->has_gamma_lut)
 			drm_log.infof("CRTC %" PRIu32 " has no gamma LUT support", crtc->id);
+		crtc->has_degamma_lut = (crtc->props.find( "DEGAMMA_LUT" ) != crtc->props.end());
+		if (!crtc->has_degamma_lut)
+			drm_log.infof("CRTC %" PRIu32 " has no degamma LUT support", crtc->id);
 		crtc->has_ctm = (crtc->props.find( "CTM" ) != crtc->props.end());
 		if (!crtc->has_ctm)
 			drm_log.infof("CRTC %" PRIu32 " has no CTM support", crtc->id);
@@ -788,6 +791,8 @@ void finish_drm(struct drm_t *drm)
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
 		if ( drm->crtcs[i].has_gamma_lut )
 			add_crtc_property(req, &drm->crtcs[i], "GAMMA_LUT", 0);
+		if ( drm->crtcs[i].has_degamma_lut )
+			add_crtc_property(req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
 		if ( drm->crtcs[i].has_ctm )
 			add_crtc_property(req, &drm->crtcs[i], "CTM", 0);
 		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
@@ -899,6 +904,8 @@ int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.mode_id);
 			if ( drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.gamma_lut_id);
+			if ( drm->pending.degamma_lut_id != drm->current.degamma_lut_id )
+				drmModeDestroyPropertyBlob(drm->fd, drm->current.degamma_lut_id);
 			drm->crtcs[i].current = drm->crtcs[i].pending;
 		}
 	}
@@ -1238,6 +1245,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 {
 	drm_update_gamma_lut(drm);
+	drm_update_degamma_lut(drm);
 	drm_update_color_mtx(drm);
 
 	drm->fbids_in_req.clear();
@@ -1275,6 +1283,11 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 				if (add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0)
 					return false;
 			}
+			if (drm->crtcs[i].has_degamma_lut)
+			{
+				if (add_crtc_property(drm->req, &drm->crtcs[i], "DEGAMMA_LUT", 0) < 0)
+					return false;
+			}
 			if (drm->crtcs[i].has_ctm)
 			{
 				if (add_crtc_property(drm->req, &drm->crtcs[i], "CTM", 0) < 0)
@@ -1299,6 +1312,12 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 				return false;
 		}
 
+		if (drm->crtc->has_degamma_lut)
+		{
+			if (add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id) < 0)
+				return false;
+		}
+
 		if (drm->crtc->has_ctm)
 		{
 			if (add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id) < 0)
@@ -1314,6 +1333,12 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 		if ( drm->crtc->has_gamma_lut && drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
 		{
 			if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
+				return false;	
+		}
+
+		if ( drm->crtc->has_degamma_lut && drm->pending.degamma_lut_id != drm->current.degamma_lut_id )
+		{
+			if (add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id) < 0)
 				return false;	
 		}
 
@@ -1487,15 +1512,46 @@ bool drm_set_color_gain_blend(struct drm_t *drm, float blend)
 	return false;
 }
 
+bool drm_set_gamma_exponent(struct drm_t *drm, float *vec)
+{
+	for (int i = 0; i < 3; i++)
+		drm->pending.color_gamma_exponent[i] = vec[i];
+
+	for (int i = 0; i < 3; i++)
+	{
+		if ( drm->current.color_gamma_exponent[i] != drm->pending.color_gamma_exponent[i] )
+			return true;
+	}
+	return false;
+}
+
+bool drm_set_degamma_exponent(struct drm_t *drm, float *vec)
+{
+	for (int i = 0; i < 3; i++)
+		drm->pending.color_degamma_exponent[i] = vec[i];
+
+	for (int i = 0; i < 3; i++)
+	{
+		if ( drm->current.color_degamma_exponent[i] != drm->pending.color_degamma_exponent[i] )
+			return true;
+	}
+	return false;
+}
+
 inline float lerp( float a, float b, float t )
 {
     return a + t * (b - a);
 }
 
+inline uint16_t drm_quantize_lut_value( float flValue )
+{
+	return (uint16_t)quantize( flValue, (float)UINT16_MAX );
+}
+
 inline uint16_t drm_calc_lut_value( float input, float flLinearGain, float flGain, float flBlend )
 {
     float flValue = lerp( flGain * input, linear_to_srgb( flLinearGain * srgb_to_linear( input ) ), flBlend );
-	return (uint16_t)quantize( flValue, (float)UINT16_MAX );
+	return drm_quantize_lut_value( flValue );
 }
 
 bool drm_update_color_mtx(struct drm_t *drm)
@@ -1572,6 +1628,15 @@ bool drm_update_color_mtx(struct drm_t *drm)
 	return true;
 }
 
+static float safe_pow(float x, float y)
+{
+	// Avoids pow(x, 1.0f) != x.
+	if (y == 1.0f)
+		return x;
+
+	return pow(x, y);
+}
+
 bool drm_update_gamma_lut(struct drm_t *drm)
 {
 	if ( !drm->crtc->has_gamma_lut )
@@ -1583,6 +1648,9 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 		drm->pending.color_linear_gain[0] == drm->current.color_linear_gain[0] &&
 		drm->pending.color_linear_gain[1] == drm->current.color_linear_gain[1] &&
 		drm->pending.color_linear_gain[2] == drm->current.color_linear_gain[2] &&
+		drm->pending.color_gamma_exponent[0] == drm->current.color_gamma_exponent[0] &&
+		drm->pending.color_gamma_exponent[1] == drm->current.color_gamma_exponent[1] &&
+		drm->pending.color_gamma_exponent[2] == drm->current.color_gamma_exponent[2] &&
 		drm->pending.gain_blend == drm->current.gain_blend )
 	{
 		return true;
@@ -1598,7 +1666,12 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 		  drm->pending.color_linear_gain[1] == 1.0f &&
 		  drm->pending.color_linear_gain[2] == 1.0f );
 
-	if ( color_gain_identity && linear_gain_identity )
+	bool gamma_exponent_identity =
+		( drm->pending.color_gamma_exponent[0] == 1.0f &&
+		  drm->pending.color_gamma_exponent[1] == 1.0f &&
+		  drm->pending.color_gamma_exponent[2] == 1.0f );
+
+	if ( color_gain_identity && linear_gain_identity && gamma_exponent_identity )
 	{
 		drm->pending.gamma_lut_id = 0;
 		return true;
@@ -1609,9 +1682,14 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 	for ( int i = 0; i < lut_entries; i++ )
 	{
         float input = float(i) / float(lut_entries - 1);
-		gamma_lut[i].red   = drm_calc_lut_value( input, drm->pending.color_linear_gain[0], drm->pending.color_gain[0], drm->pending.gain_blend );
-		gamma_lut[i].green = drm_calc_lut_value( input, drm->pending.color_linear_gain[1], drm->pending.color_gain[1], drm->pending.gain_blend );
-		gamma_lut[i].blue  = drm_calc_lut_value( input, drm->pending.color_linear_gain[2], drm->pending.color_gain[2], drm->pending.gain_blend );
+
+		float r_exp = safe_pow( input, drm->pending.color_gamma_exponent[0] );
+		float g_exp = safe_pow( input, drm->pending.color_gamma_exponent[1] );
+		float b_exp = safe_pow( input, drm->pending.color_gamma_exponent[2] );
+
+		gamma_lut[i].red   = drm_calc_lut_value( r_exp, drm->pending.color_linear_gain[0], drm->pending.color_gain[0], drm->pending.gain_blend );
+		gamma_lut[i].green = drm_calc_lut_value( g_exp, drm->pending.color_linear_gain[1], drm->pending.color_gain[1], drm->pending.gain_blend );
+		gamma_lut[i].blue  = drm_calc_lut_value( b_exp, drm->pending.color_linear_gain[2], drm->pending.color_gain[2], drm->pending.gain_blend );
 	}
 
 	uint32_t blob_id = 0;	
@@ -1624,6 +1702,54 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 	delete[] gamma_lut;
 
 	drm->pending.gamma_lut_id = blob_id;
+
+	return true;
+}
+
+bool drm_update_degamma_lut(struct drm_t *drm)
+{
+	if ( !drm->crtc->has_degamma_lut )
+		return true;
+
+	if (drm->pending.color_degamma_exponent[0] == drm->current.color_degamma_exponent[0] &&
+		drm->pending.color_degamma_exponent[1] == drm->current.color_degamma_exponent[1] &&
+		drm->pending.color_degamma_exponent[2] == drm->current.color_degamma_exponent[2])
+	{
+		return true;
+	}
+
+	bool degamma_exponent_identity =
+		( drm->pending.color_degamma_exponent[0] == 1.0f &&
+		  drm->pending.color_degamma_exponent[1] == 1.0f &&
+		  drm->pending.color_degamma_exponent[2] == 1.0f );
+
+	if ( degamma_exponent_identity )
+	{
+		drm->pending.degamma_lut_id = 0;
+		return true;
+	}
+
+	const int lut_entries = drm->crtc->initial_prop_values["DEGAMMA_LUT_SIZE"];
+	drm_color_lut *degamma_lut = new drm_color_lut[lut_entries];
+	for ( int i = 0; i < lut_entries; i++ )
+	{
+        float input = float(i) / float(lut_entries - 1);
+
+		degamma_lut[i].red   = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[0] ) );
+		degamma_lut[i].green = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[1] ) );
+		degamma_lut[i].blue  = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[2] ) );
+	}
+
+	uint32_t blob_id = 0;	
+	if (drmModeCreatePropertyBlob(drm->fd, degamma_lut,
+			lut_entries * sizeof(struct drm_color_lut), &blob_id) != 0) {
+		drm_log.errorf_errno("Unable to create degamma LUT property blob");
+		delete[] degamma_lut;
+		return false;
+	}
+	delete[] degamma_lut;
+
+	drm->pending.degamma_lut_id = blob_id;
 
 	return true;
 }
