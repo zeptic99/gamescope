@@ -1870,6 +1870,7 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 						is_steam_deck_display = 
 							( edid_data.make == EDID_ID( 'W', 'L', 'C' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
 							( edid_data.make == EDID_ID( 'A', 'N', 'X' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
+							( edid_data.make == EDID_ID( 'V', 'L', 'V' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
 							( edid_data.make == EDID_ID( 'V', 'L', 'V' ) && !strncmp( edid_data.model, "Jupiter", sizeof( edid_data.model ) ) );
 
 						drmModeFreePropertyBlob(blob);
