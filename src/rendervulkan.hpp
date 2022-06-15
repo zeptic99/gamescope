@@ -34,6 +34,14 @@ enum BlurMode {
     BLUR_MODE_ALWAYS = 2,
 };
 
+enum EStreamColorspace : int
+{
+	k_EStreamColorspace_Unknown = 0,
+	k_EStreamColorspace_BT601 = 1,
+	k_EStreamColorspace_BT601_Full = 2,
+	k_EStreamColorspace_BT709 = 3,
+	k_EStreamColorspace_BT709_Full = 4
+};
 
 #include "drm.hpp"
 

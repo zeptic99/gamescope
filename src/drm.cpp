@@ -1167,6 +1167,47 @@ drm_prepare_basic( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 	return ret;
 }
 
+// Only used for NV12 buffers
+static drm_color_encoding drm_get_color_encoding(EStreamColorspace colorspace)
+{
+	switch (colorspace)
+	{
+		default:
+		case k_EStreamColorspace_Unknown:
+			return DRM_COLOR_YCBCR_BT709;
+
+		case k_EStreamColorspace_BT601:
+			return DRM_COLOR_YCBCR_BT601;
+		case k_EStreamColorspace_BT601_Full:
+			return DRM_COLOR_YCBCR_BT601;
+
+		case k_EStreamColorspace_BT709:
+			return DRM_COLOR_YCBCR_BT709;
+		case k_EStreamColorspace_BT709_Full:
+			return DRM_COLOR_YCBCR_BT709;
+	}
+}
+
+static drm_color_range drm_get_color_range(EStreamColorspace colorspace)
+{
+	switch (colorspace)
+	{
+		default:
+		case k_EStreamColorspace_Unknown:
+			return DRM_COLOR_YCBCR_FULL_RANGE;
+
+		case k_EStreamColorspace_BT601:
+			return DRM_COLOR_YCBCR_LIMITED_RANGE;
+		case k_EStreamColorspace_BT601_Full:
+			return DRM_COLOR_YCBCR_FULL_RANGE;
+
+		case k_EStreamColorspace_BT709:
+			return DRM_COLOR_YCBCR_LIMITED_RANGE;
+		case k_EStreamColorspace_BT709_Full:
+			return DRM_COLOR_YCBCR_FULL_RANGE;
+	}
+}
+
 static int
 drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 {
@@ -1217,6 +1258,9 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", crtcW);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", crtcH);
+
+			liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_ENCODING", drm_get_color_encoding( g_ForcedNV12ColorSpace ) );
+			liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_RANGE", drm_get_color_range( g_ForcedNV12ColorSpace ) );
 		}
 		else
 		{

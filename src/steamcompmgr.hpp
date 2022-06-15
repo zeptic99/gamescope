@@ -35,6 +35,8 @@ static const uint32_t g_zposExternalOverlay = 2;
 static const uint32_t g_zposOverlay = 3;
 static const uint32_t g_zposCursor = 4;
 
+extern EStreamColorspace g_ForcedNV12ColorSpace;
+
 class MouseCursor
 {
 public:

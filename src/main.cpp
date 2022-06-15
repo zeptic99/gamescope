@@ -27,6 +27,8 @@
 #include "pipewire.hpp"
 #endif
 
+EStreamColorspace g_ForcedNV12ColorSpace = k_EStreamColorspace_Unknown;
+
 const char *gamescope_optstring = nullptr;
 
 const struct option *gamescope_options = (struct option[]){
@@ -269,6 +271,23 @@ static void raise_fd_limit( void )
 	g_fdLimitRaised = true;
 }
 
+static EStreamColorspace parse_colorspace_string( const char *pszStr )
+{
+	if ( !pszStr || !*pszStr )
+		return k_EStreamColorspace_Unknown;
+
+	if ( !strcmp( pszStr, "k_EStreamColorspace_BT601" ) )
+		return k_EStreamColorspace_BT601;
+	else if ( !strcmp( pszStr, "k_EStreamColorspace_BT601_Full" ) )
+		return k_EStreamColorspace_BT601_Full;
+	else if ( !strcmp( pszStr, "k_EStreamColorspace_BT709" ) )
+		return k_EStreamColorspace_BT709;
+	else if ( !strcmp( pszStr, "k_EStreamColorspace_BT709_Full" ) )
+		return k_EStreamColorspace_BT709_Full;
+	else
+	 	return k_EStreamColorspace_Unknown;
+}
+
 int g_nPreferredOutputWidth = 0;
 int g_nPreferredOutputHeight = 0;
 
@@ -433,6 +452,8 @@ int main(int argc, char **argv)
 			return 1;
 		}
 	}
+
+	g_ForcedNV12ColorSpace = parse_colorspace_string( getenv( "GAMESCOPE_NV12_COLORSPACE" ) );
 
 	if ( !vulkan_init() )
 	{

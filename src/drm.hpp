@@ -6,6 +6,23 @@
 #include <xf86drmMode.h>
 #include <assert.h>
 #include <drm_fourcc.h>
+
+// Josh: Okay whatever, this header isn't
+// available for whatever stupid reason. :v
+//#include <drm_color_mgmt.h>
+enum drm_color_encoding {
+	DRM_COLOR_YCBCR_BT601,
+	DRM_COLOR_YCBCR_BT709,
+	DRM_COLOR_YCBCR_BT2020,
+	DRM_COLOR_ENCODING_MAX,
+};
+
+enum drm_color_range {
+	DRM_COLOR_YCBCR_LIMITED_RANGE,
+	DRM_COLOR_YCBCR_FULL_RANGE,
+	DRM_COLOR_RANGE_MAX,
+};
+
 #include <wayland-server-core.h>
 
 extern "C" {

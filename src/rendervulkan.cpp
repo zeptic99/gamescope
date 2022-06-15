@@ -9,6 +9,7 @@
 #include <array>
 #include <bitset>
 #include <thread>
+#include <vulkan/vulkan_core.h>
 
 // Used to remove the config struct alignment specified by the NIS header
 #define NIS_ALIGNED(x)
@@ -835,6 +836,42 @@ bool CVulkanDevice::createDevice()
 	return true;
 }
 
+static VkSamplerYcbcrModelConversion colorspaceToYCBCRModel( EStreamColorspace colorspace )
+{
+	switch (colorspace)
+	{
+		default:
+		case k_EStreamColorspace_Unknown:
+			return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709;
+
+		case k_EStreamColorspace_BT601:
+		case k_EStreamColorspace_BT601_Full:
+			return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_601;
+
+		case k_EStreamColorspace_BT709:
+		case k_EStreamColorspace_BT709_Full:
+			return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709;
+	}
+}
+
+static VkSamplerYcbcrRange colorspaceToYCBCRRange( EStreamColorspace colorspace )
+{
+	switch (colorspace)
+	{
+		default:
+		case k_EStreamColorspace_Unknown:
+			return VK_SAMPLER_YCBCR_RANGE_ITU_FULL;
+
+		case k_EStreamColorspace_BT709:
+		case k_EStreamColorspace_BT601:
+			return VK_SAMPLER_YCBCR_RANGE_ITU_NARROW;
+
+		case k_EStreamColorspace_BT601_Full:
+		case k_EStreamColorspace_BT709_Full:
+			return VK_SAMPLER_YCBCR_RANGE_ITU_FULL;
+	}
+}
+
 bool CVulkanDevice::createLayouts()
 {
 	VkFormatProperties nv12Properties;
@@ -845,8 +882,8 @@ bool CVulkanDevice::createLayouts()
 	{
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,
 		.format = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM,
-		.ycbcrModel = VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709,
-		.ycbcrRange = VK_SAMPLER_YCBCR_RANGE_ITU_FULL,
+		.ycbcrModel = colorspaceToYCBCRModel( g_ForcedNV12ColorSpace ),
+		.ycbcrRange = colorspaceToYCBCRRange( g_ForcedNV12ColorSpace ),
 		.xChromaOffset = cosited ? VK_CHROMA_LOCATION_COSITED_EVEN : VK_CHROMA_LOCATION_MIDPOINT,
 		.yChromaOffset = cosited ? VK_CHROMA_LOCATION_COSITED_EVEN : VK_CHROMA_LOCATION_MIDPOINT,
 		.chromaFilter = VK_FILTER_LINEAR,
