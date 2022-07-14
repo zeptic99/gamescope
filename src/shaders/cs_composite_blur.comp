@@ -38,6 +38,9 @@ void main() {
     vec2 uv = vec2(coord);
     vec3 outputValue = vec3(0.0f);
 
+    if (c_compositing_debug)
+        outputValue = vec3(1.0f, 0.0f, 0.0f);
+
     if (c_layerCount > 0)
         outputValue = gaussian_blur(s_samplers[VKR_BLUR_EXTRA_SLOT], 0, vec2(coord), c_blur_radius, true, true).rgb;
 

@@ -37,6 +37,9 @@ void main() {
     vec2 uv = vec2(coord);
     vec3 outputValue = vec3(0.0f);
 
+    if (c_compositing_debug)
+        outputValue = vec3(1.0f, 0.0f, 0.0f);
+
     float finalRevAlpha = 1.0f;
 
     for (int i = c_blur_layer_count; i < c_layerCount; i++) {

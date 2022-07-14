@@ -53,6 +53,10 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
     if (coord.x < 0.0f       || coord.y < 0.0f ||
         coord.x >= texSize.x || coord.y >= texSize.y) {
         float border = (u_borderMask & (1u << layerIdx)) != 0 ? 1.0f : 0.0f;
+
+        if (c_compositing_debug)
+            return vec4(vec3(1.0f, 0.0f, 1.0f) * border, border);
+
         return vec4(0.0f, 0.0f, 0.0f, border);
     }
 

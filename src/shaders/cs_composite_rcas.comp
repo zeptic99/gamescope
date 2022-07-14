@@ -42,6 +42,9 @@ void rcasComposite(uvec2 pos)
 {
     vec3 outputValue = vec3(0.0f);
 
+    if (c_compositing_debug)
+        outputValue = vec3(1.0f, 0.0f, 0.0f);
+
     if (c_layerCount > 0) {
         // this is actually signed, underflow will be filtered out by the branch below
         uvec2 rcasPos = pos + u_layer0Offset;
