@@ -540,6 +540,17 @@ bool wlsession_init( void ) {
 	wlr_log_init(WLR_DEBUG, handle_wlr_log);
 
 	wlserver.display = wl_display_create();
+	wlserver.wlr.headless_backend = wlr_headless_backend_create( wlserver.display );
+
+	wlserver.wlr.output = wlr_headless_add_output( wlserver.wlr.headless_backend, 1280, 720 );
+	strncpy(wlserver.wlr.output->make, "gamescope", sizeof(wlserver.wlr.output->make));
+	strncpy(wlserver.wlr.output->model, "gamescope", sizeof(wlserver.wlr.output->model));
+
+	const struct wlserver_output_info output_info = {
+		.name = "Virtual-1",
+		.description = "Virtual gamescope output",
+	};
+	wlserver_set_output_info( &output_info );
 
 	if ( BIsNested() )
 		return true;
@@ -553,18 +564,6 @@ bool wlsession_init( void ) {
 
 	wlserver.session_active.notify = handle_session_active;
 	wl_signal_add( &wlserver.wlr.session->events.active, &wlserver.session_active );
-
-	wlserver.wlr.headless_backend = wlr_headless_backend_create( wlserver.display );
-
-	wlserver.wlr.output = wlr_headless_add_output( wlserver.wlr.headless_backend, 1280, 720 );
-	strncpy(wlserver.wlr.output->make, "gamescope", sizeof(wlserver.wlr.output->make));
-	strncpy(wlserver.wlr.output->model, "gamescope", sizeof(wlserver.wlr.output->model));
-
-	const struct wlserver_output_info output_info = {
-		.name = "Virtual-1",
-		.description = "Virtual gamescope output",
-	};
-	wlserver_set_output_info( &output_info );
 
 	return true;
 }
