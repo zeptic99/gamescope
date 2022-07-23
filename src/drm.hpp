@@ -37,6 +37,7 @@ extern "C" {
 #include <utility>
 #include <atomic>
 #include <map>
+#include <unordered_map>
 #include <mutex>
 #include <vector>
 
@@ -97,7 +98,7 @@ struct drm_t {
 
 	std::vector< struct plane > planes;
 	std::vector< struct crtc > crtcs;
-	std::map< uint32_t, struct connector > connectors;
+	std::unordered_map< uint32_t, struct connector > connectors;
 
 	std::map< uint32_t, drmModePropertyRes * > props;
 	
