@@ -45,6 +45,8 @@ enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 static LogScope drm_log("drm");
 static LogScope drm_verbose_log("drm", LOG_SILENT);
 
+static std::map< std::string, std::string > pnps = {};
+
 static std::map< uint32_t, const char * > connector_types = {
 	{ DRM_MODE_CONNECTOR_Unknown, "Unknown" },
 	{ DRM_MODE_CONNECTOR_VGA, "VGA" },
@@ -325,6 +327,64 @@ static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 	return mode1.vrefresh > mode2.vrefresh;
 }
 
+static void parse_edid( drm_t *drm, struct connector *conn)
+{
+	free(conn->make);
+	conn->make = NULL;
+	free(conn->model);
+	conn->model = NULL;
+
+	if (conn->props.count("EDID") == 0) {
+		return;
+	}
+
+	uint64_t blob_id = conn->initial_prop_values["EDID"];
+	if (blob_id == 0) {
+		return;
+	}
+
+	drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
+	if (!blob) {
+		drm_log.errorf_errno("drmModeGetPropertyBlob(EDID) failed");
+		return;
+	}
+
+	if (blob->length < 128) {
+		drm_log.errorf("Truncated EDID");
+		return;
+	}
+
+	const uint8_t *data = (const uint8_t *) blob->data;
+
+	// The ASCII 3-letter manufacturer PnP ID is encoded in 5-bit codes
+	uint16_t id = (data[8] << 8) | data[9];
+	char pnp_id[] = {
+		(char)(((id >> 10) & 0x1F) + '@'),
+		(char)(((id >> 5) & 0x1F) + '@'),
+		(char)(((id >> 0) & 0x1F) + '@'),
+		'\0',
+	};
+	if (pnps.count(pnp_id) > 0) {
+		conn->make = strdup(pnps[pnp_id].c_str());
+	}
+
+	for (size_t i = 72; i <= 108; i += 18) {
+		uint16_t flag = (data[i] << 8) | data[i + 1];
+		if (flag == 0 && data[i + 3] == 0xFC) {
+			char model[14];
+			snprintf(model, sizeof(model), "%.13s", &data[i + 5]);
+			char *nl = strchr(model, '\n');
+			if (nl) {
+				*nl = '\0';
+			}
+
+			conn->model = strdup(model);
+		}
+	}
+
+	drmModeFreePropertyBlob(blob);
+}
+
 static bool refresh_state( drm_t *drm )
 {
 	drmModeRes *resources = drmModeGetResources(drm->fd);
@@ -401,10 +461,11 @@ static bool refresh_state( drm_t *drm )
 
 		char name[128] = {};
 		snprintf(name, sizeof(name), "%s-%d", type_str, conn->connector->connector_type_id);
-
 		conn->name = strdup(name);
 
 		conn->possible_crtcs = get_connector_possible_crtcs(drm, conn->connector);
+
+		parse_edid(drm, conn);
 	}
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
@@ -593,14 +654,20 @@ static bool setup_best_connector(struct drm_t *drm)
 		return false;
 	}
 
-	const char *description;
+	char description[256];
 	switch (best->connector->connector_type) {
 	case DRM_MODE_CONNECTOR_LVDS:
 	case DRM_MODE_CONNECTOR_eDP:
-		description = "Internal screen";
+		snprintf(description, sizeof(description), "Internal screen");
 		break;
 	default:
-		description = "External screen";
+		if (best->make && best->model) {
+			snprintf(description, sizeof(description), "%s %s", best->make, best->model);
+		} else if (best->model) {
+			snprintf(description, sizeof(description), "%s", best->model);
+		} else {
+			snprintf(description, sizeof(description), "External screen");
+		}
 		break;
 	}
 
@@ -657,8 +724,43 @@ char *find_drm_node_by_devid(dev_t devid)
 	return name;
 }
 
+void load_pnps(void)
+{
+	// TODO: use hwdata's pkg-config file once they ship one
+	const char *filename = "/usr/share/hwdata/pnp.ids";
+	FILE *f = fopen(filename, "r");
+	if (!f) {
+		drm_log.infof("failed to open PNP IDs file at '%s'", filename);
+		return;
+	}
+
+	char *line = NULL;
+	size_t line_size = 0;
+	while (getline(&line, &line_size, f) >= 0) {
+		char *nl = strchr(line, '\n');
+		if (nl) {
+			*nl = '\0';
+		}
+
+		char *sep = strchr(line, '\t');
+		if (!sep) {
+			continue;
+		}
+		*sep = '\0';
+
+		std::string id(line);
+		std::string name(sep + 1);
+		pnps[id] = name;
+	}
+
+	free(line);
+	fclose(f);
+}
+
 bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 {
+	load_pnps();
+
 	drm->preferred_width = width;
 	drm->preferred_height = height;
 	drm->preferred_refresh = refresh;
