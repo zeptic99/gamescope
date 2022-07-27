@@ -756,7 +756,7 @@ static int add_property(drmModeAtomicReq *req, uint32_t obj_id, std::map<std::st
 	if ( props.count( name ) == 0 )
 	{
 		drm_log.errorf("no property %s on object %u", name, obj_id);
-		return -EINVAL;
+		return -ENOENT;
 	}
 
 	const drmModePropertyRes *prop = props[ name ];
