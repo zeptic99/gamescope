@@ -268,7 +268,7 @@ uint64_t g_SteamCompMgrVBlankTime = 0;
 
 static int g_nSteamCompMgrTargetFPS = 0;
 static uint64_t g_uDynamicRefreshEqualityTime = 0;
-static int g_nDynamicRefreshRate = 0;
+static int g_nDynamicRefreshRate[DRM_SCREEN_TYPE_COUNT] = { 0, 0 };
 // Delay to stop modes flickering back and forth.
 static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
@@ -1734,8 +1734,10 @@ paint_all()
 
 	bool bCapture = takeScreenshot || pw_buffer != nullptr;
 
-	int nTargetRefresh = g_nDynamicRefreshRate && steamcompmgr_window_should_limit_fps( global_focus.focusWindow )// && !global_focus.overlayWindow
-		? g_nDynamicRefreshRate
+	int nDynamicRefresh = g_nDynamicRefreshRate[drm_get_screen_type( &g_DRM )];
+
+	int nTargetRefresh = nDynamicRefresh && steamcompmgr_window_should_limit_fps( global_focus.focusWindow )// && !global_focus.overlayWindow
+		? nDynamicRefresh
 		: drm_get_default_refresh( &g_DRM );
 
 	uint64_t now = get_time_in_nanos();
@@ -4028,9 +4030,12 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_nSteamCompMgrTargetFPS = get_prop( ctx, ctx->root, ctx->atoms.gamescopeFPSLimit, 0 );
 		update_runtime_info();
 	}
-	if ( ev->atom == ctx->atoms.gamescopeDynamicRefresh )
+	for (int i = 0; i < DRM_SCREEN_TYPE_COUNT; i++)
 	{
-		g_nDynamicRefreshRate = get_prop( ctx, ctx->root, ctx->atoms.gamescopeDynamicRefresh, 0 );
+		if ( ev->atom == ctx->atoms.gamescopeDynamicRefresh[i] )
+		{
+			g_nDynamicRefreshRate[i] = get_prop( ctx, ctx->root, ctx->atoms.gamescopeDynamicRefresh[i], 0 );
+		}
 	}
 	if ( ev->atom == ctx->atoms.gamescopeLowLatency )
 	{
@@ -4938,7 +4943,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 	ctx->atoms.gamescopeXWaylandModeControl = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_MODE_CONTROL", false );
 	ctx->atoms.gamescopeFPSLimit = XInternAtom( ctx->dpy, "GAMESCOPE_FPS_LIMIT", false );
-	ctx->atoms.gamescopeDynamicRefresh = XInternAtom( ctx->dpy, "GAMESCOPE_DYNAMIC_REFRESH", false );
+	ctx->atoms.gamescopeDynamicRefresh[DRM_SCREEN_TYPE_INTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_DYNAMIC_REFRESH", false );
+	ctx->atoms.gamescopeDynamicRefresh[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_DYNAMIC_REFRESH_EXTERNAL", false );
 	ctx->atoms.gamescopeLowLatency = XInternAtom( ctx->dpy, "GAMESCOPE_LOW_LATENCY", false );
 
 	ctx->atoms.gamescopeFSRFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_FSR_FEEDBACK", false );
