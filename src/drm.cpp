@@ -1293,8 +1293,8 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 	return ret;
 }
 
-/* Prepares an atomic commit for the provided scene-graph. Returns false on
- * error or if the scene-graph can't be presented directly. */
+/* Prepares an atomic commit for the provided scene-graph. Returns 0 on success,
+ * negative errno on failure or if the scene-graph can't be presented directly. */
 int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 {
 	drm_update_gamma_lut(drm);
@@ -1320,8 +1320,9 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 		for ( auto &kv : drm->connectors ) {
 			struct connector *conn = &kv.second;
-			if ( add_connector_property( drm->req, conn, "CRTC_ID", 0 ) < 0 )
-				return false;
+			int ret = add_connector_property( drm->req, conn, "CRTC_ID", 0 );
+			if (ret < 0)
+				return ret;
 		}
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 			// We can't disable a CRTC if it's already disabled, or else the
@@ -1333,51 +1334,62 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 				return false;
 			if (drm->crtcs[i].has_gamma_lut)
 			{
-				if (add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0) < 0)
-					return false;
+				int ret = add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0);
+				if (ret < 0)
+					return ret;
 			}
 			if (drm->crtcs[i].has_degamma_lut)
 			{
-				if (add_crtc_property(drm->req, &drm->crtcs[i], "DEGAMMA_LUT", 0) < 0)
-					return false;
+				int ret = add_crtc_property(drm->req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
+				if (ret < 0)
+					return ret;
 			}
 			if (drm->crtcs[i].has_ctm)
 			{
-				if (add_crtc_property(drm->req, &drm->crtcs[i], "CTM", 0) < 0)
-					return false;
+				int ret = add_crtc_property(drm->req, &drm->crtcs[i], "CTM", 0);
+				if (ret < 0)
+					return ret;
 			}
-			if (add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0) < 0)
-				return false;
+
+			int ret = add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0);
+			if (ret < 0)
+				return ret;
 			drm->crtcs[i].pending.active = 0;
 		}
 
 		// Then enable the one we've picked
 
-		if (add_connector_property(drm->req, drm->connector, "CRTC_ID", drm->crtc->id) < 0)
-			return false;
+		int ret = add_connector_property(drm->req, drm->connector, "CRTC_ID", drm->crtc->id);
+		if (ret < 0)
+			return ret;
 
-		if (add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id) < 0)
-			return false;
+		ret = add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id);
+		if (ret < 0)
+			return ret;
 
 		if (drm->crtc->has_gamma_lut)
 		{
-			if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
+			ret = add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id);
+			if (ret < 0)
 				return false;
 		}
 
 		if (drm->crtc->has_degamma_lut)
 		{
-			if (add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id) < 0)
+			ret = add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id);
+			if (ret < 0)
 				return false;
 		}
 
 		if (drm->crtc->has_ctm)
 		{
-			if (add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id) < 0)
+			ret = add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id);
+			if (ret < 0)
 				return false;
 		}
 
-		if (add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1) < 0)
+		ret = add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1);
+		if (ret < 0)
 			return false;
 		drm->crtc->pending.active = 1;
 	}
@@ -1385,20 +1397,23 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 	{
 		if ( drm->crtc->has_gamma_lut && drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
 		{
-			if (add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id) < 0)
-				return false;	
+			int ret = add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id);
+			if (ret < 0)
+				return ret;
 		}
 
 		if ( drm->crtc->has_degamma_lut && drm->pending.degamma_lut_id != drm->current.degamma_lut_id )
 		{
-			if (add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id) < 0)
-				return false;	
+			int ret = add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id);
+			if (ret < 0)
+				return ret;
 		}
 
 		if ( drm->crtc->has_ctm && drm->pending.ctm_id != drm->current.ctm_id )
 		{
-			if (add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id) < 0)
-				return false;
+			int ret = add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id);
+			if (ret < 0)
+				return ret;
 		}
 	}
 
