@@ -442,16 +442,16 @@ static bool refresh_state( drm_t *drm )
 	// Re-probe connectors props and status
 	for (auto &kv : drm->connectors) {
 		struct connector *conn = &kv.second;
-		if (!get_object_properties(drm, conn->id, DRM_MODE_OBJECT_CONNECTOR, conn->props, conn->initial_prop_values)) {
-			return false;
-		}
-
 		if (conn->connector != nullptr)
 			drmModeFreeConnector(conn->connector);
 
 		conn->connector = drmModeGetConnector(drm->fd, conn->id);
 		if (conn->connector == nullptr) {
 			drm_log.errorf_errno("drmModeGetConnector failed");
+			return false;
+		}
+
+		if (!get_object_properties(drm, conn->id, DRM_MODE_OBJECT_CONNECTOR, conn->props, conn->initial_prop_values)) {
 			return false;
 		}
 
