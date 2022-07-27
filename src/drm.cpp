@@ -1325,36 +1325,38 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 				return ret;
 		}
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
+			struct crtc *crtc = &drm->crtcs[i];
+
 			// We can't disable a CRTC if it's already disabled, or else the
 			// kernel will error out with "requesting event but off".
-			if (drm->crtcs[i].current.active == 0)
+			if (crtc->current.active == 0)
 				continue;
 
-			if (add_crtc_property(drm->req, &drm->crtcs[i], "MODE_ID", 0) < 0)
+			if (add_crtc_property(drm->req, crtc, "MODE_ID", 0) < 0)
 				return false;
-			if (drm->crtcs[i].has_gamma_lut)
+			if (crtc->has_gamma_lut)
 			{
-				int ret = add_crtc_property(drm->req, &drm->crtcs[i], "GAMMA_LUT", 0);
+				int ret = add_crtc_property(drm->req, crtc, "GAMMA_LUT", 0);
 				if (ret < 0)
 					return ret;
 			}
-			if (drm->crtcs[i].has_degamma_lut)
+			if (crtc->has_degamma_lut)
 			{
-				int ret = add_crtc_property(drm->req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
+				int ret = add_crtc_property(drm->req, crtc, "DEGAMMA_LUT", 0);
 				if (ret < 0)
 					return ret;
 			}
-			if (drm->crtcs[i].has_ctm)
+			if (crtc->has_ctm)
 			{
-				int ret = add_crtc_property(drm->req, &drm->crtcs[i], "CTM", 0);
+				int ret = add_crtc_property(drm->req, crtc, "CTM", 0);
 				if (ret < 0)
 					return ret;
 			}
 
-			int ret = add_crtc_property(drm->req, &drm->crtcs[i], "ACTIVE", 0);
+			int ret = add_crtc_property(drm->req, crtc, "ACTIVE", 0);
 			if (ret < 0)
 				return ret;
-			drm->crtcs[i].pending.active = 0;
+			crtc->pending.active = 0;
 		}
 
 		// Then enable the one we've picked
