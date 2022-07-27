@@ -73,7 +73,7 @@ void vblankThreadRun( void )
 		// target refresh so we don't miss submitting for vblank in DRM.
 		// (This fixes 4K@30Hz screens)
 		const uint64_t nsecToSec = 1'000'000'000ul;
-		const drm_screen_type screen_type = drm_get_screen_type();
+		const drm_screen_type screen_type = drm_get_screen_type( &g_DRM );
 		const uint64_t redZone = screen_type == DRM_SCREEN_TYPE_INTERNAL
 			? g_uVblankDrawBufferRedZoneNS
 			: ( g_uVblankDrawBufferRedZoneNS * 60 * nsecToSec ) / ( refresh * nsecToSec );
