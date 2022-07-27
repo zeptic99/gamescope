@@ -45,6 +45,8 @@ enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 static LogScope drm_log("drm");
 static LogScope drm_verbose_log("drm", LOG_SILENT);
 
+static std::map< std::string, std::string > pnps = {};
+
 static std::map< uint32_t, const char * > connector_types = {
 	{ DRM_MODE_CONNECTOR_Unknown, "Unknown" },
 	{ DRM_MODE_CONNECTOR_VGA, "VGA" },
@@ -325,6 +327,66 @@ static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 	return mode1.vrefresh > mode2.vrefresh;
 }
 
+static void parse_edid( drm_t *drm, struct connector *conn)
+{
+	memset(conn->make_pnp, 0, sizeof(conn->make_pnp));
+	free(conn->make);
+	conn->make = NULL;
+	free(conn->model);
+	conn->model = NULL;
+
+	if (conn->props.count("EDID") == 0) {
+		return;
+	}
+
+	uint64_t blob_id = conn->initial_prop_values["EDID"];
+	if (blob_id == 0) {
+		return;
+	}
+
+	drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
+	if (!blob) {
+		drm_log.errorf_errno("drmModeGetPropertyBlob(EDID) failed");
+		return;
+	}
+
+	if (blob->length < 128) {
+		drm_log.errorf("Truncated EDID");
+		return;
+	}
+
+	const uint8_t *data = (const uint8_t *) blob->data;
+
+	// The ASCII 3-letter manufacturer PnP ID is encoded in 5-bit codes
+	uint16_t id = (data[8] << 8) | data[9];
+	char pnp_id[] = {
+		(char)(((id >> 10) & 0x1F) + '@'),
+		(char)(((id >> 5) & 0x1F) + '@'),
+		(char)(((id >> 0) & 0x1F) + '@'),
+		'\0',
+	};
+	memcpy(conn->make_pnp, pnp_id, sizeof(pnp_id));
+	if (pnps.count(pnp_id) > 0) {
+		conn->make = strdup(pnps[pnp_id].c_str());
+	}
+
+	for (size_t i = 72; i <= 108; i += 18) {
+		uint16_t flag = (data[i] << 8) | data[i + 1];
+		if (flag == 0 && data[i + 3] == 0xFC) {
+			char model[14];
+			snprintf(model, sizeof(model), "%.13s", &data[i + 5]);
+			char *nl = strchr(model, '\n');
+			if (nl) {
+				*nl = '\0';
+			}
+
+			conn->model = strdup(model);
+		}
+	}
+
+	drmModeFreePropertyBlob(blob);
+}
+
 static bool refresh_state( drm_t *drm )
 {
 	drmModeRes *resources = drmModeGetResources(drm->fd);
@@ -401,10 +463,11 @@ static bool refresh_state( drm_t *drm )
 
 		char name[128] = {};
 		snprintf(name, sizeof(name), "%s-%d", type_str, conn->connector->connector_type_id);
-
 		conn->name = strdup(name);
 
 		conn->possible_crtcs = get_connector_possible_crtcs(drm, conn->connector);
+
+		parse_edid(drm, conn);
 	}
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
@@ -593,9 +656,26 @@ static bool setup_best_connector(struct drm_t *drm)
 		return false;
 	}
 
+	char description[256];
+	switch (best->connector->connector_type) {
+	case DRM_MODE_CONNECTOR_LVDS:
+	case DRM_MODE_CONNECTOR_eDP:
+		snprintf(description, sizeof(description), "Internal screen");
+		break;
+	default:
+		if (best->make && best->model) {
+			snprintf(description, sizeof(description), "%s %s", best->make, best->model);
+		} else if (best->model) {
+			snprintf(description, sizeof(description), "%s", best->model);
+		} else {
+			snprintf(description, sizeof(description), "External screen");
+		}
+		break;
+	}
+
 	const struct wlserver_output_info wlserver_output_info = {
 		.name = best->name,
-		.description = best->name,
+		.description = description,
 		.phys_width = (int) best->connector->mmWidth,
 		.phys_height = (int) best->connector->mmHeight,
 	};
@@ -646,8 +726,43 @@ char *find_drm_node_by_devid(dev_t devid)
 	return name;
 }
 
+void load_pnps(void)
+{
+	// TODO: use hwdata's pkg-config file once they ship one
+	const char *filename = "/usr/share/hwdata/pnp.ids";
+	FILE *f = fopen(filename, "r");
+	if (!f) {
+		drm_log.infof("failed to open PNP IDs file at '%s'", filename);
+		return;
+	}
+
+	char *line = NULL;
+	size_t line_size = 0;
+	while (getline(&line, &line_size, f) >= 0) {
+		char *nl = strchr(line, '\n');
+		if (nl) {
+			*nl = '\0';
+		}
+
+		char *sep = strchr(line, '\t');
+		if (!sep) {
+			continue;
+		}
+		*sep = '\0';
+
+		std::string id(line);
+		std::string name(sep + 1);
+		pnps[id] = name;
+	}
+
+	free(line);
+	fclose(f);
+}
+
 bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 {
+	load_pnps();
+
 	drm->preferred_width = width;
 	drm->preferred_height = height;
 	drm->preferred_refresh = refresh;
@@ -1851,54 +1966,6 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	return true;
 }
 
-#define EDID_ID(a, b, c) (((a & 0x1f) << 10) | ((b & 0x1f) << 5) | (c & 0x1f))
-
-struct edid_data_t
-{
-	uint16_t make;
-	char model[16];
-	char serial[16];
-};
-
-// from wlroots... mostly
-void parse_edid(edid_data_t *output, const uint8_t *data, size_t len) {
-	if (!data || len < 128) {
-		output->make = 0;
-		snprintf(output->model, sizeof(output->model), "<Unknown>");
-		return;
-	}
-
-	output->make = (data[8] << 8) | data[9];
-
-	uint16_t model = data[10] | (data[11] << 8);
-	snprintf(output->model, sizeof(output->model), "0x%04X", model);
-
-	uint32_t serial = data[12] | (data[13] << 8) | (data[14] << 8) | (data[15] << 8);
-	snprintf(output->serial, sizeof(output->serial), "0x%08X", serial);
-
-	for (size_t i = 72; i <= 108; i += 18) {
-		uint16_t flag = (data[i] << 8) | data[i + 1];
-		if (flag == 0 && data[i + 3] == 0xFC) {
-			sprintf(output->model, "%.13s", &data[i + 5]);
-
-			// Monitor names are terminated by newline if they're too short
-			char *nl = strchr(output->model, '\n');
-			if (nl) {
-				*nl = '\0';
-			}
-		} else if (flag == 0 && data[i + 3] == 0xFF) {
-			sprintf(output->serial, "%.13s", &data[i + 5]);
-
-			// Monitor serial numbers are terminated by newline if they're too
-			// short
-			char *nl = strchr(output->serial, '\n');
-			if (nl) {
-				*nl = '\0';
-			}
-		}
-	}
-}
-
 bool drm_set_refresh( struct drm_t *drm, int refresh )
 {
 	int width = g_nOutputWidth;
@@ -1926,29 +1993,13 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 			break;
 		case DRM_MODE_GENERATE_FIXED:
 			{
-				bool is_steam_deck_display = false;
-				if ( drm->connector->props.find( "EDID" ) != drm->connector->props.end() )
-				{
-					uint64_t blob_id = drm->connector->initial_prop_values["EDID"];
-
-					drmModePropertyBlobRes *blob = drmModeGetPropertyBlob(drm->fd, blob_id);
-					if (blob) {
-						edid_data_t edid_data = {};
-						parse_edid( &edid_data, (const unsigned char *)blob->data, blob->length );
-
-						is_steam_deck_display = 
-							( edid_data.make == EDID_ID( 'W', 'L', 'C' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
-							( edid_data.make == EDID_ID( 'A', 'N', 'X' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
-							( edid_data.make == EDID_ID( 'V', 'L', 'V' ) && !strncmp( edid_data.model, "ANX7530 U", sizeof( edid_data.model ) ) ) ||
-							( edid_data.make == EDID_ID( 'V', 'L', 'V' ) && !strncmp( edid_data.model, "Jupiter", sizeof( edid_data.model ) ) );
-
-						drmModeFreePropertyBlob(blob);
-					}
-					else
-					{
-						drm_log.errorf_errno("drmModeGetPropertyBlob(EDID) failed");
-					}
-				}
+				const char *make_pnp = drm->connector->make_pnp;
+				const char *model = drm->connector->model;
+				bool is_steam_deck_display =
+					(strcmp(make_pnp, "WLC") == 0 && strcmp(model, "ANX7530 U") == 0) ||
+					(strcmp(make_pnp, "ANX") == 0 && strcmp(model, "ANX7530 U") == 0) ||
+					(strcmp(make_pnp, "VLV") == 0 && strcmp(model, "ANX7530 U") == 0) ||
+					(strcmp(make_pnp, "VLV") == 0 && strcmp(model, "Jupiter") == 0);
 
 				const drmModeModeInfo *preferred_mode = find_mode(connector, 0, 0, 0);
 				generate_fixed_mode( &mode, preferred_mode, refresh, is_steam_deck_display );
