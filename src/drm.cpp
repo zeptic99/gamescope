@@ -383,6 +383,12 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 	if (pnps.count(pnp_id) > 0) {
 		conn->make = strdup(pnps[pnp_id].c_str());
 	}
+	else {
+		// Some vendors like AOC, don't have a PNP id listed,
+		// but their name is literally just "AOC", so just
+		// use the PNP name directly.
+		conn->make = strdup(pnp_id);
+	}
 
 	for (size_t i = 72; i <= 108; i += 18) {
 		uint16_t flag = (data[i] << 8) | data[i + 1];
