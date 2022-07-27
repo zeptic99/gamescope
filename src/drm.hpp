@@ -175,6 +175,13 @@ enum drm_mode_generation {
 	DRM_MODE_GENERATE_FIXED,
 };
 
+enum drm_screen_type {
+	DRM_SCREEN_TYPE_INTERNAL = 0,
+	DRM_SCREEN_TYPE_EXTERNAL = 1,
+
+	DRM_SCREEN_TYPE_COUNT
+};
+
 extern enum drm_mode_generation g_drmModeGeneration;
 
 bool init_drm(struct drm_t *drm, int width, int height, int refresh);
@@ -200,6 +207,7 @@ bool drm_update_degamma_lut(struct drm_t *drm);
 bool drm_update_color_mtx(struct drm_t *drm);
 bool drm_set_gamma_exponent(struct drm_t *drm, float *vec);
 bool drm_set_degamma_exponent(struct drm_t *drm, float *vec);
+drm_screen_type drm_get_screen_type(struct drm_t *drm);
 
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);

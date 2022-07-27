@@ -1723,6 +1723,18 @@ bool drm_set_degamma_exponent(struct drm_t *drm, float *vec)
 	return false;
 }
 
+drm_screen_type drm_get_screen_type(struct drm_t *drm)
+{
+	if (!drm->connector || !drm->connector->connector)
+		return DRM_SCREEN_TYPE_INTERNAL;
+
+	if ( drm->connector->connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+		 drm->connector->connector->connector_type == DRM_MODE_CONNECTOR_LVDS )
+		 return DRM_SCREEN_TYPE_INTERNAL;
+
+	return DRM_SCREEN_TYPE_EXTERNAL;
+}
+
 inline float lerp( float a, float b, float t )
 {
     return a + t * (b - a);
