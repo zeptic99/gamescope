@@ -68,6 +68,12 @@ void vblankThreadRun( void )
 		const uint64_t nsecInterval = 1'000'000'000ul / refresh;
 		const uint64_t drawTime = g_uVblankDrawTimeNS;
 
+		// The redzone is relative to 60Hz, scale it by our
+		// target refresh so we don't miss submitting for vblank in DRM.
+		// (This fixes 4K@30Hz screens)
+		const uint64_t nsecToSec = 1'000'000'000ul;
+		const uint64_t redZone = ( g_uVblankDrawBufferRedZoneNS * 60 * nsecToSec ) / ( refresh * nsecToSec );
+
 		// This is a rolling average when drawTime < rollingMaxDrawTime,
 		// and a a max when drawTime > rollingMaxDrawTime.
 		// This allows us to deal with spikes in the draw buffer time very easily.
@@ -76,24 +82,24 @@ void vblankThreadRun( void )
 		// we get back into a good state and then regress again.
 
 		// If we go over half of our deadzone, be more defensive about things.
-		if ( int64_t(drawTime) - int64_t(g_uVblankDrawBufferRedZoneNS / 2) > int64_t(rollingMaxDrawTime) )
+		if ( int64_t(drawTime) - int64_t(redZone / 2) > int64_t(rollingMaxDrawTime) )
 			rollingMaxDrawTime = drawTime;
 		else
 			rollingMaxDrawTime = ( ( alpha * rollingMaxDrawTime ) + ( range - alpha ) * drawTime ) / range;
 
 		// If we need to offset for our draw more than half of our vblank, something is very wrong.
 		// Clamp our max time to half of the vblank if we can.
-		rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - g_uVblankDrawBufferRedZoneNS );
+		rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - redZone );
 
 		g_uRollingMaxDrawTime = rollingMaxDrawTime;
 
-		uint64_t offset = rollingMaxDrawTime + g_uVblankDrawBufferRedZoneNS;
+		uint64_t offset = rollingMaxDrawTime + redZone;
 
 #ifdef VBLANK_DEBUG
 		// Debug stuff for logging missed vblanks
 		static uint64_t vblankIdx = 0;
 		static uint64_t lastDrawTime = g_uVblankDrawTimeNS;
-		static uint64_t lastOffset = g_uVblankDrawTimeNS + g_uVblankDrawBufferRedZoneNS;
+		static uint64_t lastOffset = g_uVblankDrawTimeNS + redZone;
 
 		if ( vblankIdx++ % 300 == 0 || drawTime > lastOffset )
 		{
@@ -101,7 +107,7 @@ void vblankThreadRun( void )
 				fprintf( stderr, " !! missed vblank " );
 
 			fprintf( stderr, "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
-				g_uVblankDrawBufferRedZoneNS / 1'000'000.0,
+				redZone / 1'000'000.0,
 				g_uVBlankRateOfDecayPercentage,
 				rollingMaxDrawTime / 1'000'000.0,
 				lastDrawTime / 1'000'000.0,
