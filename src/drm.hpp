@@ -69,6 +69,7 @@ struct connector {
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
 
+	char make_pnp[4];
 	char *make;
 	char *model;
 };
