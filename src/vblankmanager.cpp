@@ -18,6 +18,7 @@
 #include "steamcompmgr.hpp"
 #include "wlserver.hpp"
 #include "main.hpp"
+#include "drm.hpp"
 
 static int g_vblankPipe[2];
 
@@ -72,7 +73,10 @@ void vblankThreadRun( void )
 		// target refresh so we don't miss submitting for vblank in DRM.
 		// (This fixes 4K@30Hz screens)
 		const uint64_t nsecToSec = 1'000'000'000ul;
-		const uint64_t redZone = ( g_uVblankDrawBufferRedZoneNS * 60 * nsecToSec ) / ( refresh * nsecToSec );
+		const drm_screen_type screen_type = drm_get_screen_type();
+		const uint64_t redZone = screen_type == DRM_SCREEN_TYPE_INTERNAL
+			? g_uVblankDrawBufferRedZoneNS
+			: ( g_uVblankDrawBufferRedZoneNS * 60 * nsecToSec ) / ( refresh * nsecToSec );
 
 		// This is a rolling average when drawTime < rollingMaxDrawTime,
 		// and a a max when drawTime > rollingMaxDrawTime.
