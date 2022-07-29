@@ -459,6 +459,8 @@ static bool refresh_state( drm_t *drm )
 		 * highest refresh rate */
 		std::stable_sort(conn->connector->modes, conn->connector->modes + conn->connector->count_modes, compare_modes);
 
+		parse_edid(drm, conn);
+
 		if ( conn->name != nullptr )
 			continue;
 
@@ -471,8 +473,6 @@ static bool refresh_state( drm_t *drm )
 		conn->name = strdup(name);
 
 		conn->possible_crtcs = get_connector_possible_crtcs(drm, conn->connector);
-
-		parse_edid(drm, conn);
 	}
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
