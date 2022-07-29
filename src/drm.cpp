@@ -319,10 +319,10 @@ static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 	if (goodRefresh1 != goodRefresh2)
 		return goodRefresh1;
 
-	if (mode1.type & DRM_MODE_TYPE_PREFERRED)
-		return true;
-	if (mode2.type & DRM_MODE_TYPE_PREFERRED)
-		return false;
+	bool preferred1 = mode1.type & DRM_MODE_TYPE_PREFERRED;
+	bool preferred2 = mode2.type & DRM_MODE_TYPE_PREFERRED;
+	if (preferred1 != preferred2)
+		return preferred1;
 
 	int area1 = mode1.hdisplay * mode1.vdisplay;
 	int area2 = mode2.hdisplay * mode2.vdisplay;
