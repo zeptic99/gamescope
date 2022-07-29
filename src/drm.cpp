@@ -424,8 +424,10 @@ static bool refresh_state( drm_t *drm )
 		}
 
 		if (!found) {
+			drm_log.debugf("connector '%s' disappeared", conn->name);
+
 			if (drm->connector == conn) {
-				drm_log.infof("current connector '%s' disconnected", conn->name);
+				drm_log.infof("current connector '%s' disappeared", conn->name);
 				drm->connector = nullptr;
 			}
 
@@ -473,6 +475,8 @@ static bool refresh_state( drm_t *drm )
 		conn->name = strdup(name);
 
 		conn->possible_crtcs = get_connector_possible_crtcs(drm, conn->connector);
+
+		drm_log.debugf("found new connector '%s'", conn->name);
 	}
 
 	for (size_t i = 0; i < drm->crtcs.size(); i++) {
