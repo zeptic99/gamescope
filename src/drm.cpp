@@ -30,6 +30,7 @@ extern "C" {
 
 #include <algorithm>
 #include <thread>
+#include <unordered_set>
 
 struct drm_t g_DRM = {};
 
@@ -1340,9 +1341,124 @@ static drm_color_range drm_get_color_range(EStreamColorspace colorspace)
 	}
 }
 
-static int
-drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
+template <typename T>
+void hash_combine(size_t& s, const T& v)
 {
+	std::hash<T> h;
+	s^= h(v) + 0x9e3779b9 + (s<< 6) + (s>> 2);
+}
+
+struct LiftoffStateCacheEntry
+{
+	LiftoffStateCacheEntry()
+	{
+		memset(this, 0, sizeof(LiftoffStateCacheEntry));
+	}
+
+    int nLayerCount;
+
+	struct LiftoffLayerState_t
+	{
+		bool ycbcr;
+		uint32_t zpos;
+		uint32_t srcW, srcH;
+		uint32_t crtcX, crtcY, crtcW, crtcH;
+		drm_color_encoding colorEncoding;
+		drm_color_range    colorRange;
+	} layerState[ k_nMaxLayers ];
+
+	bool operator == (const LiftoffStateCacheEntry& entry) const
+	{
+		return !memcmp(this, &entry, sizeof(LiftoffStateCacheEntry));
+	}
+};
+
+struct LiftoffStateCacheEntryKasher
+{
+	size_t operator()(const LiftoffStateCacheEntry& k) const
+	{
+		size_t hash = 0;
+		hash_combine(hash, k.nLayerCount);
+		for ( int i = 0; i < k.nLayerCount; i++ )
+		{
+			hash_combine(hash, k.layerState[i].ycbcr);
+			hash_combine(hash, k.layerState[i].zpos);
+			hash_combine(hash, k.layerState[i].srcW);
+			hash_combine(hash, k.layerState[i].srcH);
+			hash_combine(hash, k.layerState[i].crtcX);
+			hash_combine(hash, k.layerState[i].crtcY);
+			hash_combine(hash, k.layerState[i].crtcW);
+			hash_combine(hash, k.layerState[i].crtcH);
+			hash_combine(hash, k.layerState[i].colorEncoding);
+			hash_combine(hash, k.layerState[i].colorRange);
+		}
+
+		return hash;
+  	}
+};
+
+
+std::unordered_set<LiftoffStateCacheEntry, LiftoffStateCacheEntryKasher> g_LiftoffStateCache;
+
+LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( const FrameInfo_t *frameInfo )
+{
+	LiftoffStateCacheEntry entry{};
+
+	entry.nLayerCount = frameInfo->layerCount;
+	for ( int i = 0; i < entry.nLayerCount; i++ )
+	{
+		const uint16_t srcWidth  = frameInfo->layers[ i ].tex->width();
+		const uint16_t srcHeight = frameInfo->layers[ i ].tex->height();
+
+		int32_t crtcX = -frameInfo->layers[ i ].offset.x;
+		int32_t crtcY = -frameInfo->layers[ i ].offset.y;
+		uint64_t crtcW = srcWidth / frameInfo->layers[ i ].scale.x;
+		uint64_t crtcH = srcHeight / frameInfo->layers[ i ].scale.y;
+
+		if (g_bRotated)
+		{
+			int64_t imageH = frameInfo->layers[ i ].tex->contentHeight() / frameInfo->layers[ i ].scale.y;
+
+			const int32_t x = crtcX;
+			const uint64_t w = crtcW;
+			crtcX = g_nOutputHeight - imageH - crtcY;
+			crtcY = x;
+			crtcW = crtcH;
+			crtcH = w;
+		}
+
+		entry.layerState[i].zpos  = frameInfo->layers[ i ].zpos;
+		entry.layerState[i].srcW  = srcWidth  << 16;
+		entry.layerState[i].srcH  = srcHeight << 16;
+		entry.layerState[i].crtcX = crtcX;
+		entry.layerState[i].crtcY = crtcY;
+		entry.layerState[i].crtcW = crtcW;
+		entry.layerState[i].crtcH = crtcH;
+		entry.layerState[i].ycbcr = frameInfo->layers[i].isYcbcr();
+		if ( entry.layerState[i].ycbcr )
+		{
+			entry.layerState[i].colorEncoding = drm_get_color_encoding( g_ForcedNV12ColorSpace );
+			entry.layerState[i].colorRange    = drm_get_color_range( g_ForcedNV12ColorSpace );
+		}
+	}
+
+	return entry;
+}
+
+static int
+drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, bool needs_modeset )
+{
+	auto entry = FrameInfoToLiftoffStateCacheEntry( frameInfo );
+
+	// If we are modesetting, reset the state cache, we might
+	// move to another CRTC or whatever which might have differing caps.
+	// (same with different modes)
+	if (needs_modeset)
+		g_LiftoffStateCache.clear();
+
+	if (g_LiftoffStateCache.count(entry) != 0)
+		return -EINVAL;
+
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
 		if ( i < frameInfo->layerCount )
@@ -1356,45 +1472,26 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", frameInfo->layers[ i ].fbid);
 			drm->fbids_in_req.push_back( frameInfo->layers[ i ].fbid );
 
-			liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", frameInfo->layers[ i ].zpos );
+			liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", entry.layerState[i].zpos );
 			liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", frameInfo->layers[ i ].opacity * 0xffff);
-
-			const uint16_t srcWidth = frameInfo->layers[ i ].tex->width();
-			const uint16_t srcHeight = frameInfo->layers[ i ].tex->height();
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_X", 0);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_Y", 0);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", srcWidth << 16);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", srcHeight << 16);
-
-			int32_t crtcX = -frameInfo->layers[ i ].offset.x;
-			int32_t crtcY = -frameInfo->layers[ i ].offset.y;
-			uint64_t crtcW = srcWidth / frameInfo->layers[ i ].scale.x;
-			uint64_t crtcH = srcHeight / frameInfo->layers[ i ].scale.y;
-
-			if (g_bRotated) {
-				int64_t imageH = frameInfo->layers[ i ].tex->contentHeight() / frameInfo->layers[ i ].scale.y;
-
-				const int32_t x = crtcX;
-				const uint64_t w = crtcW;
-				crtcX = g_nOutputHeight - imageH - crtcY;
-				crtcY = x;
-				crtcW = crtcH;
-				crtcH = w;
-			}
+			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", entry.layerState[i].srcW );
+			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", entry.layerState[i].srcH );
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0);
 
-			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", crtcX);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", crtcY);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", entry.layerState[i].crtcX);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", entry.layerState[i].crtcY);
 
-			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", crtcW);
-			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", crtcH);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_W", entry.layerState[i].crtcW);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_H", entry.layerState[i].crtcH);
 
-			if ( frameInfo->layers[i].isYcbcr() )
+			if ( entry.layerState[i].ycbcr )
 			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_ENCODING", drm_get_color_encoding( g_ForcedNV12ColorSpace ) );
-				liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_RANGE", drm_get_color_range( g_ForcedNV12ColorSpace ) );
+				liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_ENCODING", entry.layerState[i].colorEncoding );
+				liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_RANGE",    entry.layerState[i].colorRange );
 			}
 			else
 			{
@@ -1418,6 +1515,15 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 		// We don't support partial composition yet
 		if ( liftoff_output_needs_composition( drm->lo_output ) )
 			ret = -EINVAL;
+	}
+
+	// If we aren't modesetting and we got -EINVAL, that means that we
+	// probably can't do this layout, so add it to our state cache so we don't
+	// try it again.
+	if (!needs_modeset)
+	{
+		if (ret == -EINVAL)
+			g_LiftoffStateCache.insert(entry);
 	}
 
 	if ( ret == 0 )
@@ -1558,7 +1664,7 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 	int ret;
 	if ( g_bUseLayers == true ) {
-		ret = drm_prepare_liftoff( drm, frameInfo );
+		ret = drm_prepare_liftoff( drm, frameInfo, needs_modeset );
 	} else {
 		ret = drm_prepare_basic( drm, frameInfo );
 	}
