@@ -2007,6 +2007,12 @@ win_skip_taskbar_and_pager( win *w )
 }
 
 static bool
+win_skip_and_not_fullscreen( win *w )
+{
+	return win_skip_taskbar_and_pager( w ) && !w->isFullscreen;
+}
+
+static bool
 win_maybe_a_dropdown( win *w )
 {
 	// Josh:
@@ -2031,7 +2037,7 @@ win_maybe_a_dropdown( win *w )
 	//        ie. a settings menu dialog popup or something.
 	//      - If the window has both skip taskbar and pager, treat it as a dialog.
 	bool valid_maybe_a_dropdown =
-		w->maybe_a_dropdown && ( ( !w->is_dialog || ( !w->transientFor && win_skip_taskbar_and_pager( w ) ) ) && ( w->skipPager || w->skipTaskbar ) );
+		w->maybe_a_dropdown && ( ( !w->is_dialog || ( !w->transientFor && win_skip_and_not_fullscreen( w ) ) ) && ( w->skipPager || w->skipTaskbar ) );
 	return ( valid_maybe_a_dropdown || win_is_override_redirect( w ) ) && !win_is_useless( w );
 }
 
@@ -2068,8 +2074,8 @@ is_focus_priority_greater( win *a, win *b )
 
 	// Wine sets SKIP_TASKBAR and SKIP_PAGER hints for WS_EX_NOACTIVATE windows.
 	// See https://github.com/Plagman/gamescope/issues/87
-	if ( win_skip_taskbar_and_pager( a ) != win_skip_taskbar_and_pager( b ) )
-		return !win_skip_taskbar_and_pager( a );
+	if ( win_skip_and_not_fullscreen( a ) != win_skip_and_not_fullscreen( b ) )
+		return !win_skip_and_not_fullscreen( a );
 
 	// Prefer normal windows over dialogs
 	// if we are an override redirect/dropdown window.
@@ -2537,7 +2543,7 @@ determine_and_apply_focus()
 		// Exclude windows that are useless (1x1), skip taskbar + pager or override redirect windows
 		// from the reported focusable windows to Steam.
 		if ( win_is_useless( focusable_window ) ||
-			win_skip_taskbar_and_pager( focusable_window ) ||
+			win_skip_and_not_fullscreen( focusable_window ) ||
 			focusable_window->a.override_redirect )
 			continue;
 
