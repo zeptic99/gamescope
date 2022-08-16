@@ -133,8 +133,10 @@ struct PipelineInfo_t
 	uint32_t blurRadius;
 	uint32_t blurLayerCount;
 
+	bool compositeDebug;
+
 	bool operator==(const PipelineInfo_t& o) const {
-		return shaderType == o.shaderType && layerCount == o.layerCount && ycbcrMask == o.ycbcrMask && blurRadius == o.blurRadius && blurLayerCount == o.blurLayerCount;
+		return shaderType == o.shaderType && layerCount == o.layerCount && ycbcrMask == o.ycbcrMask && blurRadius == o.blurRadius && blurLayerCount == o.blurLayerCount && compositeDebug == o.compositeDebug;
 	}
 };
 
@@ -155,6 +157,7 @@ namespace std
 			hash = hash_combine(hash, k.ycbcrMask);
 			hash = hash_combine(hash, k.blurRadius);
 			hash = hash_combine(hash, k.blurLayerCount);
+			hash = hash_combine(hash, k.compositeDebug);
 			return hash;
 		}
 	};
@@ -474,7 +477,7 @@ private:
 	bool createPools();
 	bool createShaders();
 	bool createScratchResources();
-	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count);
+	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count, bool composite_debug);
 	void compileAllPipelines();
 	void resetCmdBuffers(uint64_t sequence);
 
@@ -1173,7 +1176,7 @@ VkSampler CVulkanDevice::sampler( SamplerState key )
 	return ret;
 }
 
-VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count)
+VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count, bool composite_debug)
 {
 	const std::array<VkSpecializationMapEntry, 5> specializationEntries = {{
 		{
@@ -1212,7 +1215,7 @@ VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMas
 	} specializationData = {
 		.layerCount   = layerCount,
 		.ycbcrMask    = ycbcrMask,
-		.debug        = g_bIsCompositeDebug,
+		.debug        = composite_debug,
 		.radius       = radius ? (radius * 2) - 1 : 0,
 		.blur_layer_count = blur_layer_count,
 	};
@@ -1252,7 +1255,7 @@ void CVulkanDevice::compileAllPipelines()
 
 
 	std::array<PipelineInfo_t, SHADER_TYPE_COUNT> pipelineInfos;
-#define SHADER(type, layer_count, max_ycbcr, max_radius, blur_layers) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, max_radius, blur_layers}
+#define SHADER(type, layer_count, max_ycbcr, max_radius, blur_layers) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, max_radius, blur_layers, false}
 	SHADER(BLIT, k_nMaxLayers, k_nMaxYcbcrMask, 1, 1);
 	SHADER(BLUR, k_nMaxLayers, k_nMaxYcbcrMask, kMaxBlurRadius, k_nMaxBlurLayers);
 	SHADER(BLUR_COND, k_nMaxLayers, k_nMaxYcbcrMask, kMaxBlurRadius, k_nMaxBlurLayers);
@@ -1272,10 +1275,10 @@ void CVulkanDevice::compileAllPipelines()
 						if (blur_layers > layerCount)
 							continue;
 
-						VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, radius, info.shaderType, blur_layers);
+						VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, radius, info.shaderType, blur_layers, info.compositeDebug);
 						{
 							std::lock_guard<std::mutex> lock(m_pipelineMutex);
-							PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, radius, blur_layers};
+							PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, radius, blur_layers, info.compositeDebug};
 							auto result = m_pipelineMap.emplace(std::make_pair(key, newPipeline));
 							if (!result.second)
 								vk.DestroyPipeline(device(), newPipeline, nullptr);
@@ -1290,11 +1293,11 @@ void CVulkanDevice::compileAllPipelines()
 VkPipeline CVulkanDevice::pipeline(ShaderType type, uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, uint32_t blur_layers)
 {
 	std::lock_guard<std::mutex> lock(m_pipelineMutex);
-	PipelineInfo_t key = {type, layerCount, ycbcrMask, radius, blur_layers};
+	PipelineInfo_t key = {type, layerCount, ycbcrMask, radius, blur_layers, g_bIsCompositeDebug};
 	auto search = m_pipelineMap.find(key);
 	if (search == m_pipelineMap.end())
 	{
-		VkPipeline result = compilePipeline(layerCount, ycbcrMask, radius, type, blur_layers);
+		VkPipeline result = compilePipeline(layerCount, ycbcrMask, radius, type, blur_layers, g_bIsCompositeDebug);
 		m_pipelineMap[key] = result;
 		return result;
 	}

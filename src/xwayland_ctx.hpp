@@ -139,5 +139,8 @@ struct xwayland_ctx_t
 		Atom gamescopeBlurMode;
 		Atom gamescopeBlurRadius;
 		Atom gamescopeBlurFadeDuration;
+
+		Atom gamescopeCompositeForce;
+		Atom gamescopeCompositeDebug;
 	} atoms;
 };

@@ -4078,6 +4078,16 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_BlurFadeDuration = get_prop( ctx, ctx->root, ctx->atoms.gamescopeBlurFadeDuration, 0 );
 	}
+	if ( ev->atom == ctx->atoms.gamescopeCompositeForce )
+	{
+		alwaysComposite = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeForce, 0 );
+		hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeCompositeDebug )
+	{
+		g_bIsCompositeDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
+		hasRepaint = true;
+	}
 }
 
 static int
@@ -4965,6 +4975,9 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeBlurMode = XInternAtom( ctx->dpy, "GAMESCOPE_BLUR_MODE", false );
 	ctx->atoms.gamescopeBlurRadius = XInternAtom( ctx->dpy, "GAMESCOPE_BLUR_RADIUS", false );
 	ctx->atoms.gamescopeBlurFadeDuration = XInternAtom( ctx->dpy, "GAMESCOPE_BLUR_FADE_DURATION", false );
+
+	ctx->atoms.gamescopeCompositeForce = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_FORCE", false );
+	ctx->atoms.gamescopeCompositeDebug = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_DEBUG", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);
