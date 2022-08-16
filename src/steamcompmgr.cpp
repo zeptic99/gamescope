@@ -2027,6 +2027,10 @@ win_maybe_a_dropdown( win *w )
 	if ( w->appID == 230410 && w->maybe_a_dropdown && w->transientFor && ( w->skipPager || w->skipTaskbar ) )
 		return !win_is_useless( w );
 
+	// Work around Antichamber splash screen until we hook up
+	// the Proton window style deduction.
+	if ( w->appID == 219890 )
+		return false;
 
 	// Josh:
 	// The logic here is as follows. The window will be treated as a dropdown if:
