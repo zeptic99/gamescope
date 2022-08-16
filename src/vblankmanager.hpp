@@ -12,3 +12,5 @@ const unsigned int g_uDefaultVBlankRateOfDecayPercentage = 980;
 
 extern uint64_t g_uVblankDrawBufferRedZoneNS;
 extern uint64_t g_uVBlankRateOfDecayPercentage;
+
+extern std::atomic<bool> g_bCurrentlyCompositing;

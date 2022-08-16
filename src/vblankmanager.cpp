@@ -51,6 +51,13 @@ const uint64_t g_uVBlankRateOfDecayMax = 1000;
 
 static std::atomic<uint64_t> g_uRollingMaxDrawTime = { g_uStartingDrawTime };
 
+std::atomic<bool> g_bCurrentlyCompositing = { false };
+
+// The minimum drawtime to use when we are compositing.
+// Getting closer and closer to vblank when compositing means that we can get into
+// a feedback loop with our clocks. Pick a sane minimum draw time.
+const uint64_t g_uVBlankDrawTimeMinCompositing = 2'400'000;
+
 //#define VBLANK_DEBUG
 
 void vblankThreadRun( void )
@@ -67,7 +74,10 @@ void vblankThreadRun( void )
 		const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 
 		const uint64_t nsecInterval = 1'000'000'000ul / refresh;
-		const uint64_t drawTime = g_uVblankDrawTimeNS;
+		uint64_t drawTime = g_uVblankDrawTimeNS;
+
+		if ( g_bCurrentlyCompositing )
+			drawTime = std::max(drawTime, g_uVBlankDrawTimeMinCompositing);
 
 		// The redzone is relative to 60Hz, scale it by our
 		// target refresh so we don't miss submitting for vblank in DRM.

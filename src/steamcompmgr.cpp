@@ -1769,6 +1769,9 @@ paint_all()
 			return;
 	}
 
+	// Update to let the vblank manager know we are currently compositing.
+	g_bCurrentlyCompositing = bDoComposite;
+
 	if ( bDoComposite == true )
 	{
 		std::shared_ptr<CVulkanTexture> pCaptureTexture = nullptr;
