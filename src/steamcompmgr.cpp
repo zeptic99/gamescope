@@ -2093,6 +2093,17 @@ win_maybe_a_dropdown( win *w )
 	if ( w->appID == 219890 )
 		return false;
 
+	// The Launcher in Witcher 2 (20920) has a clear window with WS_EX_LAYERED on top of it.
+	//
+	// Layered windows are windows that are meant to be transparent
+	// with alpha blending + visual fx.
+	// https://docs.microsoft.com/en-us/windows/win32/winmsg/window-features
+	//
+	// TODO: Come back to me for original Age of Empires HD launcher.
+	// Does that use it? It wants blending!
+	if ( w->hasHwndStyleEx && ( w->hwndStyleEx & WS_EX_LAYERED ) )
+		return true;
+
 	// Josh:
 	// The logic here is as follows. The window will be treated as a dropdown if:
 	// 
