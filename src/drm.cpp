@@ -1445,6 +1445,20 @@ LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( const FrameInfo_t *fra
 	return entry;
 }
 
+static bool env_to_bool(const char *env)
+{
+	if (!env || !*env)
+		return false;
+
+	return !!atoi(env);
+}
+
+static bool is_liftoff_caching_enabled()
+{
+	static bool disabled = env_to_bool(getenv("GAMESCOPE_LIFTOFF_CACHE_DISABLE"));
+	return !disabled;
+}
+
 static int
 drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, bool needs_modeset )
 {
@@ -1456,8 +1470,11 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 	if (needs_modeset)
 		g_LiftoffStateCache.clear();
 
-	if (g_LiftoffStateCache.count(entry) != 0)
-		return -EINVAL;
+	if (is_liftoff_caching_enabled())
+	{
+		if (g_LiftoffStateCache.count(entry) != 0)
+			return -EINVAL;
+	}
 
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
