@@ -142,5 +142,8 @@ struct xwayland_ctx_t
 
 		Atom gamescopeCompositeForce;
 		Atom gamescopeCompositeDebug;
+
+		Atom wineHwndStyle;
+		Atom wineHwndStyleEx;
 	} atoms;
 };
