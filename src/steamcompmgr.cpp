@@ -2095,6 +2095,10 @@ win_maybe_a_dropdown( win *w )
 
 	// The Launcher in Witcher 2 (20920) has a clear window with WS_EX_LAYERED on top of it.
 	//
+	// The Age of Empires 2 Launcher also has a WS_EX_LAYERED window to separate controls
+	// from its backing, which this seems to handle, although we seemingly don't handle
+	// it's transparency yet, which I do not understand.
+	//
 	// Layered windows are windows that are meant to be transparent
 	// with alpha blending + visual fx.
 	// https://docs.microsoft.com/en-us/windows/win32/winmsg/window-features
