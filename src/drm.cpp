@@ -1845,27 +1845,33 @@ bool drm_set_color_gain_blend(struct drm_t *drm, float blend)
 	return false;
 }
 
-bool drm_set_gamma_exponent(struct drm_t *drm, float *vec)
+bool drm_set_gamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_type screen_type)
 {
 	for (int i = 0; i < 3; i++)
-		drm->pending.color_gamma_exponent[i] = vec[i];
+		drm->pending.color_gamma_exponent[screen_type][i] = vec[i];
+
+	if ( drm_get_screen_type(drm) != screen_type )
+		return false;
 
 	for (int i = 0; i < 3; i++)
 	{
-		if ( drm->current.color_gamma_exponent[i] != drm->pending.color_gamma_exponent[i] )
+		if ( drm->current.color_gamma_exponent[screen_type][i] != drm->pending.color_gamma_exponent[screen_type][i] )
 			return true;
 	}
 	return false;
 }
 
-bool drm_set_degamma_exponent(struct drm_t *drm, float *vec)
+bool drm_set_degamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_type screen_type)
 {
 	for (int i = 0; i < 3; i++)
-		drm->pending.color_degamma_exponent[i] = vec[i];
+		drm->pending.color_degamma_exponent[screen_type][i] = vec[i];
+
+	if ( drm_get_screen_type(drm) != screen_type )
+		return false;
 
 	for (int i = 0; i < 3; i++)
 	{
-		if ( drm->current.color_degamma_exponent[i] != drm->pending.color_degamma_exponent[i] )
+		if ( drm->current.color_degamma_exponent[screen_type][i] != drm->pending.color_degamma_exponent[screen_type][i] )
 			return true;
 	}
 	return false;
@@ -1993,16 +1999,19 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 	if ( !drm->crtc->has_gamma_lut )
 		return true;
 
+	enum drm_screen_type screen_type = drm->pending.screen_type;
+
 	if (drm->pending.color_gain[0] == drm->current.color_gain[0] &&
 		drm->pending.color_gain[1] == drm->current.color_gain[1] &&
 		drm->pending.color_gain[2] == drm->current.color_gain[2] &&
 		drm->pending.color_linear_gain[0] == drm->current.color_linear_gain[0] &&
 		drm->pending.color_linear_gain[1] == drm->current.color_linear_gain[1] &&
 		drm->pending.color_linear_gain[2] == drm->current.color_linear_gain[2] &&
-		drm->pending.color_gamma_exponent[0] == drm->current.color_gamma_exponent[0] &&
-		drm->pending.color_gamma_exponent[1] == drm->current.color_gamma_exponent[1] &&
-		drm->pending.color_gamma_exponent[2] == drm->current.color_gamma_exponent[2] &&
-		drm->pending.gain_blend == drm->current.gain_blend )
+		drm->pending.color_gamma_exponent[screen_type][0] == drm->current.color_gamma_exponent[screen_type][0] &&
+		drm->pending.color_gamma_exponent[screen_type][1] == drm->current.color_gamma_exponent[screen_type][1] &&
+		drm->pending.color_gamma_exponent[screen_type][2] == drm->current.color_gamma_exponent[screen_type][2] &&
+		drm->pending.gain_blend == drm->current.gain_blend &&
+		drm->pending.screen_type == drm->current.screen_type )
 	{
 		return true;
 	}
@@ -2018,9 +2027,9 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 		  drm->pending.color_linear_gain[2] == 1.0f );
 
 	bool gamma_exponent_identity =
-		( drm->pending.color_gamma_exponent[0] == 1.0f &&
-		  drm->pending.color_gamma_exponent[1] == 1.0f &&
-		  drm->pending.color_gamma_exponent[2] == 1.0f );
+		( drm->pending.color_gamma_exponent[screen_type][0] == 1.0f &&
+		  drm->pending.color_gamma_exponent[screen_type][1] == 1.0f &&
+		  drm->pending.color_gamma_exponent[screen_type][2] == 1.0f );
 
 	if ( color_gain_identity && linear_gain_identity && gamma_exponent_identity )
 	{
@@ -2034,9 +2043,9 @@ bool drm_update_gamma_lut(struct drm_t *drm)
 	{
         float input = float(i) / float(lut_entries - 1);
 
-		float r_exp = safe_pow( input, drm->pending.color_gamma_exponent[0] );
-		float g_exp = safe_pow( input, drm->pending.color_gamma_exponent[1] );
-		float b_exp = safe_pow( input, drm->pending.color_gamma_exponent[2] );
+		float r_exp = safe_pow( input, drm->pending.color_gamma_exponent[screen_type][0] );
+		float g_exp = safe_pow( input, drm->pending.color_gamma_exponent[screen_type][1] );
+		float b_exp = safe_pow( input, drm->pending.color_gamma_exponent[screen_type][2] );
 
 		gamma_lut[i].red   = drm_calc_lut_value( r_exp, drm->pending.color_linear_gain[0], drm->pending.color_gain[0], drm->pending.gain_blend );
 		gamma_lut[i].green = drm_calc_lut_value( g_exp, drm->pending.color_linear_gain[1], drm->pending.color_gain[1], drm->pending.gain_blend );
@@ -2062,17 +2071,20 @@ bool drm_update_degamma_lut(struct drm_t *drm)
 	if ( !drm->crtc->has_degamma_lut )
 		return true;
 
-	if (drm->pending.color_degamma_exponent[0] == drm->current.color_degamma_exponent[0] &&
-		drm->pending.color_degamma_exponent[1] == drm->current.color_degamma_exponent[1] &&
-		drm->pending.color_degamma_exponent[2] == drm->current.color_degamma_exponent[2])
+	enum drm_screen_type screen_type = drm->pending.screen_type;		
+
+	if (drm->pending.color_degamma_exponent[screen_type][0] == drm->current.color_degamma_exponent[screen_type][0] &&
+		drm->pending.color_degamma_exponent[screen_type][1] == drm->current.color_degamma_exponent[screen_type][1] &&
+		drm->pending.color_degamma_exponent[screen_type][2] == drm->current.color_degamma_exponent[screen_type][2] &&
+		drm->pending.screen_type == drm->current.screen_type )
 	{
 		return true;
 	}
 
 	bool degamma_exponent_identity =
-		( drm->pending.color_degamma_exponent[0] == 1.0f &&
-		  drm->pending.color_degamma_exponent[1] == 1.0f &&
-		  drm->pending.color_degamma_exponent[2] == 1.0f );
+		( drm->pending.color_degamma_exponent[screen_type][0] == 1.0f &&
+		  drm->pending.color_degamma_exponent[screen_type][1] == 1.0f &&
+		  drm->pending.color_degamma_exponent[screen_type][2] == 1.0f );
 
 	if ( degamma_exponent_identity )
 	{
@@ -2086,9 +2098,9 @@ bool drm_update_degamma_lut(struct drm_t *drm)
 	{
         float input = float(i) / float(lut_entries - 1);
 
-		degamma_lut[i].red   = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[0] ) );
-		degamma_lut[i].green = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[1] ) );
-		degamma_lut[i].blue  = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[2] ) );
+		degamma_lut[i].red   = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[screen_type][0] ) );
+		degamma_lut[i].green = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[screen_type][1] ) );
+		degamma_lut[i].blue  = drm_quantize_lut_value( safe_pow( input, drm->pending.color_degamma_exponent[screen_type][2] ) );
 	}
 
 	uint32_t blob_id = 0;	

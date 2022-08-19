@@ -129,7 +129,7 @@ struct xwayland_ctx_t
 		Atom gamescopeColorMatrix[DRM_SCREEN_TYPE_COUNT];
 		Atom gamescopeColorLinearGainBlend;
 
-		Atom gamescopeColorGammaExponent;
+		Atom gamescopeColorGammaExponent[DRM_SCREEN_TYPE_COUNT];
 
 		Atom gamescopeXWaylandModeControl;
 

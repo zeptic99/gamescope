@@ -4067,24 +4067,27 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if ( drm_set_color_gain_blend( &g_DRM, flBlend ) )
 			hasRepaint = true;
 	}
-	if ( ev->atom == ctx->atoms.gamescopeColorGammaExponent )
+	for (int i = 0; i < DRM_SCREEN_TYPE_COUNT; i++)
 	{
-		std::vector< uint32_t > user_vec;
-		bool bHasVec = get_prop( ctx, ctx->root, ctx->atoms.gamescopeColorGammaExponent, user_vec );
-		
-		// identity
-		float vec[6] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
-		if ( bHasVec && user_vec.size() == 6 )
+		if ( ev->atom == ctx->atoms.gamescopeColorGammaExponent[i] )
 		{
-			for (int i = 0; i < 6; i++)
-				vec[i] = bit_cast<float>( user_vec[i] );
+			std::vector< uint32_t > user_vec;
+			bool bHasVec = get_prop( ctx, ctx->root, ctx->atoms.gamescopeColorGammaExponent[i], user_vec );
+			
+			// identity
+			float vec[6] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+			if ( bHasVec && user_vec.size() == 6 )
+			{
+				for (int i = 0; i < 6; i++)
+					vec[i] = bit_cast<float>( user_vec[i] );
+			}
+
+			if ( drm_set_degamma_exponent( &g_DRM, &vec[0], drm_screen_type(i) ) )
+				hasRepaint = true;
+
+			if ( drm_set_gamma_exponent( &g_DRM, &vec[3], drm_screen_type(i) ) )
+				hasRepaint = true;
 		}
-
-		if ( drm_set_degamma_exponent( &g_DRM, &vec[0] ) )
-			hasRepaint = true;
-
-		if ( drm_set_gamma_exponent( &g_DRM, &vec[3] ) )
-			hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeXWaylandModeControl )
 	{
@@ -5067,7 +5070,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeColorMatrix[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_MATRIX_EXTERNAL", false );
 	ctx->atoms.gamescopeColorLinearGainBlend = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LINEARGAIN_BLEND", false );
 
-	ctx->atoms.gamescopeColorGammaExponent = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_GAMMA_EXPONENT", false );
+	ctx->atoms.gamescopeColorGammaExponent[DRM_SCREEN_TYPE_INTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_GAMMA_EXPONENT", false );
+	ctx->atoms.gamescopeColorGammaExponent[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_GAMMA_EXPONENT_EXTERNAL", false );
 
 	ctx->atoms.gamescopeXWaylandModeControl = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_MODE_CONTROL", false );
 	ctx->atoms.gamescopeFPSLimit = XInternAtom( ctx->dpy, "GAMESCOPE_FPS_LIMIT", false );
