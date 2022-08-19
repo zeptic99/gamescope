@@ -62,6 +62,9 @@ struct xwayland_ctx_t
 	std::mutex listCommitsDoneLock;
 	std::vector< uint64_t > listCommitsDone;
 
+	double accum_x = 0.0;
+	double accum_y = 0.0;
+
 	struct {
 		Atom steamAtom;
 		Atom gameAtom;

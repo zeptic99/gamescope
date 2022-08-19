@@ -227,20 +227,18 @@ static void wlserver_movecursor( int x, int y )
 static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *data)
 {
 	struct wlr_event_pointer_motion *event = (struct wlr_event_pointer_motion *) data;
-	static double accum_x = 0.0;
-	static double accum_y = 0.0;
-
-	accum_x += event->unaccel_dx;
-	accum_y += event->unaccel_dy;
-
-	float dx, dy;
-	accum_x = modf(accum_x, &dx);
-	accum_y = modf(accum_y, &dy);
 
 	// TODO: Pick the xwayland_server with active focus
 	auto server = steamcompmgr_get_focused_server();
 	if ( server != NULL )
 	{
+		server->ctx->accum_x += event->unaccel_dx;
+		server->ctx->accum_y += event->unaccel_dy;
+
+		float dx, dy;
+		server->ctx->accum_x = modf(server->ctx->accum_x, &dx);
+		server->ctx->accum_y = modf(server->ctx->accum_y, &dy);
+
 		XTestFakeRelativeMotionEvent( server->get_xdisplay(), int(dx), int(dy), CurrentTime );
 		XFlush( server->get_xdisplay() );
 	}	
