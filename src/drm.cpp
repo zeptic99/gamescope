@@ -1555,6 +1555,8 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
  * negative errno on failure or if the scene-graph can't be presented directly. */
 int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 {
+	drm->pending.screen_type = drm_get_screen_type(drm);
+
 	drm_update_gamma_lut(drm);
 	drm_update_degamma_lut(drm);
 	drm_update_color_mtx(drm);
@@ -1819,14 +1821,17 @@ bool drm_set_color_linear_gains(struct drm_t *drm, float *gains)
 	return false;
 }
 
-bool drm_set_color_mtx(struct drm_t *drm, float *mtx)
+bool drm_set_color_mtx(struct drm_t *drm, float *mtx, enum drm_screen_type screen_type)
 {
 	for (int i = 0; i < 9; i++)
-		drm->pending.color_mtx[i] = mtx[i];
+		drm->pending.color_mtx[screen_type][i] = mtx[i];
+
+	if ( drm_get_screen_type(drm) != screen_type )
+		return false;
 
 	for (int i = 0; i < 9; i++)
 	{
-		if ( drm->current.color_mtx[i] != drm->pending.color_mtx[i] )
+		if ( drm->current.color_mtx[screen_type][i] != drm->pending.color_mtx[screen_type][i] )
 			return true;
 	}
 	return false;
@@ -1907,9 +1912,15 @@ bool drm_update_color_mtx(struct drm_t *drm)
 	};
 
 	bool dirty = false;
+
+	enum drm_screen_type screen_type = drm->pending.screen_type;
+
+	if (drm->pending.screen_type != drm->current.screen_type)
+		dirty = true;
+
 	for (int i = 0; i < 9; i++)
 	{
-		if (drm->pending.color_mtx[i] != drm->current.color_mtx[i])
+		if (drm->pending.color_mtx[screen_type][i] != drm->current.color_mtx[screen_type][i])
 			dirty = true;
 	}
 
@@ -1919,7 +1930,7 @@ bool drm_update_color_mtx(struct drm_t *drm)
 	bool identity = true;
 	for (int i = 0; i < 9; i++)
 	{
-		if (drm->pending.color_mtx[i] != g_identity_mtx[i])
+		if (drm->pending.color_mtx[screen_type][i] != g_identity_mtx[i])
 			identity = false;
 	}
 
@@ -1933,7 +1944,7 @@ bool drm_update_color_mtx(struct drm_t *drm)
 	struct drm_color_ctm drm_ctm;
 	for (int i = 0; i < 9; i++)
 	{
-		const float val = drm->pending.color_mtx[i];
+		const float val = drm->pending.color_mtx[screen_type][i];
 
 		// S31.32 sign-magnitude
 		float integral;

@@ -126,7 +126,7 @@ struct xwayland_ctx_t
 
 		Atom gamescopeColorLinearGain;
 		Atom gamescopeColorGain;
-		Atom gamescopeColorMatrix;
+		Atom gamescopeColorMatrix[DRM_SCREEN_TYPE_COUNT];
 		Atom gamescopeColorLinearGainBlend;
 
 		Atom gamescopeColorGammaExponent;

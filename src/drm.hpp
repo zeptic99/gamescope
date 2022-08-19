@@ -23,6 +23,13 @@ enum drm_color_range {
 	DRM_COLOR_RANGE_MAX,
 };
 
+enum drm_screen_type {
+	DRM_SCREEN_TYPE_INTERNAL = 0,
+	DRM_SCREEN_TYPE_EXTERNAL = 1,
+
+	DRM_SCREEN_TYPE_COUNT
+};
+
 #include <wayland-server-core.h>
 
 extern "C" {
@@ -127,13 +134,22 @@ struct drm_t {
 		float color_linear_gain[3] = { 1.0f, 1.0f, 1.0f };
 		float color_gamma_exponent[3] = { 1.0f, 1.0f, 1.0f };
 		float color_degamma_exponent[3] = { 1.0f, 1.0f, 1.0f };
-		float color_mtx[9] =
+		float color_mtx[DRM_SCREEN_TYPE_COUNT][9] =
 		{
-			1.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 1.0f,
+			{
+				1.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f,
+				0.0f, 0.0f, 1.0f,
+			},
+
+			{
+				1.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f,
+				0.0f, 0.0f, 1.0f,
+			},
 		};
 		float gain_blend = 0.0f;
+		enum drm_screen_type screen_type = DRM_SCREEN_TYPE_INTERNAL;
 	} current, pending;
 
 	/* FBs in the atomic request, but not yet submitted to KMS */
@@ -176,13 +192,6 @@ enum drm_mode_generation {
 	DRM_MODE_GENERATE_FIXED,
 };
 
-enum drm_screen_type {
-	DRM_SCREEN_TYPE_INTERNAL = 0,
-	DRM_SCREEN_TYPE_EXTERNAL = 1,
-
-	DRM_SCREEN_TYPE_COUNT
-};
-
 extern enum drm_mode_generation g_drmModeGeneration;
 
 bool init_drm(struct drm_t *drm, int width, int height, int refresh);
@@ -201,7 +210,7 @@ bool drm_set_refresh( struct drm_t *drm, int refresh );
 bool drm_set_resolution( struct drm_t *drm, int width, int height );
 bool drm_set_color_linear_gains(struct drm_t *drm, float *gains);
 bool drm_set_color_gains(struct drm_t *drm, float *gains);
-bool drm_set_color_mtx(struct drm_t *drm, float *mtx);
+bool drm_set_color_mtx(struct drm_t *drm, float *mtx, enum drm_screen_type screen_type);
 bool drm_set_color_gain_blend(struct drm_t *drm, float blend);
 bool drm_update_gamma_lut(struct drm_t *drm);
 bool drm_update_degamma_lut(struct drm_t *drm);
