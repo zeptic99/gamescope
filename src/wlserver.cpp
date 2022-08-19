@@ -226,15 +226,24 @@ static void wlserver_movecursor( int x, int y )
 
 static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *data)
 {
-	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, motion );
 	struct wlr_event_pointer_motion *event = (struct wlr_event_pointer_motion *) data;
+	static double accum_x = 0.0;
+	static double accum_y = 0.0;
 
-	if ( wlserver.mouse_focus_surface != NULL )
+	accum_x += event->unaccel_dx;
+	accum_y += event->unaccel_dy;
+
+	float dx, dy;
+	accum_x = modf(accum_x, &dx);
+	accum_y = modf(accum_y, &dy);
+
+	// TODO: Pick the xwayland_server with active focus
+	auto server = steamcompmgr_get_focused_server();
+	if ( server != NULL )
 	{
-		wlserver_movecursor( event->unaccel_dx, event->unaccel_dy );
-
-		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, event->time_msec, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-	}
+		XTestFakeRelativeMotionEvent( server->get_xdisplay(), int(dx), int(dy), CurrentTime );
+		XFlush( server->get_xdisplay() );
+	}	
 }
 
 static void wlserver_handle_pointer_button(struct wl_listener *listener, void *data)
