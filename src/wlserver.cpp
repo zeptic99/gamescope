@@ -197,33 +197,6 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 	bump_input_counter();
 }
 
-static void wlserver_movecursor( int x, int y )
-{
-	wlserver.mouse_surface_cursorx += x;
-
-	if ( wlserver.mouse_surface_cursorx > wlserver.mouse_focus_surface->current.width - 1 )
-	{
-		wlserver.mouse_surface_cursorx = wlserver.mouse_focus_surface->current.width - 1;
-	}
-
-	if ( wlserver.mouse_surface_cursorx < 0 )
-	{
-		wlserver.mouse_surface_cursorx = 0;
-	}
-
-	wlserver.mouse_surface_cursory += y;
-
-	if ( wlserver.mouse_surface_cursory > wlserver.mouse_focus_surface->current.height - 1 )
-	{
-		wlserver.mouse_surface_cursory = wlserver.mouse_focus_surface->current.height - 1;
-	}
-
-	if ( wlserver.mouse_surface_cursory < 0 )
-	{
-		wlserver.mouse_surface_cursory = 0;
-	}
-}
-
 static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *data)
 {
 	struct wlr_event_pointer_motion *event = (struct wlr_event_pointer_motion *) data;
