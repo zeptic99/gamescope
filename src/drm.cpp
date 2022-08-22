@@ -562,10 +562,33 @@ static bool get_resources(struct drm_t *drm)
 	return true;
 }
 
+struct mode_blocklist_entry
+{
+	uint32_t width, height, refresh;
+};
+
+// Filter out reporting some modes that are required for
+// certain certifications, but are completely useless,
+// and probably don't fit the display pixel size.
+static mode_blocklist_entry g_badModes[] =
+{
+	{ 4096, 2160, 0 },
+};
+
 static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
 {
 	for (int i = 0; i < connector->count_modes; i++) {
 		const drmModeModeInfo *mode = &connector->modes[i];
+
+		bool bad = false;
+		for (const auto& badMode : g_badModes) {
+			bad |= (badMode.width   == 0 || mode->hdisplay == badMode.width)
+				&& (badMode.height  == 0 || mode->vdisplay == badMode.height)
+				&& (badMode.refresh == 0 || mode->vrefresh == badMode.refresh);
+		}
+
+		if (bad)
+			continue;
 
 		if (hdisplay != 0 && hdisplay != mode->hdisplay)
 			continue;
