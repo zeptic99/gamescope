@@ -20,7 +20,8 @@ add_project_arguments(cppc.get_supported_arguments([
   '-Wno-unused-parameter',
   '-Wno-missing-field-initializers',
   '-Wno-c99-designator',
-  '-Wno-invalid-offsetof'
+  '-Wno-invalid-offsetof',
+  '-Wno-unused-const-variable',
 ]), language: 'cpp')
 
 dep_x11 = dependency('x11')
