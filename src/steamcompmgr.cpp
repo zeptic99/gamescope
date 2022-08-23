@@ -2105,7 +2105,13 @@ win_maybe_a_dropdown( win *w )
 	//
 	// TODO: Come back to me for original Age of Empires HD launcher.
 	// Does that use it? It wants blending!
-	if ( w->hasHwndStyleEx && ( w->hwndStyleEx & WS_EX_LAYERED ) )
+	// 
+	// Only do this if we have CONTROLPARENT right now. Some other apps, such as the
+	// Street Fighter V (310950) Splash Screen also use LAYERED and TOOLWINDOW, and we don't
+	// want that to be overlayed.
+	// TODO: Find more apps using LAYERED.
+	const uint32_t validLayered = WS_EX_CONTROLPARENT | WS_EX_LAYERED;
+	if ( w->hasHwndStyleEx && ( ( w->hwndStyleEx & validLayered ) == validLayered ) )
 		return true;
 
 	// Josh:
