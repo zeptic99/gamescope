@@ -115,9 +115,10 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 
 	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p", wlr_surface );
 
-	gamescope_xwayland_server_t *server = (gamescope_xwayland_server_t *)wlr_surface->data;
-	assert(server);
-	server->wayland_commit( wlr_surface, buf );
+	wlserver_surface *wlserver_surface = (struct wlserver_surface *)wlr_surface->data;
+	assert(wlserver_surface);
+	assert(wlserver_surface->xwayland_server);
+	wlserver_surface->xwayland_server->wayland_commit( wlr_surface, buf );
 }
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
@@ -383,10 +384,16 @@ static void content_override_handle_surface_destroy( struct wl_listener *listene
 {
 	struct wlserver_content_override *co = wl_container_of( listener, co, surface_destroy_listener );
 	assert(co->surface);
-	gamescope_xwayland_server_t *server = (gamescope_xwayland_server_t *)co->surface->data;
+	wlserver_surface *wlserver_surf = (wlserver_surface *)co->surface->data;
+	if (!wlserver_surf)
+	{
+		wl_log.errorf( "Unable to destroy content override for surface %p (no wlserver_surface) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
+		return;
+	}
+	gamescope_xwayland_server_t *server = wlserver_surf->xwayland_server;
 	if (!server)
 	{
-		wl_log.errorf( "Unable to destroy content override for surface %p - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
+		wl_log.errorf( "Unable to destroy content override for surface %p (no server) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
 		return;
 	}
 	server->destroy_content_override( co );
@@ -1017,7 +1024,7 @@ static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_
 	wl_signal_add( &wlr_surf->events.destroy, &surf->destroy );
 
 	surf->wlr = wlr_surf;
-	wlr_surf->data = surf->xwayland_server;
+	wlr_surf->data = surf;
 
 	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, NULL, NULL, 0 ) )
 	{
@@ -1063,10 +1070,7 @@ void gamescope_xwayland_server_t::set_wl_id( struct wlserver_surface *surf, uint
 	}
 
 	if ( wlr_surf != nullptr )
-	{
-		wlr_surf->data = reinterpret_cast<void*>(this);
 		wlserver_surface_set_wlr( surf, wlr_surf );
-	}
 }
 
 bool gamescope_xwayland_server_t::is_xwayland_ready() const
