@@ -41,6 +41,12 @@ bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
 const char *g_sOutputName = nullptr;
 
+#ifndef DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP
+#define DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP 0x15
+#endif
+
+bool g_bSupportsAsyncFlips = false;
+
 enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 
 static LogScope drm_log("drm");
@@ -800,6 +806,10 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 		drm->allow_modifiers = true;
 	}
 
+	g_bSupportsAsyncFlips = drmGetCap(drm->fd, DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP, &cap) == 0 && cap != 0;
+	if (!g_bSupportsAsyncFlips)
+		drm_log.errorf("Immediate flips are not supported by the KMS driver");
+
 	if (!get_resources(drm)) {
 		return false;
 	}
@@ -1536,7 +1546,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 
 /* Prepares an atomic commit for the provided scene-graph. Returns 0 on success,
  * negative errno on failure or if the scene-graph can't be presented directly. */
-int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
+int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameInfo )
 {
 	drm->pending.screen_type = drm_get_screen_type(drm);
 
@@ -1555,6 +1565,9 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 	// We do internal refcounting with these events
 	flags |= DRM_MODE_PAGE_FLIP_EVENT;
+
+	if ( async )
+		flags |= DRM_MODE_PAGE_FLIP_ASYNC;
 
 	if ( needs_modeset ) {
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;

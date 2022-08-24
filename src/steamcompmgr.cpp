@@ -208,6 +208,8 @@ struct commit_t
 
 #define MWM_TEAROFF_WINDOW 1
 
+static bool g_bAsyncFlipsEnabled = false;
+
 struct motif_hints_t
 {
 	unsigned long flags;
@@ -307,6 +309,7 @@ uint32_t		lastPublishedInputCounter;
 
 bool			focusDirty = false;
 bool			hasRepaint = false;
+bool			hasRepaintNonBasePlane = false;
 
 unsigned long	damageSequence = 0;
 
@@ -1569,7 +1572,7 @@ static void update_touch_scaling( const struct FrameInfo_t *frameInfo )
 }
 
 static void
-paint_all()
+paint_all(bool async)
 {
 	gamescope_xwayland_server_t *root_server = wlserver_get_xwayland_server(0);
 	xwayland_ctx_t *root_ctx = root_server->ctx.get();
@@ -1823,7 +1826,7 @@ paint_all()
 
 	if ( !bNeedsComposite )
 	{
-		int ret = drm_prepare( &g_DRM, &frameInfo );
+		int ret = drm_prepare( &g_DRM, async, &frameInfo );
 		if ( ret == 0 )
 			bDoComposite = false;
 		else if ( ret == -EACCES )
@@ -1877,7 +1880,7 @@ paint_all()
 
 			layer->linearFilter = false;
 
-			int ret = drm_prepare( &g_DRM, &frameInfo );
+			int ret = drm_prepare( &g_DRM, async, &frameInfo );
 
 			// Happens when we're VT-switched away
 			if ( ret == -EACCES )
@@ -1896,7 +1899,7 @@ paint_all()
 				drm_rollback( &g_DRM );
 
 				// Try once again to in case we need to fall back to another mode.
-				ret = drm_prepare( &g_DRM, &frameInfo );
+				ret = drm_prepare( &g_DRM, async, &frameInfo );
 
 				// Happens when we're VT-switched away
 				if ( ret == -EACCES )
@@ -3753,7 +3756,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 
 				if ( gameFocused && ( w == ctx->focus.overlayWindow || w == ctx->focus.notificationWindow ) )
 				{
-					hasRepaint = true;
+					hasRepaintNonBasePlane = true;
 				}
 				if ( w == ctx->focus.externalOverlayWindow )
 				{
@@ -4181,6 +4184,10 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_bIsCompositeDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeAllowTearing )
+	{
+		g_bAsyncFlipsEnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -4416,12 +4423,12 @@ void handle_done_commits( xwayland_ctx_t *ctx )
 					{
 						if ( w == global_focus.overlayWindow && w->opacity != TRANSLUCENT )
 						{
-							hasRepaint = true;
+							hasRepaintNonBasePlane = true;
 						}
 
 						if ( w == global_focus.notificationWindow && w->opacity != TRANSLUCENT )
 						{
-							hasRepaint = true;
+							hasRepaintNonBasePlane = true;
 						}
 					}
 					if ( ctx->focus.outdatedInteractiveFocus )
@@ -4432,7 +4439,7 @@ void handle_done_commits( xwayland_ctx_t *ctx )
 					// If this is an external overlay, repaint
 					if ( w == ctx->focus.externalOverlayWindow && w->opacity != TRANSLUCENT )
 					{
-						hasRepaint = true;
+						hasRepaintNonBasePlane = true;
 					}
 					// If this is the main plane, repaint
 					if ( w == global_focus.focusWindow && !w->isSteamStreamingClient )
@@ -4443,7 +4450,7 @@ void handle_done_commits( xwayland_ctx_t *ctx )
 
 					if ( w == global_focus.overrideWindow )
 					{
-						hasRepaint = true;
+						hasRepaintNonBasePlane = true;
 					}
 
 					if ( w->isSteamStreamingClientVideo && global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient )
@@ -5094,6 +5101,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeCompositeForce = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_FORCE", false );
 	ctx->atoms.gamescopeCompositeDebug = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_DEBUG", false );
 
+	ctx->atoms.gamescopeAllowTearing = XInternAtom( ctx->dpy, "GAMESCOPE_ALLOW_TEARING", false );
+
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
 
@@ -5424,12 +5433,37 @@ steamcompmgr_main(int argc, char **argv)
 		if (focusDirty)
 			determine_and_apply_focus();
 
-		if ( ( g_bTakeScreenshot == true || hasRepaint == true || is_fading_out() ) && vblank == true )
+		static int nMissedOverlayPaints = 0;
+
+		const bool bForceSyncFlip = g_bTakeScreenshot || is_fading_out();
+		// If we are compositing, always force sync flips because we currently wait
+		// for composition to finish before submitting.
+		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
+		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nMissedOverlayPaints;
+		const bool bDoAsyncFlip   = g_bAsyncFlipsEnabled && g_bSupportsAsyncFlips && !bNeedsSyncFlip;
+
+		bool bShouldPaint = false;
+		if ( bDoAsyncFlip )
 		{
-			paint_all();
+			if ( hasRepaint && !g_bCurrentlyCompositing )
+				bShouldPaint = true;
+		}
+		else
+		{
+			bShouldPaint = vblank && ( hasRepaint || hasRepaintNonBasePlane || bForceSyncFlip );
+		}
+
+		if ( !bShouldPaint && hasRepaintNonBasePlane && vblank )
+			nMissedOverlayPaints++;
+
+		if ( bShouldPaint )
+		{
+			paint_all( !vblank );
 
 			// Consumed the need to repaint here
 			hasRepaint = false;
+			hasRepaintNonBasePlane = false;
+			nMissedOverlayPaints = 0;
 
 			// If we're in the middle of a fade, pump an event into the loop to
 			// make sure we keep pushing frames even if the app isn't updating.

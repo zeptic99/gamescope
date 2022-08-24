@@ -197,7 +197,7 @@ extern enum drm_mode_generation g_drmModeGeneration;
 bool init_drm(struct drm_t *drm, int width, int height, int refresh);
 void finish_drm(struct drm_t *drm);
 int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo );
-int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo );
+int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameInfo );
 void drm_rollback( struct drm_t *drm );
 bool drm_poll_state(struct drm_t *drm);
 uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf );
@@ -221,3 +221,5 @@ drm_screen_type drm_get_screen_type(struct drm_t *drm);
 
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);
+
+extern bool g_bSupportsAsyncFlips;
