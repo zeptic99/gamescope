@@ -6,6 +6,7 @@ protocols = [
 	'gamescope-xwayland',
 	'gamescope-pipewire',
 	'gamescope-input-method',
+	'gamescope-tearing-control-unstable-v1',
 ]
 
 foreach name : protocols
