@@ -208,7 +208,7 @@ struct commit_t
 
 #define MWM_TEAROFF_WINDOW 1
 
-static bool g_bAsyncFlipsEnabled = false;
+bool g_bAsyncFlipsEnabled = false;
 
 struct motif_hints_t
 {

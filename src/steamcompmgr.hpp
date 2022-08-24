@@ -118,3 +118,5 @@ struct wlr_surface *steamcompmgr_get_server_input_surface( size_t idx );
 
 extern uint64_t g_SteamCompMgrVBlankTime;
 extern pid_t focusWindow_pid;
+
+extern bool g_bAsyncFlipsEnabled;
