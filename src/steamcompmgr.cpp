@@ -5437,13 +5437,15 @@ steamcompmgr_main(int argc, char **argv)
 
 		static int nMissedOverlayPaints = 0;
 
+		const bool bSteamOverlayOpen  = global_focus.overlayWindow && global_focus.overlayWindow->opacity;
 		const bool bSurfaceWantsAsync = g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async;
+
 		const bool bForceSyncFlip = g_bTakeScreenshot || is_fading_out();
 		// If we are compositing, always force sync flips because we currently wait
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
 		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nMissedOverlayPaints;
-		const bool bDoAsyncFlip   = g_bAsyncFlipsEnabled && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bNeedsSyncFlip;
+		const bool bDoAsyncFlip   = g_bAsyncFlipsEnabled && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bSteamOverlayOpen && !bNeedsSyncFlip;
 
 		bool bShouldPaint = false;
 		if ( bDoAsyncFlip )
