@@ -67,6 +67,7 @@ enum wlserver_touch_click_mode g_nTouchClickMode = g_nDefaultTouchClickMode;
 static struct wl_list pending_surfaces = {0};
 
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf );
+static wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
 
 extern const struct wlr_surface_role xwayland_surface_role;
 
@@ -115,7 +116,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 
 	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p", wlr_surface );
 
-	wlserver_x11_surface_info *wlserver_x11_surface_info = (struct wlserver_x11_surface_info *)wlr_surface->data;
+	wlserver_x11_surface_info *wlserver_x11_surface_info = get_wl_surface_info(wlr_surface)->x11_surface;
 	assert(wlserver_x11_surface_info);
 	assert(wlserver_x11_surface_info->xwayland_server);
 	wlserver_x11_surface_info->xwayland_server->wayland_commit( wlr_surface, buf );
@@ -356,10 +357,28 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 
 static struct wl_listener new_input_listener = { .notify = wlserver_new_input };
 
+static wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf)
+{
+	return reinterpret_cast<wlserver_wl_surface_info *>(wlr_surf->data);
+}
+
+static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
+{
+	wlserver_wl_surface_info *surf = wl_container_of( l, surf, destroy );
+	delete surf;
+}
+
 static void wlserver_new_surface(struct wl_listener *l, void *data)
 {
 	struct wlr_surface *wlr_surf = (struct wlr_surface *)data;
 	uint32_t id = wl_resource_get_id(wlr_surf->resource);
+
+	wlserver_wl_surface_info *wl_surface_info = new wlserver_wl_surface_info;
+	wl_surface_info->wlr = wlr_surf;
+	wl_surface_info->destroy.notify = handle_wl_surface_destroy;
+	wl_signal_add( &wlr_surf->events.destroy, &wl_surface_info->destroy );
+
+	wlr_surf->data = wl_surface_info;
 
 	struct wlserver_x11_surface_info *s, *tmp;
 	wl_list_for_each_safe(s, tmp, &pending_surfaces, pending_link)
@@ -384,7 +403,7 @@ static void content_override_handle_surface_destroy( struct wl_listener *listene
 {
 	struct wlserver_content_override *co = wl_container_of( listener, co, surface_destroy_listener );
 	assert(co->surface);
-	wlserver_x11_surface_info *wlserver_surf = (wlserver_x11_surface_info *)co->surface->data;
+	wlserver_x11_surface_info *wlserver_surf = get_wl_surface_info(co->surface)->x11_surface;
 	if (!wlserver_surf)
 	{
 		wl_log.errorf( "Unable to destroy content override for surface %p (no wlserver_x11_surface_info) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
@@ -1006,7 +1025,7 @@ const char *wlserver_get_wl_display_name( void )
 	return wlserver.wl_display_name;
 }
 
-static void handle_surface_destroy( struct wl_listener *l, void *data )
+static void handle_x11_surface_destroy( struct wl_listener *l, void *data )
 {
 	struct wlserver_x11_surface_info *surf = wl_container_of( l, surf, destroy );
 	wlserver_x11_surface_info_finish( surf );
@@ -1020,11 +1039,11 @@ static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info 
 	wl_list_remove( &surf->pending_link );
 	wl_list_init( &surf->pending_link );
 
-	surf->destroy.notify = handle_surface_destroy;
+	surf->destroy.notify = handle_x11_surface_destroy;
 	wl_signal_add( &wlr_surf->events.destroy, &surf->destroy );
 
 	surf->wlr = wlr_surf;
-	wlr_surf->data = surf;
+	get_wl_surface_info(wlr_surf)->x11_surface = surf;
 
 	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, NULL, NULL, 0 ) )
 	{

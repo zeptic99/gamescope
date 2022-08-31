@@ -182,6 +182,13 @@ struct wlserver_x11_surface_info
 	gamescope_xwayland_server_t *xwayland_server;
 };
 
+struct wlserver_wl_surface_info
+{
+	wlserver_x11_surface_info *x11_surface = nullptr;
+	struct wlr_surface *wlr = nullptr;
+	struct wl_listener destroy;
+};
+
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf );
 
