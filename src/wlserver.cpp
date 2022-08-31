@@ -36,6 +36,7 @@ extern "C" {
 
 #include "gamescope-xwayland-protocol.h"
 #include "gamescope-pipewire-protocol.h"
+#include "gamescope-tearing-control-unstable-v1-protocol.h"
 
 #include "wlserver.hpp"
 #include "drm.hpp"
@@ -505,6 +506,59 @@ static void create_gamescope_pipewire( void )
 }
 #endif
 
+
+
+static void gamescope_surface_tearing_set_presentation_hint( struct wl_client *client, struct wl_resource *resource, uint32_t hint )
+{
+	wlserver_wl_surface_info *wl_surface_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
+
+	wl_surface_info->presentation_hint = hint;
+}
+
+static void gamescope_surface_tearing_destroy( struct wl_client *client, struct wl_resource *resource )
+{
+	wl_resource_destroy( resource );
+}
+
+static const struct gamescope_surface_tearing_control_v1_interface surface_tearing_control_impl {
+	.set_presentation_hint = gamescope_surface_tearing_set_presentation_hint,
+	.destroy = gamescope_surface_tearing_destroy,
+};
+
+static void gamescope_tearing_handle_destroy( struct wl_client *client, struct wl_resource *resource )
+{
+	wl_resource_destroy( resource );
+}
+
+static void gamescope_tearing_get_tearing_control( struct wl_client *client, struct wl_resource *resource, uint32_t id, struct wl_resource *surface_resource )
+{
+	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
+
+	struct wl_resource *surface_tearing_control_resource
+		= wl_resource_create( client, &gamescope_surface_tearing_control_v1_interface, wl_resource_get_version( resource ), id );
+	wl_resource_set_implementation( surface_tearing_control_resource, &surface_tearing_control_impl, get_wl_surface_info(surface), NULL );
+}
+
+static const struct gamescope_tearing_control_v1_interface tearing_control_impl = {
+	.destroy			 = gamescope_tearing_handle_destroy,
+	.get_tearing_control = gamescope_tearing_get_tearing_control,
+};
+
+static void gamescope_tearing_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
+{
+	struct wl_resource *resource = wl_resource_create( client, &gamescope_tearing_control_v1_interface, version, id );
+	wl_resource_set_implementation( resource, &tearing_control_impl, NULL, NULL );
+}
+
+static void create_gamescope_tearing( void )
+{
+	uint32_t version = 1;
+	wl_global_create( wlserver.display, &gamescope_tearing_control_v1_interface, version, NULL, gamescope_tearing_bind );
+}
+
+
+
+
 static void handle_session_active( struct wl_listener *listener, void *data )
 {
 	if (wlserver.wlr.session->active) {
@@ -689,6 +743,8 @@ bool wlserver_init( void ) {
 #if HAVE_PIPEWIRE
 	create_gamescope_pipewire();
 #endif
+
+	create_gamescope_tearing();
 
 	int result = -1;
 	int display_slot = 0;
