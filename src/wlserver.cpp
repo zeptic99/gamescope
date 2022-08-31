@@ -939,6 +939,11 @@ void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *
 	wlr_surface_send_frame_done( surf, when );
 }
 
+bool wlserver_surface_is_async( struct wlr_surface *surf )
+{
+	return get_wl_surface_info( surf )->presentation_hint != 0;
+}
+
 void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 {
 	if ( wlserver.mouse_focus_surface != NULL )
