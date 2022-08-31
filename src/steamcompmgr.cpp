@@ -178,6 +178,7 @@ struct commit_t
 	std::shared_ptr<CVulkanTexture> vulkanTex;
 	uint64_t commitID = 0;
 	bool done = false;
+	bool async = false;
 };
 
 #define MWM_HINTS_FUNCTIONS   1
@@ -765,12 +766,13 @@ destroy_buffer( struct wl_listener *listener, void * )
 }
 
 static std::shared_ptr<commit_t>
-import_commit ( struct wlr_buffer *buf )
+import_commit ( struct wlr_buffer *buf, bool async )
 {
 	std::shared_ptr<commit_t> commit = std::make_shared<commit_t>();
 	std::unique_lock<std::mutex> lock( wlr_buffer_map_lock );
 
 	commit->buf = buf;
+	commit->async = async;
 
 	auto it = wlr_buffer_map.find( buf );
 	if ( it != wlr_buffer_map.end() )
@@ -4512,7 +4514,7 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 			continue;
 		}
 
-		std::shared_ptr<commit_t> newCommit = import_commit( buf );
+		std::shared_ptr<commit_t> newCommit = import_commit( buf, wlserver_surface_is_async(tmp_queue[ i ].surf) );
 
 		int fence = -1;
 		if ( newCommit )
