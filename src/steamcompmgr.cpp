@@ -264,7 +264,7 @@ struct win {
 
 	unsigned int mouseMoved;
 
-	struct wlserver_surface surface;
+	struct wlserver_x11_surface_info surface;
 
 	xwayland_ctx_t *ctx;
 
@@ -3326,7 +3326,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 
 	new_win->mouseMoved = 0;
 
-	wlserver_surface_init( &new_win->surface, ctx->xwayland_server, id );
+	wlserver_x11_surface_info_init( &new_win->surface, ctx->xwayland_server, id );
 
 	new_win->next = *p;
 	*p = new_win;
@@ -3470,7 +3470,7 @@ finish_destroy_win(xwayland_ctx_t *ctx, Window id, bool gone)
 			}
 
 			wlserver_lock();
-			wlserver_surface_finish( &w->surface );
+			wlserver_x11_surface_info_finish( &w->surface );
 			wlserver_unlock();
 
 			free(w->title);

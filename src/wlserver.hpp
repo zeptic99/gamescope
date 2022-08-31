@@ -34,7 +34,7 @@ public:
 	bool is_xwayland_ready() const;
 	const char *get_nested_display_name() const;
 
-	void set_wl_id( struct wlserver_surface *surf, uint32_t id );
+	void set_wl_id( struct wlserver_x11_surface_info *surf, uint32_t id );
 
 	_XDisplay *get_xdisplay();
 
@@ -169,7 +169,7 @@ void wlserver_set_output_info( const wlserver_output_info *info );
 gamescope_xwayland_server_t *wlserver_get_xwayland_server( size_t index );
 const char *wlserver_get_wl_display_name( void );
 
-struct wlserver_surface
+struct wlserver_x11_surface_info
 {
 	std::atomic<struct wlr_surface *> wlr;
 
@@ -182,8 +182,8 @@ struct wlserver_surface
 	gamescope_xwayland_server_t *xwayland_server;
 };
 
-void wlserver_surface_init( struct wlserver_surface *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
-void wlserver_surface_finish( struct wlserver_surface *surf );
+void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
+void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf );
 
 void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh );
 

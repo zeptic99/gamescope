@@ -66,7 +66,7 @@ enum wlserver_touch_click_mode g_nTouchClickMode = g_nDefaultTouchClickMode;
 
 static struct wl_list pending_surfaces = {0};
 
-static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_surface *wlr_surf );
+static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf );
 
 extern const struct wlr_surface_role xwayland_surface_role;
 
@@ -115,10 +115,10 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 
 	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p", wlr_surface );
 
-	wlserver_surface *wlserver_surface = (struct wlserver_surface *)wlr_surface->data;
-	assert(wlserver_surface);
-	assert(wlserver_surface->xwayland_server);
-	wlserver_surface->xwayland_server->wayland_commit( wlr_surface, buf );
+	wlserver_x11_surface_info *wlserver_x11_surface_info = (struct wlserver_x11_surface_info *)wlr_surface->data;
+	assert(wlserver_x11_surface_info);
+	assert(wlserver_x11_surface_info->xwayland_server);
+	wlserver_x11_surface_info->xwayland_server->wayland_commit( wlr_surface, buf );
 }
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
@@ -361,12 +361,12 @@ static void wlserver_new_surface(struct wl_listener *l, void *data)
 	struct wlr_surface *wlr_surf = (struct wlr_surface *)data;
 	uint32_t id = wl_resource_get_id(wlr_surf->resource);
 
-	struct wlserver_surface *s, *tmp;
+	struct wlserver_x11_surface_info *s, *tmp;
 	wl_list_for_each_safe(s, tmp, &pending_surfaces, pending_link)
 	{
 		if (s->wl_id == id && s->wlr == nullptr)
 		{
-			wlserver_surface_set_wlr( s, wlr_surf );
+			wlserver_x11_surface_info_set_wlr( s, wlr_surf );
 		}
 	}
 }
@@ -384,10 +384,10 @@ static void content_override_handle_surface_destroy( struct wl_listener *listene
 {
 	struct wlserver_content_override *co = wl_container_of( listener, co, surface_destroy_listener );
 	assert(co->surface);
-	wlserver_surface *wlserver_surf = (wlserver_surface *)co->surface->data;
+	wlserver_x11_surface_info *wlserver_surf = (wlserver_x11_surface_info *)co->surface->data;
 	if (!wlserver_surf)
 	{
-		wl_log.errorf( "Unable to destroy content override for surface %p (no wlserver_surface) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
+		wl_log.errorf( "Unable to destroy content override for surface %p (no wlserver_x11_surface_info) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
 		return;
 	}
 	gamescope_xwayland_server_t *server = wlserver_surf->xwayland_server;
@@ -1008,12 +1008,12 @@ const char *wlserver_get_wl_display_name( void )
 
 static void handle_surface_destroy( struct wl_listener *l, void *data )
 {
-	struct wlserver_surface *surf = wl_container_of( l, surf, destroy );
-	wlserver_surface_finish( surf );
-	wlserver_surface_init( surf, surf->xwayland_server, surf->x11_id );
+	struct wlserver_x11_surface_info *surf = wl_container_of( l, surf, destroy );
+	wlserver_x11_surface_info_finish( surf );
+	wlserver_x11_surface_info_init( surf, surf->xwayland_server, surf->x11_id );
 }
 
-static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_surface *wlr_surf )
+static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf )
 {
 	assert( surf->wlr == nullptr );
 
@@ -1032,7 +1032,7 @@ static void wlserver_surface_set_wlr( struct wlserver_surface *surf, struct wlr_
 	}
 }
 
-void wlserver_surface_init( struct wlserver_surface *surf, gamescope_xwayland_server_t *server, uint32_t x11_id )
+void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id )
 {
 	surf->wl_id = 0;
 	surf->x11_id = x11_id;
@@ -1042,7 +1042,7 @@ void wlserver_surface_init( struct wlserver_surface *surf, gamescope_xwayland_se
 	wl_list_init( &surf->destroy.link );
 }
 
-void gamescope_xwayland_server_t::set_wl_id( struct wlserver_surface *surf, uint32_t id )
+void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *surf, uint32_t id )
 {
 	if ( surf->wl_id != 0 )
 	{
@@ -1070,7 +1070,7 @@ void gamescope_xwayland_server_t::set_wl_id( struct wlserver_surface *surf, uint
 	}
 
 	if ( wlr_surf != nullptr )
-		wlserver_surface_set_wlr( surf, wlr_surf );
+		wlserver_x11_surface_info_set_wlr( surf, wlr_surf );
 }
 
 bool gamescope_xwayland_server_t::is_xwayland_ready() const
@@ -1088,7 +1088,7 @@ const char *gamescope_xwayland_server_t::get_nested_display_name() const
 	return xwayland_server->display_name;
 }
 
-void wlserver_surface_finish( struct wlserver_surface *surf )
+void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 {
 	if ( surf->wlr == wlserver.mouse_focus_surface )
 	{
