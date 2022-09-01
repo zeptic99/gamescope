@@ -718,13 +718,16 @@ bool CVulkanDevice::createDevice()
 		}
 
 		dev_t renderDevId = makedev( drmProps.renderMajor, drmProps.renderMinor );
-		char *renderName = find_drm_node_by_devid( renderDevId );
-		if ( renderName == nullptr ) {
-			vk_log.errorf( "failed to find DRM node" );
+		drmDevice *drmDev = nullptr;
+		if (drmGetDeviceFromDevId(renderDevId, 0, &drmDev) != 0) {
+			vk_log.errorf( "drmGetDeviceFromDevId() failed" );
 			return false;
 		}
+		assert(drmDev->available_nodes & (1 << DRM_NODE_RENDER));
+		const char *drmRenderName = drmDev->nodes[DRM_NODE_RENDER];
 
-		m_drmRendererFd = open( renderName, O_RDWR | O_CLOEXEC );
+		m_drmRendererFd = open( drmRenderName, O_RDWR | O_CLOEXEC );
+		drmFreeDevice(&drmDev);
 		if ( m_drmRendererFd < 0 ) {
 			vk_log.errorf_errno( "failed to open DRM render node" );
 			return false;

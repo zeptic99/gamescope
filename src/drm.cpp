@@ -717,48 +717,6 @@ static bool setup_best_connector(struct drm_t *drm)
 	return true;
 }
 
-char *find_drm_node_by_devid(dev_t devid)
-{
-	// TODO: replace all of this with drmGetDeviceFromDevId once it's available
-
-	drmDevice *devices[32];
-	int devices_len = drmGetDevices2(0, devices, sizeof(devices) / sizeof(devices[0]));
-	if (devices_len < 0) {
-		drm_log.errorf_errno("drmGetDevices2 failed");
-		return nullptr;
-	}
-
-	char *name = nullptr;
-	for (int i = 0; i < devices_len; i++) {
-		drmDevice *dev = devices[i];
-
-		const int node_types[] = { DRM_NODE_PRIMARY, DRM_NODE_RENDER };
-		for (size_t j = 0; j < sizeof(node_types) / sizeof(node_types[0]); j++) {
-			int node = node_types[j];
-
-			if (!(dev->available_nodes & (1 << node)))
-				continue;
-
-			struct stat dev_stat = {};
-			if (stat(dev->nodes[node], &dev_stat) != 0) {
-				drm_log.errorf_errno("stat(%s) failed", dev->nodes[node]);
-				continue;
-			}
-
-			if (dev_stat.st_rdev == devid) {
-				name = strdup(dev->nodes[node]);
-				break;
-			}
-		}
-
-		if (name != nullptr)
-			break;
-	}
-
-	drmFreeDevices(devices, devices_len);
-	return name;
-}
-
 void load_pnps(void)
 {
 	// TODO: use hwdata's pkg-config file once they ship one
@@ -803,11 +761,13 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 	char *device_name = nullptr;
 	dev_t dev_id = 0;
 	if (vulkan_primary_dev_id(&dev_id)) {
-		device_name = find_drm_node_by_devid(dev_id);
-		if (device_name == nullptr) {
+		drmDevice *drm_dev = nullptr;
+		if (drmGetDeviceFromDevId(dev_id, 0, &drm_dev) != 0) {
 			drm_log.errorf("Failed to find DRM device with device ID %" PRIu64, (uint64_t)dev_id);
 			return false;
 		}
+		assert(drm_dev->available_nodes & (1 << DRM_NODE_PRIMARY));
+		device_name = strdup(drm_dev->nodes[DRM_NODE_PRIMARY]);
 		drm_log.infof("opening DRM node '%s'", device_name);
 	}
 	else
