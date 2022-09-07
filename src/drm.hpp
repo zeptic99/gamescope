@@ -175,6 +175,8 @@ struct drm_t {
 	std::atomic < bool > needs_modeset;
 
 	std::unordered_map< std::string, int > connector_priorities;
+
+	bool force_internal = false;
 };
 
 extern struct drm_t g_DRM;

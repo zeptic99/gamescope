@@ -80,6 +80,8 @@ static std::map< uint32_t, const char * > connector_types = {
 #endif
 };
 
+drm_screen_type drm_get_connector_type(drmModeConnector *connector);
+
 static struct fb& get_fb( struct drm_t& drm, uint32_t id )
 {
 	std::lock_guard<std::mutex> m( drm.fb_map_mutex );
@@ -651,6 +653,9 @@ static bool setup_best_connector(struct drm_t *drm)
 		struct connector *conn = &kv.second;
 
 		if (conn->connector->connection != DRM_MODE_CONNECTED)
+			continue;
+
+		if (drm->force_internal && drm_get_connector_type(conn->connector) == DRM_SCREEN_TYPE_EXTERNAL)
 			continue;
 
 		int priority = get_connector_priority(drm, conn->name);
@@ -1873,16 +1878,21 @@ bool drm_set_degamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_typ
 	return false;
 }
 
+drm_screen_type drm_get_connector_type(drmModeConnector *connector)
+{
+	if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+		connector->connector_type == DRM_MODE_CONNECTOR_LVDS)
+		 return DRM_SCREEN_TYPE_INTERNAL;
+
+	return DRM_SCREEN_TYPE_EXTERNAL;
+}
+
 drm_screen_type drm_get_screen_type(struct drm_t *drm)
 {
 	if (!drm->connector || !drm->connector->connector)
 		return DRM_SCREEN_TYPE_INTERNAL;
 
-	if ( drm->connector->connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
-		 drm->connector->connector->connector_type == DRM_MODE_CONNECTOR_LVDS )
-		 return DRM_SCREEN_TYPE_INTERNAL;
-
-	return DRM_SCREEN_TYPE_EXTERNAL;
+	return drm_get_connector_type(drm->connector->connector);
 }
 
 inline float lerp( float a, float b, float t )

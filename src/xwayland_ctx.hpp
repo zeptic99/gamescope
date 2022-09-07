@@ -147,6 +147,7 @@ struct xwayland_ctx_t
 		Atom gamescopeCompositeDebug;
 
 		Atom gamescopeAllowTearing;
+		Atom gamescopeDisplayForceInternal;
 
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;

@@ -4194,6 +4194,14 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_nAsyncFlipsEnabled = get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
 	}
+	if ( ev->atom == ctx->atoms.gamescopeDisplayForceInternal )
+	{
+		if ( !BIsNested() )
+		{
+			g_DRM.force_internal = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayForceInternal, 0 );
+			g_DRM.out_of_date = true;
+		}
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -5108,6 +5116,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeCompositeDebug = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_DEBUG", false );
 
 	ctx->atoms.gamescopeAllowTearing = XInternAtom( ctx->dpy, "GAMESCOPE_ALLOW_TEARING", false );
+
+	ctx->atoms.gamescopeDisplayForceInternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_FORCE_INTERNAL", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
