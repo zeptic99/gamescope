@@ -383,7 +383,7 @@ int main(int argc, char **argv)
 					g_preferVendorID = vendorID;
 					g_preferDeviceID = deviceID;
 				} else if (strcmp(opt_name, "immediate-flips") == 0) {
-					g_bAsyncFlipsEnabled = true;
+					g_nAsyncFlipsEnabled = 1;
 				}
 				break;
 			case '?':
