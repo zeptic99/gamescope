@@ -969,7 +969,7 @@ void MouseCursor::checkSuspension()
 
 		// We're hiding the cursor, force redraw if we were showing it
 		if (window && !m_imageEmpty ) {
-			hasRepaint = true;
+			hasRepaintNonBasePlane = true;
 			nudge_steamcompmgr();
 		}
 	}
@@ -1137,13 +1137,13 @@ void MouseCursor::move(int x, int y)
 	if (window) {
 		// If mouse moved and we're on the hook for showing the cursor, repaint
 		if (!m_hideForMovement && !m_imageEmpty) {
-			hasRepaint = true;
+			hasRepaintNonBasePlane = true;
 		}
 
 		// If mouse moved and screen is magnified, repaint
 		if ( zoomScaleRatio != 1.0 )
 		{
-			hasRepaint = true;
+			hasRepaintNonBasePlane = true;
 		}
 	}
 
@@ -2738,8 +2738,12 @@ determine_and_apply_focus()
 	if (previous_focus.overlayWindow         != global_focus.overlayWindow         ||
 		previous_focus.externalOverlayWindow != global_focus.externalOverlayWindow ||
 	    previous_focus.notificationWindow    != global_focus.notificationWindow    ||
-		previous_focus.focusWindow           != global_focus.focusWindow           ||
 		previous_focus.overrideWindow        != global_focus.overrideWindow)
+	{
+		hasRepaintNonBasePlane = true;
+	}
+
+	if (previous_focus.focusWindow           != global_focus.focusWindow)
 	{
 		hasRepaint = true;
 	}
