@@ -672,7 +672,7 @@ static bool get_saved_mode(const char *description, saved_mode &mode_info)
 	return false;
 }
 
-static bool setup_best_connector(struct drm_t *drm)
+static bool setup_best_connector(struct drm_t *drm, bool force)
 {
 	if (drm->connector && drm->connector->connector->connection != DRM_MODE_CONNECTED) {
 		drm_log.infof("current connector '%s' disconnected", drm->connector->name);
@@ -697,9 +697,11 @@ static bool setup_best_connector(struct drm_t *drm)
 		}
 	}
 
-	if ((!best && drm->connector) || (best && best == drm->connector)) {
-		// Let's keep our current connector
-		return true;
+	if (!force) {
+		if ((!best && drm->connector) || (best && best == drm->connector)) {
+			// Let's keep our current connector
+			return true;
+		}
 	}
 
 	if ( best == nullptr ) {
@@ -876,7 +878,7 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 
 	drm->connector_priorities = parse_connector_priorities( g_sOutputName );
 
-	if (!setup_best_connector(drm)) {
+	if (!setup_best_connector(drm, false)) {
 		return false;
 	}
 
@@ -1752,13 +1754,13 @@ void drm_rollback( struct drm_t *drm )
 
 bool drm_poll_state( struct drm_t *drm )
 {
-	bool out_of_date = drm->out_of_date.exchange(false);
+	int out_of_date = drm->out_of_date.exchange(false);
 	if ( !out_of_date )
 		return false;
 
 	refresh_state( drm );
 
-	setup_best_connector(drm);
+	setup_best_connector(drm, out_of_date >= 2);
 
 	return true;
 }

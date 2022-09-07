@@ -177,7 +177,7 @@ struct drm_t {
 	std::atomic < uint64_t > flipcount;
 
 	std::atomic < bool > paused;
-	std::atomic < bool > out_of_date;
+	std::atomic < int > out_of_date;
 	std::atomic < bool > needs_modeset;
 
 	std::unordered_map< std::string, int > connector_priorities;
