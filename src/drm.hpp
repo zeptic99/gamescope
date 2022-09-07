@@ -48,6 +48,12 @@ extern "C" {
 #include <mutex>
 #include <vector>
 
+struct saved_mode {
+	int width;
+	int height;
+	int refresh;
+};
+
 struct plane {
 	uint32_t id;
 	drmModePlane *plane;

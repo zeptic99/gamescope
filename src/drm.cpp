@@ -646,6 +646,32 @@ static int get_connector_priority(struct drm_t *drm, const char *name)
 	return drm->connector_priorities.size();
 }
 
+static bool get_saved_mode(const char *description, saved_mode &mode_info)
+{
+	const char *mode_file = getenv("GAMESCOPE_MODE_SAVE_FILE");
+	if (!mode_file || !*mode_file)
+		return false;
+
+	FILE *file = fopen(mode_file, "r");
+	if (!file)
+		return false;
+
+	char line[256];
+    while (fgets(line, sizeof(line), file))
+	{
+		char saved_description[256];
+        bool valid = sscanf(line, "%255[^:]:%dx%d@%d", saved_description, &mode_info.width, &mode_info.height, &mode_info.refresh) == 4;
+
+		if (valid && !strcmp(saved_description, description))
+		{
+			fclose(file);
+			return true;
+		}
+    }
+	fclose(file);
+	return false;
+}
+
 static bool setup_best_connector(struct drm_t *drm)
 {
 	if (drm->connector && drm->connector->connector->connection != DRM_MODE_CONNECTED) {
@@ -687,25 +713,6 @@ static bool setup_best_connector(struct drm_t *drm)
 		return false;
 	}
 
-	const drmModeModeInfo *mode = nullptr;
-	if ( drm->preferred_width != 0 || drm->preferred_height != 0 || drm->preferred_refresh != 0 )
-	{
-		mode = find_mode(best->connector, drm->preferred_width, drm->preferred_height, drm->preferred_refresh);
-	}
-
-	if (!mode) {
-		mode = find_mode(best->connector, 0, 0, 0);
-	}
-
-	if (!mode) {
-		drm_log.errorf("could not find mode!");
-		return false;
-	}
-
-	if (!drm_set_mode(drm, mode)) {
-		return false;
-	}
-
 	char description[256];
 	switch (best->connector->connector_type) {
 	case DRM_MODE_CONNECTOR_LVDS:
@@ -721,6 +728,31 @@ static bool setup_best_connector(struct drm_t *drm)
 			snprintf(description, sizeof(description), "External screen");
 		}
 		break;
+	}
+
+	const drmModeModeInfo *mode = nullptr;
+	if ( drm->preferred_width != 0 || drm->preferred_height != 0 || drm->preferred_refresh != 0 )
+	{
+		mode = find_mode(best->connector, drm->preferred_width, drm->preferred_height, drm->preferred_refresh);
+	}
+
+	if (!mode && drm_get_connector_type(best->connector) == DRM_SCREEN_TYPE_EXTERNAL) {
+		saved_mode mode_info;
+		if (get_saved_mode(description, mode_info))
+			mode = find_mode(best->connector, mode_info.width, mode_info.height, mode_info.refresh);
+	}
+
+	if (!mode) {
+		mode = find_mode(best->connector, 0, 0, 0);
+	}
+
+	if (!mode) {
+		drm_log.errorf("could not find mode!");
+		return false;
+	}
+
+	if (!drm_set_mode(drm, mode)) {
+		return false;
 	}
 
 	const struct wlserver_output_info wlserver_output_info = {
