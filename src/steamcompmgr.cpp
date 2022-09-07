@@ -5128,6 +5128,9 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDisplayForceInternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_FORCE_INTERNAL", false );
 	ctx->atoms.gamescopeDisplayModeNudge = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_MODE_NUDGE", false );
 
+	ctx->atoms.gamescopeDisplayIsExternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_IS_EXTERNAL", false );
+	ctx->atoms.gamescopeDisplayModeListExternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_MODE_LIST_EXTERNAL", false );
+
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
 
@@ -5171,6 +5174,38 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 		if (!load_mouse_cursor(ctx->cursor.get(), g_customCursorPath, g_customCursorHotspotX, g_customCursorHotspotY))
 			xwm_log.errorf("Failed to load mouse cursor: %s", g_customCursorPath);
 	}
+}
+
+void update_mode_atoms(xwayland_ctx_t *root_ctx)
+{
+	if ( drm_get_screen_type(&g_DRM) == DRM_SCREEN_TYPE_INTERNAL )
+	{
+		XDeleteProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayModeListExternal);
+
+		uint32_t zero = 0;
+		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayIsExternal, XA_CARDINAL, 32, PropModeReplace,
+			(unsigned char *)&zero, 1 );
+		return;
+	}
+
+	char modes[4096] = "";
+	int remaining_size = sizeof(modes) - 1;
+	int len = 0;
+	for (int i = 0; remaining_size > 0 && i < g_DRM.connector->connector->count_modes; i++)
+	{
+		const auto& mode = g_DRM.connector->connector->modes[i];
+		int mode_len = snprintf(&modes[len], remaining_size, "%s%dx%d@%d",
+			i == 0 ? "" : " ",
+			int(mode.hdisplay), int(mode.vdisplay), int(mode.vrefresh));
+		len += mode_len;
+		remaining_size -= mode_len;
+	}
+	XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayModeListExternal, XA_STRING, 8, PropModeReplace,
+		(unsigned char *)modes, strlen(modes) + 1 );
+	
+	uint32_t one = 1;
+	XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayIsExternal, XA_CARDINAL, 32, PropModeReplace,
+		(unsigned char *)&one, 1 );
 }
 
 extern int g_nPreferredOutputWidth;
@@ -5323,6 +5358,8 @@ steamcompmgr_main(int argc, char **argv)
 		}
 	}
 
+	update_mode_atoms(root_ctx);
+
 	for (;;)
 	{
 		bool vblank = false;
@@ -5402,7 +5439,11 @@ steamcompmgr_main(int argc, char **argv)
 		if ( BIsNested() == false )
 		{
 			if ( drm_poll_state( &g_DRM ) )
+			{
 				hasRepaint = true;
+
+				update_mode_atoms(root_ctx);
+			}
 		}
 
 		// Pick our width/height for this potential frame, regardless of how it might change later

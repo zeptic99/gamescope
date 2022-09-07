@@ -150,6 +150,9 @@ struct xwayland_ctx_t
 		Atom gamescopeDisplayForceInternal;
 		Atom gamescopeDisplayModeNudge;
 
+		Atom gamescopeDisplayIsExternal;
+		Atom gamescopeDisplayModeListExternal;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 	} atoms;
