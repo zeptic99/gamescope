@@ -209,7 +209,7 @@ struct commit_t
 
 #define MWM_TEAROFF_WINDOW 1
 
-bool g_bAsyncFlipsEnabled = false;
+int g_nAsyncFlipsEnabled = 0;
 
 struct motif_hints_t
 {
@@ -4192,7 +4192,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeAllowTearing )
 	{
-		g_bAsyncFlipsEnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
+		g_nAsyncFlipsEnabled = get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
 	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
@@ -5439,17 +5439,21 @@ steamcompmgr_main(int argc, char **argv)
 		if (focusDirty)
 			determine_and_apply_focus();
 
-		static int nMissedOverlayPaints = 0;
+		const bool bAllowRelaxedVsync = g_nAsyncFlipsEnabled >= 2;
+
+		static int nIgnoredOverlayRepaints = 0;
+		static int nBasePlaneMissedVBlankCount = 0;
 
 		const bool bSteamOverlayOpen  = global_focus.overlayWindow && global_focus.overlayWindow->opacity;
-		const bool bSurfaceWantsAsync = g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async;
+		// If we are running behind, allow tearing.
+		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async) || (nBasePlaneMissedVBlankCount && bAllowRelaxedVsync);
 
 		const bool bForceSyncFlip = g_bTakeScreenshot || is_fading_out();
 		// If we are compositing, always force sync flips because we currently wait
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
-		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nMissedOverlayPaints;
-		const bool bDoAsyncFlip   = g_bAsyncFlipsEnabled && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bSteamOverlayOpen && !bNeedsSyncFlip;
+		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nIgnoredOverlayRepaints;
+		const bool bDoAsyncFlip   = (g_nAsyncFlipsEnabled >= 1) && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bSteamOverlayOpen && !bNeedsSyncFlip;
 
 		bool bShouldPaint = false;
 		if ( bDoAsyncFlip )
@@ -5463,16 +5467,22 @@ steamcompmgr_main(int argc, char **argv)
 		}
 
 		if ( !bShouldPaint && hasRepaintNonBasePlane && vblank )
-			nMissedOverlayPaints++;
+			nIgnoredOverlayRepaints++;
+
+		if ( !hasRepaint && vblank )
+			nBasePlaneMissedVBlankCount++;
 
 		if ( bShouldPaint )
 		{
 			paint_all( !vblank );
 
 			// Consumed the need to repaint here
+			if (hasRepaint)
+				nBasePlaneMissedVBlankCount = 0;
+
 			hasRepaint = false;
 			hasRepaintNonBasePlane = false;
-			nMissedOverlayPaints = 0;
+			nIgnoredOverlayRepaints = 0;
 
 			// If we're in the middle of a fade, pump an event into the loop to
 			// make sure we keep pushing frames even if the app isn't updating.
