@@ -403,19 +403,11 @@ void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_cont
 static void content_override_handle_surface_destroy( struct wl_listener *listener, void *data )
 {
 	struct wlserver_content_override *co = wl_container_of( listener, co, surface_destroy_listener );
-	assert(co->surface);
-	wlserver_x11_surface_info *wlserver_surf = get_wl_surface_info(co->surface)->x11_surface;
-	if (!wlserver_surf)
-	{
-		wl_log.errorf( "Unable to destroy content override for surface %p (no wlserver_x11_surface_info) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
-		return;
-	}
-	gamescope_xwayland_server_t *server = wlserver_surf->xwayland_server;
-	if (!server)
-	{
-		wl_log.errorf( "Unable to destroy content override for surface %p (no server) - was it launched on the wrong DISPLAY or did the surface never get wl_id?\n", co->surface );
-		return;
-	}
+	/* The protocol only works for server 0, so assume that for now.
+	 * A future revision may change this and add a DISPLAY parameter or something.
+	 * That would be cool! */
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( 0 );
+	assert( server );
 	server->destroy_content_override( co );
 }
 
