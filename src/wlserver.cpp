@@ -1231,6 +1231,13 @@ const char *gamescope_xwayland_server_t::get_nested_display_name() const
 
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 {
+	if (surf->wlr)
+	{
+		wlserver_wl_surface_info *wl_info = get_wl_surface_info(surf->wlr);
+		if (wl_info)
+			wl_info->x11_surface = nullptr;
+	}
+
 	if ( surf->wlr == wlserver.mouse_focus_surface )
 	{
 		wlserver.mouse_focus_surface = nullptr;
