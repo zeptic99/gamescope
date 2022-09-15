@@ -614,7 +614,12 @@ static bool filter_global(const struct wl_client *client, const struct wl_global
 		return true;
 
 	struct wlr_output *output = (struct wlr_output *) wl_global_get_user_data(global);
-	assert(output);
+	if (!output)
+	{
+		//assert(output);
+		wl_log.errorf("Global %p with interface %s had no userdata! Woah :(", global, wl_output_interface.name);
+		return false;
+	}
 
 	/* We create one wl_output global per Xwayland server, to easily have
 	 * per-server output configuration. Only expose the wl_output belonging to
