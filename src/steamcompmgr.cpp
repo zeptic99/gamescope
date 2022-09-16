@@ -1994,6 +1994,7 @@ paint_all(bool async)
  *   not found: default
  *   otherwise the value
  */
+__attribute__((__no_sanitize_address__)) // x11 broken, returns format 32 even when it only malloc'ed one byte. :(
 static unsigned int
 get_prop(xwayland_ctx_t *ctx, Window win, Atom prop, unsigned int def, bool *found = nullptr )
 {
@@ -2024,6 +2025,7 @@ get_prop(xwayland_ctx_t *ctx, Window win, Atom prop, unsigned int def, bool *fou
 }
 
 // vectored version, return value is whether anything was found
+__attribute__((__no_sanitize_address__)) // x11 broken :(
 bool get_prop( xwayland_ctx_t *ctx, Window win, Atom prop, std::vector< uint32_t > &vecResult )
 {
 	Atom actual;
