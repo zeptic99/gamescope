@@ -52,6 +52,9 @@ extern "C" {
 
 #include "gpuvis_trace_utils.h"
 
+#include <algorithm>
+#include <list>
+
 static LogScope wl_log("wlserver");
 
 static struct wlserver_t wlserver = {};
@@ -97,6 +100,14 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 	nudge_steamcompmgr();
 }
 
+struct PendingCommit_t
+{
+	struct wlr_surface *surf;
+	struct wlr_buffer *buf;
+};
+
+std::list<PendingCommit_t> g_PendingCommits;
+
 void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	assert(wlr_surface->role == &xwayland_surface_role);
 
@@ -118,9 +129,15 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p", wlr_surface );
 
 	wlserver_x11_surface_info *wlserver_x11_surface_info = get_wl_surface_info(wlr_surface)->x11_surface;
-	assert(wlserver_x11_surface_info);
-	assert(wlserver_x11_surface_info->xwayland_server);
-	wlserver_x11_surface_info->xwayland_server->wayland_commit( wlr_surface, buf );
+	if (wlserver_x11_surface_info)
+	{
+		assert(wlserver_x11_surface_info->xwayland_server);
+		wlserver_x11_surface_info->xwayland_server->wayland_commit( wlr_surface, buf );
+	}
+	else
+	{
+		g_PendingCommits.push_back(PendingCommit_t{ wlr_surface, buf });
+	}
 }
 
 static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface) {
@@ -374,6 +391,20 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 
 	if ( surf->wlr == wlserver.kb_focus_surface )
 		wlserver.kb_focus_surface = nullptr;
+
+	for (auto it = g_PendingCommits.begin(); it != g_PendingCommits.end();)
+	{
+		if (it->surf == surf->wlr)
+		{
+			// We owned the buffer lock, so unlock it here.
+			wlr_buffer_unlock(it->buf);
+			it = g_PendingCommits.erase(it);
+		}
+		else
+		{
+			it++;
+		}
+	}
 
 	surf->wlr->data = nullptr;
 	delete surf;
@@ -1172,6 +1203,26 @@ static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info 
 	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, NULL, NULL, 0 ) )
 	{
 		wl_log.errorf("Failed to set xwayland surface role");
+	}
+
+	for (auto it = g_PendingCommits.begin(); it != g_PendingCommits.end();)
+	{
+		if (it->surf == wlr_surf)
+		{
+			PendingCommit_t pending = *it;
+
+			// Still have the buffer lock from before...
+			wlserver_x11_surface_info *wlserver_x11_surface_info = get_wl_surface_info(wlr_surf)->x11_surface;
+			assert(wlserver_x11_surface_info);
+			assert(wlserver_x11_surface_info->xwayland_server);
+			wlserver_x11_surface_info->xwayland_server->wayland_commit( pending.surf, pending.buf );
+
+			it = g_PendingCommits.erase(it);
+		}
+		else
+		{
+			it++;
+		}
 	}
 }
 
