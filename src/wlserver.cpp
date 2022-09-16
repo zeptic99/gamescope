@@ -374,6 +374,8 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 
 	if ( surf->wlr == wlserver.kb_focus_surface )
 		wlserver.kb_focus_surface = nullptr;
+
+	surf->wlr->data = nullptr;
 	delete surf;
 }
 
