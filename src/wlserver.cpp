@@ -634,10 +634,11 @@ void wlserver_set_output_info( const wlserver_output_info *info )
 	wlserver.output_info.phys_width = info->phys_width;
 	wlserver.output_info.phys_height = info->phys_height;
 
-	for (size_t i = 0; i < wlserver.wlr.xwayland_servers.size(); i++) {
-		gamescope_xwayland_server_t *server = wlserver.wlr.xwayland_servers[i].get();
-		server->update_output_info();
-	}
+	if (wlserver.wlr.xwayland_servers.empty())
+		return;
+
+	gamescope_xwayland_server_t *server = wlserver.wlr.xwayland_servers[0].get();
+	server->update_output_info();
 }
 
 static bool filter_global(const struct wl_client *client, const struct wl_global *global, void *data)
