@@ -4544,6 +4544,22 @@ void check_new_wayland_res(xwayland_ctx_t *ctx)
 			continue;
 		}
 
+		bool already_exists = false;
+		for ( const auto& existing_commit : w->commit_queue )
+		{
+			if (existing_commit->buf == buf)
+				already_exists = true;
+		}
+
+		if ( already_exists )
+		{
+			wlserver_lock();
+			wlr_buffer_unlock( buf );
+			wlserver_unlock();
+			xwm_log.errorf( "got the same buffer commited twice, ignoring." );
+			continue;
+		}
+
 		std::shared_ptr<commit_t> newCommit = import_commit( buf, wlserver_surface_is_async(tmp_queue[ i ].surf) );
 
 		int fence = -1;
