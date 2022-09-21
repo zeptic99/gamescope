@@ -1910,8 +1910,16 @@ paint_all(bool async)
 				if ( ret != 0 )
 				{
 					xwm_log.errorf("Failed to prepare 1-layer flip entirely: %s", strerror( -ret ));
-					// We should always handle a 1-layer flip
-					abort();
+					// We should always handle a 1-layer flip, this used to abort,
+					// but lets be more friendly and just avoid a commit and try again later.
+					// Let's re-poll our state, and force grab the best connector again.
+					//
+					// Some intense connector hotplugging could be occuring and the
+					// connector could become destroyed before we had a chance to use it
+					// as we hadn't reffed it in a commit yet.
+					g_DRM.out_of_date = 2;
+					drm_poll_state( &g_DRM );
+					return;
 				}
 			}
 
