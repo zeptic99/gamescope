@@ -58,7 +58,7 @@ public:
 
 	void hide() { m_lastMovedTime = 0; checkSuspension(); }
 
-	bool isHidden() { return m_hideForMovement; }
+	bool isHidden() { return m_hideForMovement || m_imageEmpty; }
 
 	void forcePosition(int x, int y)
 	{
@@ -77,6 +77,8 @@ private:
 
 	bool getTexture();
 
+	void updateCursorFeedback( bool bForce = false );
+
 	int m_x = 0, m_y = 0;
 	int m_hotspotX = 0, m_hotspotY = 0;
 
@@ -93,6 +95,8 @@ private:
 
 	int m_lastX = 0;
 	int m_lastY = 0;
+
+	bool m_bCursorVisibleFeedback = false;
 };
 
 extern std::vector< wlr_surface * > wayland_surfaces_deleted;
