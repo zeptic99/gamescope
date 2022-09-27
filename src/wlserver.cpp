@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
-#include <poll.h>	
+#include <poll.h>
 
 #include <linux/input-event-codes.h>
 
