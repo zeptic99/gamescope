@@ -773,6 +773,8 @@ gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 	}
 
 	update_output_info();
+
+	wlr_output_create_global(output);
 }
 
 gamescope_xwayland_server_t::~gamescope_xwayland_server_t()
