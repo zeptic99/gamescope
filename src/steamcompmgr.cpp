@@ -210,6 +210,7 @@ struct commit_t
 #define MWM_TEAROFF_WINDOW 1
 
 int g_nAsyncFlipsEnabled = 0;
+int g_nSteamMaxHeight = 0;
 
 struct motif_hints_t
 {
@@ -2595,15 +2596,29 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 	if (w->a.x != 0 || w->a.y != 0)
 		XMoveWindow(ctx->dpy, ctx->focus.focusWindow->id, 0, 0);
 
-	if ( window_is_fullscreen( ctx->focus.focusWindow ) && ( w->a.width != ctx->root_width || w->a.height != ctx->root_height || globalScaleRatio != 1.0f ) )
+	if ( window_is_fullscreen( ctx->focus.focusWindow ) )
 	{
-		XResizeWindow(ctx->dpy, ctx->focus.focusWindow->id, ctx->root_width, ctx->root_height);
+		bool bIsSteam = ctx->focus.focusWindow->appID == 769;
+		int fs_width  = ctx->root_width;
+		int fs_height = ctx->root_height;
+		if ( bIsSteam && g_nSteamMaxHeight && ctx->root_height > g_nSteamMaxHeight )
+		{
+			float steam_height_scale = g_nSteamMaxHeight / (float)ctx->root_height;
+			fs_height = g_nSteamMaxHeight;
+			fs_width  = ctx->root_width * steam_height_scale;
+		}
+
+		if ( w->a.width != fs_width || w->a.height != fs_height || globalScaleRatio != 1.0f )
+			XResizeWindow(ctx->dpy, ctx->focus.focusWindow->id, fs_width, fs_height);
 	}
-	else if ( !window_is_fullscreen( ctx->focus.focusWindow ) && ctx->focus.focusWindow->sizeHintsSpecified &&
-		((unsigned)ctx->focus.focusWindow->a.width != ctx->focus.focusWindow->requestedWidth ||
-		(unsigned)ctx->focus.focusWindow->a.height != ctx->focus.focusWindow->requestedHeight))
+	else
 	{
-		XResizeWindow(ctx->dpy, ctx->focus.focusWindow->id, ctx->focus.focusWindow->requestedWidth, ctx->focus.focusWindow->requestedHeight);
+		if (ctx->focus.focusWindow->sizeHintsSpecified &&
+			((unsigned)ctx->focus.focusWindow->a.width != ctx->focus.focusWindow->requestedWidth ||
+			(unsigned)ctx->focus.focusWindow->a.height != ctx->focus.focusWindow->requestedHeight))
+		{
+			XResizeWindow(ctx->dpy, ctx->focus.focusWindow->id, ctx->focus.focusWindow->requestedWidth, ctx->focus.focusWindow->requestedHeight);
+		}
 	}
 
 	if ( inputFocus )
@@ -4232,6 +4247,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_nAsyncFlipsEnabled = get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
 	}
+	if ( ev->atom == ctx->atoms.gamescopeSteamMaxHeight )
+	{
+		g_nSteamMaxHeight = get_prop( ctx, ctx->root, ctx->atoms.gamescopeSteamMaxHeight, 0 );
+		focusDirty = true;
+	}
 	if ( ev->atom == ctx->atoms.gamescopeDisplayForceInternal )
 	{
 		if ( !BIsNested() )
@@ -5192,6 +5212,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDisplayModeListExternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_MODE_LIST_EXTERNAL", false );
 
 	ctx->atoms.gamescopeCursorVisibleFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_CURSOR_VISIBLE_FEEDBACK", false );
+
+	ctx->atoms.gamescopeSteamMaxHeight = XInternAtom( ctx->dpy, "GAMESCOPE_STEAM_MAX_HEIGHT", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
