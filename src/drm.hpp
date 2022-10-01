@@ -87,6 +87,8 @@ struct connector {
 	char *make;
 	char *model;
 
+	int target_refresh;
+
 	struct {
 		uint32_t crtc_id;
 	} current, pending;

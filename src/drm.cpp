@@ -493,6 +493,8 @@ static bool refresh_state( drm_t *drm )
 
 		conn->current.crtc_id = conn->initial_prop_values["CRTC_ID"];
 
+		conn->target_refresh = 0;
+
 		drm_log.debugf("found new connector '%s'", conn->name);
 	}
 
@@ -754,6 +756,8 @@ static bool setup_best_connector(struct drm_t *drm, bool force)
 		drm_log.errorf("could not find mode!");
 		return false;
 	}
+
+	best->target_refresh = mode->vrefresh;
 
 	if (!drm_set_mode(drm, mode)) {
 		return false;
@@ -2279,6 +2283,9 @@ int drm_get_default_refresh(struct drm_t *drm)
 {
 	if ( drm->preferred_refresh )
 		return drm->preferred_refresh;
+
+	if ( drm->connector && drm->connector->target_refresh )
+		return drm->connector->target_refresh;
 
 	if ( drm->connector && drm->connector->connector )
 	{
