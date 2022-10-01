@@ -233,6 +233,9 @@ void inputSDLThreadRun( void )
 						g_nNestedRefresh = g_nOldNestedRefresh;
 						g_bWindowFocused = true;
 						break;
+					case SDL_WINDOWEVENT_EXPOSED:
+						force_repaint();
+						break;
 				}
 				break;
 			default:

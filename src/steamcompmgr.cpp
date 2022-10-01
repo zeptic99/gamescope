@@ -417,6 +417,8 @@ static std::unordered_map<struct wlr_buffer*, wlr_buffer_map_entry> wlr_buffer_m
 static std::atomic< bool > g_bTakeScreenshot{false};
 static bool g_bPropertyRequestedScreenshot;
 
+static std::atomic<bool> g_bForceRepaint{false};
+
 static int g_nudgePipe[2] = {-1, -1};
 
 static LogScope xwm_log("xwm");
@@ -4548,6 +4550,12 @@ void take_screenshot( void )
 	nudge_steamcompmgr();
 }
 
+void force_repaint( void )
+{
+	g_bForceRepaint = true;
+	nudge_steamcompmgr();
+}
+
 void check_new_wayland_res(xwayland_ctx_t *ctx)
 {
 	// When importing buffer, we'll potentially need to perform operations with
@@ -5562,7 +5570,8 @@ steamcompmgr_main(int argc, char **argv)
 		// If we are running behind, allow tearing.
 		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async) || (nBasePlaneMissedVBlankCount && bAllowRelaxedVsync);
 
-		const bool bForceSyncFlip = g_bTakeScreenshot || is_fading_out();
+		const bool bForceRepaint = g_bForceRepaint.exchange(false);
+		const bool bForceSyncFlip = bForceRepaint || g_bTakeScreenshot || is_fading_out();
 		// If we are compositing, always force sync flips because we currently wait
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
