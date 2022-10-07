@@ -68,6 +68,7 @@ struct wlserver_content_override {
 enum wlserver_touch_click_mode g_nDefaultTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
 enum wlserver_touch_click_mode g_nTouchClickMode = g_nDefaultTouchClickMode;
 
+
 static struct wl_list pending_surfaces = {0};
 
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf );
@@ -234,7 +235,7 @@ static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *d
 
 		XTestFakeRelativeMotionEvent( server->get_xdisplay(), int(dx), int(dy), CurrentTime );
 		XFlush( server->get_xdisplay() );
-	}	
+	}
 }
 
 static void wlserver_handle_pointer_button(struct wl_listener *listener, void *data)
@@ -1042,22 +1043,51 @@ bool wlserver_surface_is_async( struct wlr_surface *surf )
 	return get_wl_surface_info( surf )->presentation_hint != 0;
 }
 
+/* Handle the orientation of the touch inputs */
+static void apply_touchscreen_orientation(double *x, double *y )
+{
+	double tx = 0;
+	double ty = 0;
+
+	switch ( get_drm_effective_orientation() )
+	{
+		case DRM_MODE_ROTATE_0:
+			tx = *x;
+			ty = *y;
+			break;
+		case DRM_MODE_ROTATE_90:
+			tx = 1.0 - *y;
+			ty = *x;
+			break;
+		case DRM_MODE_ROTATE_180:
+			tx = 1.0 - *x;
+			ty = 1.0 - *y;
+			break;
+		case DRM_MODE_ROTATE_270:
+			tx = *y;
+			ty = 1.0 - *x;
+			break;
+	}
+
+	*x = tx;
+	*y = ty;
+}
+
 void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 {
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
-		double tx = g_bRotated ? y : x;
-		double ty = g_bRotated ? 1.0 - x : y;
+		double tx = x;
+		double ty = y;
+
+		apply_touchscreen_orientation(&tx, &ty);
 
 		tx *= g_nOutputWidth;
 		ty *= g_nOutputHeight;
-
 		tx += focusedWindowOffsetX;
 		ty += focusedWindowOffsetY;
-
 		tx *= focusedWindowScaleX;
 		ty *= focusedWindowScaleY;
-
 		wlserver.mouse_surface_cursorx = tx;
 		wlserver.mouse_surface_cursory = ty;
 
@@ -1085,18 +1115,17 @@ void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 {
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
-		double tx = g_bRotated ? y : x;
-		double ty = g_bRotated ? 1.0 - x : y;
+		double tx = x;
+		double ty = y;
+
+		apply_touchscreen_orientation(&tx, &ty);
 
 		tx *= g_nOutputWidth;
 		ty *= g_nOutputHeight;
-
 		tx += focusedWindowOffsetX;
 		ty += focusedWindowOffsetY;
-
 		tx *= focusedWindowScaleX;
 		ty *= focusedWindowScaleY;
-
 		wlserver.mouse_surface_cursorx = tx;
 		wlserver.mouse_surface_cursory = ty;
 
