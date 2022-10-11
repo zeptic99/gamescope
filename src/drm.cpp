@@ -731,20 +731,14 @@ static bool setup_best_connector(struct drm_t *drm, bool force)
 	}
 
 	char description[256];
-	switch (best->connector->connector_type) {
-	case DRM_MODE_CONNECTOR_LVDS:
-	case DRM_MODE_CONNECTOR_eDP:
+	if (drm_get_connector_type(best->connector) == DRM_SCREEN_TYPE_INTERNAL) {
 		snprintf(description, sizeof(description), "Internal screen");
-		break;
-	default:
-		if (best->make && best->model) {
-			snprintf(description, sizeof(description), "%s %s", best->make, best->model);
-		} else if (best->model) {
-			snprintf(description, sizeof(description), "%s", best->model);
-		} else {
-			snprintf(description, sizeof(description), "External screen");
-		}
-		break;
+	} else if (best->make && best->model) {
+		snprintf(description, sizeof(description), "%s %s", best->make, best->model);
+	} else if (best->model) {
+		snprintf(description, sizeof(description), "%s", best->model);
+	} else {
+		snprintf(description, sizeof(description), "External screen");
 	}
 
 	const drmModeModeInfo *mode = nullptr;
