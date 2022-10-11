@@ -36,7 +36,6 @@ struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
 bool g_bRotated = false;
-
 bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
 const char *g_sOutputName = nullptr;
@@ -49,6 +48,7 @@ bool g_bSupportsAsyncFlips = false;
 
 enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
+uint64_t g_drmEffectiveOrientation = PANEL_ORIENTATION_0;
 
 
 static LogScope drm_log("drm");
@@ -153,6 +153,15 @@ static bool get_plane_formats(struct drm_t *drm, struct plane *plane, struct wlr
 	}
 
 	return true;
+}
+
+static const char *get_enum_name(const drmModePropertyRes *prop, uint64_t value)
+{
+	for (int i = 0; i < prop->count_enums; i++) {
+		if (prop->enums[i].value == value)
+			return prop->enums[i].name;
+	}
+	return nullptr;
 }
 
 static uint32_t pick_plane_format( const struct wlr_drm_format_set *formats )
@@ -1279,22 +1288,57 @@ void drm_unlock_fbid( struct drm_t *drm, uint32_t fbid )
 }
 
 /* Handle the orientation of the display */
-uint64_t get_drm_effective_orientation()
+void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn)
 {
+	drm_screen_type screenType = drm_get_screen_type(drm);
+	if ( screenType == DRM_SCREEN_TYPE_EXTERNAL )
+	{
+		g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+		return;	
+	}	
 	switch ( g_drmModeOrientation )
 	{
 		case PANEL_ORIENTATION_0:
-			return DRM_MODE_ROTATE_0;
+			g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+			break;
 		case PANEL_ORIENTATION_90:
-			return DRM_MODE_ROTATE_90;
+			g_drmEffectiveOrientation = DRM_MODE_ROTATE_90;
+			break;
 		case PANEL_ORIENTATION_180:
-			return DRM_MODE_ROTATE_180;
+			g_drmEffectiveOrientation = DRM_MODE_ROTATE_180;
+			break;
 		case PANEL_ORIENTATION_270:
-			return DRM_MODE_ROTATE_270;
+			g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
+			break;
 		case PANEL_ORIENTATION_AUTO:
-			return g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
+			if (conn->props.count("panel orientation") > 0 ) 
+			{
+				const char *orientation = get_enum_name(conn->props["panel orientation"], conn->initial_prop_values["panel orientation"]);
+
+				if (strcmp(orientation, "Normal") == 0)
+				{
+					g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+				}
+				else if (strcmp(orientation, "Left Side Up") == 0)
+				{
+					g_drmEffectiveOrientation = DRM_MODE_ROTATE_90;
+				}
+				else if (strcmp(orientation, "Upside Down") == 0)
+				{
+					g_drmEffectiveOrientation = DRM_MODE_ROTATE_180;
+				}
+				else if (strcmp(orientation, "Right Side Up") == 0)
+				{
+					g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
+				}
+				break;
+			}
+			else
+			{
+				g_drmEffectiveOrientation = g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
+				break;
+			}
 	}
-	abort(); //Should not happen unless something went terribly wrong
 }
 
 /* Prepares an atomic commit without using libliftoff */
@@ -1321,16 +1365,7 @@ drm_prepare_basic( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 	drm->fbids_in_req.push_back( fb_id );
 
-	drm_screen_type screenType = drm_get_screen_type(drm);
-
-	if ( screenType == DRM_SCREEN_TYPE_INTERNAL )
-	{
-		add_plane_property(req, drm->primary, "rotation", get_drm_effective_orientation());
-	}
-	else
-	{
-		add_plane_property(req, drm->primary, "rotation", DRM_MODE_ROTATE_0);
-	}
+	add_plane_property(req, drm->primary, "rotation", g_drmEffectiveOrientation);
 
 	add_plane_property(req, drm->primary, "FB_ID", fb_id);
 	add_plane_property(req, drm->primary, "CRTC_ID", drm->crtc->id);
@@ -1580,16 +1615,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", entry.layerState[i].srcW );
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", entry.layerState[i].srcH );
 
-			drm_screen_type screenType = drm_get_screen_type(drm);
-
-			if ( screenType == DRM_SCREEN_TYPE_INTERNAL )
-			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", get_drm_effective_orientation());
-			}
-			else
-			{
-				liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", DRM_MODE_ROTATE_0);
-			}
+			liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", g_drmEffectiveOrientation );
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", entry.layerState[i].crtcX);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", entry.layerState[i].crtcY);
@@ -1886,6 +1912,8 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 
 	drm->connector = conn;
 	drm->needs_modeset = true;
+
+	update_drm_effective_orientation(drm, conn);
 
 	return true;
 }
