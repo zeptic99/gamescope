@@ -1906,7 +1906,7 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 
 	drm->connector = conn;
 	drm->needs_modeset = true;
-	
+
 	return true;
 }
 
