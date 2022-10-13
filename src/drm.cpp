@@ -1282,13 +1282,13 @@ void drm_unlock_fbid( struct drm_t *drm, uint32_t fbid )
 }
 
 /* Handle the orientation of the display */
-void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn)
+static void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn, const drmModeModeInfo *mode)
 {
 	drm_screen_type screenType = drm_get_screen_type(drm);
 	if ( screenType == DRM_SCREEN_TYPE_EXTERNAL )
 	{
 		g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
-		return;	
+		return;
 	}
 	switch ( g_drmModeOrientation )
 	{
@@ -1305,7 +1305,7 @@ void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn)
 			g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
 			break;
 		case PANEL_ORIENTATION_AUTO:
-			if (conn->props.count("panel orientation") > 0 ) 
+			if (conn->props.count("panel orientation") > 0 )
 			{
 				const char *orientation = get_enum_name(conn->props["panel orientation"], conn->initial_prop_values["panel orientation"]);
 
@@ -1328,7 +1328,8 @@ void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn)
 			}
 			else
 			{
-				g_drmEffectiveOrientation = g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
+				// Auto-detect portait mode
+				g_drmEffectiveOrientation = mode->hdisplay < mode->vdisplay ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
 			}
 			break;
 	}
@@ -2262,25 +2263,24 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	drm->pending.mode_id = mode_id;
 	drm->needs_modeset = true;
 
-	g_nOutputWidth = mode->hdisplay;
-	g_nOutputHeight = mode->vdisplay;
 	g_nOutputRefresh = mode->vrefresh;
 
-	// Auto-detect portrait mode
-	g_bRotated = g_nOutputWidth < g_nOutputHeight;
+	update_drm_effective_orientation(drm, drm->connector, mode);
 
-	if ( g_bRotated )
+	switch ( g_drmEffectiveOrientation )
 	{
-		g_nOutputWidth = mode->vdisplay;
-		g_nOutputHeight = mode->hdisplay;
-	}
-	
-	update_drm_effective_orientation(drm, drm->connector);
-
-	if ( g_drmEffectiveOrientation == PANEL_ORIENTATION_0 || g_drmModeOrientation == PANEL_ORIENTATION_180 )
-	{
+	case DRM_MODE_ROTATE_0:
+	case DRM_MODE_ROTATE_180:
+		g_bRotated = false;
 		g_nOutputWidth = mode->hdisplay;
 		g_nOutputHeight = mode->vdisplay;
+		break;
+	case DRM_MODE_ROTATE_90:
+	case DRM_MODE_ROTATE_270:
+		g_bRotated = true;
+		g_nOutputWidth = mode->vdisplay;
+		g_nOutputHeight = mode->hdisplay;
+		break;
 	}
 
 	return true;
