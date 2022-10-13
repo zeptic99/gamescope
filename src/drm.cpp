@@ -1289,7 +1289,7 @@ void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn)
 	{
 		g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
 		return;	
-	}	
+	}
 	switch ( g_drmModeOrientation )
 	{
 		case PANEL_ORIENTATION_0:
@@ -1325,13 +1325,12 @@ void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn)
 				{
 					g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
 				}
-				break;
 			}
 			else
 			{
 				g_drmEffectiveOrientation = g_bRotated ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
-				break;
 			}
+			break;
 	}
 }
 
@@ -1906,9 +1905,7 @@ bool drm_set_connector( struct drm_t *drm, struct connector *conn )
 
 	drm->connector = conn;
 	drm->needs_modeset = true;
-
-	update_drm_effective_orientation(drm, conn);
-
+	
 	return true;
 }
 
@@ -2276,6 +2273,14 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	{
 		g_nOutputWidth = mode->vdisplay;
 		g_nOutputHeight = mode->hdisplay;
+	}
+	
+	update_drm_effective_orientation(drm, drm->connector);
+
+	if ( g_drmEffectiveOrientation == PANEL_ORIENTATION_0 || g_drmModeOrientation == PANEL_ORIENTATION_180 )
+	{
+		g_nOutputWidth = mode->hdisplay;
+		g_nOutputHeight = mode->vdisplay;
 	}
 
 	return true;
