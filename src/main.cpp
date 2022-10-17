@@ -108,7 +108,7 @@ const char usage[] =
 	"  -e, --steam                    enable Steam integration\n"
 	"  --xwayland-count               create N xwayland servers\n"
 	"  --prefer-vk-device             prefer Vulkan device for compositing (ex: 1002:7300)\n"
-	"  --force-orientation             rotate the display (left, right, normal, upsidedown)\n"
+	"  --force-orientation            rotate the internal display (left, right, normal, upsidedown)\n"
 	"\n"
 	"Nested mode options:\n"
 	"  -o, --nested-unfocused-refresh game refresh rate when unfocused\n"
