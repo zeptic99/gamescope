@@ -558,6 +558,7 @@ int main(int argc, char **argv)
 
 	setenv("DISPLAY", base_server->get_nested_display_name(), 1);
 	setenv("XDG_SESSION_TYPE", "x11", 1);
+	setenv("XDG_CURRENT_DESKTOP", "gamescope", 1);
 	if (g_nXWaylandCount > 1)
 	{
 		for (int i = 1; i < g_nXWaylandCount; i++)
