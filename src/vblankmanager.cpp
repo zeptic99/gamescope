@@ -70,6 +70,8 @@ void vblankThreadRun( void )
 	const uint64_t range = g_uVBlankRateOfDecayMax;
 	while ( true )
 	{
+		const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+		const uint64_t nsecInterval = 1'000'000'000ul / refresh;
 		// The redzone is relative to 60Hz, scale it by our
 		// target refresh so we don't miss submitting for vblank in DRM.
 		// (This fixes 4K@30Hz screens)
@@ -84,9 +86,7 @@ void vblankThreadRun( void )
 		if ( !bVRR )
 		{
 			const uint64_t alpha = g_uVBlankRateOfDecayPercentage;
-			const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 
-			const uint64_t nsecInterval = 1'000'000'000ul / refresh;
 			uint64_t drawTime = g_uVblankDrawTimeNS;
 
 			if ( g_bCurrentlyCompositing )
@@ -123,7 +123,7 @@ void vblankThreadRun( void )
 			// 'vblank' time is varying.
 			g_uRollingMaxDrawTime = g_uStartingDrawTime;
 
-			offset = 1'000'000 + redzone;
+			offset = 1'000'000 + redZone;
 		}
 
 #ifdef VBLANK_DEBUG
