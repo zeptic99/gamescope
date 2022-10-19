@@ -205,9 +205,12 @@ static struct plane *find_primary_plane(struct drm_t *drm)
 
 static void drm_unlock_fb_internal( struct drm_t *drm, struct fb *fb );
 
+std::atomic<uint64_t> g_nCompletedPageFlipCount = { 0u };
+
 static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsigned int usec, unsigned int crtc_id, void *data)
 {
 	uint64_t flipcount = (uint64_t)data;
+	g_nCompletedPageFlipCount = flipcount;
 
 	if ( g_DRM.crtc->id != crtc_id )
 		return;
@@ -506,6 +509,8 @@ static bool refresh_state( drm_t *drm )
 
 		conn->target_refresh = 0;
 
+		conn->vrr_capable = !!conn->initial_prop_values["vrr_capable"];
+
 		drm_log.debugf("found new connector '%s'", conn->name);
 	}
 
@@ -524,8 +529,13 @@ static bool refresh_state( drm_t *drm )
 		crtc->has_ctm = (crtc->props.find( "CTM" ) != crtc->props.end());
 		if (!crtc->has_ctm)
 			drm_log.infof("CRTC %" PRIu32 " has no CTM support", crtc->id);
+		crtc->has_vrr_enabled = (crtc->props.find( "VRR_ENABLED" ) != crtc->props.end());
+		if (!crtc->has_vrr_enabled)
+			drm_log.infof("CRTC %" PRIu32 " has no VRR_ENABLED support", crtc->id);
 
 		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
+		if (crtc->has_vrr_enabled)
+			drm->current.vrr_enabled = crtc->initial_prop_values["VRR_ENABLED"];
 	}
 
 	for (size_t i = 0; i < drm->planes.size(); i++) {
@@ -977,6 +987,8 @@ void finish_drm(struct drm_t *drm)
 			add_crtc_property(req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
 		if ( drm->crtcs[i].has_ctm )
 			add_crtc_property(req, &drm->crtcs[i], "CTM", 0);
+		if ( drm->crtcs[i].has_vrr_enabled )
+			add_crtc_property(req, &drm->crtcs[i], "VRR_ENABLED", 0);
 		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
 	}
 	for ( size_t i = 0; i < drm->planes.size(); i++ ) {
@@ -1672,6 +1684,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	drm_update_gamma_lut(drm);
 	drm_update_degamma_lut(drm);
 	drm_update_color_mtx(drm);
+	drm_update_vrr_state(drm);
 
 	drm->fbids_in_req.clear();
 
@@ -1732,6 +1745,12 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				if (ret < 0)
 					return ret;
 			}
+			if (crtc->has_vrr_enabled)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VRR_ENABLED", 0);
+				if (ret < 0)
+					return ret;
+			}
 
 			int ret = add_crtc_property(drm->req, crtc, "ACTIVE", 0);
 			if (ret < 0)
@@ -1775,6 +1794,13 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				return false;
 		}
 
+		if (drm->crtc->has_vrr_enabled)
+		{
+			ret = add_crtc_property(drm->req, drm->crtc, "VRR_ENABLED", drm->pending.vrr_enabled);
+			if (ret < 0)
+				return false;
+		}
+
 		ret = add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1);
 		if (ret < 0)
 			return false;
@@ -1799,6 +1825,13 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		if ( drm->crtc->has_ctm && drm->pending.ctm_id != drm->current.ctm_id )
 		{
 			int ret = add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id);
+			if (ret < 0)
+				return ret;
+		}
+
+		if ( drm->crtc->has_vrr_enabled && drm->pending.vrr_enabled != drm->current.vrr_enabled )
+		{
+			int ret = add_crtc_property(drm->req, drm->crtc, "VRR_ENABLED", drm->pending.vrr_enabled );
 			if (ret < 0)
 				return ret;
 		}
@@ -1967,6 +2000,16 @@ bool drm_set_color_mtx(struct drm_t *drm, float *mtx, enum drm_screen_type scree
 	return false;
 }
 
+void drm_set_vrr_enabled(struct drm_t *drm, bool enabled)
+{
+	drm->wants_vrr_enabled = enabled;
+}
+
+bool drm_get_vrr_in_use(struct drm_t *drm)
+{
+	return drm->current.vrr_enabled;
+}
+
 bool drm_set_color_gain_blend(struct drm_t *drm, float blend)
 {
 	drm->pending.gain_blend = blend;
@@ -2117,6 +2160,22 @@ bool drm_update_color_mtx(struct drm_t *drm)
 	}
 
 	drm->pending.ctm_id = blob_id;
+	return true;
+}
+
+bool drm_update_vrr_state(struct drm_t *drm)
+{
+	drm->pending.vrr_enabled = false;
+
+	if ( drm->connector && drm->crtc && drm->crtc->has_vrr_enabled )
+	{
+		if ( drm->wants_vrr_enabled && drm->connector->vrr_capable )
+			drm->pending.vrr_enabled = true;
+	}
+
+	if (drm->pending.vrr_enabled != drm->current.vrr_enabled)
+		drm->needs_modeset = true;
+
 	return true;
 }
 
@@ -2362,4 +2421,12 @@ int drm_get_default_refresh(struct drm_t *drm)
 	}
 
 	return 60;
+}
+
+bool drm_get_vrr_capable(struct drm_t *drm)
+{
+	if ( drm->connector )
+		return drm->connector->vrr_capable;
+
+	return false;
 }

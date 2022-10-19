@@ -69,6 +69,7 @@ struct crtc {
 	bool has_gamma_lut;
 	bool has_degamma_lut;
 	bool has_ctm;
+	bool has_vrr_enabled;
 
 	struct {
 		bool active;
@@ -88,6 +89,7 @@ struct connector {
 	char *model;
 
 	int target_refresh;
+	bool vrr_capable;
 
 	struct {
 		uint32_t crtc_id;
@@ -162,7 +164,9 @@ struct drm_t {
 		};
 		float gain_blend = 0.0f;
 		enum drm_screen_type screen_type = DRM_SCREEN_TYPE_INTERNAL;
+		bool vrr_enabled = false;
 	} current, pending;
+	bool wants_vrr_enabled = false;
 
 	/* FBs in the atomic request, but not yet submitted to KMS */
 	std::vector < uint32_t > fbids_in_req;
@@ -239,11 +243,15 @@ bool drm_set_color_gain_blend(struct drm_t *drm, float blend);
 bool drm_update_gamma_lut(struct drm_t *drm);
 bool drm_update_degamma_lut(struct drm_t *drm);
 bool drm_update_color_mtx(struct drm_t *drm);
+bool drm_update_vrr_state(struct drm_t *drm);
 bool drm_set_gamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_type screen_type);
 bool drm_set_degamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_type screen_type);
 drm_screen_type drm_get_screen_type(struct drm_t *drm);
 
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);
+bool drm_get_vrr_capable(struct drm_t *drm);
+void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
+bool drm_get_vrr_in_use(struct drm_t *drm);
 
 extern bool g_bSupportsAsyncFlips;

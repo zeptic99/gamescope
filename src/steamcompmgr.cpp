@@ -211,6 +211,8 @@ struct commit_t
 
 int g_nAsyncFlipsEnabled = 0;
 int g_nSteamMaxHeight = 0;
+bool g_bVRRCapable_CachedValue = false;
+bool g_bVRRInUse_CachedValue = false;
 
 struct motif_hints_t
 {
@@ -4252,6 +4254,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_nSteamMaxHeight = get_prop( ctx, ctx->root, ctx->atoms.gamescopeSteamMaxHeight, 0 );
 		focusDirty = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeVRREnabled )
+	{
+		bool enabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeVRREnabled, 0 );
+		drm_set_vrr_enabled( &g_DRM, enabled );
+	}
 	if ( ev->atom == ctx->atoms.gamescopeDisplayForceInternal )
 	{
 		if ( !BIsNested() )
@@ -5214,6 +5221,9 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeCursorVisibleFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_CURSOR_VISIBLE_FEEDBACK", false );
 
 	ctx->atoms.gamescopeSteamMaxHeight = XInternAtom( ctx->dpy, "GAMESCOPE_STEAM_MAX_HEIGHT", false );
+	ctx->atoms.gamescopeVRREnabled = XInternAtom( ctx->dpy, "GAMESCOPE_VRR_ENABLED", false );
+	ctx->atoms.gamescopeVRRCapable = XInternAtom( ctx->dpy, "GAMESCOPE_VRR_CAPABLE", false );
+	ctx->atoms.gamescopeVRRInUse = XInternAtom( ctx->dpy, "GAMESCOPE_VRR_FEEDBACK", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
@@ -5260,6 +5270,36 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	}
 }
 
+void update_vrr_atoms(xwayland_ctx_t *root_ctx, bool force)
+{
+	bool capable = drm_get_vrr_capable( &g_DRM );
+	if ( capable != g_bVRRCapable_CachedValue || force )
+	{
+		uint32_t capable_value = capable ? 1 : 0;
+		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeVRRCapable, XA_CARDINAL, 32, PropModeReplace,
+			(unsigned char *)&capable_value, 1 );
+		g_bVRRCapable_CachedValue = capable;
+	}
+
+	bool in_use = drm_get_vrr_in_use( &g_DRM );
+	if ( in_use != g_bVRRInUse_CachedValue || force )
+	{
+		uint32_t in_use_value = in_use ? 1 : 0;
+		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeVRRInUse, XA_CARDINAL, 32, PropModeReplace,
+			(unsigned char *)&in_use_value, 1 );
+		g_bVRRInUse_CachedValue = in_use;
+	}
+
+	// Don't update this in-sync with DRM vrr usage.
+	// Keep this as a preference, starting with off.
+	if ( force )
+	{
+		uint32_t enabled_value = 0;
+		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeVRREnabled, XA_CARDINAL, 32, PropModeReplace,
+			(unsigned char *)&enabled_value, 1 );
+	}
+}
+
 void update_mode_atoms(xwayland_ctx_t *root_ctx)
 {
 	if ( drm_get_screen_type(&g_DRM) == DRM_SCREEN_TYPE_INTERNAL )
@@ -5296,6 +5336,8 @@ extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
 
 static bool g_bWasFSRActive = false;
+
+extern std::atomic<uint64_t> g_nCompletedPageFlipCount;
 
 void
 steamcompmgr_main(int argc, char **argv)
@@ -5442,6 +5484,7 @@ steamcompmgr_main(int argc, char **argv)
 		}
 	}
 
+	update_vrr_atoms(root_ctx, true);
 	update_mode_atoms(root_ctx);
 
 	for (;;)
@@ -5583,14 +5626,13 @@ steamcompmgr_main(int argc, char **argv)
 		if (focusDirty)
 			determine_and_apply_focus();
 
-		const bool bAllowRelaxedVsync = g_nAsyncFlipsEnabled >= 2;
-
 		static int nIgnoredOverlayRepaints = 0;
-		static int nBasePlaneMissedVBlankCount = 0;
+
+		const bool bVRR = drm_get_vrr_in_use( &g_DRM );
 
 		const bool bSteamOverlayOpen  = global_focus.overlayWindow && global_focus.overlayWindow->opacity;
 		// If we are running behind, allow tearing.
-		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async) || (nBasePlaneMissedVBlankCount && bAllowRelaxedVsync);
+		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async);
 
 		const bool bForceRepaint = g_bForceRepaint.exchange(false);
 		const bool bForceSyncFlip = bForceRepaint || g_bTakeScreenshot || is_fading_out();
@@ -5598,7 +5640,7 @@ steamcompmgr_main(int argc, char **argv)
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
 		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nIgnoredOverlayRepaints;
-		const bool bDoAsyncFlip   = (g_nAsyncFlipsEnabled >= 1) && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bSteamOverlayOpen && !bNeedsSyncFlip;
+		const bool bDoAsyncFlip   = ( ((g_nAsyncFlipsEnabled >= 1) && g_bSupportsAsyncFlips && bSurfaceWantsAsync) || bVRR ) && !bSteamOverlayOpen && !bNeedsSyncFlip;
 
 		bool bShouldPaint = false;
 		if ( bDoAsyncFlip )
@@ -5611,19 +5653,16 @@ steamcompmgr_main(int argc, char **argv)
 			bShouldPaint = vblank && ( hasRepaint || hasRepaintNonBasePlane || bForceSyncFlip );
 		}
 
+		// If we have a pending page flip and doing VRR, lets not do another...
+		if ( bVRR && g_nCompletedPageFlipCount != g_DRM.flipcount )
+			bShouldPaint = false;
+
 		if ( !bShouldPaint && hasRepaintNonBasePlane && vblank )
 			nIgnoredOverlayRepaints++;
 
-		if ( !hasRepaint && vblank )
-			nBasePlaneMissedVBlankCount++;
-
 		if ( bShouldPaint )
 		{
-			paint_all( !vblank );
-
-			// Consumed the need to repaint here
-			if (hasRepaint)
-				nBasePlaneMissedVBlankCount = 0;
+			paint_all( !vblank && !bVRR );
 
 			hasRepaint = false;
 			hasRepaintNonBasePlane = false;
@@ -5636,6 +5675,8 @@ steamcompmgr_main(int argc, char **argv)
 				nudge_steamcompmgr();
 			}
 		}
+
+		update_vrr_atoms(root_ctx, false);
 
 		// TODO: Look into making this _RAW
 		// wlroots, seems to just use normal MONOTONIC

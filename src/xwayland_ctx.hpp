@@ -157,6 +157,10 @@ struct xwayland_ctx_t
 
 		Atom gamescopeSteamMaxHeight;
 
+		Atom gamescopeVRRCapable;
+		Atom gamescopeVRREnabled;
+		Atom gamescopeVRRInUse;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 	} atoms;

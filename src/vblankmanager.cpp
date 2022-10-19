@@ -70,15 +70,6 @@ void vblankThreadRun( void )
 	const uint64_t range = g_uVBlankRateOfDecayMax;
 	while ( true )
 	{
-		const uint64_t alpha = g_uVBlankRateOfDecayPercentage;
-		const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
-
-		const uint64_t nsecInterval = 1'000'000'000ul / refresh;
-		uint64_t drawTime = g_uVblankDrawTimeNS;
-
-		if ( g_bCurrentlyCompositing )
-			drawTime = std::max(drawTime, g_uVBlankDrawTimeMinCompositing);
-
 		// The redzone is relative to 60Hz, scale it by our
 		// target refresh so we don't miss submitting for vblank in DRM.
 		// (This fixes 4K@30Hz screens)
@@ -88,26 +79,52 @@ void vblankThreadRun( void )
 			? g_uVblankDrawBufferRedZoneNS
 			: ( g_uVblankDrawBufferRedZoneNS * 60 * nsecToSec ) / ( refresh * nsecToSec );
 
-		// This is a rolling average when drawTime < rollingMaxDrawTime,
-		// and a a max when drawTime > rollingMaxDrawTime.
-		// This allows us to deal with spikes in the draw buffer time very easily.
-		// eg. if we suddenly spike up (eg. because of test commits taking a stupid long time),
-		// we will then be able to deal with spikes in the long term, even if several commits after
-		// we get back into a good state and then regress again.
+		uint64_t offset;
+		bool bVRR = drm_get_vrr_in_use( &g_DRM );
+		if ( !bVRR )
+		{
+			const uint64_t alpha = g_uVBlankRateOfDecayPercentage;
+			const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 
-		// If we go over half of our deadzone, be more defensive about things.
-		if ( int64_t(drawTime) - int64_t(redZone / 2) > int64_t(rollingMaxDrawTime) )
-			rollingMaxDrawTime = drawTime;
+			const uint64_t nsecInterval = 1'000'000'000ul / refresh;
+			uint64_t drawTime = g_uVblankDrawTimeNS;
+
+			if ( g_bCurrentlyCompositing )
+				drawTime = std::max(drawTime, g_uVBlankDrawTimeMinCompositing);
+			// This is a rolling average when drawTime < rollingMaxDrawTime,
+			// and a a max when drawTime > rollingMaxDrawTime.
+			// This allows us to deal with spikes in the draw buffer time very easily.
+			// eg. if we suddenly spike up (eg. because of test commits taking a stupid long time),
+			// we will then be able to deal with spikes in the long term, even if several commits after
+			// we get back into a good state and then regress again.
+
+			// If we go over half of our deadzone, be more defensive about things.
+			if ( int64_t(drawTime) - int64_t(redZone / 2) > int64_t(rollingMaxDrawTime) )
+				rollingMaxDrawTime = drawTime;
+			else
+				rollingMaxDrawTime = ( ( alpha * rollingMaxDrawTime ) + ( range - alpha ) * drawTime ) / range;
+
+			// If we need to offset for our draw more than half of our vblank, something is very wrong.
+			// Clamp our max time to half of the vblank if we can.
+			rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - redZone );
+
+			g_uRollingMaxDrawTime = rollingMaxDrawTime;
+
+			offset = rollingMaxDrawTime + redZone;
+		}
 		else
-			rollingMaxDrawTime = ( ( alpha * rollingMaxDrawTime ) + ( range - alpha ) * drawTime ) / range;
+		{
+			// VRR:
+			// Just ensure that if we missed a frame due to already
+			// having a page flip in-flight, that we flush it out with this.
+			// Nothing fancy needed, just need to get on the other side of the page flip.
+			//
+			// We don't use any of the rolling times due to them varying given our
+			// 'vblank' time is varying.
+			g_uRollingMaxDrawTime = g_uStartingDrawTime;
 
-		// If we need to offset for our draw more than half of our vblank, something is very wrong.
-		// Clamp our max time to half of the vblank if we can.
-		rollingMaxDrawTime = std::min( rollingMaxDrawTime, nsecInterval - redZone );
-
-		g_uRollingMaxDrawTime = rollingMaxDrawTime;
-
-		uint64_t offset = rollingMaxDrawTime + redZone;
+			offset = 1'000'000 + redzone;
+		}
 
 #ifdef VBLANK_DEBUG
 		// Debug stuff for logging missed vblanks
