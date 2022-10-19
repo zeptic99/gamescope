@@ -557,6 +557,7 @@ int main(int argc, char **argv)
 	gamescope_xwayland_server_t *base_server = wlserver_get_xwayland_server(0);
 
 	setenv("DISPLAY", base_server->get_nested_display_name(), 1);
+	setenv("XDG_SESSION_TYPE", "x11", 1);
 	if (g_nXWaylandCount > 1)
 	{
 		for (int i = 1; i < g_nXWaylandCount; i++)
