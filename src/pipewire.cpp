@@ -11,6 +11,7 @@
 
 #include "main.hpp"
 #include "pipewire.hpp"
+#include "pipewire_requested_size.hpp"
 #include "log.hpp"
 
 static LogScope pwr_log("pipewire");
@@ -22,6 +23,14 @@ static int nudgePipe[2] = { -1, -1 };
 static std::atomic<struct pipewire_buffer *> out_buffer;
 // Pending buffer for steamcompmgr → PipeWire
 static std::atomic<struct pipewire_buffer *> in_buffer;
+
+// Requested capture size
+static uint32_t s_nRequestedWidth;
+static uint32_t s_nRequestedHeight;
+static uint32_t s_nCaptureWidth;
+static uint32_t s_nCaptureHeight;
+static uint32_t s_nOutputWidth;
+static uint32_t s_nOutputHeight;
 
 static void destroy_buffer(struct pipewire_buffer *buffer) {
 	assert(!buffer->copying);
@@ -41,8 +50,30 @@ static void destroy_buffer(struct pipewire_buffer *buffer) {
 	delete buffer;
 }
 
+static void calculate_capture_size()
+{
+	s_nCaptureWidth = s_nOutputWidth;
+	s_nCaptureHeight = s_nOutputHeight;
+
+	if (s_nRequestedWidth > 0 && s_nRequestedHeight > 0 &&
+	    (s_nOutputWidth > s_nRequestedWidth || s_nOutputHeight > s_nRequestedHeight)) {
+		// Need to clamp to the smallest dimension
+		float flRatioW = static_cast<float>(s_nRequestedWidth) / s_nOutputWidth;
+		float flRatioH = static_cast<float>(s_nRequestedHeight) / s_nOutputHeight;
+		if (flRatioW <= flRatioH) {
+			s_nCaptureWidth = s_nRequestedWidth;
+			s_nCaptureHeight = static_cast<uint32_t>(ceilf(flRatioW * s_nOutputHeight));
+		} else {
+			s_nCaptureWidth = static_cast<uint32_t>(ceilf(flRatioH * s_nOutputWidth));
+			s_nCaptureHeight = s_nRequestedHeight;
+		}
+	}
+}
+
 static std::vector<const struct spa_pod *> build_format_params(struct spa_pod_builder *builder) {
-	struct spa_rectangle size = SPA_RECTANGLE(g_nOutputWidth, g_nOutputHeight);
+	struct spa_rectangle size = SPA_RECTANGLE(s_nCaptureWidth, s_nCaptureHeight);
+	struct spa_rectangle min_requested_size = { 0, 0 };
+	struct spa_rectangle max_requested_size = { UINT32_MAX, UINT32_MAX };
 	struct spa_fraction framerate = SPA_FRACTION(0, 1);
 	uint64_t modifier = DRM_FORMAT_MOD_LINEAR;
 
@@ -56,6 +87,7 @@ static std::vector<const struct spa_pod *> build_format_params(struct spa_pod_bu
 		SPA_FORMAT_VIDEO_format, SPA_POD_Id(SPA_VIDEO_FORMAT_BGRx),
 		SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&size),
 		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate),
+		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size ),
 		0);
 	spa_pod_builder_prop(builder, SPA_FORMAT_VIDEO_modifier, SPA_POD_PROP_FLAG_MANDATORY);
 	spa_pod_builder_push_choice(builder, &choice_frame, SPA_CHOICE_Enum, 0);
@@ -70,7 +102,8 @@ static std::vector<const struct spa_pod *> build_format_params(struct spa_pod_bu
 		SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
 		SPA_FORMAT_VIDEO_format, SPA_POD_Id(SPA_VIDEO_FORMAT_BGRx),
 		SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&size),
-		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate)));
+		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate),
+		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size )));
 
 	return params;
 }
@@ -151,8 +184,13 @@ static void dispatch_nudge(struct pipewire_state *state, int fd)
 		}
 	}
 
-	if (g_nOutputWidth != state->video_info.size.width || g_nOutputHeight != state->video_info.size.height) {
-		pwr_log.debugf("renegotiating stream params (size: %dx%d)", g_nOutputWidth, g_nOutputHeight);
+	if (g_nOutputWidth != s_nOutputWidth || g_nOutputHeight != s_nOutputHeight) {
+		s_nOutputWidth = g_nOutputWidth;
+		s_nOutputHeight = g_nOutputHeight;
+		calculate_capture_size();
+	}
+	if (s_nCaptureWidth != state->video_info.size.width || s_nCaptureHeight != state->video_info.size.height) {
+		pwr_log.debugf("renegotiating stream params (size: %dx%d)", s_nCaptureWidth, s_nCaptureHeight);
 
 		uint8_t buf[1024];
 		struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
@@ -216,12 +254,17 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 	if (param == nullptr || id != SPA_PARAM_Format)
 		return;
 
+	struct spa_rectangle requested_size = { 0, 0 };
 	int bpp = 4;
-	int ret = spa_format_video_raw_parse(param, &state->video_info);
+	int ret = spa_format_video_raw_parse_with_requested_size(param, &state->video_info, &requested_size);
 	if (ret < 0) {
 		pwr_log.errorf("spa_format_video_raw_parse failed");
 		return;
 	}
+	s_nRequestedWidth = requested_size.width;
+	s_nRequestedHeight = requested_size.height;
+	calculate_capture_size();
+
 	state->shm_stride = SPA_ROUND_UP_N(state->video_info.size.width * bpp, 4);
 
 	const struct spa_pod_prop *modifier_prop = spa_pod_find_prop(param, nullptr, SPA_FORMAT_VIDEO_modifier);
@@ -302,7 +345,7 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 	bool is_dmabuf = (spa_data->type & (1 << SPA_DATA_DmaBuf)) != 0;
 	bool is_memfd = (spa_data->type & (1 << SPA_DATA_MemFd)) != 0;
 
-	buffer->texture = vulkan_acquire_screenshot_texture(is_dmabuf);
+	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf);
 	assert(buffer->texture != nullptr);
 
 	if (is_dmabuf) {
@@ -485,6 +528,12 @@ bool init_pipewire(void)
 
 	static struct spa_hook stream_hook;
 	pw_stream_add_listener(state->stream, &stream_hook, &stream_events, state);
+
+	s_nRequestedWidth = 0;
+	s_nRequestedHeight = 0;
+	s_nOutputWidth = g_nOutputWidth;
+	s_nOutputHeight = g_nOutputHeight;
+	calculate_capture_size();
 
 	uint8_t buf[1024];
 	struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(buf, sizeof(buf));

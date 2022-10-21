@@ -1617,8 +1617,8 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 
 void CVulkanCmdBuffer::copyImage(std::shared_ptr<CVulkanTexture> src, std::shared_ptr<CVulkanTexture> dst)
 {
-	assert(src->width() == dst->width());
-	assert(src->height() == dst->height());
+	//assert(src->width() == dst->width());
+	//assert(src->height() == dst->height());
 	m_textureRefs.emplace(src.get(), src);
 	m_textureRefs.emplace(dst.get(), dst);
 	prepareSrcImage(src.get());
@@ -2868,7 +2868,7 @@ void vulkan_garbage_collect( void )
 	g_device.garbageCollect();
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(bool exportable)
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable)
 {
 	for (auto& pScreenshotImage : g_output.pScreenshotImages)
 	{
@@ -2884,12 +2884,12 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(bool exportabl
 				screenshotImageFlags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
 			}
 
-			bool bSuccess = pScreenshotImage->BInit( currentOutputWidth, currentOutputHeight, VulkanFormatToDRM(g_output.outputFormat), screenshotImageFlags );
+			bool bSuccess = pScreenshotImage->BInit( width, height, VulkanFormatToDRM(g_output.outputFormat), screenshotImageFlags );
 
 			assert( bSuccess );
 		}
 
-		if (pScreenshotImage.use_count() > 1)
+		if (pScreenshotImage.use_count() > 1 || width != pScreenshotImage->width() || height != pScreenshotImage->height())
 			continue;
 
 		return pScreenshotImage;
