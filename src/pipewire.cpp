@@ -144,6 +144,11 @@ static void copy_buffer(struct pipewire_state *state, struct pipewire_buffer *bu
 		header->dts_offset = 0;
 	}
 
+	float *requested_size_scale = (float *) spa_buffer_find_meta_data(spa_buffer, SPA_META_requested_size_scale, sizeof(*requested_size_scale));
+	if (requested_size_scale != nullptr) {
+		*requested_size_scale = ((float)tex->width() / g_nOutputWidth);
+	}
+
 	struct spa_chunk *chunk = spa_buffer->datas[0].chunk;
 	chunk->flags = needs_reneg ? SPA_CHUNK_FLAG_CORRUPTED : 0;
 
@@ -292,7 +297,12 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 		SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
 		SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Header),
 		SPA_PARAM_META_size, SPA_POD_Int(sizeof(struct spa_meta_header)));
-	const struct spa_pod *params[] = { buffers_param, meta_param };
+	const struct spa_pod *scale_param =
+		(const struct spa_pod *) spa_pod_builder_add_object(&builder,
+		SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
+		SPA_PARAM_META_type, SPA_POD_Id(SPA_META_requested_size_scale),
+		SPA_PARAM_META_size, SPA_POD_Int(sizeof(float)));
+	const struct spa_pod *params[] = { buffers_param, meta_param, scale_param };
 
 	ret = pw_stream_update_params(state->stream, params, sizeof(params) / sizeof(params[0]));
 	if (ret != 0) {
