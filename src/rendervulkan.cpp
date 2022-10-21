@@ -21,6 +21,9 @@
 #include "steamcompmgr.hpp"
 #include "sdlwindow.hpp"
 #include "log.hpp"
+#ifdef HAVE_OPENVR
+#include "vr_session.hpp"
+#endif
 
 #include "cs_composite_blit.h"
 #include "cs_composite_blur.h"
@@ -617,7 +620,13 @@ bool CVulkanDevice::createInstance()
 	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
 	std::vector< const char * > sdlExtensions;
-	if ( BIsNested() )
+	if ( BIsVRSession() )
+	{
+#ifdef HAVE_OPENVR
+		vrsession_append_instance_exts( sdlExtensions );
+#endif
+	}
+	else if ( BIsNested() )
 	{
 		if ( SDL_Vulkan_LoadLibrary( nullptr ) != 0 )
 		{
@@ -853,6 +862,13 @@ bool CVulkanDevice::createDevice()
 	enabledExtensions.push_back( VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME );
 
 	enabledExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
+
+	if ( BIsVRSession() )
+	{
+#ifdef HAVE_OPENVR
+		vrsession_append_device_exts( physDev(), enabledExtensions );
+#endif
+	}
 
 	VkPhysicalDeviceFeatures2 features2 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -1825,6 +1841,8 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 		bool isExport = flush && state.needsExport;
 		bool isPresent = flush && state.needsPresentLayout;
 
+		VkImageLayout presentLayout = BIsVRSession() ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
 		if (!state.discarded && !state.dirty && !state.needsImport && !isExport && !isPresent)
 			continue;
 
@@ -1837,7 +1855,7 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 			.srcAccessMask = state.dirty ? write_bits : 0u,
 			.dstAccessMask = flush ? 0u : read_bits | write_bits,
 			.oldLayout = (state.discarded || state.needsImport) ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL,
-			.newLayout = isPresent ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_GENERAL,
+			.newLayout = isPresent ? presentLayout : VK_IMAGE_LAYOUT_GENERAL,
 			.srcQueueFamilyIndex = isExport ? m_device->queueFamily() : state.needsImport ? externalQueue : VK_QUEUE_FAMILY_IGNORED,
 			.dstQueueFamilyIndex = isExport ? externalQueue : state.needsImport ? m_device->queueFamily() : VK_QUEUE_FAMILY_IGNORED,
 			.image = image->vkImage(),
@@ -1965,6 +1983,11 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 	else
 	{
 		properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	}
+
+	if ( flags.bSwapchain == true )
+	{
+		m_bSwapchain = true;	
 	}
 
 	m_bExternal = pDMA || flags.bExportable == true;
@@ -2461,6 +2484,7 @@ bool CVulkanTexture::BInitFromSwapchain( VkImage image, uint32_t width, uint32_t
 	m_format = format;
 	m_contentWidth = width;
 	m_contentHeight = height;
+	m_bSwapchain = true;
 
 	VkImageViewCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -2715,6 +2739,45 @@ void vulkan_present_to_window( void )
 		vulkan_remake_swapchain();
 }
 
+#if HAVE_OPENVR
+std::shared_ptr<CVulkanTexture> vulkan_create_debug_white_texture()
+{
+	CVulkanTexture::createFlags flags;
+	flags.bMappable = true;
+	flags.bSampled = true;
+	flags.bTransferSrc = true;
+	flags.bLinear = true;
+
+	auto texture = std::make_shared<CVulkanTexture>();
+	assert( texture->BInit( g_nOutputWidth, g_nOutputHeight, VulkanFormatToDRM( VK_FORMAT_B8G8R8A8_UNORM ), flags ) );
+
+	memset( texture->mappedData(), 0xFF, texture->width() * texture->height() * 4 );
+
+	return texture;
+}
+
+void vulkan_present_to_openvr( void )
+{
+	//static auto texture = vulkan_create_debug_white_texture();
+	auto texture = vulkan_get_last_output_image();
+
+	vr::VRVulkanTextureData_t data =
+	{
+		.m_nImage            = (uint64_t)(uintptr_t)texture->vkImage(),
+		.m_pDevice           = g_device.device(),
+		.m_pPhysicalDevice   = g_device.physDev(),
+		.m_pInstance         = g_device.instance(),
+		.m_pQueue            = g_device.queue(),
+		.m_nQueueFamilyIndex = g_device.queueFamily(),
+		.m_nWidth            = texture->width(),
+		.m_nHeight           = texture->height(),
+		.m_nFormat           = texture->format(),
+		.m_nSampleCount      = 1,
+	};
+	vrsession_present(&data);
+}
+#endif
+
 bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 {
 	uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;
@@ -2813,10 +2876,11 @@ bool vulkan_remake_swapchain( void )
 static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 {
 	CVulkanTexture::createFlags outputImageflags;
-	outputImageflags.bFlippable = true;
+	outputImageflags.bFlippable = !BIsNested();
 	outputImageflags.bStorage = true;
 	outputImageflags.bTransferSrc = true; // for screenshots
 	outputImageflags.bSampled = true; // for pipewire blits
+	outputImageflags.bSwapchain = BIsVRSession();
 
 	pOutput->outputImages.resize(2);
 
@@ -2866,7 +2930,12 @@ bool vulkan_make_output( void )
 
 	VkResult result;
 	
-	if ( BIsNested() == true )
+	if ( BIsVRSession() )
+	{
+		pOutput->outputFormat = VK_FORMAT_B8G8R8A8_UNORM;
+		vulkan_make_output_images( pOutput );
+	}
+	else if ( BIsNested() == true )
 	{
 		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, g_device.instance(), &pOutput->surface ) )
 		{
@@ -3425,7 +3494,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
 	g_device.wait(sequence);
 
-	if ( BIsNested() == false )
+	if ( BIsNested() == false || BIsVRSession() == true )
 	{
 		g_output.nOutImage = !g_output.nOutImage;
 	}

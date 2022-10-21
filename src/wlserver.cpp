@@ -1125,6 +1125,17 @@ void wlserver_mousemotion( int x, int y, uint32_t time )
 	}
 }
 
+void wlserver_mousewarp( int x, int y, uint32_t time )
+{
+	// TODO: Pick the xwayland_server with active focus
+	auto server = steamcompmgr_get_focused_server();
+	if ( server != NULL )
+	{
+		XTestFakeMotionEvent( server->get_xdisplay(), 0, x, y, CurrentTime );
+		XFlush( server->get_xdisplay() );
+	}
+}
+
 void wlserver_mousebutton( int button, bool press, uint32_t time )
 {
 	wlr_seat_pointer_notify_button( wlserver.wlr.seat, time, button, press ? WLR_BUTTON_PRESSED : WLR_BUTTON_RELEASED );

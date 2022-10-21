@@ -20,6 +20,10 @@
 #include "main.hpp"
 #include "drm.hpp"
 
+#ifdef HAVE_OPENVR
+#include "vr_session.hpp"
+#endif
+
 static int g_vblankPipe[2];
 
 std::atomic<uint64_t> g_lastVblank;
@@ -178,6 +182,38 @@ void vblankThreadRun( void )
 	}
 }
 
+void vblankThreadVR()
+{
+	pthread_setname_np( pthread_self(), "gamescope-vblkvr" );
+
+	while ( true )
+	{
+#ifdef HAVE_OPENVR
+		vrsession_framesync( ~0u );
+#else
+		abort();
+#endif
+
+		// If we are visible, write a vblank event.
+#ifdef HAVE_OPENVR
+		if ( vrsession_visible() )
+#endif
+		{
+			uint64_t vblanktime = get_time_in_nanos();
+			ssize_t ret = write( g_vblankPipe[ 1 ], &vblanktime, sizeof( vblanktime ) );
+			if ( ret <= 0 )
+			{
+				perror( "vblankmanager: write failed" );
+			}
+			else
+			{
+				gpuvis_trace_printf( "sent vblank" );
+			}
+		}
+	}
+}
+
+
 int vblank_init( void )
 {
 	if ( pipe2( g_vblankPipe, O_CLOEXEC | O_NONBLOCK ) != 0 )
@@ -188,7 +224,7 @@ int vblank_init( void )
 	
 	g_lastVblank = get_time_in_nanos();
 
-	std::thread vblankThread( vblankThreadRun );
+	std::thread vblankThread( BIsVRSession() ? vblankThreadVR : vblankThreadRun );
 	vblankThread.detach();
 
 	return g_vblankPipe[ 0 ];

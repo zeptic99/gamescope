@@ -25,6 +25,10 @@
 #include "wlserver.hpp"
 #include "gpuvis_trace_utils.h"
 
+#if HAVE_OPENVR
+#include "vr_session.hpp"
+#endif
+
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
 #endif
@@ -64,6 +68,23 @@ const struct option *gamescope_options = (struct option[]){
 	{ "generate-drm-mode", required_argument, nullptr, 0 },
 	{ "immediate-flips", no_argument, nullptr, 0 },
 	{ "adaptive-sync", no_argument, nullptr, 0 },
+
+	// openvr options
+#if HAVE_OPENVR
+	{ "openvr", no_argument, nullptr, 0 },
+	{ "vr-overlay-key", required_argument, nullptr, 0 },
+	{ "vr-overlay-explicit-name", required_argument, nullptr, 0 },
+	{ "vr-overlay-default-name", required_argument, nullptr, 0 },
+	{ "vr-overlay-icon", required_argument, nullptr, 0 },
+	{ "vr-overlay-show-immediately", no_argument, nullptr, 0 },
+	{ "vr-overlay-enable-control-bar", no_argument, nullptr, 0 },
+	{ "vr-overlay-enable-control-bar-keyboard", no_argument, nullptr, 0 },
+	{ "vr-overlay-enable-control-bar-close", no_argument, nullptr, 0 },
+	{ "vr-overlay-modal", no_argument, nullptr, 0 },
+	{ "vr-overlay-physical-width", required_argument, nullptr, 0 },
+	{ "vr-overlay-physical-curvature", required_argument, nullptr, 0 },
+	{ "vr-overlay-physical-pre-curve-pitch", required_argument, nullptr, 0 },
+#endif
 
 	// wlserver options
 	{ "xwayland-count", required_argument, nullptr, 0 },
@@ -139,6 +160,23 @@ const char usage[] =
 	"  --immediate-flips              Enable immediate flips, may result in tearing\n"
 	"  --adaptive-sync                Enable adaptive sync if available (variable rate refresh)\n"
 	"\n"
+#if HAVE_OPENVR
+	"VR mode options:\n"
+	"  --openvr                                 Uses the openvr backend and outputs as a VR overlay\n"
+	"  --vr-overlay-key                         Sets the SteamVR overlay key to this string\n"
+	"  --vr-overlay-explicit-name               Force the SteamVR overlay name to always be this string\n"
+	"  --vr-overlay-default-name                Sets the fallback SteamVR overlay name when there is no window title\n"
+	"  --vr-overlay-icon                        Sets the SteamVR overlay icon to this file\n"
+	"  --vr-overlay-show-immediately            Makes our VR overlay take focus immediately\n"
+	"  --vr-overlay-enable-control-bar          Enables the SteamVR control bar\n"
+	"  --vr-overlay-enable-control-bar-keyboard Enables the SteamVR keyboard button on the control bar\n"
+	"  --vr-overlay-enable-control-bar-close    Enables the SteamVR close button on the control bar\n"
+	"  --vr-overlay-modal                       Makes our VR overlay appear as a modal\n"
+	"  --vr-overlay-physical-width              Sets the physical width of our VR overlay in metres\n"
+	"  --vr-overlay-physical-curvature          Sets the curvature of our VR overlay\n"
+	"  --vr-overlay-physical-pre-curve-pitch    Sets the pre-curve pitch of our VR overlay\n"
+	"\n"
+#endif
 	"Debug options:\n"
 	"  --disable-layers               disable libliftoff (hardware planes)\n"
 	"  --debug-layers                 debug libliftoff\n"
@@ -209,6 +247,19 @@ bool BIsNested()
 {
 	return g_bIsNested;
 }
+
+#if HAVE_OPENVR
+bool g_bUseOpenVR = false;
+bool BIsVRSession( void )
+{
+	return g_bUseOpenVR;
+}
+#else
+bool BIsVRSession( void )
+{
+	return false;
+}
+#endif
 
 static bool initOutput(int preferredWidth, int preferredHeight, int preferredRefresh);
 static void steamCompMgrThreadRun(int argc, char **argv);
@@ -435,6 +486,12 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "adaptive-sync") == 0) {
 					s_bInitialWantsVRREnabled = true;
 				}
+#if HAVE_OPENVR
+				else if (strcmp(opt_name, "openvr") == 0) {
+					g_bUseOpenVR = true;
+					g_bIsNested = true;
+				}
+#endif
 				break;
 			case '?':
 				fprintf( stderr, "See --help for a list of options.\n" );
@@ -511,6 +568,17 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef HAVE_OPENVR
+	if ( BIsVRSession() )
+	{
+		if ( !vr_init( argc, argv ) )
+		{
+			fprintf( stderr, "Failed to initialize OpenVR runtime\n" );
+			return 1;
+		}
+	}
+	else
+#endif
 	if ( BIsNested() )
 	{
 		if ( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS ) != 0 )
@@ -586,6 +654,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#if HAVE_OPENVR
+	if ( BIsVRSession() )
+	{
+		vrsession_ime_init();
+	}
+#endif
+
 	gamescope_xwayland_server_t *base_server = wlserver_get_xwayland_server(0);
 
 	setenv("DISPLAY", base_server->get_nested_display_name(), 1);
@@ -656,7 +731,16 @@ static bool initOutput( int preferredWidth, int preferredHeight, int preferredRe
 		if ( g_nOutputRefresh == 0 )
 			g_nOutputRefresh = 60;
 
-		return sdlwindow_init();
+#if HAVE_OPENVR
+		if ( BIsVRSession() )
+		{
+			return vrsession_init();
+		}
+		else
+#endif
+		{
+			return sdlwindow_init();
+		}
 	}
 	else
 	{

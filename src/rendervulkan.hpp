@@ -136,6 +136,7 @@ public:
 			bTransferDst = false;
 			bLinear = false;
 			bExportable = false;
+			bSwapchain = false;
 		}
 
 		bool bFlippable : 1;
@@ -146,6 +147,7 @@ public:
 		bool bTransferDst : 1;
 		bool bLinear : 1;
 		bool bExportable : 1;
+		bool bSwapchain : 1;
 	};
 
 	bool BInit( uint32_t width, uint32_t height, uint32_t drmFormat, createFlags flags, wlr_dmabuf_attributes *pDMA = nullptr, uint32_t contentWidth = 0, uint32_t contentHeight = 0 );
@@ -166,7 +168,7 @@ public:
 	inline VkFormat format() const { return m_format; }
 	inline const struct wlr_dmabuf_attributes& dmabuf() { return m_dmabuf; }
 	inline VkImage vkImage() { return m_vkImage; }
-	inline bool swapchainImage() { return m_vkImageMemory == VK_NULL_HANDLE; }
+	inline bool swapchainImage() { return m_bSwapchain; }
 	inline bool externalImage() { return m_bExternal; }
 	inline VkDeviceSize totalSize() const { return m_size; }
 
@@ -191,6 +193,7 @@ public:
 private:
 	bool m_bInitialized = false;
 	bool m_bExternal = false;
+	bool m_bSwapchain = false;
 
 	VkImage m_vkImage = VK_NULL_HANDLE;
 	VkDeviceMemory m_vkImageMemory = VK_NULL_HANDLE;
@@ -326,6 +329,9 @@ std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( void );
 std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
 
 void vulkan_present_to_window( void );
+#if HAVE_OPENVR
+void vulkan_present_to_openvr( void );
+#endif
 
 void vulkan_garbage_collect( void );
 bool vulkan_remake_swapchain( void );

@@ -102,6 +102,10 @@ if pipewire_dep.found()
   src += 'pipewire.cpp'
 endif
 
+if openvr_dep.found()
+  src += 'vr_session.cpp'
+endif
+
   executable(
     'gamescope',
     src,
@@ -110,7 +114,7 @@ endif
       dep_xxf86vm, dep_xres, drm_dep, wayland_server,
       xkbcommon, thread_dep, sdl_dep, wlroots_dep,
       vulkan_dep, liftoff_dep, dep_xtst, cap_dep, pipewire_dep, librt_dep,
-      stb_dep, displayinfo_dep,
+      stb_dep, displayinfo_dep, openvr_dep,
     ],
     install: true,
   )

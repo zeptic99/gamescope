@@ -10,3 +10,6 @@
 [submodule "subprojects/libdisplay-info"]
 	path = subprojects/libdisplay-info
 	url = https://gitlab.freedesktop.org/emersion/libdisplay-info
+[submodule "subprojects/openvr"]
+	path = subprojects/openvr
+	url = https://github.com/ValveSoftware/openvr.git

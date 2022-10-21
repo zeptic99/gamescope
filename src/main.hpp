@@ -61,3 +61,4 @@ extern uint32_t g_preferDeviceID;
 
 void restore_fd_limit( void );
 bool BIsNested( void );
+bool BIsVRSession( void );

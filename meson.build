@@ -35,6 +35,18 @@ hwdata_dep = dependency('hwdata')
 dep_x11 = dependency('x11')
 vulkan_dep = dependency('vulkan')
 
+cpu_family = target_machine.cpu_family()
+openvr_path_base = meson.source_root() + '/subprojects/openvr'
+openvr_lib_path_base = openvr_path_base + '/lib'
+if (cpu_family == 'x86_64')
+  openvr_lib_path = openvr_lib_path_base +'/linux64'
+elif (cpu_family == 'x86')
+  openvr_lib_path = openvr_lib_path_base +'/linux32'
+elif (cpu_family == 'aarch64')
+  openvr_lib_path = openvr_lib_path_base +'/linuxarm64'
+endif
+openvr_dep = cppc.find_library('openvr_api', dirs: openvr_lib_path, required : get_option('openvr'))
+
 add_project_arguments(
   '-DHAVE_PIPEWIRE=@0@'.format(pipewire_dep.found().to_int()),
   '-DHWDATA_PNP_IDS="@0@"'.format(hwdata_dep.get_variable('pkgdatadir') / 'pnp.ids'),
