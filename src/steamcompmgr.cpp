@@ -892,6 +892,40 @@ window_is_fullscreen( win *w )
 	return w && ( w->appID == 769 || w->isFullscreen );
 }
 
+void calc_scale_factor(float &out_scale_x, float &out_scale_y, float sourceWidth, float sourceHeight)
+{
+	float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
+	float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
+	float outputScaleRatio = std::min(XOutputRatio, YOutputRatio);
+
+	float XRatio = (float)g_nNestedWidth / sourceWidth;
+	float YRatio = (float)g_nNestedHeight / sourceHeight;
+
+	out_scale_x = std::min(XRatio, YRatio);
+	out_scale_y = std::min(XRatio, YRatio);
+
+	if (g_upscaleScaler == GamescopeUpscaleScaler::AUTO)
+	{
+		out_scale_x = std::min(g_flMaxWindowScale, out_scale_x);
+		out_scale_y = std::min(g_flMaxWindowScale, out_scale_y);
+	}
+
+	out_scale_x *= outputScaleRatio;
+	out_scale_y *= outputScaleRatio;
+
+	if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
+	{
+		if (out_scale_x > 1.0f)
+		{
+			// x == y here always.
+			out_scale_x = out_scale_y = floor(out_scale_x);
+		}
+	}
+
+	out_scale_x *= globalScaleRatio;
+	out_scale_y *= globalScaleRatio;
+}
+
 /**
  * Constructor for a cursor. It is hidden in the beginning (normally until moved by user).
  */
@@ -1290,37 +1324,24 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 		sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->a.y + fit->a.height, 0, currentOutputHeight ) );
 	}
 
-	float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
-	float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
-	float outputScaleRatio = (XOutputRatio < YOutputRatio) ? XOutputRatio : YOutputRatio;
-
 	float scaledX, scaledY;
-	float currentScaleRatio = 1.0;
-	float XRatio = (float)g_nNestedWidth / sourceWidth;
-	float YRatio = (float)g_nNestedHeight / sourceHeight;
+	float currentScaleRatio_x = 1.0;
+	float currentScaleRatio_y = 1.0;
 	int cursorOffsetX, cursorOffsetY;
 
-	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-	if (g_upscaleScaler == GamescopeUpscaleScaler::AUTO)
-		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
-	currentScaleRatio *= outputScaleRatio;
-	if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
-	{
-		if (currentScaleRatio > 1.0f)
-			currentScaleRatio = floor(currentScaleRatio);
-	}
+	calc_scale_factor(currentScaleRatio_x, currentScaleRatio_y, sourceWidth, sourceHeight);
 
-	cursorOffsetX = (currentOutputWidth - sourceWidth * currentScaleRatio * globalScaleRatio) / 2.0f;
-	cursorOffsetY = (currentOutputHeight - sourceHeight * currentScaleRatio * globalScaleRatio) / 2.0f;
+	cursorOffsetX = (currentOutputWidth - sourceWidth * currentScaleRatio_x) / 2.0f;
+	cursorOffsetY = (currentOutputHeight - sourceHeight * currentScaleRatio_y) / 2.0f;
 
 	// Actual point on scaled screen where the cursor hotspot should be
-	scaledX = (winX - window->a.x) * currentScaleRatio * globalScaleRatio + cursorOffsetX;
-	scaledY = (winY - window->a.y) * currentScaleRatio * globalScaleRatio + cursorOffsetY;
+	scaledX = (winX - window->a.x) * currentScaleRatio_x + cursorOffsetX;
+	scaledY = (winY - window->a.y) * currentScaleRatio_y + cursorOffsetY;
 
 	if ( zoomScaleRatio != 1.0 )
 	{
-		scaledX += ((sourceWidth / 2) - winX) * currentScaleRatio * globalScaleRatio;
-		scaledY += ((sourceHeight / 2) - winY) * currentScaleRatio * globalScaleRatio;
+		scaledX += ((sourceWidth / 2) - winX) * currentScaleRatio_x;
+		scaledY += ((sourceHeight / 2) - winY) * currentScaleRatio_y;
 	}
 
 	// Apply the cursor offset inside the texture using the display scale
@@ -1412,7 +1433,8 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 {
 	uint32_t sourceWidth, sourceHeight;
 	int drawXOffset = 0, drawYOffset = 0;
-	float currentScaleRatio = 1.0;
+	float currentScaleRatio_x = 1.0;
+	float currentScaleRatio_y = 1.0;
 	std::shared_ptr<commit_t> lastCommit;
 	if ( w )
 		get_window_last_done_commit( w, lastCommit );
@@ -1485,37 +1507,21 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 
 	if (sourceWidth != currentOutputWidth || sourceHeight != currentOutputHeight || ( ( w->a.x || w->a.y ) && w != scaleW ) || globalScaleRatio != 1.0f)
 	{
-		float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
-		float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
-		float outputScaleRatio = (XOutputRatio < YOutputRatio) ? XOutputRatio : YOutputRatio;
+		calc_scale_factor(currentScaleRatio_x, currentScaleRatio_y, sourceWidth, sourceHeight);
 
-		float XRatio = (float)g_nNestedWidth / sourceWidth;
-		float YRatio = (float)g_nNestedHeight / sourceHeight;
-
-		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-		if (g_upscaleScaler == GamescopeUpscaleScaler::AUTO)
-			currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
-		currentScaleRatio *= outputScaleRatio;
-		if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
-		{
-			if (currentScaleRatio > 1.0f)
-				currentScaleRatio = floor(currentScaleRatio);
-		}
-		currentScaleRatio *= globalScaleRatio;
-
-		drawXOffset = ((int)currentOutputWidth - (int)sourceWidth * currentScaleRatio) / 2.0f;
-		drawYOffset = ((int)currentOutputHeight - (int)sourceHeight * currentScaleRatio) / 2.0f;
+		drawXOffset = ((int)currentOutputWidth - (int)sourceWidth * currentScaleRatio_x) / 2.0f;
+		drawYOffset = ((int)currentOutputHeight - (int)sourceHeight * currentScaleRatio_y) / 2.0f;
 
 		if (w != scaleW)
 		{
-			drawXOffset += w->a.x * currentScaleRatio;
-			drawYOffset += w->a.y * currentScaleRatio;
+			drawXOffset += w->a.x * currentScaleRatio_x;
+			drawYOffset += w->a.y * currentScaleRatio_y;
 		}
 
 		if ( zoomScaleRatio != 1.0 )
 		{
-			drawXOffset += (((int)sourceWidth / 2) - cursor->x()) * currentScaleRatio;
-			drawYOffset += (((int)sourceHeight / 2) - cursor->y()) * currentScaleRatio;
+			drawXOffset += (((int)sourceWidth / 2) - cursor->x()) * currentScaleRatio_x;
+			drawYOffset += (((int)sourceHeight / 2) - cursor->y()) * currentScaleRatio_y;
 		}
 	}
 
@@ -1525,8 +1531,8 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 
 	layer->opacity = ( (w->isOverlay || w->isExternalOverlay) ? w->opacity / (float)OPAQUE : 1.0f ) * flOpacityScale;
 
-	layer->scale.x = 1.0 / currentScaleRatio;
-	layer->scale.y = 1.0 / currentScaleRatio;
+	layer->scale.x = 1.0 / currentScaleRatio_x;
+	layer->scale.y = 1.0 / currentScaleRatio_y;
 
 	if ( w != scaleW )
 	{
@@ -1537,8 +1543,8 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 	{
 		int xOffset = 0, yOffset = 0;
 
-		int width = w->a.width * currentScaleRatio;
-		int height = w->a.height * currentScaleRatio;
+		int width = w->a.width * currentScaleRatio_x;
+		int height = w->a.height * currentScaleRatio_y;
 
 		if (globalScaleRatio != 1.0f)
 		{
