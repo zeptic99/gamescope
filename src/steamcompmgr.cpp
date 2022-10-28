@@ -1301,7 +1301,8 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 	int cursorOffsetX, cursorOffsetY;
 
 	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-	currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
+	if (g_upscaleScaler == GamescopeUpscaleScaler::SMART_FIT)
+		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 	currentScaleRatio *= outputScaleRatio;
 	if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
 	{
@@ -1492,7 +1493,8 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 		float YRatio = (float)g_nNestedHeight / sourceHeight;
 
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
+		if (g_upscaleScaler == GamescopeUpscaleScaler::SMART_FIT)
+			currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 		currentScaleRatio *= outputScaleRatio;
 		if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
 		{
