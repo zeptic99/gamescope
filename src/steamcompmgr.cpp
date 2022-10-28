@@ -1301,7 +1301,7 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 	int cursorOffsetX, cursorOffsetY;
 
 	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-	if (g_upscaleScaler == GamescopeUpscaleScaler::SMART_FIT)
+	if (g_upscaleScaler == GamescopeUpscaleScaler::AUTO)
 		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 	currentScaleRatio *= outputScaleRatio;
 	if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
@@ -1493,7 +1493,7 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 		float YRatio = (float)g_nNestedHeight / sourceHeight;
 
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
-		if (g_upscaleScaler == GamescopeUpscaleScaler::SMART_FIT)
+		if (g_upscaleScaler == GamescopeUpscaleScaler::AUTO)
 			currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 		currentScaleRatio *= outputScaleRatio;
 		if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
@@ -4051,11 +4051,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 		default:
 		case 0:
-			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 			g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
 			break;
 		case 1:
-			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 			g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
 			break;
 		case 2:
@@ -4063,11 +4063,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
 			break;
 		case 3:
-			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 			g_upscaleFilter = GamescopeUpscaleFilter::FSR;
 			break;
 		case 4:
-			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 			g_upscaleFilter = GamescopeUpscaleFilter::NIS;
 			break;
 		}

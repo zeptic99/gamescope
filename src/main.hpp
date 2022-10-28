@@ -30,7 +30,7 @@ enum class GamescopeUpscaleFilter : uint32_t
 
 enum class GamescopeUpscaleScaler : uint32_t
 {
-    SMART_FIT,
+    AUTO,
     INTEGER,
     FIT,
 };

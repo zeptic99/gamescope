@@ -158,7 +158,7 @@ bool g_bFullscreen = false;
 bool g_bIsNested = false;
 
 GamescopeUpscaleFilter g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
-GamescopeUpscaleScaler g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+GamescopeUpscaleScaler g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 int g_upscaleFilterSharpness = 2;
 
 bool g_bBorderlessOutputWindow = false;
