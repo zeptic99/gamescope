@@ -892,7 +892,7 @@ window_is_fullscreen( win *w )
 	return w && ( w->appID == 769 || w->isFullscreen );
 }
 
-void calc_scale_factor(float &out_scale_x, float &out_scale_y, float sourceWidth, float sourceHeight)
+void calc_scale_factor_scaler(float &out_scale_x, float &out_scale_y, float sourceWidth, float sourceHeight)
 {
 	float XOutputRatio = currentOutputWidth / (float)g_nNestedWidth;
 	float YOutputRatio = currentOutputHeight / (float)g_nNestedHeight;
@@ -936,6 +936,11 @@ void calc_scale_factor(float &out_scale_x, float &out_scale_y, float sourceWidth
 			out_scale_x = out_scale_y = floor(out_scale_x);
 		}
 	}
+}
+
+void calc_scale_factor(float &out_scale_x, float &out_scale_y, float sourceWidth, float sourceHeight)
+{
+	calc_scale_factor_scaler(out_scale_x, out_scale_y, sourceWidth, sourceHeight);
 
 	out_scale_x *= globalScaleRatio;
 	out_scale_y *= globalScaleRatio;
