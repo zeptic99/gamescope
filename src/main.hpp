@@ -34,6 +34,7 @@ enum class GamescopeUpscaleScaler : uint32_t
     INTEGER,
     FIT,
     FILL,
+    STRETCH,
 };
 
 extern GamescopeUpscaleFilter g_upscaleFilter;
