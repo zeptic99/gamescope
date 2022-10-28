@@ -901,8 +901,16 @@ void calc_scale_factor(float &out_scale_x, float &out_scale_y, float sourceWidth
 	float XRatio = (float)g_nNestedWidth / sourceWidth;
 	float YRatio = (float)g_nNestedHeight / sourceHeight;
 
-	out_scale_x = std::min(XRatio, YRatio);
-	out_scale_y = std::min(XRatio, YRatio);
+	if (g_upscaleScaler != GamescopeUpscaleScaler::FILL)
+	{
+		out_scale_x = std::min(XRatio, YRatio);
+		out_scale_y = std::min(XRatio, YRatio);
+	}
+	else
+	{
+		out_scale_x = std::max(XRatio, YRatio);
+		out_scale_y = std::max(XRatio, YRatio);
+	}
 
 	if (g_upscaleScaler == GamescopeUpscaleScaler::AUTO)
 	{
