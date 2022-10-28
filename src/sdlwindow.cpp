@@ -166,17 +166,17 @@ void inputSDLThreadRun( void )
 							SDL_SetWindowFullscreen( g_SDLWindow, g_bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
 							break;
 						case KEY_N:
-							g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
+							g_wantedUpscaleFilter = GamescopeUpscaleFilter::NEAREST;
 							break;
 						case KEY_B:
-							g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
+							g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;
 							break;
 						case KEY_U:
-							g_upscaleFilter = (g_upscaleFilter == GamescopeUpscaleFilter::FSR) ?
+							g_wantedUpscaleFilter = (g_wantedUpscaleFilter == GamescopeUpscaleFilter::FSR) ?
 								GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::FSR;
 							break;
 						case KEY_Y:
-							g_upscaleFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NIS) ? 
+							g_wantedUpscaleFilter = (g_wantedUpscaleFilter == GamescopeUpscaleFilter::NIS) ? 
 								GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NIS;
 							break;
 						case KEY_I:

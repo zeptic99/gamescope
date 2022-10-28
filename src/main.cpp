@@ -159,6 +159,9 @@ bool g_bIsNested = false;
 
 GamescopeUpscaleFilter g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
 GamescopeUpscaleScaler g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
+
+GamescopeUpscaleFilter g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;
+GamescopeUpscaleScaler g_wantedUpscaleScaler = GamescopeUpscaleScaler::AUTO;
 int g_upscaleFilterSharpness = 2;
 
 bool g_bBorderlessOutputWindow = false;
@@ -350,10 +353,10 @@ int main(int argc, char **argv)
 				g_flMaxWindowScale = atof( optarg );
 				break;
 			case 'i':
-				g_upscaleScaler = GamescopeUpscaleScaler::INTEGER;
+				g_wantedUpscaleScaler = GamescopeUpscaleScaler::INTEGER;
 				break;
 			case 'n':
-				g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
+				g_wantedUpscaleFilter = GamescopeUpscaleFilter::NEAREST;
 				break;
 			case 'b':
 				g_bBorderlessOutputWindow = true;
@@ -365,10 +368,10 @@ int main(int argc, char **argv)
 				g_sOutputName = optarg;
 				break;
 			case 'U':
-				g_upscaleFilter = GamescopeUpscaleFilter::FSR;
+				g_wantedUpscaleFilter = GamescopeUpscaleFilter::FSR;
 				break;
 			case 'Y':
-				g_upscaleFilter = GamescopeUpscaleFilter::NIS;
+				g_wantedUpscaleFilter = GamescopeUpscaleFilter::NIS;
 				break;
 			case 0: // long options without a short option
 				opt_name = gamescope_options[opt_index].name;

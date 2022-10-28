@@ -237,7 +237,7 @@ struct win {
 	bool utf8_title;
 	pid_t pid;
 
-	bool isSteam;
+	bool isSteamLegacyBigPicture;
 	bool isSteamStreamingClient;
 	bool isSteamStreamingClientVideo;
 	uint32_t inputFocusMode;
@@ -351,9 +351,15 @@ unsigned int g_BlurFadeStartTime = 0;
 
 pid_t focusWindow_pid;
 
+static bool
+window_is_steam( win *w )
+{
+	return w && ( w->isSteamLegacyBigPicture || w->appID == 769 );
+}
+
 bool steamcompmgr_window_should_limit_fps( win *w )
 {
-	return w && !w->isSteam && w->appID != 769 && !w->isOverlay && !w->isExternalOverlay;
+	return w && !window_is_steam( w ) && !w->isOverlay && !w->isExternalOverlay;
 }
 
 
@@ -883,13 +889,13 @@ get_window_last_done_commit( win *w, std::shared_ptr<commit_t> &commit )
 static bool
 window_wants_no_focus_when_mouse_hidden( win *w )
 {
-	return w && w->appID == 769;
+	return window_is_steam( w );
 }
 
 static bool
 window_is_fullscreen( win *w )
 {
-	return w && ( w->appID == 769 || w->isFullscreen );
+	return w && ( window_is_steam( w ) || w->isFullscreen );
 }
 
 void calc_scale_factor_scaler(float &out_scale_x, float &out_scale_y, float sourceWidth, float sourceHeight)
@@ -1672,7 +1678,7 @@ paint_all(bool async)
 
 		stats_printf( "fps=%f\n", currentFrameRate );
 
-		if ( w && w->isSteam )
+		if ( window_is_steam( w ) )
 		{
 			stats_printf( "focus=steam\n" );
 		}
@@ -2480,7 +2486,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 		}
 
 		if ( w->a.map_state == IsViewable && w->a.c_class == InputOutput && w->isOverlay == false && w->isExternalOverlay == false &&
-			( win_has_game_id( w ) || w->isSteam || w->isSteamStreamingClient ) &&
+			( win_has_game_id( w ) || window_is_steam( w ) || w->isSteamStreamingClient ) &&
 			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient == true ) )
 		{
 			vecPossibleFocusWindows.push_back( w );
@@ -2633,7 +2639,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 
 	if ( window_is_fullscreen( ctx->focus.focusWindow ) )
 	{
-		bool bIsSteam = ctx->focus.focusWindow->appID == 769;
+		bool bIsSteam = window_is_steam( ctx->focus.focusWindow );
 		int fs_width  = ctx->root_width;
 		int fs_height = ctx->root_height;
 		if ( bIsSteam && g_nSteamMaxHeight && ctx->root_height > g_nSteamMaxHeight )
@@ -3117,7 +3123,7 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 	/* This needs to be here since we don't get PropertyNotify when unmapped */
 	w->opacity = get_prop(ctx, w->id, ctx->atoms.opacityAtom, OPAQUE);
 
-	w->isSteam = get_prop(ctx, w->id, ctx->atoms.steamAtom, 0);
+	w->isSteamLegacyBigPicture = get_prop(ctx, w->id, ctx->atoms.steamAtom, 0);
 
 	/* First try to read the UTF8 title prop, then fallback to the non-UTF8 one */
 	get_win_title( ctx, w, ctx->atoms.netWMNameAtom );
@@ -3364,7 +3370,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 
 	new_win->isOverlay = false;
 	new_win->isExternalOverlay = false;
-	new_win->isSteam = false;
+	new_win->isSteamLegacyBigPicture = false;
 	new_win->isSteamStreamingClient = false;
 	new_win->isSteamStreamingClientVideo = false;
 	new_win->inputFocusMode = 0;
@@ -3887,7 +3893,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		win * w = find_win(ctx, ev->window);
 		if (w)
 		{
-			w->isSteam = get_prop(ctx, w->id, ctx->atoms.steamAtom, 0);
+			w->isSteamLegacyBigPicture = get_prop(ctx, w->id, ctx->atoms.steamAtom, 0);
 			focusDirty = true;
 		}
 	}
@@ -4077,24 +4083,24 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 		default:
 		case 0:
-			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
-			g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
+			g_wantedUpscaleScaler = GamescopeUpscaleScaler::AUTO;
+			g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;
 			break;
 		case 1:
-			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
-			g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
+			g_wantedUpscaleScaler = GamescopeUpscaleScaler::AUTO;
+			g_wantedUpscaleFilter = GamescopeUpscaleFilter::NEAREST;
 			break;
 		case 2:
-			g_upscaleScaler = GamescopeUpscaleScaler::INTEGER;
-			g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
+			g_wantedUpscaleScaler = GamescopeUpscaleScaler::INTEGER;
+			g_wantedUpscaleFilter = GamescopeUpscaleFilter::NEAREST;
 			break;
 		case 3:
-			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
-			g_upscaleFilter = GamescopeUpscaleFilter::FSR;
+			g_wantedUpscaleScaler = GamescopeUpscaleScaler::AUTO;
+			g_wantedUpscaleFilter = GamescopeUpscaleFilter::FSR;
 			break;
 		case 4:
-			g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
-			g_upscaleFilter = GamescopeUpscaleFilter::NIS;
+			g_wantedUpscaleScaler = GamescopeUpscaleScaler::AUTO;
+			g_wantedUpscaleFilter = GamescopeUpscaleFilter::NIS;
 			break;
 		}
 		hasRepaint = true;
@@ -4306,18 +4312,18 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if ( ev->atom == ctx->atoms.gamescopeNewScalingFilter )
 	{
 		GamescopeUpscaleFilter nScalingFilter = ( GamescopeUpscaleFilter ) get_prop( ctx, ctx->root, ctx->atoms.gamescopeNewScalingFilter, 0 );
-		if (g_upscaleFilter != nScalingFilter)
+		if (g_wantedUpscaleFilter != nScalingFilter)
 		{
-			g_upscaleFilter = nScalingFilter;
+			g_wantedUpscaleFilter = nScalingFilter;
 			hasRepaint = true;
 		}
 	}
 	if ( ev->atom == ctx->atoms.gamescopeNewScalingScaler )
 	{
 		GamescopeUpscaleScaler nScalingScaler = ( GamescopeUpscaleScaler ) get_prop( ctx, ctx->root, ctx->atoms.gamescopeNewScalingScaler, 0 );
-		if (g_upscaleScaler != nScalingScaler)
+		if (g_wantedUpscaleScaler != nScalingScaler)
 		{
-			g_upscaleScaler = nScalingScaler;
+			g_wantedUpscaleScaler = nScalingScaler;
 			hasRepaint = true;
 		}
 	}
@@ -5674,6 +5680,17 @@ steamcompmgr_main(int argc, char **argv)
 		// Doesn't realllly matter but avoids an extra frame of being on the wrong window.
 		if (focusDirty)
 			determine_and_apply_focus();
+
+		if ( window_is_steam( global_focus.focusWindow ) )
+		{
+			g_upscaleScaler = GamescopeUpscaleScaler::FIT;
+			g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
+		}
+		else
+		{
+			g_upscaleScaler = g_wantedUpscaleScaler;
+			g_upscaleFilter = g_wantedUpscaleFilter;
+		}
 
 		static int nIgnoredOverlayRepaints = 0;
 

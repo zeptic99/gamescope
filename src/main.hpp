@@ -39,6 +39,8 @@ enum class GamescopeUpscaleScaler : uint32_t
 
 extern GamescopeUpscaleFilter g_upscaleFilter;
 extern GamescopeUpscaleScaler g_upscaleScaler;
+extern GamescopeUpscaleFilter g_wantedUpscaleFilter;
+extern GamescopeUpscaleScaler g_wantedUpscaleScaler;
 extern int g_upscaleFilterSharpness;
 
 extern bool g_bBorderlessOutputWindow;
