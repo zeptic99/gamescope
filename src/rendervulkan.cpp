@@ -3049,7 +3049,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 		cmdBuffer->setSamplerUnnormalized(0, false);
 		cmdBuffer->setSamplerNearest(0, false);
 		cmdBuffer->bindTarget(compositeImage);
-		cmdBuffer->pushConstants<RcasPushData_t>(frameInfo, g_upscalerSharpness / 10.0f);
+		cmdBuffer->pushConstants<RcasPushData_t>(frameInfo, g_upscaleFilterSharpness / 10.0f);
 
 		cmdBuffer->dispatch(div_roundup(currentOutputWidth, pixelsPerGroup), div_roundup(currentOutputHeight, pixelsPerGroup));
 	}
@@ -3063,7 +3063,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 
 		update_tmp_images(tempX, tempY);
 
-		float nisSharpness = (20 - g_upscalerSharpness) / 20.0f;
+		float nisSharpness = (20 - g_upscaleFilterSharpness) / 20.0f;
 
 		cmdBuffer->bindPipeline(g_device.pipeline(SHADER_TYPE_NIS));
 		cmdBuffer->bindTarget(g_output.tmpOutput);

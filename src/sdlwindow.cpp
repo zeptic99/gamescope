@@ -166,24 +166,24 @@ void inputSDLThreadRun( void )
 							SDL_SetWindowFullscreen( g_SDLWindow, g_bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
 							break;
 						case KEY_N:
-							g_bFilterGameWindow = !g_bFilterGameWindow;
+							g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
 							break;
 						case KEY_B:
-							g_upscaler = GamescopeUpscaler::BLIT;
+							g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
 							break;
 						case KEY_U:
-							g_upscaler = (g_upscaler == GamescopeUpscaler::FSR) ?
-								GamescopeUpscaler::BLIT : GamescopeUpscaler::FSR;
+							g_upscaleFilter = (g_upscaleFilter == GamescopeUpscaleFilter::FSR) ?
+								GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::FSR;
 							break;
 						case KEY_Y:
-							g_upscaler = (g_upscaler == GamescopeUpscaler::NIS) ? 
-								GamescopeUpscaler::BLIT : GamescopeUpscaler::NIS;
+							g_upscaleFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NIS) ? 
+								GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NIS;
 							break;
 						case KEY_I:
-							g_upscalerSharpness = std::min(20, g_upscalerSharpness + 1);
+							g_upscaleFilterSharpness = std::min(20, g_upscaleFilterSharpness + 1);
 							break;
 						case KEY_O:
-							g_upscalerSharpness = std::max(0, g_upscalerSharpness - 1);
+							g_upscaleFilterSharpness = std::max(0, g_upscaleFilterSharpness - 1);
 							break;
 						case KEY_S:
 							take_screenshot();

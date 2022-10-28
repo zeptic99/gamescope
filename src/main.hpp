@@ -20,17 +20,23 @@ extern int g_nOutputRefresh; // Hz
 
 extern bool g_bFullscreen;
 
-extern bool g_bFilterGameWindow;
-
-enum class GamescopeUpscaler : uint32_t
+enum class GamescopeUpscaleFilter : uint32_t
 {
-    BLIT = 0,
+    NEAREST = 0,
+    LINEAR,
     FSR,
     NIS
 };
 
-extern GamescopeUpscaler g_upscaler;
-extern int g_upscalerSharpness;
+enum class GamescopeUpscaleScaler : uint32_t
+{
+    SMART_FIT,
+    INTEGER,
+};
+
+extern GamescopeUpscaleFilter g_upscaleFilter;
+extern GamescopeUpscaleScaler g_upscaleScaler;
+extern int g_upscaleFilterSharpness;
 
 extern bool g_bBorderlessOutputWindow;
 

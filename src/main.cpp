@@ -157,9 +157,9 @@ bool g_bFullscreen = false;
 
 bool g_bIsNested = false;
 
-bool g_bFilterGameWindow = true;
-GamescopeUpscaler g_upscaler = GamescopeUpscaler::BLIT;
-int g_upscalerSharpness = 2;
+GamescopeUpscaleFilter g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
+GamescopeUpscaleScaler g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+int g_upscaleFilterSharpness = 2;
 
 bool g_bBorderlessOutputWindow = false;
 
@@ -174,7 +174,6 @@ int g_nOldPolicy;
 struct sched_param g_schedOldParam;
 
 float g_flMaxWindowScale = FLT_MAX;
-bool g_bIntegerScale = false;
 
 uint32_t g_preferVendorID = 0;
 uint32_t g_preferDeviceID = 0;
@@ -351,10 +350,10 @@ int main(int argc, char **argv)
 				g_flMaxWindowScale = atof( optarg );
 				break;
 			case 'i':
-				g_bIntegerScale = true;
+				g_upscaleScaler = GamescopeUpscaleScaler::INTEGER;
 				break;
 			case 'n':
-				g_bFilterGameWindow = false;
+				g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
 				break;
 			case 'b':
 				g_bBorderlessOutputWindow = true;
@@ -366,10 +365,10 @@ int main(int argc, char **argv)
 				g_sOutputName = optarg;
 				break;
 			case 'U':
-				g_upscaler = GamescopeUpscaler::FSR;
+				g_upscaleFilter = GamescopeUpscaleFilter::FSR;
 				break;
 			case 'Y':
-				g_upscaler = GamescopeUpscaler::NIS;
+				g_upscaleFilter = GamescopeUpscaleFilter::NIS;
 				break;
 			case 0: // long options without a short option
 				opt_name = gamescope_options[opt_index].name;
@@ -393,7 +392,7 @@ int main(int argc, char **argv)
 					g_drmModeOrientation = force_orientation( optarg );
 				} else if (strcmp(opt_name, "sharpness") == 0 ||
 						   strcmp(opt_name, "fsr-sharpness") == 0) {
-					g_upscalerSharpness = atoi( optarg );
+					g_upscaleFilterSharpness = atoi( optarg );
 				} else if (strcmp(opt_name, "rt") == 0) {
 					g_bRt = true;
 				} else if (strcmp(opt_name, "prefer-vk-device") == 0) {

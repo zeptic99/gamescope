@@ -326,7 +326,6 @@ unsigned int	fadeOutStartTime = 0;
 unsigned int 	g_FadeOutDuration = 0;
 
 extern float g_flMaxWindowScale;
-extern bool g_bIntegerScale;
 
 bool			synchronize;
 
@@ -1304,8 +1303,11 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 	currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 	currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 	currentScaleRatio *= outputScaleRatio;
-	if (g_bIntegerScale && currentScaleRatio > 1.0f)
-		currentScaleRatio = floor(currentScaleRatio);
+	if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
+	{
+		if (currentScaleRatio > 1.0f)
+			currentScaleRatio = floor(currentScaleRatio);
+	}
 
 	cursorOffsetX = (currentOutputWidth - sourceWidth * currentScaleRatio * globalScaleRatio) / 2.0f;
 	cursorOffsetY = (currentOutputHeight - sourceHeight * currentScaleRatio * globalScaleRatio) / 2.0f;
@@ -1492,8 +1494,11 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 		currentScaleRatio = (XRatio < YRatio) ? XRatio : YRatio;
 		currentScaleRatio = std::min(g_flMaxWindowScale, currentScaleRatio);
 		currentScaleRatio *= outputScaleRatio;
-		if (g_bIntegerScale && currentScaleRatio > 1.0f)
-			currentScaleRatio = floor(currentScaleRatio);
+		if (g_upscaleScaler == GamescopeUpscaleScaler::INTEGER)
+		{
+			if (currentScaleRatio > 1.0f)
+				currentScaleRatio = floor(currentScaleRatio);
+		}
 		currentScaleRatio *= globalScaleRatio;
 
 		drawXOffset = ((int)currentOutputWidth - (int)sourceWidth * currentScaleRatio) / 2.0f;
@@ -1569,7 +1574,7 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 	layer->tex = lastCommit->vulkanTex;
 	layer->fbid = lastCommit->fb_id;
 
-	layer->linearFilter = (w->isOverlay || w->isExternalOverlay) ? true : g_bFilterGameWindow;
+	layer->linearFilter = (w->isOverlay || w->isExternalOverlay) ? true : g_upscaleFilter != GamescopeUpscaleFilter::NEAREST;
 
 	if ( flags & PaintWindowFlag::BasePlane )
 	{
@@ -1714,8 +1719,8 @@ paint_all(bool async)
 				paint_window(w, w, &frameInfo, global_focus.cursor, PaintWindowFlag::BasePlane | PaintWindowFlag::DrawBorders, 1.0f, override);
 
 				bool needsScaling = frameInfo.layers[0].scale.x < 1.0f && frameInfo.layers[0].scale.y < 1.0f;
-				frameInfo.useFSRLayer0 = g_upscaler == GamescopeUpscaler::FSR && needsScaling;
-				frameInfo.useNISLayer0 = g_upscaler == GamescopeUpscaler::NIS && needsScaling;
+				frameInfo.useFSRLayer0 = g_upscaleFilter == GamescopeUpscaleFilter::FSR && needsScaling;
+				frameInfo.useNISLayer0 = g_upscaleFilter == GamescopeUpscaleFilter::NIS && needsScaling;
 			}
 			update_touch_scaling( &frameInfo );
 		}
@@ -1845,7 +1850,7 @@ paint_all(bool async)
 	if ( !BIsNested() && g_nOutputRefresh != nTargetRefresh && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
 		drm_set_refresh( &g_DRM, nTargetRefresh );
 
-	bool bNeedsNearest = !g_bFilterGameWindow && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
+	bool bNeedsNearest = g_upscaleFilter == GamescopeUpscaleFilter::NEAREST && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
 
 	bool bNeedsComposite = BIsNested();
 	bNeedsComposite |= alwaysComposite;
@@ -4044,37 +4049,32 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 		default:
 		case 0:
-			g_bFilterGameWindow = true;
-			g_bIntegerScale = false;
-			g_upscaler = GamescopeUpscaler::BLIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
 			break;
 		case 1:
-			g_bFilterGameWindow = false;
-			g_bIntegerScale = false;
-			g_upscaler = GamescopeUpscaler::BLIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
 			break;
 		case 2:
-			g_bFilterGameWindow = false;
-			g_bIntegerScale = true;
-			g_upscaler = GamescopeUpscaler::BLIT;
+			g_upscaleScaler = GamescopeUpscaleScaler::INTEGER;
+			g_upscaleFilter = GamescopeUpscaleFilter::NEAREST;
 			break;
 		case 3:
-			g_bFilterGameWindow = true;
-			g_bIntegerScale = false;
-			g_upscaler = GamescopeUpscaler::FSR;
+			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleFilter = GamescopeUpscaleFilter::FSR;
 			break;
 		case 4:
-			g_bFilterGameWindow = true;
-			g_bIntegerScale = false;
-			g_upscaler = GamescopeUpscaler::NIS;
+			g_upscaleScaler = GamescopeUpscaleScaler::SMART_FIT;
+			g_upscaleFilter = GamescopeUpscaleFilter::NIS;
 			break;
 		}
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeFSRSharpness || ev->atom == ctx->atoms.gamescopeSharpness )
 	{
-		g_upscalerSharpness = (int)clamp( get_prop( ctx, ctx->root, ev->atom, 2 ), 0u, 20u );
-		if ( g_upscaler != GamescopeUpscaler::BLIT )
+		g_upscaleFilterSharpness = (int)clamp( get_prop( ctx, ctx->root, ev->atom, 2 ), 0u, 20u );
+		if ( g_upscaleFilter == GamescopeUpscaleFilter::FSR || g_upscaleFilter == GamescopeUpscaleFilter::NIS )
 			hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeColorLinearGain )
@@ -4273,6 +4273,24 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 			g_DRM.out_of_date = 2;
 			XDeleteProperty( ctx->dpy, ctx->root, ctx->atoms.gamescopeDisplayModeNudge );
+		}
+	}
+	if ( ev->atom == ctx->atoms.gamescopeNewScalingFilter )
+	{
+		GamescopeUpscaleFilter nScalingFilter = ( GamescopeUpscaleFilter ) get_prop( ctx, ctx->root, ctx->atoms.gamescopeNewScalingFilter, 0 );
+		if (g_upscaleFilter != nScalingFilter)
+		{
+			g_upscaleFilter = nScalingFilter;
+			hasRepaint = true;
+		}
+	}
+	if ( ev->atom == ctx->atoms.gamescopeNewScalingScaler )
+	{
+		GamescopeUpscaleScaler nScalingScaler = ( GamescopeUpscaleScaler ) get_prop( ctx, ctx->root, ctx->atoms.gamescopeNewScalingScaler, 0 );
+		if (g_upscaleScaler != nScalingScaler)
+		{
+			g_upscaleScaler = nScalingScaler;
+			hasRepaint = true;
 		}
 	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
@@ -5224,6 +5242,9 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeVRREnabled = XInternAtom( ctx->dpy, "GAMESCOPE_VRR_ENABLED", false );
 	ctx->atoms.gamescopeVRRCapable = XInternAtom( ctx->dpy, "GAMESCOPE_VRR_CAPABLE", false );
 	ctx->atoms.gamescopeVRRInUse = XInternAtom( ctx->dpy, "GAMESCOPE_VRR_FEEDBACK", false );
+
+	ctx->atoms.gamescopeNewScalingFilter = XInternAtom( ctx->dpy, "GAMESCOPE_NEW_SCALING_FILTER", false );
+	ctx->atoms.gamescopeNewScalingScaler = XInternAtom( ctx->dpy, "GAMESCOPE_NEW_SCALING_SCALER", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
