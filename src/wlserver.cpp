@@ -925,6 +925,8 @@ extern std::mutex g_SteamCompMgrXWaylandServerMutex;
 
 void wlserver_run(void)
 {
+	pthread_setname_np( pthread_self(), "gamescope-wl" );
+
 	struct pollfd pollfd = {
 		.fd = wl_event_loop_get_fd( wlserver.event_loop ),
 		.events = POLLIN,
