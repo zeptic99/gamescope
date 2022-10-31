@@ -130,13 +130,12 @@ struct PipelineInfo_t
 
 	uint32_t layerCount;
 	uint32_t ycbcrMask;
-	uint32_t blurRadius;
 	uint32_t blurLayerCount;
 
 	bool compositeDebug;
 
 	bool operator==(const PipelineInfo_t& o) const {
-		return shaderType == o.shaderType && layerCount == o.layerCount && ycbcrMask == o.ycbcrMask && blurRadius == o.blurRadius && blurLayerCount == o.blurLayerCount && compositeDebug == o.compositeDebug;
+		return shaderType == o.shaderType && layerCount == o.layerCount && ycbcrMask == o.ycbcrMask && blurLayerCount == o.blurLayerCount && compositeDebug == o.compositeDebug;
 	}
 };
 
@@ -155,7 +154,6 @@ namespace std
 			uint32_t hash = k.shaderType;
 			hash = hash_combine(hash, k.layerCount);
 			hash = hash_combine(hash, k.ycbcrMask);
-			hash = hash_combine(hash, k.blurRadius);
 			hash = hash_combine(hash, k.blurLayerCount);
 			hash = hash_combine(hash, k.compositeDebug);
 			return hash;
@@ -449,7 +447,7 @@ public:
 	bool BInit();
 
 	VkSampler sampler(SamplerState key);
-	VkPipeline pipeline(ShaderType type, uint32_t layerCount = 1, uint32_t ycbcrMask = 0, uint32_t radius = 0, uint32_t blur_layers = 0);
+	VkPipeline pipeline(ShaderType type, uint32_t layerCount = 1, uint32_t ycbcrMask = 0, uint32_t blur_layers = 0);
 	int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeBits );
 	std::unique_ptr<CVulkanCmdBuffer> commandBuffer();
 	uint64_t submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuf);
@@ -495,7 +493,7 @@ private:
 	bool createPools();
 	bool createShaders();
 	bool createScratchResources();
-	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count, bool composite_debug);
+	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug);
 	void compileAllPipelines();
 	void resetCmdBuffers(uint64_t sequence);
 
@@ -1198,9 +1196,9 @@ VkSampler CVulkanDevice::sampler( SamplerState key )
 	return ret;
 }
 
-VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, ShaderType type, uint32_t blur_layer_count, bool composite_debug)
+VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug)
 {
-	const std::array<VkSpecializationMapEntry, 5> specializationEntries = {{
+	const std::array<VkSpecializationMapEntry, 4> specializationEntries = {{
 		{
 			.constantID = 0,
 			.offset     = sizeof(uint32_t) * 0,
@@ -1221,24 +1219,17 @@ VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMas
 			.offset     = sizeof(uint32_t) * 3,
 			.size       = sizeof(uint32_t)
 		},
-		{
-			.constantID = 4,
-			.offset     = sizeof(uint32_t) * 4,
-			.size       = sizeof(uint32_t)
-		},
 	}};
 
 	struct {
 		uint32_t layerCount;
 		uint32_t ycbcrMask;
 		uint32_t debug;
-		uint32_t radius;
 		uint32_t blur_layer_count;
 	} specializationData = {
 		.layerCount   = layerCount,
 		.ycbcrMask    = ycbcrMask,
 		.debug        = composite_debug,
-		.radius       = radius ? (radius * 2) - 1 : 0,
 		.blur_layer_count = blur_layer_count,
 	};
 
@@ -1277,34 +1268,32 @@ void CVulkanDevice::compileAllPipelines()
 	pthread_setname_np( pthread_self(), "gamescope-shdr" );
 
 	std::array<PipelineInfo_t, SHADER_TYPE_COUNT> pipelineInfos;
-#define SHADER(type, layer_count, max_ycbcr, max_radius, blur_layers) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, max_radius, blur_layers, false}
-	SHADER(BLIT, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1, 1);
-	SHADER(BLUR, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, kMaxBlurRadius, k_nMaxBlurLayers);
-	SHADER(BLUR_COND, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, kMaxBlurRadius, k_nMaxBlurLayers);
-	SHADER(BLUR_FIRST_PASS, 1, 2, kMaxBlurRadius, 1);
-	SHADER(RCAS, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1, 1);
-	SHADER(EASU, 1, 1, 1, 1);
-	SHADER(NIS, 1, 1, 1, 1);
+#define SHADER(type, layer_count, max_ycbcr, blur_layers) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, blur_layers, false}
+	SHADER(BLIT, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1);
+	SHADER(BLUR, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, k_nMaxBlurLayers);
+	SHADER(BLUR_COND, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, k_nMaxBlurLayers);
+	SHADER(BLUR_FIRST_PASS, 1, 2, 1);
+	SHADER(RCAS, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1);
+	SHADER(EASU, 1, 1, 1);
+	SHADER(NIS, 1, 1, 1);
 #undef SHADER
 
 	for (auto& info : pipelineInfos) {
 		for (uint32_t layerCount = 1; layerCount <= info.layerCount; layerCount++) {
 			for (uint32_t ycbcrMask = 0; ycbcrMask < info.ycbcrMask; ycbcrMask++) {
-				for (uint32_t radius = 0; radius < info.blurRadius; radius++) {
-					for (uint32_t blur_layers = 1; blur_layers <= info.blurLayerCount; blur_layers++) {
-						if (ycbcrMask >= (1u << (layerCount + 1)))
-							continue;
-						if (blur_layers > layerCount)
-							continue;
+				for (uint32_t blur_layers = 1; blur_layers <= info.blurLayerCount; blur_layers++) {
+					if (ycbcrMask >= (1u << (layerCount + 1)))
+						continue;
+					if (blur_layers > layerCount)
+						continue;
 
-						VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, radius, info.shaderType, blur_layers, info.compositeDebug);
-						{
-							std::lock_guard<std::mutex> lock(m_pipelineMutex);
-							PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, radius, blur_layers, info.compositeDebug};
-							auto result = m_pipelineMap.emplace(std::make_pair(key, newPipeline));
-							if (!result.second)
-								vk.DestroyPipeline(device(), newPipeline, nullptr);
-						}
+					VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, info.shaderType, blur_layers, info.compositeDebug);
+					{
+						std::lock_guard<std::mutex> lock(m_pipelineMutex);
+						PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, blur_layers, info.compositeDebug};
+						auto result = m_pipelineMap.emplace(std::make_pair(key, newPipeline));
+						if (!result.second)
+							vk.DestroyPipeline(device(), newPipeline, nullptr);
 					}
 				}
 			}
@@ -1312,14 +1301,14 @@ void CVulkanDevice::compileAllPipelines()
 	}
 }
 
-VkPipeline CVulkanDevice::pipeline(ShaderType type, uint32_t layerCount, uint32_t ycbcrMask, uint32_t radius, uint32_t blur_layers)
+VkPipeline CVulkanDevice::pipeline(ShaderType type, uint32_t layerCount, uint32_t ycbcrMask, uint32_t blur_layers)
 {
 	std::lock_guard<std::mutex> lock(m_pipelineMutex);
-	PipelineInfo_t key = {type, layerCount, ycbcrMask, radius, blur_layers, g_bIsCompositeDebug};
+	PipelineInfo_t key = {type, layerCount, ycbcrMask, blur_layers, g_bIsCompositeDebug};
 	auto search = m_pipelineMap.find(key);
 	if (search == m_pipelineMap.end())
 	{
-		VkPipeline result = compilePipeline(layerCount, ycbcrMask, radius, type, blur_layers, g_bIsCompositeDebug);
+		VkPipeline result = compilePipeline(layerCount, ycbcrMask, type, blur_layers, g_bIsCompositeDebug);
 		m_pipelineMap[key] = result;
 		return result;
 	}
@@ -1548,7 +1537,7 @@ void CVulkanCmdBuffer::clearState()
 template<class PushData, class... Args>
 void CVulkanCmdBuffer::pushConstants(Args&&... args)
 {
-	static_assert(sizeof(PushData) <= 128, "Only 128 bytes push constants.");
+//	static_assert(sizeof(PushData) <= 128, "Only 128 bytes push constants.");
 	PushData data(std::forward<Args>(args)...);
 	m_device->vk.CmdPushConstants(m_cmdBuffer, m_device->pipelineLayout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(data), &data);
 }
@@ -2953,6 +2942,7 @@ struct BlitPushData_t
 	float opacity[k_nMaxLayers];
 	uint32_t borderMask;
 	uint32_t frameId;
+	uint32_t blurRadius;
 
 	explicit BlitPushData_t(const struct FrameInfo_t *frameInfo)
 	{
@@ -2964,6 +2954,7 @@ struct BlitPushData_t
 		}
 		borderMask = frameInfo->borderMask();
 		frameId = s_frameId++;
+		blurRadius = frameInfo->blurRadius ? ( frameInfo->blurRadius * 2 ) - 1 : 0;
 	}
 
 	explicit BlitPushData_t(float blit_scale) {
@@ -3165,7 +3156,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 		if (frameInfo->layerCount >= 2 && frameInfo->layers[1].zpos == g_zposOverride)
 			blur_layer_count++;
 
-		cmdBuffer->bindPipeline(g_device.pipeline(type, blur_layer_count, frameInfo->ycbcrMask() & 0x3u, frameInfo->blurRadius));
+		cmdBuffer->bindPipeline(g_device.pipeline(type, blur_layer_count, frameInfo->ycbcrMask() & 0x3u));
 		cmdBuffer->bindTarget(g_output.tmpOutput);
 		for (uint32_t i = 0; i < blur_layer_count; i++)
 		{
@@ -3181,7 +3172,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 		cmdBuffer->dispatch(div_roundup(currentOutputWidth, pixelsPerGroup), div_roundup(currentOutputHeight, pixelsPerGroup));
 
 		type = frameInfo->blurLayer0 == BLUR_MODE_COND ? SHADER_TYPE_BLUR_COND : SHADER_TYPE_BLUR;
-		cmdBuffer->bindPipeline(g_device.pipeline(type, frameInfo->layerCount, frameInfo->ycbcrMask(), frameInfo->blurRadius, blur_layer_count));
+		cmdBuffer->bindPipeline(g_device.pipeline(type, frameInfo->layerCount, frameInfo->ycbcrMask(), blur_layer_count));
 		bind_all_layers(cmdBuffer.get(), frameInfo);
 		cmdBuffer->bindTarget(compositeImage);
 		cmdBuffer->bindTexture(VKR_BLUR_EXTRA_SLOT, g_output.tmpOutput);
