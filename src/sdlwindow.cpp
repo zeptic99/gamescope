@@ -70,6 +70,8 @@ void updateOutputRefresh( void )
 
 void inputSDLThreadRun( void )
 {
+	pthread_setname_np( pthread_self(), "gamescope-sdl" );
+
 	SDL_Event event;
 	uint32_t key;
 
