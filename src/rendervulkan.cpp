@@ -1273,7 +1273,7 @@ VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMas
 
 void CVulkanDevice::compileAllPipelines()
 {
-
+	pthread_setname_np( pthread_self(), "gamescope-shdr" );
 
 	std::array<PipelineInfo_t, SHADER_TYPE_COUNT> pipelineInfos;
 #define SHADER(type, layer_count, max_ycbcr, max_radius, blur_layers) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, max_radius, blur_layers, false}
