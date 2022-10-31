@@ -23,6 +23,7 @@
 // 6: Cursor
 #define k_nMaxLayers 6
 #define k_nMaxYcbcrMask 16
+#define k_nMaxYcbcrMask_ToPreCompile 3
 
 #define k_nMaxBlurLayers 2
 

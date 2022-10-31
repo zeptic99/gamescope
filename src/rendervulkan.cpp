@@ -1278,11 +1278,11 @@ void CVulkanDevice::compileAllPipelines()
 
 	std::array<PipelineInfo_t, SHADER_TYPE_COUNT> pipelineInfos;
 #define SHADER(type, layer_count, max_ycbcr, max_radius, blur_layers) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, max_radius, blur_layers, false}
-	SHADER(BLIT, k_nMaxLayers, k_nMaxYcbcrMask, 1, 1);
-	SHADER(BLUR, k_nMaxLayers, k_nMaxYcbcrMask, kMaxBlurRadius, k_nMaxBlurLayers);
-	SHADER(BLUR_COND, k_nMaxLayers, k_nMaxYcbcrMask, kMaxBlurRadius, k_nMaxBlurLayers);
+	SHADER(BLIT, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1, 1);
+	SHADER(BLUR, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, kMaxBlurRadius, k_nMaxBlurLayers);
+	SHADER(BLUR_COND, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, kMaxBlurRadius, k_nMaxBlurLayers);
 	SHADER(BLUR_FIRST_PASS, 1, 2, kMaxBlurRadius, 1);
-	SHADER(RCAS, k_nMaxLayers, k_nMaxYcbcrMask, 1, 1);
+	SHADER(RCAS, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1, 1);
 	SHADER(EASU, 1, 1, 1, 1);
 	SHADER(NIS, 1, 1, 1, 1);
 #undef SHADER
