@@ -1053,6 +1053,7 @@ static void apply_touchscreen_orientation(double *x, double *y )
 
 	switch ( g_drmEffectiveOrientation )
 	{
+		default:
 		case DRM_MODE_ROTATE_0:
 			tx = *x;
 			ty = *y;
