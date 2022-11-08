@@ -28,6 +28,7 @@
 #endif
 
 EStreamColorspace g_ForcedNV12ColorSpace = k_EStreamColorspace_Unknown;
+static bool s_bInitialWantsVRREnabled = false;
 
 const char *gamescope_optstring = nullptr;
 
@@ -60,6 +61,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "default-touch-mode", required_argument, nullptr, 0 },
 	{ "generate-drm-mode", required_argument, nullptr, 0 },
 	{ "immediate-flips", no_argument, nullptr, 0 },
+	{ "adaptive-sync", no_argument, nullptr, 0 },
 
 	// wlserver options
 	{ "xwayland-count", required_argument, nullptr, 0 },
@@ -120,6 +122,7 @@ const char usage[] =
 	"  --default-touch-mode           0: hover, 1: left, 2: right, 3: middle, 4: passthrough\n"
 	"  --generate-drm-mode            DRM mode generation algorithm (cvt, fixed)\n"
 	"  --immediate-flips              Enable immediate flips, may result in tearing\n"
+	"  --adaptive-sync                Enable adaptive sync if available (variable rate refresh)\n"
 	"\n"
 	"Debug options:\n"
 	"  --disable-layers               disable libliftoff (hardware planes)\n"
@@ -406,6 +409,8 @@ int main(int argc, char **argv)
 					g_preferDeviceID = deviceID;
 				} else if (strcmp(opt_name, "immediate-flips") == 0) {
 					g_nAsyncFlipsEnabled = 1;
+				} else if (strcmp(opt_name, "adaptive-sync") == 0) {
+					s_bInitialWantsVRREnabled = true;
 				}
 				break;
 			case '?':
@@ -630,6 +635,6 @@ static bool initOutput( int preferredWidth, int preferredHeight, int preferredRe
 	}
 	else
 	{
-		return init_drm( &g_DRM, preferredWidth, preferredHeight, preferredRefresh );
+		return init_drm( &g_DRM, preferredWidth, preferredHeight, preferredRefresh, s_bInitialWantsVRREnabled );
 	}
 }

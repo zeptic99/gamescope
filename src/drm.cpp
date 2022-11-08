@@ -777,10 +777,11 @@ void load_pnps(void)
 	fclose(f);
 }
 
-bool init_drm(struct drm_t *drm, int width, int height, int refresh)
+bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_adaptive_sync)
 {
 	load_pnps();
 
+	drm->wants_vrr_enabled = wants_adaptive_sync;
 	drm->preferred_width = width;
 	drm->preferred_height = height;
 	drm->preferred_refresh = refresh;
