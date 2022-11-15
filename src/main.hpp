@@ -22,8 +22,8 @@ extern bool g_bFullscreen;
 
 enum class GamescopeUpscaleFilter : uint32_t
 {
-    NEAREST = 0,
-    LINEAR,
+    LINEAR = 0,
+    NEAREST,
     FSR,
     NIS
 };
