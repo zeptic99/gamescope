@@ -2062,7 +2062,7 @@ paint_all(bool async)
 						fclose(file);
 
 						char cmd[4096];
-						sprintf(cmd, "ffmpeg -f rawvideo -pixel_format nv12 -video_size %dx%d -i %s %s_encoded.png", pCaptureTexture->width(), pCaptureTexture->height() pTimeBuffer, pTimeBuffer);
+						sprintf(cmd, "ffmpeg -f rawvideo -pixel_format nv12 -video_size %dx%d -i %s %s_encoded.png", pCaptureTexture->width(), pCaptureTexture->height(), pTimeBuffer, pTimeBuffer);
 
 						system(cmd);
 
