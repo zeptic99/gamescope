@@ -14,13 +14,15 @@ layout(
 // YYYYYYYYYYYYYYY...
 // UVUVUVUVUVUVUVU...
 
+const uint u_frameId = 0;
+
 layout(push_constant)
 uniform layers_t {
-    vec2 u_scale[VKR_MAX_LAYERS];
-    vec2 u_offset[VKR_MAX_LAYERS];
-    float u_opacity[VKR_MAX_LAYERS];
+    vec2 u_scale[1];
+    vec2 u_offset[1];
+    float u_opacity[1];
     uint u_borderMask;
-    uint u_frameId;
+    uvec2 u_halfExtent;
 };
 
 #include "composite.h"
@@ -33,7 +35,7 @@ void main() {
   ivec3 thread_id = ivec3(gl_GlobalInvocationID);
 
   // todo: fix
-  if (all(lessThan(thread_id.xy, ivec2(640, 400)))) {
+  if (all(lessThan(thread_id.xy, ivec2(u_halfExtent.x, u_halfExtent.y)))) {
     ivec2 offset_table[4] = {
       ivec2(0, 0), ivec2(1, 0), ivec2(0, 1), ivec2(1, 1),
     };

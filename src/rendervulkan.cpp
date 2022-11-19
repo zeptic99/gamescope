@@ -3024,6 +3024,32 @@ struct BlitPushData_t
 	}
 };
 
+struct CaptureConvertBlitData_t
+{
+	vec2_t scale[1];
+	vec2_t offset[1];
+	float opacity[1];
+	uint32_t borderMask;
+	uint32_t halfExtent[2];
+
+	explicit CaptureConvertBlitData_t(const struct FrameInfo_t *frameInfo)
+	{
+		for (int i = 0; i < std::min(frameInfo->layerCount, 1); i++) {
+			const FrameInfo_t::Layer_t *layer = &frameInfo->layers[i];
+			scale[i] = layer->scale;
+			offset[i] = layer->offsetPixelCenter();
+			opacity[i] = layer->opacity;
+		}
+	}
+
+	explicit CaptureConvertBlitData_t(float blit_scale) {
+		scale[0] = { blit_scale, blit_scale };
+		offset[0] = { 0.0f, 0.0f };
+		opacity[0] = 1.0f;
+		borderMask = 0;
+	}
+};
+
 struct uvec4_t
 {
 	uint32_t  x;
@@ -3262,7 +3288,9 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 			const bool ycbcr = pScreenshotTexture->isYcbcr();
 
 			float scale = (float)compositeImage->width() / pScreenshotTexture->width();
-			BlitPushData_t constants( scale );
+			CaptureConvertBlitData_t constants( scale );
+			constants.halfExtent[0] = pScreenshotTexture->width() / 2.0f;
+			constants.halfExtent[1] = pScreenshotTexture->height() / 2.0f;
 
 			cmdBuffer->bindPipeline(g_device.pipeline( ycbcr ? SHADER_TYPE_RGB_TO_NV12 : SHADER_TYPE_BLIT ));
 			cmdBuffer->bindTexture(0, compositeImage);
@@ -3274,7 +3302,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 				cmdBuffer->bindTexture(i, nullptr);
 			}
 			cmdBuffer->bindTarget(pScreenshotTexture);
-			cmdBuffer->pushConstants<BlitPushData_t>(constants);
+			cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);
 
 			const int pixelsPerGroup = 8;
 

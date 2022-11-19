@@ -1918,7 +1918,7 @@ paint_all(bool async)
 		}
 #endif
 		// hack: forced to nv12 rn
-		bool bHackForceNV12DumpScreenshot = false;
+		bool bHackForceNV12DumpScreenshot = true;
 
 		if ( bCapture && pCaptureTexture == nullptr )
 		{
