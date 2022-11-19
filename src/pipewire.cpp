@@ -355,7 +355,7 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 	bool is_dmabuf = (spa_data->type & (1 << SPA_DATA_DmaBuf)) != 0;
 	bool is_memfd = (spa_data->type & (1 << SPA_DATA_MemFd)) != 0;
 
-	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf);
+	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, false);
 	assert(buffer->texture != nullptr);
 
 	if (is_dmabuf) {

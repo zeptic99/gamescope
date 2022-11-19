@@ -97,7 +97,8 @@ shader_src = [
   'src/shaders/cs_easu_fp16.comp',
   'src/shaders/cs_gaussian_blur_horizontal.comp',
   'src/shaders/cs_nis.comp',
-  'src/shaders/cs_nis_fp16.comp'
+  'src/shaders/cs_nis_fp16.comp',
+  'src/shaders/cs_rgb_to_nv12.comp',
 ]
 
 spirv_shaders = glsl_generator.process(shader_src)

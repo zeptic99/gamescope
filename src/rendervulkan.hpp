@@ -107,6 +107,8 @@ public:
 	inline VkImageView view( bool linear ) { return linear ? m_linearView : m_srgbView; }
 	inline VkImageView linearView() { return m_linearView; }
 	inline VkImageView srgbView() { return m_srgbView; }
+	inline VkImageView lumaView() { return m_lumaView; }
+	inline VkImageView chromaView() { return m_chromaView; }
 	inline uint32_t width() { return m_width; }
 	inline uint32_t height() { return m_height; }
 	inline uint32_t contentWidth() {return m_contentWidth; }
@@ -114,11 +116,17 @@ public:
 	inline uint32_t rowPitch() { return m_unRowPitch; }
 	inline uint32_t fbid() { return m_FBID; }
 	inline void *mappedData() { return m_pMappedData; }
-	inline VkFormat format() { return m_format; }
+	inline VkFormat format() const { return m_format; }
 	inline const struct wlr_dmabuf_attributes& dmabuf() { return m_dmabuf; }
 	inline VkImage vkImage() { return m_vkImage; }
 	inline bool swapchainImage() { return m_vkImageMemory == VK_NULL_HANDLE; }
 	inline bool externalImage() { return m_bExternal; }
+	inline VkDeviceSize totalSize() const { return m_size; }
+
+	inline bool isYcbcr() const
+	{
+		return format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+	}
 
 	int memoryFence();
 
@@ -135,6 +143,9 @@ private:
 	VkImageView m_srgbView = VK_NULL_HANDLE;
 	VkImageView m_linearView = VK_NULL_HANDLE;
 
+	VkImageView m_lumaView = VK_NULL_HANDLE;
+	VkImageView m_chromaView = VK_NULL_HANDLE;
+
 	uint32_t m_width = 0;
 	uint32_t m_height = 0;
 
@@ -142,6 +153,7 @@ private:
 	uint32_t m_contentHeight = 0;
 
 	uint32_t m_unRowPitch = 0;
+	VkDeviceSize m_size = 0;
 	
 	uint32_t m_FBID = 0;
 
@@ -185,7 +197,7 @@ struct FrameInfo_t
 			if ( !tex )
 				return false;
 
-			return tex->format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+			return tex->isYcbcr();
 		}
 
 		uint32_t integerWidth() const { return tex->width() / scale.x; }
@@ -230,7 +242,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struct wl
 
 bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture );
 std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( void );
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable);
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, bool nv12);
 
 void vulkan_present_to_window( void );
 

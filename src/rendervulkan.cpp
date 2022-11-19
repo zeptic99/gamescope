@@ -31,7 +31,7 @@
 #include "cs_gaussian_blur_horizontal.h"
 #include "cs_nis.h"
 #include "cs_nis_fp16.h"
-
+#include "cs_rgb_to_nv12.h"
 
 #define A_CPU
 #include "shaders/ffx_a.h"
@@ -88,6 +88,7 @@ enum ShaderType {
 	SHADER_TYPE_EASU,
 	SHADER_TYPE_RCAS,
 	SHADER_TYPE_NIS,
+	SHADER_TYPE_RGB_TO_NV12,
 
 	SHADER_TYPE_COUNT
 };
@@ -335,6 +336,7 @@ public:
 	void begin();
 	void end();
 	void bindTexture(uint32_t slot, std::shared_ptr<CVulkanTexture> texture);
+	void setTextureStorage(bool storage);
 	void setTextureSrgb(uint32_t slot, bool srgb);
 	void setSamplerNearest(uint32_t slot, bool nearest);
 	void setSamplerUnnormalized(uint32_t slot, bool unnormalized);
@@ -942,7 +944,7 @@ bool CVulkanDevice::createLayouts()
 	for (auto& sampler : ycbcrSamplers)
 		sampler = m_ycbcrSampler;
 
-	std::array<VkDescriptorSetLayoutBinding, 3> layoutBindings = {
+	std::array<VkDescriptorSetLayoutBinding, 4> layoutBindings = {
 		VkDescriptorSetLayoutBinding {
 			.binding = 0,
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -951,12 +953,18 @@ bool CVulkanDevice::createLayouts()
 		},
 		VkDescriptorSetLayoutBinding {
 			.binding = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		},
+		VkDescriptorSetLayoutBinding {
+			.binding = 2,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = VKR_SAMPLER_SLOTS,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		},
 		VkDescriptorSetLayoutBinding {
-			.binding = 2,
+			.binding = 3,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = VKR_SAMPLER_SLOTS,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -1020,7 +1028,7 @@ bool CVulkanDevice::createPools()
 	VkDescriptorPoolSize poolSizes[2] {
 		{
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			uint32_t(m_descriptorSets.size()) * 1,
+			uint32_t(m_descriptorSets.size()) * 2,
 		},
 		{
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -1070,6 +1078,7 @@ bool CVulkanDevice::createShaders()
 		SHADER(EASU, cs_easu);
 		SHADER(NIS, cs_nis);
 	}
+	SHADER(RGB_TO_NV12, cs_rgb_to_nv12);
 #undef SHADER
 
 	for (uint32_t i = 0; i < shaderInfos.size(); i++)
@@ -1276,6 +1285,7 @@ void CVulkanDevice::compileAllPipelines()
 	SHADER(RCAS, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1);
 	SHADER(EASU, 1, 1, 1);
 	SHADER(NIS, 1, 1, 1);
+	SHADER(RGB_TO_NV12, 1, 1, 1);
 #undef SHADER
 
 	for (auto& info : pipelineInfos) {
@@ -1560,13 +1570,10 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 
 	VkDescriptorSet descriptorSet = m_device->descriptorSet();
 
-	std::array<VkWriteDescriptorSet, 3> writeDescriptorSets;
+	std::array<VkWriteDescriptorSet, 4> writeDescriptorSets;
 	std::array<VkDescriptorImageInfo, VKR_SAMPLER_SLOTS> imageDescriptors = {};
 	std::array<VkDescriptorImageInfo, VKR_SAMPLER_SLOTS> ycbcrImageDescriptors = {};
-	VkDescriptorImageInfo targetDescriptor = {
-		.imageView = m_target->srgbView(),
-		.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-	};
+	std::array<VkDescriptorImageInfo, VKR_TARGET_SLOTS> targetDescriptors = {};
 
 	writeDescriptorSets[0] = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1575,7 +1582,7 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstArrayElement = 0,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		.pImageInfo = &targetDescriptor,
+		.pImageInfo = &targetDescriptors[0],
 	};
 
 	writeDescriptorSets[1] = {
@@ -1583,15 +1590,25 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstSet = descriptorSet,
 		.dstBinding = 1,
 		.dstArrayElement = 0,
-		.descriptorCount = imageDescriptors.size(),
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = imageDescriptors.data(),
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		.pImageInfo = &targetDescriptors[1],
 	};
 
 	writeDescriptorSets[2] = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		.dstSet = descriptorSet,
 		.dstBinding = 2,
+		.dstArrayElement = 0,
+		.descriptorCount = imageDescriptors.size(),
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = imageDescriptors.data(),
+	};
+
+	writeDescriptorSets[3] = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = descriptorSet,
+		.dstBinding = 3,
 		.dstArrayElement = 0,
 		.descriptorCount = ycbcrImageDescriptors.size(),
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -1612,6 +1629,20 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 			ycbcrImageDescriptors[i].imageView = view;
 		else
 			imageDescriptors[i].imageView = view;
+	}
+
+	if (!m_target->isYcbcr())
+	{
+		targetDescriptors[0].imageView = m_target->srgbView();
+		targetDescriptors[0].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	}
+	else
+	{
+		targetDescriptors[0].imageView = m_target->lumaView();
+		targetDescriptors[0].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		targetDescriptors[1].imageView = m_target->chromaView();
+		targetDescriptors[1].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 	}
 
 	m_device->vk.UpdateDescriptorSets(m_device->device(), writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
@@ -2067,6 +2098,8 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 		.memoryTypeIndex = uint32_t(g_device.findMemoryType(properties, memRequirements.memoryTypeBits)),
 	};
 
+	m_size = allocInfo.allocationSize;
+
 	if ( flags.bExportable == true || pDMA != nullptr )
 	{
 		memory_dedicated_info = {
@@ -2290,6 +2323,31 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 				vk_errorf( res, "vkCreateImageView failed" );
 				return false;
 			}
+		}
+
+
+		if ( isYcbcr() )
+		{
+			createInfo.pNext = NULL;
+			createInfo.format = VK_FORMAT_R8_UNORM;
+
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
+			res = vkCreateImageView(g_device.device(), &createInfo, nullptr, &m_lumaView);
+			if ( res != VK_SUCCESS ) {
+				vk_errorf( res, "vkCreateImageView failed" );
+				return false;
+			}
+
+			createInfo.pNext = NULL;
+			createInfo.format = VK_FORMAT_R8G8_UNORM;
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+			res = vkCreateImageView(g_device.device(), &createInfo, nullptr, &m_chromaView);
+			if ( res != VK_SUCCESS ) {
+				vk_errorf( res, "vkCreateImageView failed" );
+				return false;
+			}
+
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 	}
 
@@ -2904,7 +2962,7 @@ void vulkan_garbage_collect( void )
 	g_device.garbageCollect();
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable)
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, bool nv12)
 {
 	for (auto& pScreenshotImage : g_output.pScreenshotImages)
 	{
@@ -2915,13 +2973,13 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 			CVulkanTexture::createFlags screenshotImageFlags;
 			screenshotImageFlags.bMappable = true;
 			screenshotImageFlags.bTransferDst = true;
-			if (exportable) {
+			if (exportable || nv12) {
 				screenshotImageFlags.bExportable = true;
 				screenshotImageFlags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
 				screenshotImageFlags.bStorage = true;
 			}
 
-			bool bSuccess = pScreenshotImage->BInit( width, height, VulkanFormatToDRM(g_output.outputFormat), screenshotImageFlags );
+			bool bSuccess = pScreenshotImage->BInit( width, height, nv12 ? DRM_FORMAT_NV12 : VulkanFormatToDRM(g_output.outputFormat), screenshotImageFlags );
 
 			assert( bSuccess );
 		}
@@ -3196,14 +3254,17 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 
 	if ( pScreenshotTexture != nullptr )
 	{
-		if (compositeImage->width() == pScreenshotTexture->width() &&
+		if (compositeImage->format() == pScreenshotTexture->format() &&
+			compositeImage->width() == pScreenshotTexture->width() &&
 		    compositeImage->height() == pScreenshotTexture->height()) {
 			cmdBuffer->copyImage(compositeImage, pScreenshotTexture);
 		} else {
+			const bool ycbcr = pScreenshotTexture->isYcbcr();
+
 			float scale = (float)compositeImage->width() / pScreenshotTexture->width();
 			BlitPushData_t constants( scale );
 
-			cmdBuffer->bindPipeline(g_device.pipeline(SHADER_TYPE_BLIT));
+			cmdBuffer->bindPipeline(g_device.pipeline( ycbcr ? SHADER_TYPE_RGB_TO_NV12 : SHADER_TYPE_BLIT ));
 			cmdBuffer->bindTexture(0, compositeImage);
 			cmdBuffer->setTextureSrgb(0, false);
 			cmdBuffer->setSamplerNearest(0, false);
@@ -3217,7 +3278,10 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 
 			const int pixelsPerGroup = 8;
 
-			cmdBuffer->dispatch(div_roundup(pScreenshotTexture->width(), pixelsPerGroup), div_roundup(pScreenshotTexture->height(), pixelsPerGroup));
+			// For ycbcr, we operate on 2 pixels at a time, so use the half-extent.
+			const int dispatchSize = ycbcr ? pixelsPerGroup * 2 : pixelsPerGroup;
+
+			cmdBuffer->dispatch(div_roundup(pScreenshotTexture->width(), dispatchSize), div_roundup(pScreenshotTexture->height(), 1));
 		}
 	}
 
