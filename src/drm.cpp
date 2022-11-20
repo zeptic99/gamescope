@@ -1274,7 +1274,7 @@ static void update_drm_effective_orientation(struct drm_t *drm, struct connector
 			g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
 			break;
 		case PANEL_ORIENTATION_AUTO:
-			if (conn->props.count("panel orientation") > 0 )
+			if (conn && conn->props.count("panel orientation") > 0)
 			{
 				const char *orientation = get_enum_name(conn->props["panel orientation"], conn->initial_prop_values["panel orientation"]);
 
@@ -2270,6 +2270,9 @@ bool drm_update_degamma_lut(struct drm_t *drm)
 
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 {
+	if (!drm->connector || !drm->connector->connector)
+		return false;
+
 	uint32_t mode_id = 0;
 	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &mode_id) != 0)
 		return false;
@@ -2312,6 +2315,9 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 		height = tmp;
 	}
 
+	if (!drm->connector || !drm->connector->connector)
+		return false;
+
 	drmModeConnector *connector = drm->connector->connector;
 	const drmModeModeInfo *existing_mode = find_mode(connector, width, height, refresh);
 	drmModeModeInfo mode = {0};
@@ -2351,6 +2357,9 @@ bool drm_set_refresh( struct drm_t *drm, int refresh )
 
 bool drm_set_resolution( struct drm_t *drm, int width, int height )
 {
+	if (!drm->connector || !drm->connector->connector)
+		return false;
+
 	drmModeConnector *connector = drm->connector->connector;
 	const drmModeModeInfo *mode = find_mode(connector, width, height, 0);
 	if ( !mode )
