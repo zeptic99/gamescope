@@ -162,7 +162,7 @@ static void copy_buffer(struct pipewire_state *state, struct pipewire_buffer *bu
 		if (!needs_reneg) {
 			int bpp = 4;
 			for (uint32_t i = 0; i < tex->height(); i++) {
-				memcpy(buffer->shm.data + i * buffer->shm.stride, (uint8_t *) tex->mappedData() + i * tex->rowPitch(), bpp * tex->width());
+				memcpy(buffer->shm.data + i * buffer->shm.stride, tex->mappedData() + i * tex->rowPitch(), bpp * tex->width());
 			}
 		}
 		break;

@@ -2374,12 +2374,14 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 
 	if ( flags.bMappable )
 	{
-		res = g_device.vk.MapMemory( g_device.device(), m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &m_pMappedData );
+		void *pData = nullptr;
+		res = g_device.vk.MapMemory( g_device.device(), m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &pData );
 		if ( res != VK_SUCCESS )
 		{
 			vk_errorf( res, "vkMapMemory failed" );
 			return false;
 		}
+		m_pMappedData = (uint8_t*)pData;
 	}
 	
 	m_bInitialized = true;

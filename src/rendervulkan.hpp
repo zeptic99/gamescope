@@ -115,7 +115,7 @@ public:
 	inline uint32_t contentHeight() {return m_contentHeight; }
 	inline uint32_t rowPitch() { return m_unRowPitch; }
 	inline uint32_t fbid() { return m_FBID; }
-	inline void *mappedData() { return m_pMappedData; }
+	inline uint8_t *mappedData() { return m_pMappedData; }
 	inline VkFormat format() const { return m_format; }
 	inline const struct wlr_dmabuf_attributes& dmabuf() { return m_dmabuf; }
 	inline VkImage vkImage() { return m_vkImage; }
@@ -167,7 +167,7 @@ private:
 	
 	uint32_t m_FBID = 0;
 
-	void *m_pMappedData = nullptr;
+	uint8_t *m_pMappedData = nullptr;
 
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
 

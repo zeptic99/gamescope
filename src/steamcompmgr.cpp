@@ -2006,7 +2006,7 @@ paint_all(bool async)
 			std::thread screenshotThread = std::thread([=] {
 				pthread_setname_np( pthread_self(), "gamescope-scrsh" );
 
-				const uint8_t *mappedData = reinterpret_cast<const uint8_t *>(pCaptureTexture->mappedData());
+				const uint8_t *mappedData = pCaptureTexture->mappedData();
 
 				if (pCaptureTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
 				{
