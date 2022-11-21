@@ -38,9 +38,15 @@ static void destroy_buffer(struct pipewire_buffer *buffer) {
 
 	switch (buffer->type) {
 	case SPA_DATA_MemFd:
-		munmap(buffer->shm.data, buffer->shm.stride * buffer->video_info.size.height);
+	{
+		off_t size = buffer->shm.stride * buffer->video_info.size.height;
+		if (buffer->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+			size += buffer->shm.stride * ((buffer->video_info.size.height + 1) / 2);
+		}
+		munmap(buffer->shm.data, size);
 		close(buffer->shm.fd);
 		break;
+	}
 	case SPA_DATA_DmaBuf:
 		break; // nothing to do
 	default:
@@ -70,25 +76,35 @@ static void calculate_capture_size()
 	}
 }
 
-static std::vector<const struct spa_pod *> build_format_params(struct spa_pod_builder *builder) {
+static void build_format_params(struct spa_pod_builder *builder, spa_video_format format, std::vector<const struct spa_pod *> &params) {
 	struct spa_rectangle size = SPA_RECTANGLE(s_nCaptureWidth, s_nCaptureHeight);
 	struct spa_rectangle min_requested_size = { 0, 0 };
 	struct spa_rectangle max_requested_size = { UINT32_MAX, UINT32_MAX };
 	struct spa_fraction framerate = SPA_FRACTION(0, 1);
 	uint64_t modifier = DRM_FORMAT_MOD_LINEAR;
 
-	std::vector<const struct spa_pod *> params;
-
 	struct spa_pod_frame obj_frame, choice_frame;
 	spa_pod_builder_push_object(builder, &obj_frame, SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
 	spa_pod_builder_add(builder,
 		SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
 		SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-		SPA_FORMAT_VIDEO_format, SPA_POD_Id(SPA_VIDEO_FORMAT_BGRx),
+		SPA_FORMAT_VIDEO_format, SPA_POD_Id(format),
 		SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&size),
 		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate),
 		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size ),
 		0);
+	if (format == SPA_VIDEO_FORMAT_NV12) {
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_colorMatrix, SPA_POD_CHOICE_ENUM_Id(3,
+							SPA_VIDEO_COLOR_MATRIX_BT601,
+							SPA_VIDEO_COLOR_MATRIX_BT601,
+							SPA_VIDEO_COLOR_MATRIX_BT709),
+			SPA_FORMAT_VIDEO_colorRange, SPA_POD_CHOICE_ENUM_Id(3,
+							SPA_VIDEO_COLOR_RANGE_16_235,
+							SPA_VIDEO_COLOR_RANGE_16_235,
+							SPA_VIDEO_COLOR_RANGE_0_255),
+			0);
+	}
 	spa_pod_builder_prop(builder, SPA_FORMAT_VIDEO_modifier, SPA_POD_PROP_FLAG_MANDATORY);
 	spa_pod_builder_push_choice(builder, &choice_frame, SPA_CHOICE_Enum, 0);
 	spa_pod_builder_long(builder, modifier); // default
@@ -96,14 +112,37 @@ static std::vector<const struct spa_pod *> build_format_params(struct spa_pod_bu
 	spa_pod_builder_pop(builder, &choice_frame);
 	params.push_back((const struct spa_pod *) spa_pod_builder_pop(builder, &obj_frame));
 
-	params.push_back((const struct spa_pod *) spa_pod_builder_add_object(builder,
-		SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
+	spa_pod_builder_push_object(builder, &obj_frame, SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
+	spa_pod_builder_add(builder,
 		SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
 		SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-		SPA_FORMAT_VIDEO_format, SPA_POD_Id(SPA_VIDEO_FORMAT_BGRx),
+		SPA_FORMAT_VIDEO_format, SPA_POD_Id(format),
 		SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&size),
 		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate),
-		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size )));
+		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size ),
+		0);
+	if (format == SPA_VIDEO_FORMAT_NV12) {
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_colorMatrix, SPA_POD_CHOICE_ENUM_Id(3,
+							SPA_VIDEO_COLOR_MATRIX_BT601,
+							SPA_VIDEO_COLOR_MATRIX_BT601,
+							SPA_VIDEO_COLOR_MATRIX_BT709),
+			SPA_FORMAT_VIDEO_colorRange, SPA_POD_CHOICE_ENUM_Id(3,
+							SPA_VIDEO_COLOR_RANGE_16_235,
+							SPA_VIDEO_COLOR_RANGE_16_235,
+							SPA_VIDEO_COLOR_RANGE_0_255),
+			0);
+	}
+	params.push_back((const struct spa_pod *) spa_pod_builder_pop(builder, &obj_frame));
+}
+
+
+static std::vector<const struct spa_pod *> build_format_params(struct spa_pod_builder *builder)
+{
+	std::vector<const struct spa_pod *> params;
+
+	build_format_params(builder, SPA_VIDEO_FORMAT_BGRx, params);
+	build_format_params(builder, SPA_VIDEO_FORMAT_NV12, params);
 
 	return params;
 }
@@ -157,12 +196,39 @@ static void copy_buffer(struct pipewire_state *state, struct pipewire_buffer *bu
 	case SPA_DATA_MemFd:
 		chunk->offset = 0;
 		chunk->size = state->video_info.size.height * buffer->shm.stride;
+		if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+			chunk->size += ((state->video_info.size.height + 1)/2 * buffer->shm.stride);
+		}
 		chunk->stride = buffer->shm.stride;
 
 		if (!needs_reneg) {
-			int bpp = 4;
-			for (uint32_t i = 0; i < tex->height(); i++) {
-				memcpy(buffer->shm.data + i * buffer->shm.stride, tex->mappedData() + i * tex->rowPitch(), bpp * tex->width());
+			uint8_t *pMappedData = tex->mappedData();
+
+			if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+				for (uint32_t i = 0; i < tex->height(); i++) {
+					const uint32_t lumaPwOffset = 0;
+					memcpy(
+						&buffer->shm.data[lumaPwOffset      + i * buffer->shm.stride],
+						&pMappedData     [tex->lumaOffset() + i * tex->lumaRowPitch()],
+						std::min<size_t>(buffer->shm.stride, tex->lumaRowPitch()));
+				}
+
+				for (uint32_t i = 0; i < (tex->height() + 1) / 2; i++) {
+					const uint32_t chromaPwOffset = tex->height() * buffer->shm.stride;
+					memcpy(
+						&buffer->shm.data[chromaPwOffset      + i * buffer->shm.stride],
+						&pMappedData     [tex->chromaOffset() + i * tex->chromaRowPitch()],
+						std::min<size_t>(buffer->shm.stride, tex->chromaRowPitch()));
+				}
+			}
+			else
+			{
+				for (uint32_t i = 0; i < tex->height(); i++) {
+					memcpy(
+						&buffer->shm.data[i * buffer->shm.stride],
+						&pMappedData     [i * tex->rowPitch()],
+						std::min<size_t>(buffer->shm.stride, tex->rowPitch()));
+				}
 			}
 		}
 		break;
@@ -197,7 +263,7 @@ static void dispatch_nudge(struct pipewire_state *state, int fd)
 	if (s_nCaptureWidth != state->video_info.size.width || s_nCaptureHeight != state->video_info.size.height) {
 		pwr_log.debugf("renegotiating stream params (size: %dx%d)", s_nCaptureWidth, s_nCaptureHeight);
 
-		uint8_t buf[1024];
+		uint8_t buf[4096];
 		struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
 		std::vector<const struct spa_pod *> format_params = build_format_params(&builder);
 		int ret = pw_stream_update_params(state->stream, format_params.data(), format_params.size());
@@ -260,7 +326,12 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 		return;
 
 	struct spa_rectangle requested_size = { 0, 0 };
+
 	int bpp = 4;
+	if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+		bpp = 1;
+	}
+
 	int ret = spa_format_video_raw_parse_with_requested_size(param, &state->video_info, &requested_size);
 	if (ret < 0) {
 		pwr_log.errorf("spa_format_video_raw_parse failed");
@@ -282,6 +353,9 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 
 	int buffers = 4;
 	int shm_size = state->shm_stride * state->video_info.size.height;
+	if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+		shm_size += ((state->video_info.size.height + 1) / 2) * state->shm_stride;
+	}
 	int data_type = state->dmabuf ? (1 << SPA_DATA_DmaBuf) : (1 << SPA_DATA_MemFd);
 
 	const struct spa_pod *buffers_param =
@@ -355,7 +429,7 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 	bool is_dmabuf = (spa_data->type & (1 << SPA_DATA_DmaBuf)) != 0;
 	bool is_memfd = (spa_data->type & (1 << SPA_DATA_MemFd)) != 0;
 
-	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, false);
+	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, state->video_info.format == SPA_VIDEO_FORMAT_NV12);
 	assert(buffer->texture != nullptr);
 
 	if (is_dmabuf) {
@@ -384,6 +458,9 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 		}
 
 		off_t size = state->shm_stride * state->video_info.size.height;
+		if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+			size += state->shm_stride * ((state->video_info.size.height + 1) / 2);
+		}
 		if (ftruncate(fd, size) != 0) {
 			pwr_log.errorf_errno("ftruncate failed");
 			close(fd);
@@ -545,7 +622,7 @@ bool init_pipewire(void)
 	s_nOutputHeight = g_nOutputHeight;
 	calculate_capture_size();
 
-	uint8_t buf[1024];
+	uint8_t buf[4096];
 	struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
 	std::vector<const struct spa_pod *> format_params = build_format_params(&builder);
 
