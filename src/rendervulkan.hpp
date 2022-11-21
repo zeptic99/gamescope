@@ -123,6 +123,11 @@ public:
 	inline bool externalImage() { return m_bExternal; }
 	inline VkDeviceSize totalSize() const { return m_size; }
 
+	inline uint32_t lumaOffset() const { return m_lumaOffset; }
+	inline uint32_t lumaRowPitch() const { return m_lumaPitch; }
+	inline uint32_t chromaOffset() const { return m_chromaOffset; }
+	inline uint32_t chromaRowPitch() const { return m_chromaPitch; }
+
 	inline bool isYcbcr() const
 	{
 		return format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
@@ -154,6 +159,11 @@ private:
 
 	uint32_t m_unRowPitch = 0;
 	VkDeviceSize m_size = 0;
+
+	uint32_t m_lumaOffset = 0;
+	uint32_t m_lumaPitch = 0;
+	uint32_t m_chromaOffset = 0;
+	uint32_t m_chromaPitch = 0;
 	
 	uint32_t m_FBID = 0;
 

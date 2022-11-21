@@ -2173,6 +2173,27 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t drmFormat,
 		g_device.vk.GetImageSubresourceLayout(g_device.device(), m_vkImage, &image_subresource, &image_layout);
 
 		m_unRowPitch = image_layout.rowPitch;
+
+		if (isYcbcr())
+		{
+			const VkImageSubresource lumaSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT,
+			};
+			VkSubresourceLayout lumaLayout;
+			g_device.vk.GetImageSubresourceLayout(g_device.device(), m_vkImage, &lumaSubresource, &lumaLayout);
+
+			m_lumaOffset = lumaLayout.offset;
+			m_lumaPitch = lumaLayout.rowPitch;
+
+			const VkImageSubresource chromaSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT,
+			};
+			VkSubresourceLayout chromaLayout;
+			g_device.vk.GetImageSubresourceLayout(g_device.device(), m_vkImage, &chromaSubresource, &chromaLayout);
+
+			m_chromaOffset = chromaLayout.offset;
+			m_chromaPitch = chromaLayout.rowPitch;
+		}
 	}
 	
 	if ( flags.bExportable == true )
