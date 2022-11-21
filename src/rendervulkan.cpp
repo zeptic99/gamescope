@@ -3311,9 +3311,18 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 			const bool ycbcr = pScreenshotTexture->isYcbcr();
 
 			float scale = (float)compositeImage->width() / pScreenshotTexture->width();
-			CaptureConvertBlitData_t constants( scale );
-			constants.halfExtent[0] = pScreenshotTexture->width() / 2.0f;
-			constants.halfExtent[1] = pScreenshotTexture->height() / 2.0f;
+			if ( ycbcr )
+			{
+				CaptureConvertBlitData_t constants( scale );
+				constants.halfExtent[0] = pScreenshotTexture->width() / 2.0f;
+				constants.halfExtent[1] = pScreenshotTexture->height() / 2.0f;
+				cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);
+			}
+			else
+			{
+				BlitPushData_t constants( scale );
+				cmdBuffer->pushConstants<BlitPushData_t>(constants);
+			}
 
 			cmdBuffer->bindPipeline(g_device.pipeline( ycbcr ? SHADER_TYPE_RGB_TO_NV12 : SHADER_TYPE_BLIT ));
 			cmdBuffer->bindTexture(0, compositeImage);
@@ -3325,7 +3334,6 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 				cmdBuffer->bindTexture(i, nullptr);
 			}
 			cmdBuffer->bindTarget(pScreenshotTexture);
-			cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);
 
 			const int pixelsPerGroup = 8;
 
