@@ -65,10 +65,10 @@ static constexpr mat3x4 g_rgb2yuv_srgb_to_bt709_full = {{
 
 static const mat3x4& colorspace_to_conversion_from_srgb_matrix(EStreamColorspace colorspace) {
 	switch (colorspace) {
+		default:
 		case k_EStreamColorspace_BT601:			return g_rgb2yuv_srgb_to_bt601_limited;
 		case k_EStreamColorspace_BT601_Full:	return g_rgb2yuv_srgb_to_bt601;
 		case k_EStreamColorspace_BT709:			return g_rgb2yuv_srgb_to_bt709_limited;
-		default:
 		case k_EStreamColorspace_BT709_Full:	return g_rgb2yuv_srgb_to_bt709_full;
 	}
 }
