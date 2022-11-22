@@ -168,7 +168,6 @@ static void copy_buffer(struct pipewire_state *state, struct pipewire_buffer *bu
 {
 	std::shared_ptr<CVulkanTexture> &tex = buffer->texture;
 	assert(tex != nullptr);
-	assert(tex->format() == VK_FORMAT_B8G8R8A8_UNORM);
 
 	struct pw_buffer *pw_buffer = buffer->buffer;
 	struct spa_buffer *spa_buffer = pw_buffer->buffer;
