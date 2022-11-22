@@ -63,6 +63,16 @@ static constexpr mat3x4 g_rgb2yuv_srgb_to_bt709_full = {{
   { 0.5000f, -0.4542f, -0.0468f, 0.5f },
 }};
 
+static const mat3x4& colorspace_to_conversion_from_srgb_matrix(EStreamColorspace colorspace) {
+	switch (colorspace) {
+		case k_EStreamColorspace_BT601:			return g_rgb2yuv_srgb_to_bt601_limited;
+		case k_EStreamColorspace_BT601_Full:	return g_rgb2yuv_srgb_to_bt601;
+		case k_EStreamColorspace_BT709:			return g_rgb2yuv_srgb_to_bt709_limited;
+		default:
+		case k_EStreamColorspace_BT709_Full:	return g_rgb2yuv_srgb_to_bt709_full;
+	}
+}
+
 extern "C"
 {
 VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(
@@ -3010,7 +3020,7 @@ void vulkan_garbage_collect( void )
 	g_device.garbageCollect();
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat)
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace)
 {
 	for (auto& pScreenshotImage : g_output.pScreenshotImages)
 	{
@@ -3028,6 +3038,7 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 			}
 
 			bool bSuccess = pScreenshotImage->BInit( width, height, drmFormat, screenshotImageFlags );
+			pScreenshotImage->setStreamColorspace(colorspace);
 
 			assert( bSuccess );
 		}
@@ -3330,7 +3341,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 			float scale = (float)compositeImage->width() / pScreenshotTexture->width();
 			if ( ycbcr )
 			{
-				CaptureConvertBlitData_t constants( scale, g_rgb2yuv_srgb_to_bt601_limited );
+				CaptureConvertBlitData_t constants( scale, colorspace_to_conversion_from_srgb_matrix( compositeImage->streamColorspace() ) );
 				constants.halfExtent[0] = pScreenshotTexture->width() / 2.0f;
 				constants.halfExtent[1] = pScreenshotTexture->height() / 2.0f;
 				cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);

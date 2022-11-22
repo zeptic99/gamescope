@@ -128,6 +128,9 @@ public:
 	inline uint32_t chromaOffset() const { return m_chromaOffset; }
 	inline uint32_t chromaRowPitch() const { return m_chromaPitch; }
 
+	inline EStreamColorspace streamColorspace() const { return m_streamColorspace; }
+	inline void setStreamColorspace(EStreamColorspace colorspace) { m_streamColorspace = colorspace; }
+
 	inline bool isYcbcr() const
 	{
 		return format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
@@ -170,6 +173,8 @@ private:
 	uint8_t *m_pMappedData = nullptr;
 
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
+
+	EStreamColorspace m_streamColorspace = k_EStreamColorspace_Unknown;
 
 	struct wlr_dmabuf_attributes m_dmabuf = {};
 };
@@ -252,7 +257,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struct wl
 
 bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture );
 std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( void );
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat);
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
 
 void vulkan_present_to_window( void );
 
