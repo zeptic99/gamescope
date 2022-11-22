@@ -438,9 +438,39 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 	bool is_dmabuf = (spa_data->type & (1 << SPA_DATA_DmaBuf)) != 0;
 	bool is_memfd = (spa_data->type & (1 << SPA_DATA_MemFd)) != 0;
 
+	EStreamColorspace colorspace = k_EStreamColorspace_Unknown;
+	switch (state->video_info.color_matrix) {
+	case SPA_VIDEO_COLOR_MATRIX_BT601:
+		switch (state->video_info.color_range) {
+		case SPA_VIDEO_COLOR_RANGE_16_235:
+			colorspace = k_EStreamColorspace_BT601;
+			break;
+		case SPA_VIDEO_COLOR_RANGE_0_255:
+			colorspace = k_EStreamColorspace_BT601_Full;
+			break;
+		default:
+			break;
+		}
+		break;
+	case SPA_VIDEO_COLOR_MATRIX_BT709:
+		switch (state->video_info.color_range) {
+		case SPA_VIDEO_COLOR_RANGE_16_235:
+			colorspace = k_EStreamColorspace_BT709;
+			break;
+		case SPA_VIDEO_COLOR_RANGE_0_255:
+			colorspace = k_EStreamColorspace_BT709_Full;
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
 	uint32_t drmFormat = spa_format_to_drm(state->video_info.format);
 
-	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, drmFormat);
+	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, drmFormat, colorspace);
 	assert(buffer->texture != nullptr);
 
 	if (is_dmabuf) {
