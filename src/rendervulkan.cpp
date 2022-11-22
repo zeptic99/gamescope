@@ -38,6 +38,31 @@
 #include "shaders/ffx_fsr1.h"
 #include "shaders/descriptor_set_constants.h"
 
+
+static constexpr mat3x4 g_rgb2yuv_srgb_to_bt601_limited = {{
+  { 0.257f, 0.504f, 0.098f, 0.0625f },
+  { -0.148f, -0.291f, 0.439f, 0.5f },
+  { 0.439f, -0.368f, -0.071f, 0.5f },
+}};
+
+static constexpr mat3x4 g_rgb2yuv_srgb_to_bt601 = {{
+  { 0.299f, 0.587f, 0.114f, 0.0f },
+  { -0.169f, -0.331f, 0.500f, 0.5f },
+  { 0.500f, -0.419f, -0.081f, 0.5f },
+}};
+
+static constexpr mat3x4 g_rgb2yuv_srgb_to_bt709_limited = {{
+  { 0.1826f, 0.6142f, 0.0620f, 0.0625f },
+  { -0.1006f, -0.3386f, 0.4392f, 0.5f },
+  { 0.4392f, -0.3989f, -0.0403f, 0.5f },
+}};
+
+static constexpr mat3x4 g_rgb2yuv_srgb_to_bt709_full = {{
+  { 0.2126f, 0.7152f, 0.0722f, 0.0f },
+  { -0.1146f, -0.3854f, 0.5000f, 0.5f },
+  { 0.5000f, -0.4542f, -0.0468f, 0.5f },
+}};
+
 extern "C"
 {
 VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(
@@ -3054,22 +3079,14 @@ struct CaptureConvertBlitData_t
 	float opacity[1];
 	uint32_t borderMask;
 	uint32_t halfExtent[2];
+	mat3x4 colorMatrix;
 
-	explicit CaptureConvertBlitData_t(const struct FrameInfo_t *frameInfo)
-	{
-		for (int i = 0; i < std::min(frameInfo->layerCount, 1); i++) {
-			const FrameInfo_t::Layer_t *layer = &frameInfo->layers[i];
-			scale[i] = layer->scale;
-			offset[i] = layer->offsetPixelCenter();
-			opacity[i] = layer->opacity;
-		}
-	}
-
-	explicit CaptureConvertBlitData_t(float blit_scale) {
+	explicit CaptureConvertBlitData_t(float blit_scale, const mat3x4 &color_matrix) {
 		scale[0] = { blit_scale, blit_scale };
 		offset[0] = { 0.0f, 0.0f };
 		opacity[0] = 1.0f;
 		borderMask = 0;
+		colorMatrix = color_matrix;
 	}
 };
 
@@ -3313,7 +3330,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 			float scale = (float)compositeImage->width() / pScreenshotTexture->width();
 			if ( ycbcr )
 			{
-				CaptureConvertBlitData_t constants( scale );
+				CaptureConvertBlitData_t constants( scale, g_rgb2yuv_srgb_to_bt601_limited );
 				constants.halfExtent[0] = pScreenshotTexture->width() / 2.0f;
 				constants.halfExtent[1] = pScreenshotTexture->height() / 2.0f;
 				cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);

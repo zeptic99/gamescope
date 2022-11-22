@@ -265,3 +265,5 @@ bool vulkan_primary_dev_id(dev_t *id);
 bool vulkan_supports_modifiers(void);
 
 struct wlr_renderer *vulkan_renderer_create( void );
+
+using mat3x4 = std::array<std::array<float, 4>, 3>;

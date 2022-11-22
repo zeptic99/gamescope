@@ -23,12 +23,17 @@ uniform layers_t {
     float u_opacity[1];
     uint u_borderMask;
     uvec2 u_halfExtent;
+    mat3x4 u_colorMatrix;
 };
 
 #include "composite.h"
 
 vec4 sampleLayer(uint layerIdx, vec2 uv) {
   return sampleLayer(s_samplers[layerIdx], layerIdx, uv, true);
+}
+
+vec3 applyColorMatrix(vec3 rgb, mat3x4 matrix) {
+  return vec4(linearToSrgb(rgb), 1.0f) * matrix;
 }
 
 void main() {
@@ -51,14 +56,11 @@ void main() {
     };
 
     vec3 avg_color = (color[0] + color[1] + color[2] + color[3]) / 4.0f;
-    vec2 uv = vec2(
-      -0.148f * avg_color.r - 0.291f * avg_color.g + 0.439f * avg_color.b + (128.0f / 255.0f),
-       0.439f * avg_color.r - 0.368f * avg_color.g - 0.071f * avg_color.b + (128.0f / 255.0f)
-    );
+    vec2 uv = applyColorMatrix(avg_color, u_colorMatrix).yz;
     imageStore(dst_chroma, chroma_uv, vec4(uv, 0.0f, 1.0f));
 
     for (int i = 0; i < 4; i++) {
-      float y = 0.257f * color[i].r + 0.504f * color[i].g + 0.098f * color[i].b + (16.0f / 255.0f);
+      float y = applyColorMatrix(color[i], u_colorMatrix).x;
       imageStore(dst_luma, luma_uv + offset_table[i], vec4(y, 0.0f, 0.0f, 1.0f));
     }
   }
