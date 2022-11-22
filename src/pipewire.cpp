@@ -414,6 +414,16 @@ static int anonymous_shm_open(void)
 	return -1;
 }
 
+uint32_t spa_format_to_drm(uint32_t spa_format)
+{
+	switch (spa_format)
+	{
+		case SPA_VIDEO_FORMAT_NV12: return DRM_FORMAT_NV12;
+		default:
+		case SPA_VIDEO_FORMAT_BGR: return DRM_FORMAT_XRGB8888;
+	}
+}
+
 static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffer)
 {
 	struct pipewire_state *state = (struct pipewire_state *) user_data;
@@ -428,7 +438,9 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 	bool is_dmabuf = (spa_data->type & (1 << SPA_DATA_DmaBuf)) != 0;
 	bool is_memfd = (spa_data->type & (1 << SPA_DATA_MemFd)) != 0;
 
-	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, state->video_info.format == SPA_VIDEO_FORMAT_NV12);
+	uint32_t drmFormat = spa_format_to_drm(state->video_info.format);
+
+	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, drmFormat);
 	assert(buffer->texture != nullptr);
 
 	if (is_dmabuf) {

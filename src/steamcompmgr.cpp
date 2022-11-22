@@ -1920,9 +1920,13 @@ paint_all(bool async)
 		// hack: forced to nv12 rn
 		bool bHackForceNV12DumpScreenshot = true;
 
+		uint32_t drmCaptureFormat = bHackForceNV12DumpScreenshot
+			? DRM_FORMAT_NV12
+			: DRM_FORMAT_XRGB8888;
+
 		if ( bCapture && pCaptureTexture == nullptr )
 		{
-			pCaptureTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, bHackForceNV12DumpScreenshot);
+			pCaptureTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat);
 		}
 
 		bool bResult = vulkan_composite( &frameInfo, pCaptureTexture );

@@ -3010,7 +3010,7 @@ void vulkan_garbage_collect( void )
 	g_device.garbageCollect();
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, bool nv12)
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat)
 {
 	for (auto& pScreenshotImage : g_output.pScreenshotImages)
 	{
@@ -3021,13 +3021,13 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 			CVulkanTexture::createFlags screenshotImageFlags;
 			screenshotImageFlags.bMappable = true;
 			screenshotImageFlags.bTransferDst = true;
-			if (exportable || nv12) {
+			if (exportable || drmFormat == DRM_FORMAT_NV12) {
 				screenshotImageFlags.bExportable = true;
 				screenshotImageFlags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
 				screenshotImageFlags.bStorage = true;
 			}
 
-			bool bSuccess = pScreenshotImage->BInit( width, height, nv12 ? DRM_FORMAT_NV12 : VulkanFormatToDRM(g_output.outputFormat), screenshotImageFlags );
+			bool bSuccess = pScreenshotImage->BInit( width, height, drmFormat, screenshotImageFlags );
 
 			assert( bSuccess );
 		}
