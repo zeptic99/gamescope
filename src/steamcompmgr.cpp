@@ -5767,6 +5767,10 @@ steamcompmgr_main(int argc, char **argv)
 	currentOutputHeight = g_nPreferredOutputHeight;
 
 	init_runtime_info();
+#ifdef HAVE_OPENVR
+	if ( BIsVRSession() )
+		vrsession_steam_mode( steamMode );
+#endif
 
 	int vblankFD = vblank_init();
 	assert( vblankFD >= 0 );

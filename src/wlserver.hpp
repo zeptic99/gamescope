@@ -242,3 +242,5 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf );
 void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh );
 
 extern std::atomic<bool> g_bPendingTouchMovement;
+
+void wlserver_open_steam_menu( bool qam );

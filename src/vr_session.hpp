@@ -23,3 +23,5 @@ void vrsession_update_touch_mode();
 
 void vrsession_title( const char *title );
 bool vrsession_ime_init();
+
+void vrsession_steam_mode( bool bSteamMode );

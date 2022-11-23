@@ -230,6 +230,21 @@ static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *d
 	}
 }
 
+void wlserver_open_steam_menu( bool qam )
+{
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( 0 );
+	if (!server)
+		return;
+
+	uint32_t keycode = qam ? XK_2 : XK_1;
+
+	XTestFakeKeyEvent(server->get_xdisplay(), XKeysymToKeycode( server->get_xdisplay(), XK_Control_L ), True, CurrentTime);
+	XTestFakeKeyEvent(server->get_xdisplay(), XKeysymToKeycode( server->get_xdisplay(), keycode ), True, CurrentTime);
+
+	XTestFakeKeyEvent(server->get_xdisplay(), XKeysymToKeycode( server->get_xdisplay(), keycode ), False, CurrentTime);
+	XTestFakeKeyEvent(server->get_xdisplay(), XKeysymToKeycode( server->get_xdisplay(), XK_Control_L ), False, CurrentTime);
+}
+
 static void wlserver_handle_pointer_button(struct wl_listener *listener, void *data)
 {
 	struct wlserver_pointer *pointer = wl_container_of( listener, pointer, button );
