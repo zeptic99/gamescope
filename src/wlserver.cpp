@@ -1230,10 +1230,11 @@ static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info 
 	surf->destroy.notify = handle_x11_surface_destroy;
 	wl_signal_add( &wlr_surf->events.destroy, &surf->destroy );
 
+	wlserver_wl_surface_info *wl_surf_info = get_wl_surface_info(wlr_surf);
 	surf->wlr = wlr_surf;
-	get_wl_surface_info(wlr_surf)->x11_surface = surf;
+	wl_surf_info->x11_surface = surf;
 
-	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, NULL, NULL, 0 ) )
+	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, wl_surf_info, NULL, 0 ) )
 	{
 		wl_log.errorf("Failed to set xwayland surface role");
 	}
