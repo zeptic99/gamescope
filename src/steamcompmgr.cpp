@@ -2253,6 +2253,15 @@ win_maybe_a_dropdown( win *w )
 	return ( valid_maybe_a_dropdown || win_is_override_redirect( w ) ) && !win_is_useless( w );
 }
 
+static bool
+win_is_disabled( win *w )
+{
+	if ( !w->hasHwndStyle )
+		return false;
+
+	return !!(w->hwndStyle & WS_DISABLED);
+}
+
 /* Returns true if a's focus priority > b's.
  *
  * This function establishes a list of criteria to decide which window should
@@ -2283,6 +2292,9 @@ is_focus_priority_greater( win *a, win *b )
 
 	if ( win_maybe_a_dropdown( a ) != win_maybe_a_dropdown( b ) )
 		return !win_maybe_a_dropdown( a );
+
+	if ( win_is_disabled( a ) != win_is_disabled( b ) )
+		return !win_is_disabled( a );
 
 	// Wine sets SKIP_TASKBAR and SKIP_PAGER hints for WS_EX_NOACTIVATE windows.
 	// See https://github.com/Plagman/gamescope/issues/87
