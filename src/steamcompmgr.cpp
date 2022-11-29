@@ -3733,7 +3733,7 @@ handle_wl_surface_id(xwayland_ctx_t *ctx, win *w, uint32_t surfaceID)
 		wlserver_keyboardfocus( surface );
 
 	// Pull the first buffer out of that window, if needed
-	xwayland_surface_role_commit( surface );
+	xwayland_surface_commit( surface );
 
 	wlserver_unlock();
 }

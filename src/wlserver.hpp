@@ -142,7 +142,7 @@ enum wlserver_touch_click_mode {
 extern enum wlserver_touch_click_mode g_nDefaultTouchClickMode;
 extern enum wlserver_touch_click_mode g_nTouchClickMode;
 
-void xwayland_surface_role_commit(struct wlr_surface *wlr_surface);
+void xwayland_surface_commit(struct wlr_surface *wlr_surface);
 
 bool wlsession_init( void );
 int wlsession_open_kms( const char *device_name );
@@ -188,6 +188,7 @@ struct wlserver_x11_surface_info
 	uint32_t wl_id, x11_id;
 	bool overridden;
 	struct wl_list pending_link;
+	struct wl_listener commit;
 	struct wl_listener destroy;
 
 	gamescope_xwayland_server_t *xwayland_server;

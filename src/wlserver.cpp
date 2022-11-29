@@ -78,8 +78,6 @@ static struct wl_list pending_surfaces = {0};
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf );
 static wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
 
-extern const struct wlr_surface_role xwayland_surface_role;
-
 std::vector<ResListEntry_t> gamescope_xwayland_server_t::retrieve_commits()
 {
 	std::vector<ResListEntry_t> commits;
@@ -113,9 +111,7 @@ struct PendingCommit_t
 
 std::list<PendingCommit_t> g_PendingCommits;
 
-void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
-	assert(wlr_surface->role == &xwayland_surface_role);
-
+void xwayland_surface_commit(struct wlr_surface *wlr_surface) {
 	uint32_t committed = wlr_surface->current.committed;
 	wlr_surface->current.committed = 0;
 
@@ -131,7 +127,7 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 
 	struct wlr_buffer *buf = wlr_buffer_lock( tex->buf );
 
-	gpuvis_trace_printf( "xwayland_surface_role_commit wlr_surface %p", wlr_surface );
+	gpuvis_trace_printf( "xwayland_surface_commit wlr_surface %p", wlr_surface );
 
 	wlserver_x11_surface_info *wlserver_x11_surface_info = get_wl_surface_info(wlr_surface)->x11_surface;
 	if (wlserver_x11_surface_info)
@@ -144,16 +140,6 @@ void xwayland_surface_role_commit(struct wlr_surface *wlr_surface) {
 		g_PendingCommits.push_back(PendingCommit_t{ wlr_surface, buf });
 	}
 }
-
-static void xwayland_surface_role_precommit(struct wlr_surface *wlr_surface, const wlr_surface_state *wlr_surface_state) {
-	assert(wlr_surface->role == &xwayland_surface_role);
-}
-
-const struct wlr_surface_role xwayland_surface_role = {
-	.name = "wlr_xwayland_surface",
-	.commit = xwayland_surface_role_commit,
-	.precommit = xwayland_surface_role_precommit,
-};
 
 void gamescope_xwayland_server_t::on_xwayland_ready(void *data)
 {
@@ -1220,6 +1206,12 @@ static void handle_x11_surface_destroy( struct wl_listener *l, void *data )
 	wlserver_x11_surface_info_init( surf, surf->xwayland_server, surf->x11_id );
 }
 
+static void handle_x11_surface_commit( struct wl_listener *l, void *data )
+{
+	struct wlserver_x11_surface_info *surf = wl_container_of( l, surf, commit );
+	xwayland_surface_commit( surf->wlr );
+}
+
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf )
 {
 	assert( surf->wlr == nullptr );
@@ -1230,14 +1222,12 @@ static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info 
 	surf->destroy.notify = handle_x11_surface_destroy;
 	wl_signal_add( &wlr_surf->events.destroy, &surf->destroy );
 
+	surf->commit.notify = handle_x11_surface_commit;
+	wl_signal_add( &wlr_surf->events.commit, &surf->commit );
+
 	wlserver_wl_surface_info *wl_surf_info = get_wl_surface_info(wlr_surf);
 	surf->wlr = wlr_surf;
 	wl_surf_info->x11_surface = surf;
-
-	if ( !wlr_surface_set_role(wlr_surf, &xwayland_surface_role, wl_surf_info, NULL, 0 ) )
-	{
-		wl_log.errorf("Failed to set xwayland surface role");
-	}
 
 	for (auto it = g_PendingCommits.begin(); it != g_PendingCommits.end();)
 	{
@@ -1268,6 +1258,7 @@ void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gam
 	surf->xwayland_server = server;
 	wl_list_init( &surf->pending_link );
 	wl_list_init( &surf->destroy.link );
+	wl_list_init( &surf->commit.link );
 }
 
 void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *surf, uint32_t id )
@@ -1329,6 +1320,7 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 	surf->wlr = nullptr;
 	wl_list_remove( &surf->pending_link );
 	wl_list_remove( &surf->destroy.link );
+	wl_list_remove( &surf->commit.link );
 }
 
 void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh )
