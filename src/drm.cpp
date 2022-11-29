@@ -48,7 +48,7 @@ bool g_bSupportsAsyncFlips = false;
 
 enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
-uint64_t g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+std::atomic<uint64_t> g_drmEffectiveOrientation(DRM_MODE_ROTATE_0);
 
 
 static LogScope drm_log("drm");

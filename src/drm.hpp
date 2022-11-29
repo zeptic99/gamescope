@@ -220,7 +220,8 @@ enum g_panel_orientation {
 
 extern enum drm_mode_generation g_drmModeGeneration;
 extern enum g_panel_orientation g_drmModeOrientation;
-extern uint64_t g_drmEffectiveOrientation;
+
+extern std::atomic<uint64_t> g_drmEffectiveOrientation; // DRM_MODE_ROTATE_*
 
 bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_adaptive_sync);
 void finish_drm(struct drm_t *drm);
