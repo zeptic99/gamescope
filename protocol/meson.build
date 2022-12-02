@@ -9,6 +9,9 @@ protocols = [
 	'gamescope-tearing-control-unstable-v1',
 ]
 
+protocols_client_src = []
+protocols_server_src = []
+
 foreach name : protocols
 	code = custom_target(
 		name + '-protocol.c',
@@ -24,5 +27,15 @@ foreach name : protocols
 		command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
 	)
 
-	src += [code, server_header]
+	client_header = custom_target(
+		name + '-client-protocol.h',
+		input: name + '.xml',
+		output: '@BASENAME@-client-protocol.h',
+		command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+	)
+
+	protocols_server_src += [code, server_header]
+	protocols_client_src += [code, client_header]
 endforeach
+
+src += protocols_server_src
