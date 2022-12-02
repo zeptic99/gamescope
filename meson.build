@@ -48,6 +48,7 @@ librt_dep = cppc.find_library('rt', required : get_option('pipewire'))
 hwdata_dep = dependency('hwdata')
 
 stb_dep = dependency('stb')
+vkroots_dep = dependency('vkroots')
 
 wlroots_dep = dependency(
   'wlroots',
@@ -146,7 +147,8 @@ executable(
     dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
     dep_xxf86vm, dep_xres, drm_dep, wayland_server,
     xkbcommon, thread_dep, sdl_dep, wlroots_dep,
-    vulkan_dep, liftoff_dep, dep_xtst, cap_dep, pipewire_dep, librt_dep, stb_dep,
+    vulkan_dep, liftoff_dep, dep_xtst, cap_dep, pipewire_dep, librt_dep,
+    stb_dep,
   ],
   install: true,
 )
