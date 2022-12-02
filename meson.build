@@ -33,10 +33,12 @@ dep_xfixes = dependency('xfixes')
 dep_xxf86vm = dependency('xxf86vm')
 dep_xtst = dependency('xtst')
 dep_xres = dependency('xres')
+dep_xcb = dependency('xcb')
 
 drm_dep = dependency('libdrm', version: '>= 2.4.112')
 vulkan_dep = dependency('vulkan')
 
+wayland_client = dependency('wayland-client')
 wayland_server = dependency('wayland-server', version: '>=1.21')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
 xkbcommon = dependency('xkbcommon')
@@ -139,6 +141,8 @@ if pipewire_dep.found()
 endif
 
 subdir('protocol')
+
+subdir('layer')
 
 executable(
   'gamescope',
