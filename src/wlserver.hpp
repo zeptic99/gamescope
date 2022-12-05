@@ -188,8 +188,6 @@ struct wlserver_x11_surface_info
 	uint32_t wl_id, x11_id;
 	bool overridden;
 	struct wl_list pending_link;
-	struct wl_listener commit;
-	struct wl_listener destroy;
 
 	gamescope_xwayland_server_t *xwayland_server;
 };
@@ -198,6 +196,7 @@ struct wlserver_wl_surface_info
 {
 	wlserver_x11_surface_info *x11_surface = nullptr;
 	struct wlr_surface *wlr = nullptr;
+	struct wl_listener commit;
 	struct wl_listener destroy;
 
 	uint32_t presentation_hint = 0;

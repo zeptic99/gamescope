@@ -371,11 +371,19 @@ static wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_sur
 	return reinterpret_cast<wlserver_wl_surface_info *>(wlr_surf->data);
 }
 
+static void handle_wl_surface_commit( struct wl_listener *l, void *data )
+{
+	wlserver_wl_surface_info *surf = wl_container_of( l, surf, commit );
+	xwayland_surface_commit(surf->wlr);
+}
+
 static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 {
 	wlserver_wl_surface_info *surf = wl_container_of( l, surf, destroy );
 	if (surf->x11_surface)
-		surf->x11_surface->wlr = nullptr;
+	{
+		wlserver_x11_surface_info_finish(surf->x11_surface);
+	}
 
 	if ( surf->wlr == wlserver.mouse_focus_surface )
 		wlserver.mouse_focus_surface = nullptr;
@@ -408,8 +416,12 @@ static void wlserver_new_surface(struct wl_listener *l, void *data)
 
 	wlserver_wl_surface_info *wl_surface_info = new wlserver_wl_surface_info;
 	wl_surface_info->wlr = wlr_surf;
+
 	wl_surface_info->destroy.notify = handle_wl_surface_destroy;
 	wl_signal_add( &wlr_surf->events.destroy, &wl_surface_info->destroy );
+
+	wl_surface_info->commit.notify = handle_wl_surface_commit;
+	wl_signal_add( &wlr_surf->events.commit, &wl_surface_info->commit );
 
 	wlr_surf->data = wl_surface_info;
 
@@ -1199,31 +1211,12 @@ const char *wlserver_get_wl_display_name( void )
 	return wlserver.wl_display_name;
 }
 
-static void handle_x11_surface_destroy( struct wl_listener *l, void *data )
-{
-	struct wlserver_x11_surface_info *surf = wl_container_of( l, surf, destroy );
-	wlserver_x11_surface_info_finish( surf );
-	wlserver_x11_surface_info_init( surf, surf->xwayland_server, surf->x11_id );
-}
-
-static void handle_x11_surface_commit( struct wl_listener *l, void *data )
-{
-	struct wlserver_x11_surface_info *surf = wl_container_of( l, surf, commit );
-	xwayland_surface_commit( surf->wlr );
-}
-
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf )
 {
 	assert( surf->wlr == nullptr );
 
 	wl_list_remove( &surf->pending_link );
 	wl_list_init( &surf->pending_link );
-
-	surf->destroy.notify = handle_x11_surface_destroy;
-	wl_signal_add( &wlr_surf->events.destroy, &surf->destroy );
-
-	surf->commit.notify = handle_x11_surface_commit;
-	wl_signal_add( &wlr_surf->events.commit, &surf->commit );
 
 	wlserver_wl_surface_info *wl_surf_info = get_wl_surface_info(wlr_surf);
 	surf->wlr = wlr_surf;
@@ -1257,8 +1250,6 @@ void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gam
 	surf->wlr = nullptr;
 	surf->xwayland_server = server;
 	wl_list_init( &surf->pending_link );
-	wl_list_init( &surf->destroy.link );
-	wl_list_init( &surf->commit.link );
 }
 
 void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *surf, uint32_t id )
@@ -1274,7 +1265,6 @@ void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *s
 	surf->xwayland_server = this;
 
 	wl_list_insert( &pending_surfaces, &surf->pending_link );
-	wl_list_init( &surf->destroy.link );
 
 	struct wlr_surface *wlr_surf = nullptr;
 	if ( content_overrides.count( surf->x11_id ) )
@@ -1319,8 +1309,6 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 	surf->wl_id = 0;
 	surf->wlr = nullptr;
 	wl_list_remove( &surf->pending_link );
-	wl_list_remove( &surf->destroy.link );
-	wl_list_remove( &surf->commit.link );
 }
 
 void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh )
