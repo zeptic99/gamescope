@@ -428,7 +428,7 @@ static void wlserver_new_surface(struct wl_listener *l, void *data)
 	struct wlserver_x11_surface_info *s, *tmp;
 	wl_list_for_each_safe(s, tmp, &pending_surfaces, pending_link)
 	{
-		if (s->wl_id == id && s->wlr == nullptr)
+		if (s->wl_id == id && s->main_surface == nullptr)
 		{
 			wlserver_x11_surface_info_set_wlr( s, wlr_surf );
 		}
@@ -1213,13 +1213,13 @@ const char *wlserver_get_wl_display_name( void )
 
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf )
 {
-	assert( surf->wlr == nullptr );
+	assert( surf->main_surface == nullptr );
 
 	wl_list_remove( &surf->pending_link );
 	wl_list_init( &surf->pending_link );
 
 	wlserver_wl_surface_info *wl_surf_info = get_wl_surface_info(wlr_surf);
-	surf->wlr = wlr_surf;
+	surf->main_surface = wlr_surf;
 	wl_surf_info->x11_surface = surf;
 
 	for (auto it = g_PendingCommits.begin(); it != g_PendingCommits.end();)
@@ -1247,7 +1247,7 @@ void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gam
 {
 	surf->wl_id = 0;
 	surf->x11_id = x11_id;
-	surf->wlr = nullptr;
+	surf->main_surface = nullptr;
 	surf->xwayland_server = server;
 	wl_list_init( &surf->pending_link );
 }
@@ -1261,7 +1261,7 @@ void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *s
 	}
 
 	surf->wl_id = id;
-	surf->wlr = nullptr;
+	surf->main_surface = nullptr;
 	surf->xwayland_server = this;
 
 	wl_list_insert( &pending_surfaces, &surf->pending_link );
@@ -1299,15 +1299,15 @@ const char *gamescope_xwayland_server_t::get_nested_display_name() const
 
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 {
-	if (surf->wlr)
+	if (surf->main_surface)
 	{
-		wlserver_wl_surface_info *wl_info = get_wl_surface_info(surf->wlr);
+		wlserver_wl_surface_info *wl_info = get_wl_surface_info(surf->main_surface);
 		if (wl_info)
 			wl_info->x11_surface = nullptr;
 	}
 
 	surf->wl_id = 0;
-	surf->wlr = nullptr;
+	surf->main_surface = nullptr;
 	wl_list_remove( &surf->pending_link );
 }
 

@@ -182,7 +182,12 @@ const char *wlserver_get_wl_display_name( void );
 
 struct wlserver_x11_surface_info
 {
-	std::atomic<struct wlr_surface *> wlr;
+	std::atomic<struct wlr_surface *> main_surface;
+
+	struct wlr_surface *current_surface()
+	{
+		return main_surface;
+	}
 
 	// owned by wlserver
 	uint32_t wl_id, x11_id;

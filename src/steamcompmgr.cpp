@@ -743,7 +743,7 @@ static win * find_win( xwayland_ctx_t *ctx, struct wlr_surface *surf )
 
 	for (w = ctx->list; w; w = w->next)
 	{
-		if ( w->surface.wlr == surf )
+		if ( w->surface.main_surface == surf )
 			return w;
 	}
 
@@ -2749,7 +2749,7 @@ wlr_surface *win_surface(win *window)
 	if (!window)
 		return nullptr;
 
-	return window->surface.wlr;
+	return window->surface.main_surface;
 }
 
 static void
@@ -2862,10 +2862,10 @@ determine_and_apply_focus()
 		{
 			wlserver_lock();
 			if ( win_surface(global_focus.inputFocusWindow) != nullptr )
-				wlserver_mousefocus( global_focus.inputFocusWindow->surface.wlr, global_focus.cursor->x(), global_focus.cursor->y() );
+				wlserver_mousefocus( global_focus.inputFocusWindow->surface.main_surface, global_focus.cursor->x(), global_focus.cursor->y() );
 
 			if ( win_surface(global_focus.keyboardFocusWindow) != nullptr )
-				wlserver_keyboardfocus( global_focus.keyboardFocusWindow->surface.wlr );
+				wlserver_keyboardfocus( global_focus.keyboardFocusWindow->surface.main_surface );
 			wlserver_unlock();
 		}
 
@@ -3712,7 +3712,7 @@ handle_wl_surface_id(xwayland_ctx_t *ctx, win *w, uint32_t surfaceID)
 
 	ctx->xwayland_server->set_wl_id( &w->surface, surfaceID );
 
-	surface = w->surface.wlr;
+	surface = w->surface.main_surface;
 	if ( surface == NULL )
 	{
 		wlserver_unlock();
@@ -5816,7 +5816,7 @@ steamcompmgr_main(int argc, char **argv)
 				{
 					for (win *w = server->ctx->list; w; w = w->next)
 					{
-						bool bSendCallback = w->surface.wlr != nullptr;
+						bool bSendCallback = w->surface.main_surface != nullptr;
 
 						int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 						int nTargetFPS = g_nSteamCompMgrTargetFPS;
@@ -5833,9 +5833,9 @@ steamcompmgr_main(int argc, char **argv)
 							// Acknowledge commit once.
 							wlserver_lock();
 
-							if ( w->surface.wlr != nullptr )
+							if ( w->surface.main_surface != nullptr )
 							{
-								wlserver_send_frame_done(w->surface.wlr, &now);
+								wlserver_send_frame_done(w->surface.main_surface, &now);
 							}
 
 							wlserver_unlock();
@@ -5859,10 +5859,10 @@ void steamcompmgr_send_frame_done_to_focus_window()
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	if ( global_focus.focusWindow && global_focus.focusWindow->surface.wlr )
+	if ( global_focus.focusWindow && global_focus.focusWindow->surface.main_surface )
 	{
 		wlserver_lock();
-		wlserver_send_frame_done( global_focus.focusWindow->surface.wlr , &now );
+		wlserver_send_frame_done( global_focus.focusWindow->surface.main_surface , &now );
 		wlserver_unlock();		
 	}
 }
@@ -5885,7 +5885,7 @@ gamescope_xwayland_server_t *steamcompmgr_get_focused_server()
 struct wlr_surface *steamcompmgr_get_server_input_surface( size_t idx )
 {
 	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( idx );
-	if ( server && server->ctx && server->ctx->focus.inputFocusWindow && server->ctx->focus.inputFocusWindow->surface.wlr )
-		return server->ctx->focus.inputFocusWindow->surface.wlr;
+	if ( server && server->ctx && server->ctx->focus.inputFocusWindow && server->ctx->focus.inputFocusWindow->surface.main_surface )
+		return server->ctx->focus.inputFocusWindow->surface.main_surface;
 	return NULL;
 }
