@@ -182,16 +182,18 @@ const char *wlserver_get_wl_display_name( void );
 
 struct wlserver_x11_surface_info
 {
+	std::atomic<struct wlr_surface *> override_surface;
 	std::atomic<struct wlr_surface *> main_surface;
 
 	struct wlr_surface *current_surface()
 	{
+		if ( override_surface )
+			return override_surface;
 		return main_surface;
 	}
 
 	// owned by wlserver
 	uint32_t wl_id, x11_id;
-	bool overridden;
 	struct wl_list pending_link;
 
 	gamescope_xwayland_server_t *xwayland_server;

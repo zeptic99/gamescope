@@ -745,6 +745,9 @@ static win * find_win( xwayland_ctx_t *ctx, struct wlr_surface *surf )
 	{
 		if ( w->surface.main_surface == surf )
 			return w;
+
+		if ( w->surface.override_surface == surf )
+			return w;
 	}
 
 	return nullptr;
@@ -3706,14 +3709,16 @@ damage_win(xwayland_ctx_t *ctx, XDamageNotifyEvent *de)
 static void
 handle_wl_surface_id(xwayland_ctx_t *ctx, win *w, uint32_t surfaceID)
 {
-	struct wlr_surface *surface = NULL;
+	struct wlr_surface *current_surface = NULL;
+	struct wlr_surface *main_surface = NULL;
 
 	wlserver_lock();
 
 	ctx->xwayland_server->set_wl_id( &w->surface, surfaceID );
 
-	surface = w->surface.main_surface;
-	if ( surface == NULL )
+	current_surface = w->surface.current_surface();
+	main_surface = w->surface.main_surface;
+	if ( current_surface == NULL )
 	{
 		wlserver_unlock();
 		return;
@@ -3722,7 +3727,7 @@ handle_wl_surface_id(xwayland_ctx_t *ctx, win *w, uint32_t surfaceID)
 	// If we already focused on our side and are handling this late,
 	// let wayland know now.
 	if ( w == global_focus.inputFocusWindow )
-		wlserver_mousefocus( surface );
+		wlserver_mousefocus( main_surface );
 
 	win *keyboardFocusWindow = global_focus.inputFocusWindow;
 
@@ -3730,10 +3735,10 @@ handle_wl_surface_id(xwayland_ctx_t *ctx, win *w, uint32_t surfaceID)
 		keyboardFocusWindow = global_focus.focusWindow;
 
 	if ( w == keyboardFocusWindow )
-		wlserver_keyboardfocus( surface );
+		wlserver_keyboardfocus( main_surface );
 
 	// Pull the first buffer out of that window, if needed
-	xwayland_surface_commit( surface );
+	xwayland_surface_commit( current_surface );
 
 	wlserver_unlock();
 }
@@ -5816,7 +5821,9 @@ steamcompmgr_main(int argc, char **argv)
 				{
 					for (win *w = server->ctx->list; w; w = w->next)
 					{
-						bool bSendCallback = w->surface.main_surface != nullptr;
+						wlr_surface *main_surface = w->surface.main_surface;
+						wlr_surface *current_surface = w->surface.current_surface();
+						bool bSendCallback = main_surface != nullptr;
 
 						int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 						int nTargetFPS = g_nSteamCompMgrTargetFPS;
@@ -5833,9 +5840,14 @@ steamcompmgr_main(int argc, char **argv)
 							// Acknowledge commit once.
 							wlserver_lock();
 
-							if ( w->surface.main_surface != nullptr )
+							if ( main_surface != nullptr )
 							{
-								wlserver_send_frame_done(w->surface.main_surface, &now);
+								wlserver_send_frame_done(main_surface, &now);
+							}
+
+							if ( current_surface != nullptr && main_surface != current_surface )
+							{
+								wlserver_send_frame_done(current_surface, &now);
 							}
 
 							wlserver_unlock();
@@ -5888,4 +5900,23 @@ struct wlr_surface *steamcompmgr_get_server_input_surface( size_t idx )
 	if ( server && server->ctx && server->ctx->focus.inputFocusWindow && server->ctx->focus.inputFocusWindow->surface.main_surface )
 		return server->ctx->focus.inputFocusWindow->surface.main_surface;
 	return NULL;
+}
+
+struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xwayland_server_t *xwayland_server, uint32_t xid )
+{
+	if ( !xwayland_server )
+		return nullptr;
+
+	if ( !xwayland_server->ctx )
+		return nullptr;
+
+	// Lookup children too so we can get the window
+	// and go back to it's top-level parent.
+	// The xwayland bypass layer does this as we can have child windows
+	// that cover the whole parent.
+	win *w = find_win( xwayland_server->ctx.get(), xid, true );
+	if ( !w )
+		return nullptr;
+
+	return &w->surface;
 }
