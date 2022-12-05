@@ -213,6 +213,7 @@ int g_nAsyncFlipsEnabled = 0;
 int g_nSteamMaxHeight = 0;
 bool g_bVRRCapable_CachedValue = false;
 bool g_bVRRInUse_CachedValue = false;
+std::pair<uint32_t, uint32_t> g_LastConnectorIdentifier = { 0u, 0u };
 
 struct motif_hints_t
 {
@@ -5335,6 +5336,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeNewScalingFilter = XInternAtom( ctx->dpy, "GAMESCOPE_NEW_SCALING_FILTER", false );
 	ctx->atoms.gamescopeNewScalingScaler = XInternAtom( ctx->dpy, "GAMESCOPE_NEW_SCALING_SCALER", false );
 
+	ctx->atoms.gamescopeDisplayEdidPath = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_EDID_PATH", false );
+
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
 
@@ -5680,6 +5683,33 @@ steamcompmgr_main(int argc, char **argv)
 				hasRepaint = true;
 
 				update_mode_atoms(root_ctx);
+			}
+		}
+
+		if ( !BIsNested() )
+		{
+			auto connector_id = drm_get_connector_identifier( &g_DRM );
+			if ( g_LastConnectorIdentifier != connector_id )
+			{
+				const char *currentConnectorName = drm_get_connector_name( &g_DRM );
+				const char *device_name = drm_get_device_name( &g_DRM );
+				int id = 0;
+				if (sscanf(device_name, "/dev/dri/card%d", &id) != -1)
+				{
+					char connectorEdidPath[ 128 ];
+					snprintf( connectorEdidPath, sizeof( connectorEdidPath ), "/sys/class/drm/card%d/card%d-%s/edid", id, id, currentConnectorName );
+
+					XTextProperty text_property =
+					{
+						.value = (unsigned char *)connectorEdidPath,
+						.encoding = root_ctx->atoms.utf8StringAtom,
+						.format = 8,
+						.nitems = strlen(connectorEdidPath),
+					};
+					XSetTextProperty( root_ctx->dpy, root_ctx->root, &text_property, root_ctx->atoms.gamescopeDisplayEdidPath );
+				}
+
+				g_LastConnectorIdentifier = connector_id;
 			}
 		}
 

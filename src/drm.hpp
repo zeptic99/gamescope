@@ -193,6 +193,8 @@ struct drm_t {
 	std::unordered_map< std::string, int > connector_priorities;
 
 	bool force_internal = false;
+
+	char *device_name = nullptr;
 };
 
 extern struct drm_t g_DRM;
@@ -254,5 +256,10 @@ int drm_get_default_refresh(struct drm_t *drm);
 bool drm_get_vrr_capable(struct drm_t *drm);
 void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
+
+const char *drm_get_connector_name(struct drm_t *drm);
+const char *drm_get_device_name(struct drm_t *drm);
+
+std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm);
 
 extern bool g_bSupportsAsyncFlips;

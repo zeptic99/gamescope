@@ -415,6 +415,7 @@ static bool refresh_state( drm_t *drm )
 			}
 
 			free(conn->name);
+			conn->name = nullptr;
 			drmModeFreeConnector(conn->connector);
 			it = drm->connectors.erase(it);
 		} else {
@@ -785,7 +786,7 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_
 	drm->preferred_height = height;
 	drm->preferred_refresh = refresh;
 
-	char *device_name = nullptr;
+	drm->device_name = nullptr;
 	dev_t dev_id = 0;
 	if (vulkan_primary_dev_id(&dev_id)) {
 		drmDevice *drm_dev = nullptr;
@@ -794,16 +795,15 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_
 			return false;
 		}
 		assert(drm_dev->available_nodes & (1 << DRM_NODE_PRIMARY));
-		device_name = strdup(drm_dev->nodes[DRM_NODE_PRIMARY]);
-		drm_log.infof("opening DRM node '%s'", device_name);
+		drm->device_name = strdup(drm_dev->nodes[DRM_NODE_PRIMARY]);
+		drm_log.infof("opening DRM node '%s'", drm->device_name);
 	}
 	else
 	{
 		drm_log.infof("warning: picking an arbitrary DRM device");
 	}
 
-	drm->fd = wlsession_open_kms( device_name );
-	free(device_name);
+	drm->fd = wlsession_open_kms( drm->device_name );
 	if ( drm->fd < 0 )
 	{
 		drm_log.errorf("Could not open KMS device");
@@ -972,6 +972,8 @@ void finish_drm(struct drm_t *drm)
 		drm_log.errorf_errno( "finish_drm: drmModeAtomicCommit failed" );
 	}
 	drmModeAtomicFree(req);
+
+	free(drm->device_name);
 
 	// We can't close the DRM FD here, it might still be in use by the
 	// page-flip handler thread.
@@ -2394,4 +2396,25 @@ bool drm_get_vrr_capable(struct drm_t *drm)
 		return drm->connector->vrr_capable;
 
 	return false;
+}
+
+const char *drm_get_connector_name(struct drm_t *drm)
+{
+	if ( !drm->connector )
+		return nullptr;
+
+	return drm->connector->name;
+}
+
+const char *drm_get_device_name(struct drm_t *drm)
+{
+	return drm->device_name;
+}
+
+std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm)
+{
+	if ( !drm->connector )
+		return { 0u, 0u };
+
+	return std::make_pair(drm->connector->connector->connector_type, drm->connector->connector->connector_type_id);
 }

@@ -164,6 +164,8 @@ struct xwayland_ctx_t
 		Atom gamescopeNewScalingFilter;
 		Atom gamescopeNewScalingScaler;
 
+		Atom gamescopeDisplayEdidPath;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 	} atoms;
