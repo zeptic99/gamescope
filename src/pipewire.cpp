@@ -326,11 +326,6 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 
 	struct spa_rectangle requested_size = { 0, 0 };
 
-	int bpp = 4;
-	if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
-		bpp = 1;
-	}
-
 	int ret = spa_format_video_raw_parse_with_requested_size(param, &state->video_info, &requested_size);
 	if (ret < 0) {
 		pwr_log.errorf("spa_format_video_raw_parse failed");
@@ -340,12 +335,15 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 	s_nRequestedHeight = requested_size.height;
 	calculate_capture_size();
 
+	int bpp = 4;
+	if (state->video_info.format == SPA_VIDEO_FORMAT_NV12) {
+		bpp = 1;
+	}
+
 	state->shm_stride = SPA_ROUND_UP_N(state->video_info.size.width * bpp, 4);
 
 	const struct spa_pod_prop *modifier_prop = spa_pod_find_prop(param, nullptr, SPA_FORMAT_VIDEO_modifier);
 	state->dmabuf = modifier_prop != nullptr;
-
-	pwr_log.debugf("format changed (size: %dx%d, dmabuf: %d)", state->video_info.size.width, state->video_info.size.height, state->dmabuf);
 
 	uint8_t buf[1024];
 	struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
@@ -381,6 +379,11 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 	if (ret != 0) {
 		pwr_log.errorf("pw_stream_update_params failed");
 	}
+
+	pwr_log.debugf("format changed (size: %dx%d, requested %dx%d, format %d, stride %d, size: %d, dmabuf: %d)",
+		state->video_info.size.width, state->video_info.size.height,
+		s_nRequestedWidth, s_nRequestedHeight,
+		state->video_info.format, state->shm_stride, shm_size, state->dmabuf);
 }
 
 static void randname(char *buf)
