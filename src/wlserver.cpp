@@ -382,7 +382,15 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 	wlserver_wl_surface_info *surf = wl_container_of( l, surf, destroy );
 	if (surf->x11_surface)
 	{
-		wlserver_x11_surface_info_finish(surf->x11_surface);
+		wlserver_x11_surface_info *x11_surface = surf->x11_surface;
+
+		wlserver_x11_surface_info_finish(x11_surface);
+		// Re-init it so it can be destroyed for good on the x11 side.
+		// This just clears it out from the main wl surface mainly.
+		//
+		// wl_list_remove leaves stuff in a weird state, so we need to call
+		// this to re-init the list to avoid a crash.
+		wlserver_x11_surface_info_init(x11_surface, x11_surface->xwayland_server, x11_surface->x11_id);
 	}
 
 	if ( surf->wlr == wlserver.mouse_focus_surface )
