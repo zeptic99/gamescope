@@ -35,7 +35,7 @@ dep_xtst = dependency('xtst')
 dep_xres = dependency('xres')
 dep_xcb = dependency('xcb')
 
-drm_dep = dependency('libdrm', version: '>= 2.4.112')
+drm_dep = dependency('libdrm', version: '>= 2.4.113')
 vulkan_dep = dependency('vulkan')
 
 wayland_client = dependency('wayland-client')

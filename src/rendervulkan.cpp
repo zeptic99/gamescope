@@ -2653,7 +2653,9 @@ bool vulkan_init_formats()
 	for ( size_t i = 0; i < sampledDRMFormats.len; i++ )
 	{
 		uint32_t fmt = sampledDRMFormats.formats[ i ]->format;
-		vk_log.infof( "  0x%" PRIX32, fmt );
+		char *name = drmGetFormatName(fmt);
+		vk_log.infof( "  %s (0x%" PRIX32 ")", name, fmt );
+		free(name);
 	}
 
 	return true;
