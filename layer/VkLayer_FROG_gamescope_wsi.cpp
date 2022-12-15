@@ -309,7 +309,7 @@ namespace GamescopeWSILayer {
     }
 
     static bool isAppInfoGamescope(const VkApplicationInfo *appInfo) {
-      if (!appInfo)
+      if (!appInfo || !appInfo->pApplicationName)
         return false;
 
       return !std::strcmp(appInfo->pApplicationName, "gamescope");
