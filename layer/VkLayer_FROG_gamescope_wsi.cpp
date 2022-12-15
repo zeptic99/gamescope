@@ -27,6 +27,7 @@ namespace GamescopeWSILayer {
   struct GamescopeSurfaceData {
     VkInstance instance;
     wl_surface* surface;
+    uint32_t window_xid;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
 
@@ -64,7 +65,7 @@ namespace GamescopeWSILayer {
 
       wl_display *display = wl_display_connect(gamescopeWaylandSocket());
       if (!display) {
-        fprintf(stderr, "Failed to connect to gamescope socket: %s\n", gamescopeWaylandSocket());
+        fprintf(stderr, "[Gamescope WSI] Failed to connect to gamescope socket: %s\n", gamescopeWaylandSocket());
         return VK_ERROR_INCOMPATIBLE_DRIVER;
       }
       wl_registry *registry = wl_display_get_registry(display);
@@ -231,11 +232,11 @@ namespace GamescopeWSILayer {
             uint32_t                     window_xid,
       const VkAllocationCallbacks*       pAllocator,
             VkSurfaceKHR*                pSurface) {
-      printf("TRACE - CreateGamescopeSurface: xid: 0x%x\n", window_xid);
+      fprintf(stderr, "[Gamescope WSI] Creating Gamescope surface: xid: 0x%x\n", window_xid);
 
       wl_surface* waylandSurface = wl_compositor_create_surface(gamescopeInstance->compositor);
       if (!waylandSurface) {
-        fprintf(stderr, "Failed to create wayland surface - xid: 0x%x\n", window_xid);
+        fprintf(stderr, "[Gamescope WSI] Failed to create wayland surface - xid: 0x%x\n", window_xid);
         return VK_ERROR_SURFACE_LOST_KHR;
       }
 
@@ -253,14 +254,15 @@ namespace GamescopeWSILayer {
 
       VkResult result = pDispatch->CreateWaylandSurfaceKHR(instance, &waylandCreateInfo, pAllocator, pSurface);
       if (result != VK_SUCCESS) {
-        fprintf(stderr, "Failed to create Vulkan wayland surface - vr: %d xid: 0x%x\n", result, window_xid);
+        fprintf(stderr, "[Gamescope WSI] Failed to create Vulkan wayland surface - vr: %d xid: 0x%x\n", result, window_xid);
         return result;
       }
 
-      printf("Made gamescope surface for xid: 0x%x\n", window_xid);
+      fprintf(stderr, "[Gamescope WSI] Made gamescope surface for xid: 0x%x\n", window_xid);
       GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
         .instance = instance,
         .surface = waylandSurface,
+        .window_xid = window_xid,
       });
 
       return result;
@@ -346,29 +348,35 @@ namespace GamescopeWSILayer {
         // If this is a gamescope surface
         // Force the colorspace to sRGB before sending to the driver.
         swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+        fprintf(stderr, "[Gamescope WSI] Creating swapchain for wl_surface for xid: 0x%0x\n", (*gamescopeSurface)->window_xid);
       }
 
       VkResult res = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
-      if (res == VK_SUCCESS && gamescopeSurface) {
-        GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
-          .surface = pCreateInfo->surface,
-        });
+      if (gamescopeSurface) {
+        if (res == VK_SUCCESS) {
+          GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
+            .surface = pCreateInfo->surface,
+          });
 
-        auto gamescopeInstance = GamescopeInstance::get((*gamescopeSurface)->instance);
-        if (gamescopeInstance) {
-          uint32_t imageCount = 0;
-          pDispatch->GetSwapchainImagesKHR(device, *pSwapchain, &imageCount, nullptr);
+          auto gamescopeInstance = GamescopeInstance::get((*gamescopeSurface)->instance);
+          if (gamescopeInstance) {
+            uint32_t imageCount = 0;
+            pDispatch->GetSwapchainImagesKHR(device, *pSwapchain, &imageCount, nullptr);
 
-          gamescope_xwayland_swapchain_feedback(
-            (*gamescopeInstance)->gamescope,
-            (*gamescopeSurface)->surface,
-            imageCount,
-            uint32_t(pCreateInfo->imageFormat),
-            uint32_t(pCreateInfo->imageColorSpace),
-            uint32_t(pCreateInfo->compositeAlpha),
-            uint32_t(pCreateInfo->preTransform),
-            uint32_t(pCreateInfo->presentMode),
-            uint32_t(pCreateInfo->clipped));
+            gamescope_xwayland_swapchain_feedback(
+              (*gamescopeInstance)->gamescope,
+              (*gamescopeSurface)->surface,
+              imageCount,
+              uint32_t(pCreateInfo->imageFormat),
+              uint32_t(pCreateInfo->imageColorSpace),
+              uint32_t(pCreateInfo->compositeAlpha),
+              uint32_t(pCreateInfo->preTransform),
+              uint32_t(pCreateInfo->presentMode),
+              uint32_t(pCreateInfo->clipped));
+          }
+        } else {
+          fprintf(stderr, "[Gamescope WSI] Failed to create swapchain - vr: %d xid: 0x%x\n", res, (*gamescopeSurface)->window_xid);
         }
       }
       return res;
