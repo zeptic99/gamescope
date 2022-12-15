@@ -1,26 +1,4 @@
-vec3 srgbToLinear(vec3 color) {
-    bvec3 isLo = lessThanEqual(color, vec3(0.04045f));
-
-    vec3 loPart = color / 12.92f;
-    vec3 hiPart = pow((color + 0.055f) / 1.055f, vec3(12.0f / 5.0f));
-    return mix(hiPart, loPart, isLo);
-}
-
-vec4 srgbToLinear(vec4 color) {
-  return vec4(srgbToLinear(color.rgb), color.a);
-}
-
-vec3 linearToSrgb(vec3 color) {
-    bvec3 isLo = lessThanEqual(color, vec3(0.0031308f));
-
-    vec3 loPart = color * 12.92f;
-    vec3 hiPart = pow(color, vec3(5.0f / 12.0f)) * 1.055f - 0.055f;
-    return mix(hiPart, loPart, isLo);
-}
-
-vec4 linearToSrgb(vec4 color) {
-  return vec4(linearToSrgb(color.rgb), color.a);
-}
+#include "colorimetry.h"
 
 uint pseudo_random(uint seed) {
     seed ^= (seed << 13);
