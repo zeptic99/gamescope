@@ -41,5 +41,32 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
     if (!unnormalized)
         coord /= texSize;
 
-    return textureLod(layerSampler, coord, 0.0f);
+    vec4 color = textureLod(layerSampler, coord, 0.0f);
+
+    if (get_layer_colorspace(layerIdx) == colorspace_pq) {
+        color.rgb = pqToNits(color.rgb);
+        if (!c_st2084Output) {
+            color.rgb = convert_primaries(color.rgb, rec2020_to_xyz, xyz_to_rec709);
+            color.rgb = nitsToLinear(color.rgb);
+        }
+    } else if (get_layer_colorspace(layerIdx) == colorspace_scRGB) {
+        if (!c_st2084Output) {
+            color.rgb = nitsToLinear(color.rgb);
+        }
+    } else if (get_layer_colorspace(layerIdx) == colorspace_sdr) {
+        if (c_st2084Output) {
+            color.rgb = linearToNits(color.rgb);
+        }
+    }
+    return color;
+}
+
+vec3 encodeOutputColor(vec3 linearOrNits) {
+    if (!c_st2084Output) {
+        // linearOrNits -> linear
+        return linearToSrgb(linearOrNits.rgb);
+    } else {
+        // linearOrNits -> nits
+        return nitsToPq(linearOrNits.rgb);
+    }
 }

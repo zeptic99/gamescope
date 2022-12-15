@@ -170,8 +170,18 @@ struct PipelineInfo_t
 
 	bool compositeDebug;
 
+	uint32_t colorspaceMask;
+	bool st2084Output;
+
 	bool operator==(const PipelineInfo_t& o) const {
-		return shaderType == o.shaderType && layerCount == o.layerCount && ycbcrMask == o.ycbcrMask && blurLayerCount == o.blurLayerCount && compositeDebug == o.compositeDebug;
+		return
+		shaderType == o.shaderType &&
+		layerCount == o.layerCount &&
+		ycbcrMask == o.ycbcrMask &&
+		blurLayerCount == o.blurLayerCount &&
+		compositeDebug == o.compositeDebug &&
+		colorspaceMask == o.colorspaceMask &&
+		st2084Output == o.st2084Output;
 	}
 };
 
@@ -192,6 +202,8 @@ namespace std
 			hash = hash_combine(hash, k.ycbcrMask);
 			hash = hash_combine(hash, k.blurLayerCount);
 			hash = hash_combine(hash, k.compositeDebug);
+			hash = hash_combine(hash, k.colorspaceMask);
+			hash = hash_combine(hash, k.st2084Output);
 			return hash;
 		}
 	};
@@ -488,7 +500,7 @@ public:
 	bool BInit();
 
 	VkSampler sampler(SamplerState key);
-	VkPipeline pipeline(ShaderType type, uint32_t layerCount = 1, uint32_t ycbcrMask = 0, uint32_t blur_layers = 0);
+	VkPipeline pipeline(ShaderType type, uint32_t layerCount = 1, uint32_t ycbcrMask = 0, uint32_t blur_layers = 0, uint32_t colorspace_mask = 0, bool st2084_output = false);
 	int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeBits );
 	std::unique_ptr<CVulkanCmdBuffer> commandBuffer();
 	uint64_t submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuf);
@@ -534,7 +546,7 @@ private:
 	bool createPools();
 	bool createShaders();
 	bool createScratchResources();
-	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug);
+	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug, uint32_t colorspace_mask, bool st2084_output);
 	void compileAllPipelines();
 	void resetCmdBuffers(uint64_t sequence);
 
@@ -1244,9 +1256,9 @@ VkSampler CVulkanDevice::sampler( SamplerState key )
 	return ret;
 }
 
-VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug)
+VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug, uint32_t colorspace_mask, bool st2084_output)
 {
-	const std::array<VkSpecializationMapEntry, 4> specializationEntries = {{
+	const std::array<VkSpecializationMapEntry, 6> specializationEntries = {{
 		{
 			.constantID = 0,
 			.offset     = sizeof(uint32_t) * 0,
@@ -1267,6 +1279,17 @@ VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMas
 			.offset     = sizeof(uint32_t) * 3,
 			.size       = sizeof(uint32_t)
 		},
+		{
+			.constantID = 4,
+			.offset     = sizeof(uint32_t) * 4,
+			.size       = sizeof(uint32_t)
+		},
+
+		{
+			.constantID = 5,
+			.offset     = sizeof(uint32_t) * 5,
+			.size       = sizeof(uint32_t)
+		},
 	}};
 
 	struct {
@@ -1274,11 +1297,15 @@ VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMas
 		uint32_t ycbcrMask;
 		uint32_t debug;
 		uint32_t blur_layer_count;
+		uint32_t colorspace_mask;
+		uint32_t st2084_output;
 	} specializationData = {
 		.layerCount   = layerCount,
 		.ycbcrMask    = ycbcrMask,
 		.debug        = composite_debug,
 		.blur_layer_count = blur_layer_count,
+		.colorspace_mask = colorspace_mask,
+		.st2084_output = st2084_output,
 	};
 
 	VkSpecializationInfo specializationInfo = {
@@ -1336,7 +1363,7 @@ void CVulkanDevice::compileAllPipelines()
 					if (blur_layers > layerCount)
 						continue;
 
-					VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, info.shaderType, blur_layers, info.compositeDebug);
+					VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, info.shaderType, blur_layers, info.compositeDebug, info.colorspaceMask, info.st2084Output);
 					{
 						std::lock_guard<std::mutex> lock(m_pipelineMutex);
 						PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, blur_layers, info.compositeDebug};
@@ -1350,14 +1377,14 @@ void CVulkanDevice::compileAllPipelines()
 	}
 }
 
-VkPipeline CVulkanDevice::pipeline(ShaderType type, uint32_t layerCount, uint32_t ycbcrMask, uint32_t blur_layers)
+VkPipeline CVulkanDevice::pipeline(ShaderType type, uint32_t layerCount, uint32_t ycbcrMask, uint32_t blur_layers, uint32_t colorspace_mask, bool st2084_output)
 {
 	std::lock_guard<std::mutex> lock(m_pipelineMutex);
-	PipelineInfo_t key = {type, layerCount, ycbcrMask, blur_layers, g_bIsCompositeDebug};
+	PipelineInfo_t key = {type, layerCount, ycbcrMask, blur_layers, g_bIsCompositeDebug, colorspace_mask, st2084_output};
 	auto search = m_pipelineMap.find(key);
 	if (search == m_pipelineMap.end())
 	{
-		VkPipeline result = compilePipeline(layerCount, ycbcrMask, type, blur_layers, g_bIsCompositeDebug);
+		VkPipeline result = compilePipeline(layerCount, ycbcrMask, type, blur_layers, g_bIsCompositeDebug, colorspace_mask, st2084_output);
 		m_pipelineMap[key] = result;
 		return result;
 	}

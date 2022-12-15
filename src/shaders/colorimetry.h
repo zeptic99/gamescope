@@ -62,10 +62,14 @@ vec3 pqToNits(vec3 pq) {
 }
 
 // pq -> nits -> linear (nits / 80)
-vec3 nitsToLinear(vec3 linear) {
+const float c_nitsToLinearLightScale = 80.0f;
+vec3 nitsToLinear(vec3 nits) {
     // This is typical, but we might want to make this customizable.
-    const float lightScale = 80.0f;
-    return linear / lightScale;
+    return nits / c_nitsToLinearLightScale;
+}
+
+vec3 linearToNits(vec3 linear) {
+    return linear * c_nitsToLinearLightScale;
 }
 
 /////////////////////////////

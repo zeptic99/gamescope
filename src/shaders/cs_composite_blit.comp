@@ -54,7 +54,7 @@ void main() {
         outputValue = layerColor.rgb * opacity + outputValue * (1.0f - layerAlpha);
     }
 
-    outputValue = linearToSrgb(outputValue);
+    outputValue = encodeOutputColor(outputValue);
     imageStore(dst, ivec2(coord), vec4(outputValue, 0));
 
     // Indicator to quickly tell if we're in the compositing path or not.
