@@ -2,6 +2,7 @@
 #define VK_USE_PLATFORM_XCB_KHR
 #define VK_USE_PLATFORM_XLIB_KHR
 #include "vkroots.h"
+#include <X11/Xlib-xcb.h>
 #include "gamescope-xwayland-client-protocol.h"
 
 #include <cstdio>
@@ -27,7 +28,9 @@ namespace GamescopeWSILayer {
   struct GamescopeSurfaceData {
     VkInstance instance;
     wl_surface* surface;
-    uint32_t window_xid;
+
+    xcb_connection_t* xcb_conn;
+    xcb_window_t window_xid;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
 
@@ -130,7 +133,7 @@ namespace GamescopeWSILayer {
       if (!gamescopeInstance)
         return pDispatch->CreateXcbSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
-      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, uint32_t(pCreateInfo->window), pAllocator, pSurface);
+      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, pCreateInfo->connection, uint32_t(pCreateInfo->window), pAllocator, pSurface);
     }
 
     static VkResult CreateXlibSurfaceKHR(
@@ -143,7 +146,7 @@ namespace GamescopeWSILayer {
       if (!gamescopeInstance)
         return pDispatch->CreateXlibSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
-      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, uint32_t(pCreateInfo->window), pAllocator, pSurface);
+      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, XGetXCBConnection(pCreateInfo->dpy), uint32_t(pCreateInfo->window), pAllocator, pSurface);
     }
 
     static VkResult GetPhysicalDeviceSurfaceFormatsKHR(
@@ -182,6 +185,29 @@ namespace GamescopeWSILayer {
         pSurfaceFormats,
         physicalDevice,
         pSurfaceInfo);
+    }
+
+    static VkResult GetPhysicalDeviceSurfaceCapabilitiesKHR(
+      const vkroots::VkInstanceDispatch*     pDispatch,
+            VkPhysicalDevice                 physicalDevice,
+            VkSurfaceKHR                     surface,
+            VkSurfaceCapabilitiesKHR*        pSurfaceCapabilities) {
+      auto gamescopeSurface = GamescopeSurface::get(surface);
+      if (!gamescopeSurface)
+        return pDispatch->GetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, pSurfaceCapabilities);
+
+      VkResult res = VK_SUCCESS;
+      if ((res = pDispatch->GetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, pSurfaceCapabilities)) != VK_SUCCESS)
+        return res;
+
+      VkExtent2D currentExtent = {};
+      if ((res = getCurrentExtent((*gamescopeSurface)->xcb_conn, (*gamescopeSurface)->window_xid, &currentExtent)) != VK_SUCCESS)
+        return res;
+
+      pSurfaceCapabilities->currentExtent = currentExtent;
+      pSurfaceCapabilities->minImageCount = getMinImageCount();
+
+      return VK_SUCCESS;
     }
 
     static void DestroySurfaceKHR(
@@ -229,6 +255,7 @@ namespace GamescopeWSILayer {
       const vkroots::VkInstanceDispatch* pDispatch,
             GamescopeInstance&           gamescopeInstance,
             VkInstance                   instance,
+            xcb_connection_t*            xcb_conn,
             uint32_t                     window_xid,
       const VkAllocationCallbacks*       pAllocator,
             VkSurfaceKHR*                pSurface) {
@@ -262,7 +289,8 @@ namespace GamescopeWSILayer {
       GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
         .instance = instance,
         .surface = waylandSurface,
-        .window_xid = window_xid,
+        .xcb_conn = xcb_conn,
+        .window_xid = xcb_window_t(window_xid),
       });
 
       return result;
@@ -304,6 +332,29 @@ namespace GamescopeWSILayer {
       }();
 
       return s_isRunningUnderGamescope;
+    }
+
+    static VkResult getCurrentExtent(xcb_connection_t* xcb_conn, xcb_window_t window_xid, VkExtent2D *pExtent) {
+      xcb_generic_error_t *err = nullptr;
+      xcb_get_geometry_cookie_t geom_cookie = xcb_get_geometry(xcb_conn, window_xid);
+      xcb_get_geometry_reply_t* geom = xcb_get_geometry_reply(xcb_conn, geom_cookie, &err);
+      if (!geom) {
+        free(err);
+        return VK_ERROR_SURFACE_LOST_KHR;
+      }
+
+      *pExtent = VkExtent2D{ geom->width, geom->height };
+      free(geom);
+      free(err);
+      return VK_SUCCESS;
+    }
+
+    static uint32_t getMinImageCount() {
+      const char *overrideStr = std::getenv("GAMESCOPE_WSI_MIN_IMAGE_COUNT");
+      if (overrideStr && *overrideStr)
+        return uint32_t(std::atoi(overrideStr));
+
+      return 3;
     }
 
     static constexpr wl_registry_listener s_registryListener = {

@@ -34,6 +34,7 @@ dep_xxf86vm = dependency('xxf86vm')
 dep_xtst = dependency('xtst')
 dep_xres = dependency('xres')
 dep_xcb = dependency('xcb')
+dep_x11_xcb = dependency('x11-xcb')
 
 drm_dep = dependency('libdrm', version: '>= 2.4.113')
 vulkan_dep = dependency('vulkan')
