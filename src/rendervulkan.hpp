@@ -79,6 +79,7 @@ enum GamescopeAppTextureColorspace {
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB,
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ,
 };
+const uint32_t GamescopeAppTextureColorspace_Bits = 2;
 
 inline GamescopeAppTextureColorspace VkColorSpaceToGamescopeAppTextureColorSpace(VkColorSpaceKHR colorspace)
 {
@@ -229,6 +230,8 @@ struct FrameInfo_t
 		bool blackBorder;
 		bool linearFilter;
 
+		GamescopeAppTextureColorspace colorspace;
+
 		bool isYcbcr() const
 		{
 			if ( !tex )
@@ -262,6 +265,14 @@ struct FrameInfo_t
 		{
 			if (layers[ i ].isYcbcr())
 				result |= 1 << i;
+		}
+		return result;
+	}
+	uint32_t colorspaceMask() const {
+		uint32_t result = 0;
+		for (int i = 0; i < layerCount; i++)
+		{
+			result |= layers[ i ].colorspace << i * GamescopeAppTextureColorspace_Bits;
 		}
 		return result;
 	}

@@ -173,6 +173,14 @@ struct commit_t
 		wlserver_unlock();
     }
 
+	GamescopeAppTextureColorspace colorspace() const
+	{
+		if (feedback)
+			return VkColorSpaceToGamescopeAppTextureColorSpace(feedback->vk_colorspace);
+
+		return GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+	}
+
 	struct wlr_buffer *buf = nullptr;
 	uint32_t fb_id = 0;
 	std::shared_ptr<CVulkanTexture> vulkanTex;
@@ -1400,6 +1408,7 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 
 	layer->linearFilter = false;
 	layer->blackBorder = false;
+	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 }
 
 void MouseCursor::updateCursorFeedback( bool bForce )
@@ -1443,6 +1452,7 @@ paint_cached_base_layer(const std::shared_ptr<commit_t>& commit, const BaseLayer
 	layer->offset.y = base.offset[1];
 	layer->opacity = base.opacity * flOpacityScale;
 
+	layer->colorspace = commit->colorspace();
 	layer->tex = commit->vulkanTex;
 	layer->fbid = commit->fb_id;
 
@@ -1616,6 +1626,7 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 	layer->fbid = lastCommit->fb_id;
 
 	layer->linearFilter = (w->isOverlay || w->isExternalOverlay) ? true : g_upscaleFilter != GamescopeUpscaleFilter::NEAREST;
+	layer->colorspace = lastCommit->colorspace();
 
 	if ( flags & PaintWindowFlag::BasePlane )
 	{
@@ -1964,6 +1975,7 @@ paint_all(bool async)
 			layer->fbid = layer->tex->fbid();
 
 			layer->linearFilter = false;
+			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
 			int ret = drm_prepare( &g_DRM, async, &frameInfo );
 
