@@ -75,18 +75,40 @@ struct VulkanWlrTexture_t
 };
 
 enum GamescopeAppTextureColorspace {
-	GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB = 0,
+	GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR = 0,
+	GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB,
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB,
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ,
 };
 const uint32_t GamescopeAppTextureColorspace_Bits = 2;
 
-inline GamescopeAppTextureColorspace VkColorSpaceToGamescopeAppTextureColorSpace(VkColorSpaceKHR colorspace)
+inline VkFormat ToSrgbVulkanFormat( VkFormat format )
+{
+	switch ( format )
+	{
+		case VK_FORMAT_B8G8R8A8_UNORM:	return VK_FORMAT_B8G8R8A8_SRGB;
+		default:						return format;
+	}
+}
+
+inline VkFormat ToLinearVulkanFormat( VkFormat format )
+{
+	switch ( format )
+	{
+		case VK_FORMAT_B8G8R8A8_SRGB:	return VK_FORMAT_B8G8R8A8_UNORM;
+		default:						return format;
+	}
+}
+
+inline GamescopeAppTextureColorspace VkColorSpaceToGamescopeAppTextureColorSpace(VkFormat format, VkColorSpaceKHR colorspace)
 {
 	switch (colorspace)
 	{
 		default:
 		case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:
+			// We will use image view conversions for these 8888 formats.
+			if (ToSrgbVulkanFormat(format) != ToLinearVulkanFormat(format))
+				return GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
 			return GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
 		case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:

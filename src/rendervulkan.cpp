@@ -334,24 +334,6 @@ static inline uint32_t DRMFormatGetBPP( uint32_t nDRMFormat )
 	return false;
 }
 
-static inline VkFormat ToSrgbVulkanFormat( VkFormat format )
-{
-	switch ( format )
-	{
-		case VK_FORMAT_B8G8R8A8_UNORM:	return VK_FORMAT_B8G8R8A8_SRGB;
-		default:						return format;
-	}
-}
-
-static inline VkFormat ToLinearVulkanFormat( VkFormat format )
-{
-	switch ( format )
-	{
-		case VK_FORMAT_B8G8R8A8_SRGB:	return VK_FORMAT_B8G8R8A8_UNORM;
-		default:						return format;
-	}
-}
-
 class CVulkanDevice;
 
 struct TextureState

@@ -8,9 +8,10 @@ layout(constant_id = 3) const int  c_blur_layer_count = 0;
 layout(constant_id = 4) const uint c_colorspaceMask = 0;
 layout(constant_id = 5) const bool c_st2084Output = false;
 
-const int colorspace_sdr = 0;
-const int colorspace_scRGB = 1;
-const int colorspace_pq = 2;
+const int colorspace_linear = 0;
+const int colorspace_sRGB = 1;
+const int colorspace_scRGB = 2;
+const int colorspace_pq = 3;
 const int colorspace_reserved = 3;
 const int colorspace_max_bits = 2;
 

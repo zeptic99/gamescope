@@ -175,10 +175,14 @@ struct commit_t
 
 	GamescopeAppTextureColorspace colorspace() const
 	{
-		if (feedback)
-			return VkColorSpaceToGamescopeAppTextureColorSpace(feedback->vk_colorspace);
+		VkColorSpaceKHR colorspace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+		if (feedback && vulkanTex)
+			colorspace = feedback->vk_colorspace;
 
-		return GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+		if (!vulkanTex)
+			return GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
+
+		return VkColorSpaceToGamescopeAppTextureColorSpace(vulkanTex->format(), colorspace);
 	}
 
 	struct wlr_buffer *buf = nullptr;

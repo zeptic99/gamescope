@@ -53,7 +53,12 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
         if (!c_st2084Output) {
             color.rgb = nitsToLinear(color.rgb);
         }
-    } else if (get_layer_colorspace(layerIdx) == colorspace_sdr) {
+    } else if (get_layer_colorspace(layerIdx) == colorspace_sRGB) {
+        color.rgb = srgbToLinear(color.rgb);
+        if (c_st2084Output) {
+            color.rgb = linearToNits(color.rgb);
+        }
+    } else if (get_layer_colorspace(layerIdx) == colorspace_linear) {
         if (c_st2084Output) {
             color.rgb = linearToNits(color.rgb);
         }
