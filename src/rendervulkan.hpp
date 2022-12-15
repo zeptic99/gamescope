@@ -74,6 +74,28 @@ struct VulkanWlrTexture_t
 	struct wlr_buffer *buf;
 };
 
+enum GamescopeAppTextureColorspace {
+	GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB = 0,
+	GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB,
+	GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ,
+};
+
+inline GamescopeAppTextureColorspace VkColorSpaceToGamescopeAppTextureColorSpace(VkColorSpaceKHR colorspace)
+{
+	switch (colorspace)
+	{
+		default:
+		case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:
+			return GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+
+		case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
+			return GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB;
+
+		case VK_COLOR_SPACE_HDR10_ST2084_EXT:
+			return GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ;
+	}
+}
+
 class CVulkanTexture
 {
 public:

@@ -96,6 +96,8 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 		ResListEntry_t newEntry = {
 			.surf = surf,
 			.buf = buf,
+			.async = wlserver_surface_is_async(surf),
+			.feedback = wlserver_surface_swapchain_feedback(surf),
 		};
 		wayland_commit_queue.push_back( newEntry );
 	}
@@ -529,7 +531,7 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
 	if ( wl_info )
 	{
-		wl_info->swapchain_feedback = wlserver_vk_swapchain_feedback {
+		wl_info->swapchain_feedback = std::make_unique<wlserver_vk_swapchain_feedback>(wlserver_vk_swapchain_feedback{
 			.image_count = image_count,
 			.vk_format = VkFormat(vk_format),
 			.vk_colorspace = VkColorSpaceKHR(vk_colorspace),
@@ -537,7 +539,7 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 			.vk_pre_transform = VkSurfaceTransformFlagBitsKHR(vk_pre_transform),
 			.vk_present_mode = VkPresentModeKHR(vk_present_mode),
 			.vk_clipped = VkBool32(vk_clipped),
-		};
+		});
 	}
 }
 
@@ -1097,6 +1099,13 @@ bool wlserver_surface_is_async( struct wlr_surface *surf )
 	}
 
 	return wl_surf->presentation_hint != 0;
+}
+
+const std::shared_ptr<wlserver_vk_swapchain_feedback>& wlserver_surface_swapchain_feedback( struct wlr_surface *surf )
+{
+	auto wl_surf = get_wl_surface_info( surf );
+
+	return wl_surf->swapchain_feedback;
 }
 
 /* Handle the orientation of the touch inputs */

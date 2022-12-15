@@ -17,9 +17,22 @@
 struct _XDisplay;
 struct xwayland_ctx_t;
 
+struct wlserver_vk_swapchain_feedback
+{
+	uint32_t image_count;
+	VkFormat vk_format;
+	VkColorSpaceKHR vk_colorspace;
+	VkCompositeAlphaFlagBitsKHR vk_composite_alpha;
+	VkSurfaceTransformFlagBitsKHR vk_pre_transform;
+	VkPresentModeKHR vk_present_mode;
+	VkBool32 vk_clipped;
+};
+
 struct ResListEntry_t {
 	struct wlr_surface *surf;
 	struct wlr_buffer *buf;
+	bool async;
+	std::shared_ptr<wlserver_vk_swapchain_feedback> feedback;
 };
 
 struct wlserver_content_override;
@@ -171,6 +184,7 @@ void wlserver_touchup( int touch_id, uint32_t time );
 void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when );
 
 bool wlserver_surface_is_async( struct wlr_surface *surf );
+const std::shared_ptr<wlserver_vk_swapchain_feedback>& wlserver_surface_swapchain_feedback( struct wlr_surface *surf );
 
 struct wlserver_output_info {
 	const char *description;
@@ -201,17 +215,6 @@ struct wlserver_x11_surface_info
 	gamescope_xwayland_server_t *xwayland_server;
 };
 
-struct wlserver_vk_swapchain_feedback
-{
-	uint32_t image_count;
-	VkFormat vk_format;
-	VkColorSpaceKHR vk_colorspace;
-	VkCompositeAlphaFlagBitsKHR vk_composite_alpha;
-	VkSurfaceTransformFlagBitsKHR vk_pre_transform;
-	VkPresentModeKHR vk_present_mode;
-	VkBool32 vk_clipped;
-};
-
 struct wlserver_wl_surface_info
 {
 	wlserver_x11_surface_info *x11_surface = nullptr;
@@ -221,7 +224,7 @@ struct wlserver_wl_surface_info
 
 	uint32_t presentation_hint = 0;
 
-	std::optional<wlserver_vk_swapchain_feedback> swapchain_feedback = std::nullopt;
+	std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback = {};
 };
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
