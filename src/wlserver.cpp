@@ -1082,7 +1082,21 @@ void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *
 
 bool wlserver_surface_is_async( struct wlr_surface *surf )
 {
-	return get_wl_surface_info( surf )->presentation_hint != 0;
+	auto wl_surf = get_wl_surface_info( surf );
+	if ( !wl_surf )
+		return false;
+
+	// If we are using the Gamescope WSI layer, treat both immediate and mailbox as
+	// "async", this is because we have a global tearing override for games.
+	// When that is enabled we want anything not FIFO or explicitly vsynced to
+	// have tearing.
+	if ( wl_surf->swapchain_feedback )
+	{
+		return wl_surf->swapchain_feedback->vk_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR ||
+			   wl_surf->swapchain_feedback->vk_present_mode == VK_PRESENT_MODE_MAILBOX_KHR;
+	}
+
+	return wl_surf->presentation_hint != 0;
 }
 
 /* Handle the orientation of the touch inputs */
