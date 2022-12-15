@@ -60,6 +60,13 @@ wlroots_dep = dependency(
   default_options: ['default_library=static', 'examples=false', 'xwayland=enabled', 'backends=libinput', 'renderers=[]', 'allocators=[]'],
 )
 
+displayinfo_dep = dependency(
+  'display-info',
+  version: ['>= 0.0.0', '< 0.1.0'],
+  fallback: ['libdisplay-info', 'di_dep'],
+  default_options: ['default_library=static'],
+)
+
 required_wlroots_features = ['xwayland', 'libinput_backend']
 foreach feat : required_wlroots_features
   if wlroots_dep.get_variable('have_' + feat) != 'true'
@@ -153,7 +160,7 @@ executable(
     dep_xxf86vm, dep_xres, drm_dep, wayland_server,
     xkbcommon, thread_dep, sdl_dep, wlroots_dep,
     vulkan_dep, liftoff_dep, dep_xtst, cap_dep, pipewire_dep, librt_dep,
-    stb_dep,
+    stb_dep, displayinfo_dep,
   ],
   install: true,
 )
