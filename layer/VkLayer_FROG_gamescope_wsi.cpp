@@ -400,7 +400,8 @@ namespace GamescopeWSILayer {
         // Force the colorspace to sRGB before sending to the driver.
         swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-        fprintf(stderr, "[Gamescope WSI] Creating swapchain for wl_surface for xid: 0x%0x\n", (*gamescopeSurface)->window_xid);
+        fprintf(stderr, "[Gamescope WSI] Creating swapchain for wl_surface for xid: 0x%0x - colorspace: %s\n",
+          (*gamescopeSurface)->window_xid, vkroots::helpers::enumString(pCreateInfo->imageColorSpace));
       }
 
       VkResult res = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
