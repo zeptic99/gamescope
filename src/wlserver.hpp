@@ -9,6 +9,8 @@
 #include <mutex>
 #include <map>
 #include <set>
+#include <optional>
+#include <vulkan/vulkan_core.h>
 
 #define WLSERVER_BUTTON_COUNT 4
 
@@ -199,6 +201,17 @@ struct wlserver_x11_surface_info
 	gamescope_xwayland_server_t *xwayland_server;
 };
 
+struct wlserver_vk_swapchain_feedback
+{
+	uint32_t image_count;
+	VkFormat vk_format;
+	VkColorSpaceKHR vk_colorspace;
+	VkCompositeAlphaFlagBitsKHR vk_composite_alpha;
+	VkSurfaceTransformFlagBitsKHR vk_pre_transform;
+	VkPresentModeKHR vk_present_mode;
+	VkBool32 vk_clipped;
+};
+
 struct wlserver_wl_surface_info
 {
 	wlserver_x11_surface_info *x11_surface = nullptr;
@@ -207,6 +220,8 @@ struct wlserver_wl_surface_info
 	struct wl_listener destroy;
 
 	uint32_t presentation_hint = 0;
+
+	std::optional<wlserver_vk_swapchain_feedback> swapchain_feedback = std::nullopt;
 };
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );

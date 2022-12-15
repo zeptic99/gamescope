@@ -515,6 +515,32 @@ static void gamescope_xwayland_handle_override_window_content( struct wl_client 
 	server->handle_override_window_content(client, resource, surface_resource, x11_window);
 }
 
+static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *client, struct wl_resource *resource,
+	struct wl_resource *surface_resource,
+	uint32_t image_count,
+	uint32_t vk_format,
+	uint32_t vk_colorspace,
+	uint32_t vk_composite_alpha,
+	uint32_t vk_pre_transform,
+	uint32_t vk_present_mode,
+	uint32_t vk_clipped)
+{
+	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
+	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	if ( wl_info )
+	{
+		wl_info->swapchain_feedback = wlserver_vk_swapchain_feedback {
+			.image_count = image_count,
+			.vk_format = VkFormat(vk_format),
+			.vk_colorspace = VkColorSpaceKHR(vk_colorspace),
+			.vk_composite_alpha = VkCompositeAlphaFlagBitsKHR(vk_composite_alpha),
+			.vk_pre_transform = VkSurfaceTransformFlagBitsKHR(vk_pre_transform),
+			.vk_present_mode = VkPresentModeKHR(vk_present_mode),
+			.vk_clipped = VkBool32(vk_clipped),
+		};
+	}
+}
+
 static void gamescope_xwayland_handle_destroy( struct wl_client *client, struct wl_resource *resource )
 {
 	wl_resource_destroy( resource );
@@ -523,6 +549,7 @@ static void gamescope_xwayland_handle_destroy( struct wl_client *client, struct 
 static const struct gamescope_xwayland_interface gamescope_xwayland_impl = {
 	.destroy = gamescope_xwayland_handle_destroy,
 	.override_window_content = gamescope_xwayland_handle_override_window_content,
+	.swapchain_feedback = gamescope_xwayland_handle_swapchain_feedback,
 };
 
 static void gamescope_xwayland_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
@@ -533,7 +560,7 @@ static void gamescope_xwayland_bind( struct wl_client *client, void *data, uint3
 
 static void create_gamescope_xwayland( void )
 {
-	uint32_t version = 1;
+	uint32_t version = 2;
 	wl_global_create( wlserver.display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
 }
 

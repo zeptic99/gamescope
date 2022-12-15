@@ -25,6 +25,7 @@ namespace GamescopeWSILayer {
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeInstance, VkInstance);
 
   struct GamescopeSurfaceData {
+    VkInstance instance;
     wl_surface* surface;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
@@ -258,6 +259,7 @@ namespace GamescopeWSILayer {
 
       printf("Made gamescope surface for xid: 0x%x\n", window_xid);
       GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
+        .instance = instance,
         .surface = waylandSurface,
       });
 
@@ -311,7 +313,7 @@ namespace GamescopeWSILayer {
             wl_registry_bind(registry, name, &wl_compositor_interface, version));
         } else if (!std::strcmp(interface, gamescope_xwayland_interface.name)) {
           instance->gamescope = reinterpret_cast<gamescope_xwayland *>(
-            wl_registry_bind(registry, name, &gamescope_xwayland_interface, 1));
+            wl_registry_bind(registry, name, &gamescope_xwayland_interface, version));
         }
       },
       .global_remove = [](void* data, wl_registry* registry, uint32_t name) {
@@ -351,6 +353,23 @@ namespace GamescopeWSILayer {
         GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
           .surface = pCreateInfo->surface,
         });
+
+        auto gamescopeInstance = GamescopeInstance::get((*gamescopeSurface)->instance);
+        if (gamescopeInstance) {
+          uint32_t imageCount = 0;
+          pDispatch->GetSwapchainImagesKHR(device, *pSwapchain, &imageCount, nullptr);
+
+          gamescope_xwayland_swapchain_feedback(
+            (*gamescopeInstance)->gamescope,
+            (*gamescopeSurface)->surface,
+            imageCount,
+            uint32_t(pCreateInfo->imageFormat),
+            uint32_t(pCreateInfo->imageColorSpace),
+            uint32_t(pCreateInfo->compositeAlpha),
+            uint32_t(pCreateInfo->preTransform),
+            uint32_t(pCreateInfo->presentMode),
+            uint32_t(pCreateInfo->clipped));
+        }
       }
       return res;
     }
@@ -369,7 +388,8 @@ namespace GamescopeWSILayer {
 
 VKROOTS_DEFINE_LAYER_INTERFACES(GamescopeWSILayer::VkInstanceOverrides,
                                 vkroots::NoOverrides,
-                                vkroots::NoOverrides);
+                                GamescopeWSILayer::VkDeviceOverrides);
 
 VKROOTS_IMPLEMENT_SYNCHRONIZED_MAP_TYPE(GamescopeWSILayer::GamescopeInstance);
 VKROOTS_IMPLEMENT_SYNCHRONIZED_MAP_TYPE(GamescopeWSILayer::GamescopeSurface);
+VKROOTS_IMPLEMENT_SYNCHRONIZED_MAP_TYPE(GamescopeWSILayer::GamescopeSwapchain);

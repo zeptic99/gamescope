@@ -29,7 +29,7 @@
     it.
   </description>
 
-  <interface name="gamescope_xwayland" version="1">
+  <interface name="gamescope_xwayland" version="2">
     <request name="destroy" type="destructor"></request>
 
     <request name="override_window_content">
@@ -45,6 +45,35 @@
       </description>
       <arg name="surface" type="object" interface="wl_surface" summary="Wayland surface"/>
       <arg name="x11_window" type="uint" summary="X11 window ID"/>
+    </request>
+
+    <request name="swapchain_feedback" since="2">
+      <description summary="provide swapchain feedback">
+        Provide swapchain feedback to the compositor.
+
+        This is what the useless tearing protocol should have been.
+        Absolutely not enough information in the final protocol to do what we want for SteamOS --
+        which is have the Allow Tearing toggle apply to *both* Mailbox + Immediate and NOT fifo,
+        essentially acting as an override for tearing on/off for games.
+        The upstream protocol is very useless for our usecase here.
+
+        Provides image count ahead of time instead of needing to try and calculate it from
+        an initial stall if we are doing low latency.
+
+        Provides colorspace info for us to do HDR for both HDR10 PQ and scRGB.
+        The upstream HDR efforts seem to have no interest in supporting scRGB but we *need* that so /shrug
+        We can do it here now! Yipee!
+
+        Swapchain feedback solves so many problems! :D
+      </description>
+      <arg name="surface" type="object" interface="wl_surface" summary="Wayland surface"/>
+      <arg name="image_count" type="uint" summary="image count of swapchain"/>
+      <arg name="vk_format" type="uint" summary="VkFormat of swapchain"/>
+      <arg name="vk_colorspace" type="uint" summary="VkColorSpaceKHR of swapchain"/>
+      <arg name="vk_composite_alpha" type="uint" summary="VkCompositeAlphaFlagBitsKHR of swapchain"/>
+      <arg name="vk_pre_transform" type="uint" summary="VkSurfaceTransformFlagBitsKHR of swapchain"/>
+      <arg name="vk_present_mode" type="uint" summary="VkPresentModeKHR of swapchain"/>
+      <arg name="vk_clipped" type="uint" summary="clipped (VkBool32) of swapchain"/>
     </request>
   </interface>
 </protocol>
