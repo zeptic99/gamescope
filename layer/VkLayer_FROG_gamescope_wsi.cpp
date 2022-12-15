@@ -29,6 +29,11 @@ namespace GamescopeWSILayer {
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
 
+  struct GamescopeSwapchainData {
+    VkSurfaceKHR surface;
+  };
+  VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSwapchain, VkSwapchainKHR);
+
   class VkInstanceOverrides {
   public:
     static VkResult CreateInstance(
@@ -139,6 +144,44 @@ namespace GamescopeWSILayer {
       return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, uint32_t(pCreateInfo->window), pAllocator, pSurface);
     }
 
+    static VkResult GetPhysicalDeviceSurfaceFormatsKHR(
+      const vkroots::VkInstanceDispatch* pDispatch,
+            VkPhysicalDevice             physicalDevice,
+            VkSurfaceKHR                 surface,
+            uint32_t*                    pSurfaceFormatCount,
+            VkSurfaceFormatKHR*          pSurfaceFormats) {
+      static constexpr std::array<VkSurfaceFormatKHR, 2> s_ExtraSurfaceFormats = {{
+        { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, },
+        { VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, },
+      }};
+      return vkroots::helpers::append(
+        pDispatch->GetPhysicalDeviceSurfaceFormatsKHR,
+        s_ExtraSurfaceFormats,
+        pSurfaceFormatCount,
+        pSurfaceFormats,
+        physicalDevice,
+        surface);
+    }
+
+    static VkResult GetPhysicalDeviceSurfaceFormats2KHR(
+      const vkroots::VkInstanceDispatch*     pDispatch,
+            VkPhysicalDevice                 physicalDevice,
+      const VkPhysicalDeviceSurfaceInfo2KHR* pSurfaceInfo,
+            uint32_t*                        pSurfaceFormatCount,
+            VkSurfaceFormat2KHR*             pSurfaceFormats) {
+      static constexpr std::array<VkSurfaceFormat2KHR, 2> s_ExtraSurfaceFormats = {{
+        { .surfaceFormat = { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, }, },
+        { .surfaceFormat = { VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, }, },
+      }};
+      return vkroots::helpers::append(
+        pDispatch->GetPhysicalDeviceSurfaceFormats2KHR,
+        s_ExtraSurfaceFormats,
+        pSurfaceFormatCount,
+        pSurfaceFormats,
+        physicalDevice,
+        pSurfaceInfo);
+    }
+
     static void DestroySurfaceKHR(
       const vkroots::VkInstanceDispatch* pDispatch,
             VkInstance                   instance,
@@ -149,6 +192,34 @@ namespace GamescopeWSILayer {
       }
       GamescopeSurface::remove(surface);
       pDispatch->DestroySurfaceKHR(instance, surface, pAllocator);
+    }
+
+    static VkResult EnumerateDeviceExtensionProperties(
+      const vkroots::VkInstanceDispatch* pDispatch,
+            VkPhysicalDevice             physicalDevice,
+            const char*                  pLayerName,
+            uint32_t*                    pPropertyCount,
+            VkExtensionProperties*       pProperties) {
+      static constexpr std::array<VkExtensionProperties, 1> s_LayerExposedExts = {{
+        { VK_EXT_HDR_METADATA_EXTENSION_NAME,
+          VK_EXT_HDR_METADATA_SPEC_VERSION },
+      }};
+
+      if (pLayerName) {
+        if (!std::strncmp(pLayerName, "VK_LAYER_FROG_gamescope_wsi", VK_MAX_EXTENSION_NAME_SIZE)) {
+          return vkroots::helpers::array(s_LayerExposedExts, pPropertyCount, pProperties);
+        } else {
+          return pDispatch->EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pPropertyCount, pProperties);
+        }
+      }
+
+      return vkroots::helpers::append(
+        pDispatch->EnumerateDeviceExtensionProperties,
+        s_LayerExposedExts,
+        pPropertyCount,
+        pProperties,
+        physicalDevice,
+        pLayerName);
     }
 
   private:
@@ -247,6 +318,51 @@ namespace GamescopeWSILayer {
       },
     };
 
+  };
+
+  class VkDeviceOverrides {
+  public:
+    static void DestroySwapchainKHR(
+      const vkroots::VkDeviceDispatch* pDispatch,
+            VkDevice                   device,
+            VkSwapchainKHR             swapchain,
+      const VkAllocationCallbacks*     pAllocator) {
+      GamescopeSwapchain::remove(swapchain);
+      pDispatch->DestroySwapchainKHR(device, swapchain, pAllocator);
+    }
+
+    static VkResult CreateSwapchainKHR(
+      const vkroots::VkDeviceDispatch* pDispatch,
+            VkDevice                   device,
+      const VkSwapchainCreateInfoKHR*  pCreateInfo,
+      const VkAllocationCallbacks*     pAllocator,
+            VkSwapchainKHR*            pSwapchain) {
+      auto gamescopeSurface = GamescopeSurface::get(pCreateInfo->surface);
+
+      VkSwapchainCreateInfoKHR swapchainInfo = *pCreateInfo;
+      if (gamescopeSurface) {
+        // If this is a gamescope surface
+        // Force the colorspace to sRGB before sending to the driver.
+        swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+
+      VkResult res = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
+      if (res == VK_SUCCESS && gamescopeSurface) {
+        GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
+          .surface = pCreateInfo->surface,
+        });
+      }
+      return res;
+    }
+
+    static void SetHdrMetadataEXT(
+      const vkroots::VkDeviceDispatch* pDispatch,
+            VkDevice                   device,
+            uint32_t                   swapchainCount,
+      const VkSwapchainKHR*            pSwapchains,
+      const VkHdrMetadataEXT*          pMetadata) {
+      printf("GOT SetHdrMetadataEXT!\n");
+    }
   };
 
 }
