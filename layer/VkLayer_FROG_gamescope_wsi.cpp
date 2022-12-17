@@ -4,6 +4,7 @@
 #include "vkroots.h"
 #include <X11/Xlib-xcb.h>
 #include "gamescope-xwayland-client-protocol.h"
+#include "color_helpers.h"
 
 #include <cstdio>
 #include <vector>
@@ -444,7 +445,44 @@ namespace GamescopeWSILayer {
             uint32_t                   swapchainCount,
       const VkSwapchainKHR*            pSwapchains,
       const VkHdrMetadataEXT*          pMetadata) {
-      fprintf(stderr, "[Gamescope WSI] Got SetHdrMetadataEXT!\n");
+      for (uint32_t i = 0; i < swapchainCount; i++) {
+        auto gamescopeSwapchain = GamescopeSwapchain::get(pSwapchains[i]);
+        if (!gamescopeSwapchain) {
+          fprintf(stderr, "[Gamescope WSI] SetHdrMetadataEXT: Swapchain %u does not support HDR.\n", i);
+          continue;
+        }
+
+        auto gamescopeSurface = GamescopeSurface::get(gamescopeSwapchain->surface);
+        if (!gamescopeSurface) {
+          fprintf(stderr, "[Gamescope WSI] SetHdrMetadataEXT: Surface for swapchain %u was already destroyed. (App use after free).\n", i);
+          abort();
+          continue;
+        }
+
+        auto gamescopeInstance = GamescopeInstance::get(gamescopeSurface->instance);
+        if (!gamescopeInstance) {
+          fprintf(stderr, "[Gamescope WSI] SetHdrMetadataEXT: Instance for swapchain %u was already destroyed. (App use after free).\n", i);
+          abort();
+          continue;
+        }
+
+        const VkHdrMetadataEXT& metadata = pMetadata[i];
+        gamescope_xwayland_set_hdr_metadata(
+          gamescopeInstance->gamescope,
+          gamescopeSurface->surface,
+          color_xy_to_u16(metadata.displayPrimaryRed.x),
+          color_xy_to_u16(metadata.displayPrimaryRed.y),
+          color_xy_to_u16(metadata.displayPrimaryGreen.x),
+          color_xy_to_u16(metadata.displayPrimaryGreen.y),
+          color_xy_to_u16(metadata.displayPrimaryBlue.x),
+          color_xy_to_u16(metadata.displayPrimaryBlue.y),
+          color_xy_to_u16(metadata.whitePoint.x),
+          color_xy_to_u16(metadata.whitePoint.y),
+          nits_to_u16(metadata.maxLuminance),
+          nits_to_u16_dark(metadata.minLuminance),
+          nits_to_u16(metadata.maxContentLightLevel),
+          nits_to_u16(metadata.maxFrameAverageLightLevel));
+      }
     }
   };
 
