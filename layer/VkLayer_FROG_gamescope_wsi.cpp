@@ -260,7 +260,7 @@ namespace GamescopeWSILayer {
       const vkroots::VkInstanceDispatch* pDispatch,
             GamescopeInstance&           gamescopeInstance,
             VkInstance                   instance,
-            xcb_connection_t*            xcb_conn,
+            xcb_connection_t*            connection,
             xcb_window_t                 window,
       const VkAllocationCallbacks*       pAllocator,
             VkSurfaceKHR*                pSurface) {
@@ -272,7 +272,12 @@ namespace GamescopeWSILayer {
         return VK_ERROR_SURFACE_LOST_KHR;
       }
 
-      gamescope_xwayland_override_window_content(gamescopeInstance->gamescope, waylandSurface, window);
+      auto serverId = getGamescopeXWaylandServerId(connection);
+      if (!serverId) {
+        fprintf(stderr, "[Gamescope WSI] Failed to get Xwayland server id. Failing surface creation.\n");
+        return VK_ERROR_SURFACE_LOST_KHR;
+      }
+      gamescope_xwayland_override_window_content2(gamescopeInstance->gamescope, waylandSurface, *serverId, window);
 
       wl_display_flush(gamescopeInstance->display);
 
@@ -294,7 +299,7 @@ namespace GamescopeWSILayer {
       GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
         .instance   = instance,
         .surface    = waylandSurface,
-        .connection = xcb_conn,
+        .connection = connection,
         .window     = window,
       });
 
@@ -340,17 +345,13 @@ namespace GamescopeWSILayer {
     }
 
     static VkResult getCurrentExtent(xcb_connection_t* xcb_conn, xcb_window_t window, VkExtent2D* pExtent) {
-      xcb_generic_error_t *err = nullptr;
       xcb_get_geometry_cookie_t geom_cookie = xcb_get_geometry(xcb_conn, window);
-      xcb_get_geometry_reply_t* geom = xcb_get_geometry_reply(xcb_conn, geom_cookie, &err);
-      if (!geom) {
-        free(err);
+      xcb_get_geometry_reply_t* geom = xcb_get_geometry_reply(xcb_conn, geom_cookie, nullptr);
+      if (!geom)
         return VK_ERROR_SURFACE_LOST_KHR;
-      }
 
       *pExtent = VkExtent2D{ geom->width, geom->height };
       free(geom);
-      free(err);
       return VK_SUCCESS;
     }
 
@@ -360,6 +361,43 @@ namespace GamescopeWSILayer {
         return uint32_t(std::atoi(overrideStr));
 
       return 3;
+    }
+
+    static std::optional<xcb_atom_t> getXcbAtom(xcb_connection_t* connection, const char *name) {
+      xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, false, strlen(name), name);
+      xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, nullptr);
+      if (!reply) {
+        fprintf(stderr, "[Gamescope WSI] Failed to get GAMESCOPE_XWAYLAND_SERVER_ID atom.\n");
+        return std::nullopt;
+      }
+      xcb_atom_t atom = reply->atom;
+      free(reply);
+      return atom;
+    }
+
+    static std::optional<uint32_t> getGamescopeXWaylandServerId(xcb_connection_t* connection) {
+      std::optional<xcb_atom_t> atom = getXcbAtom(connection, "GAMESCOPE_XWAYLAND_SERVER_ID");
+      if (!atom)
+        return std::nullopt;
+
+      xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data;
+
+      xcb_get_property_cookie_t cookie = xcb_get_property(connection, false, screen->root, *atom, XCB_ATOM_CARDINAL, 0, 1);
+      xcb_get_property_reply_t* reply = xcb_get_property_reply(connection, cookie, nullptr);
+      if (!reply) {
+        fprintf(stderr, "[Gamescope WSI] Failed to read GAMESCOPE_XWAYLAND_SERVER_ID root window property.\n");
+        return std::nullopt;
+      }
+
+      if (reply->type != XCB_ATOM_CARDINAL) {
+        fprintf(stderr, "[Gamescope WSI] GAMESCOPE_XWAYLAND_SERVER_ID was wrong type. Expected XCB_ATOM_CARDINAL.\n");
+        free(reply);
+        return std::nullopt;
+      }
+
+      uint32_t serverId = *reinterpret_cast<const uint32_t *>(xcb_get_property_value(reply));
+      free(reply);
+      return serverId;
     }
 
     static constexpr wl_registry_listener s_registryListener = {
