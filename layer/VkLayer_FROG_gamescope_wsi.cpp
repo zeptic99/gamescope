@@ -12,11 +12,13 @@
 #include <unordered_map>
 #include <optional>
 
+using namespace std::literals;
+
 namespace GamescopeWSILayer {
 
-  static bool contains(const std::vector<const char *> vec, const char *lookupValue) {
+  static bool contains(const std::vector<const char *> vec, std::string_view lookupValue) {
     return std::find_if(vec.begin(), vec.end(),
-      [=](const char* value) { return !std::strcmp(value, lookupValue); }) != vec.end();
+      [=](const char* value) { return value == lookupValue; }) != vec.end();
   }
 
   struct GamescopeInstanceData {
@@ -239,7 +241,7 @@ namespace GamescopeWSILayer {
       }};
 
       if (pLayerName) {
-        if (!std::strncmp(pLayerName, "VK_LAYER_FROG_gamescope_wsi", VK_MAX_EXTENSION_NAME_SIZE)) {
+        if (pLayerName == "VK_LAYER_FROG_gamescope_wsi"sv) {
           return vkroots::helpers::array(s_LayerExposedExts, pPropertyCount, pProperties);
         } else {
           return pDispatch->EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pPropertyCount, pProperties);
@@ -322,7 +324,7 @@ namespace GamescopeWSILayer {
       if (!appInfo || !appInfo->pApplicationName)
         return false;
 
-      return !std::strcmp(appInfo->pApplicationName, "gamescope");
+      return appInfo->pApplicationName == "gamescope"sv;
     }
 
     static bool isRunningUnderGamescope() {
@@ -404,10 +406,10 @@ namespace GamescopeWSILayer {
       .global = [](void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
         auto instance = reinterpret_cast<GamescopeInstanceData *>(data);
 
-        if (!std::strcmp(interface, wl_compositor_interface.name)) {
+        if (interface == "wl_compositor"sv) {
           instance->compositor = reinterpret_cast<wl_compositor *>(
             wl_registry_bind(registry, name, &wl_compositor_interface, version));
-        } else if (!std::strcmp(interface, gamescope_xwayland_interface.name)) {
+        } else if (interface == "gamescope_xwayland"sv) {
           instance->gamescope = reinterpret_cast<gamescope_xwayland *>(
             wl_registry_bind(registry, name, &gamescope_xwayland_interface, version));
         }
