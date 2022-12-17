@@ -5355,6 +5355,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeNewScalingScaler = XInternAtom( ctx->dpy, "GAMESCOPE_NEW_SCALING_SCALER", false );
 
 	ctx->atoms.gamescopeDisplayEdidPath = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_EDID_PATH", false );
+	ctx->atoms.gamescopeXwaylandServerId = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_SERVER_ID", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
@@ -5612,6 +5613,10 @@ steamcompmgr_main(int argc, char **argv)
 				.fd = XConnectionNumber( server->ctx->dpy ),
 				.events = POLLIN,
 			});
+
+			uint32_t serverId = static_cast<uint32_t>(i);
+			XChangeProperty(server->ctx->dpy, server->ctx->root, server->ctx->atoms.gamescopeXwaylandServerId, XA_CARDINAL, 32, PropModeReplace,
+				(unsigned char *)&serverId, 1 );
 		}
 	}
 

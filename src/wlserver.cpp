@@ -472,7 +472,7 @@ void gamescope_xwayland_server_t::handle_override_window_content( struct wl_clie
 	if ( content_overrides.count( x11_window ) ) {
 		destroy_content_override( content_overrides[ x11_window ] );
 	}
-	wlserver_x11_surface_info *x11_surface = lookup_x11_surface_info_from_xid( wlserver_get_xwayland_server( 0 ), x11_window );
+	wlserver_x11_surface_info *x11_surface = lookup_x11_surface_info_from_xid( this, x11_window );
 	// If we found an x11_surface, go back up to our parent.
 	if ( x11_surface )
 		x11_window = x11_surface->x11_id;
@@ -513,6 +513,13 @@ static void gamescope_xwayland_handle_override_window_content( struct wl_client 
 	//
 	// So... Just assume it comes from server 0 for now.
 	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( 0 );
+	assert( server );
+	server->handle_override_window_content(client, resource, surface_resource, x11_window);
+}
+
+static void gamescope_xwayland_handle_override_window_content2( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t server_id, uint32_t x11_window )
+{
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( server_id );
 	assert( server );
 	server->handle_override_window_content(client, resource, surface_resource, x11_window);
 }
@@ -574,6 +581,7 @@ static void gamescope_xwayland_handle_destroy( struct wl_client *client, struct 
 static const struct gamescope_xwayland_interface gamescope_xwayland_impl = {
 	.destroy = gamescope_xwayland_handle_destroy,
 	.override_window_content = gamescope_xwayland_handle_override_window_content,
+	.override_window_content2 = gamescope_xwayland_handle_override_window_content2,
 	.swapchain_feedback = gamescope_xwayland_handle_swapchain_feedback,
 	.set_hdr_metadata = gamescope_xwayland_handle_set_hdr_metadata,
 };

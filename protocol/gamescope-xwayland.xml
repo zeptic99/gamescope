@@ -34,6 +34,14 @@
 
     <request name="override_window_content">
       <description summary="override an X11's window wl_surface">
+        See override_window_content2.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface" summary="Wayland surface"/>
+      <arg name="x11_window" type="uint" summary="X11 window ID"/>
+    </request>
+
+    <request name="override_window_content2" since="2">
+      <description summary="override an X11's window wl_surface">
         Xwayland creates a wl_surface for each X11 window. It sends a
         WL_SURFACE_ID client message to indicate the mapping between the X11
         windows and the wl_surface objects.
@@ -42,8 +50,12 @@
         X11 client to submit buffers via the Wayland protocol. The override
         only affects buffer submission. Everything else (e.g. input events)
         still uses Xwayland's WL_SURFACE_ID.
+
+        x11_server is gotten by the GAMESCOPE_XWAYLAND_SERVER_ID property on the
+        root window of the associated server.
       </description>
       <arg name="surface" type="object" interface="wl_surface" summary="Wayland surface"/>
+      <arg name="gamescope_xwayland_server_id" type="uint" summary="gamescope xwayland server ID"/>
       <arg name="x11_window" type="uint" summary="X11 window ID"/>
     </request>
 

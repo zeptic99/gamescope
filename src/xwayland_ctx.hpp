@@ -166,6 +166,8 @@ struct xwayland_ctx_t
 
 		Atom gamescopeDisplayEdidPath;
 
+		Atom gamescopeXwaylandServerId;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 	} atoms;
