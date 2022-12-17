@@ -29,8 +29,8 @@ namespace GamescopeWSILayer {
     VkInstance instance;
     wl_surface* surface;
 
-    xcb_connection_t* xcb_conn;
-    xcb_window_t window_xid;
+    xcb_connection_t* connection;
+    xcb_window_t window;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
 
@@ -133,7 +133,7 @@ namespace GamescopeWSILayer {
       if (!gamescopeInstance)
         return pDispatch->CreateXcbSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
-      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, pCreateInfo->connection, uint32_t(pCreateInfo->window), pAllocator, pSurface);
+      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, pCreateInfo->connection, pCreateInfo->window, pAllocator, pSurface);
     }
 
     static VkResult CreateXlibSurfaceKHR(
@@ -146,7 +146,7 @@ namespace GamescopeWSILayer {
       if (!gamescopeInstance)
         return pDispatch->CreateXlibSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
 
-      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, XGetXCBConnection(pCreateInfo->dpy), uint32_t(pCreateInfo->window), pAllocator, pSurface);
+      return CreateGamescopeSurface(pDispatch, *gamescopeInstance, instance, XGetXCBConnection(pCreateInfo->dpy), xcb_window_t(pCreateInfo->window), pAllocator, pSurface);
     }
 
     static constexpr std::array<VkSurfaceFormat2KHR, 2> s_ExtraSurfaceFormat2s = {{
@@ -205,7 +205,7 @@ namespace GamescopeWSILayer {
         return res;
 
       VkExtent2D currentExtent = {};
-      if ((res = getCurrentExtent((*gamescopeSurface)->xcb_conn, (*gamescopeSurface)->window_xid, &currentExtent)) != VK_SUCCESS)
+      if ((res = getCurrentExtent((*gamescopeSurface)->connection, (*gamescopeSurface)->window, &currentExtent)) != VK_SUCCESS)
         return res;
 
       pSurfaceCapabilities->currentExtent = currentExtent;
@@ -260,18 +260,18 @@ namespace GamescopeWSILayer {
             GamescopeInstance&           gamescopeInstance,
             VkInstance                   instance,
             xcb_connection_t*            xcb_conn,
-            uint32_t                     window_xid,
+            xcb_window_t                 window,
       const VkAllocationCallbacks*       pAllocator,
             VkSurfaceKHR*                pSurface) {
-      fprintf(stderr, "[Gamescope WSI] Creating Gamescope surface: xid: 0x%x\n", window_xid);
+      fprintf(stderr, "[Gamescope WSI] Creating Gamescope surface: xid: 0x%x\n", window);
 
       wl_surface* waylandSurface = wl_compositor_create_surface(gamescopeInstance->compositor);
       if (!waylandSurface) {
-        fprintf(stderr, "[Gamescope WSI] Failed to create wayland surface - xid: 0x%x\n", window_xid);
+        fprintf(stderr, "[Gamescope WSI] Failed to create wayland surface - xid: 0x%x\n", window);
         return VK_ERROR_SURFACE_LOST_KHR;
       }
 
-      gamescope_xwayland_override_window_content(gamescopeInstance->gamescope, waylandSurface, window_xid);
+      gamescope_xwayland_override_window_content(gamescopeInstance->gamescope, waylandSurface, window);
 
       wl_display_flush(gamescopeInstance->display);
 
@@ -285,16 +285,16 @@ namespace GamescopeWSILayer {
 
       VkResult result = pDispatch->CreateWaylandSurfaceKHR(instance, &waylandCreateInfo, pAllocator, pSurface);
       if (result != VK_SUCCESS) {
-        fprintf(stderr, "[Gamescope WSI] Failed to create Vulkan wayland surface - vr: %d xid: 0x%x\n", result, window_xid);
+        fprintf(stderr, "[Gamescope WSI] Failed to create Vulkan wayland surface - vr: %s xid: 0x%x\n", vkroots::helpers::enumString(result), window);
         return result;
       }
 
-      fprintf(stderr, "[Gamescope WSI] Made gamescope surface for xid: 0x%x\n", window_xid);
+      fprintf(stderr, "[Gamescope WSI] Made gamescope surface for xid: 0x%x\n", window);
       GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
-        .instance = instance,
-        .surface = waylandSurface,
-        .xcb_conn = xcb_conn,
-        .window_xid = xcb_window_t(window_xid),
+        .instance   = instance,
+        .surface    = waylandSurface,
+        .connection = xcb_conn,
+        .window     = window,
       });
 
       return result;
@@ -338,9 +338,9 @@ namespace GamescopeWSILayer {
       return s_isRunningUnderGamescope;
     }
 
-    static VkResult getCurrentExtent(xcb_connection_t* xcb_conn, xcb_window_t window_xid, VkExtent2D *pExtent) {
+    static VkResult getCurrentExtent(xcb_connection_t* xcb_conn, xcb_window_t window, VkExtent2D* pExtent) {
       xcb_generic_error_t *err = nullptr;
-      xcb_get_geometry_cookie_t geom_cookie = xcb_get_geometry(xcb_conn, window_xid);
+      xcb_get_geometry_cookie_t geom_cookie = xcb_get_geometry(xcb_conn, window);
       xcb_get_geometry_reply_t* geom = xcb_get_geometry_reply(xcb_conn, geom_cookie, &err);
       if (!geom) {
         free(err);
@@ -405,12 +405,12 @@ namespace GamescopeWSILayer {
         swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
         fprintf(stderr, "[Gamescope WSI] Creating swapchain for wl_surface for xid: 0x%0x - colorspace: %s\n",
-          (*gamescopeSurface)->window_xid, vkroots::helpers::enumString(pCreateInfo->imageColorSpace));
+          (*gamescopeSurface)->window, vkroots::helpers::enumString(pCreateInfo->imageColorSpace));
       }
 
-      VkResult res = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
+      VkResult result = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
       if (gamescopeSurface) {
-        if (res == VK_SUCCESS) {
+        if (result == VK_SUCCESS) {
           GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
             .surface = pCreateInfo->surface,
           });
@@ -432,10 +432,10 @@ namespace GamescopeWSILayer {
               uint32_t(pCreateInfo->clipped));
           }
         } else {
-          fprintf(stderr, "[Gamescope WSI] Failed to create swapchain - vr: %d xid: 0x%x\n", res, (*gamescopeSurface)->window_xid);
+          fprintf(stderr, "[Gamescope WSI] Failed to create swapchain - vr: %s xid: 0x%x\n", vkroots::helpers::enumString(result), (*gamescopeSurface)->window);
         }
       }
-      return res;
+      return result;
     }
 
     static void SetHdrMetadataEXT(
@@ -444,7 +444,7 @@ namespace GamescopeWSILayer {
             uint32_t                   swapchainCount,
       const VkSwapchainKHR*            pSwapchains,
       const VkHdrMetadataEXT*          pMetadata) {
-      printf("GOT SetHdrMetadataEXT!\n");
+      fprintf(stderr, "[Gamescope WSI] Got SetHdrMetadataEXT!\n");
     }
   };
 
