@@ -75,5 +75,62 @@
       <arg name="vk_present_mode" type="uint" summary="VkPresentModeKHR of swapchain"/>
       <arg name="vk_clipped" type="uint" summary="clipped (VkBool32) of swapchain"/>
     </request>
+
+    <request name="set_hdr_metadata" since="2">
+      <description summary="set HDR metadata for a surface">
+        Forward HDR metadata from Vulkan to the compositor.
+
+        HDR Metadata Infoframe as per CTA 861.G spec.
+        This is expected to match exactly with the spec.
+
+        display_primary_*:
+          Color Primaries of the Data.
+          Specifies X and Y coordinates.
+          These are coded as unsigned 16-bit values in units of
+          0.00002, where 0x0000 represents zero and 0xC350
+          represents 1.0000.
+
+        white_point_*:
+          White Point of Colorspace Data.
+          Specifies X and Y coordinates.
+          These are coded as unsigned 16-bit values in units of
+          0.00002, where 0x0000 represents zero and 0xC350
+          represents 1.0000.
+
+        max_display_mastering_luminance:
+          Max Mastering Display Luminance.
+          This value is coded as an unsigned 16-bit value in units of 1 cd/m2,
+          where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
+
+        max_display_mastering_luminance:
+          Min Mastering Display Luminance.
+          This value is coded as an unsigned 16-bit value in units of
+          0.0001 cd/m2, where 0x0001 represents 0.0001 cd/m2 and 0xFFFF
+          represents 6.5535 cd/m2.
+
+        max_cll:
+          Max Content Light Level.
+          This value is coded as an unsigned 16-bit value in units of 1 cd/m2,
+          where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
+
+        max_fall:
+          Max Frame Average Light Level.
+          This value is coded as an unsigned 16-bit value in units of 1 cd/m2,
+          where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface" summary="Wayland surface"/>
+      <arg name="display_primary_red_x" type="uint" summary="red primary x coordinate"/>
+      <arg name="display_primary_red_y" type="uint" summary="red primary y coordinate"/>
+      <arg name="display_primary_green_x" type="uint" summary="green primary x coordinate"/>
+      <arg name="display_primary_green_y" type="uint" summary="green primary y coordinate"/>
+      <arg name="display_primary_blue_x" type="uint" summary="blue primary x coordinate"/>
+      <arg name="display_primary_blue_y" type="uint" summary="blue primary y coordinate"/>
+      <arg name="white_point_x" type="uint" summary="white point x coordinate"/>
+      <arg name="white_point_y" type="uint" summary="white point y coordinate"/>
+      <arg name="max_display_mastering_luminance" type="uint" summary="max display mastering luminance"/>
+      <arg name="min_display_mastering_luminance" type="uint" summary="min display mastering luminance"/>
+      <arg name="max_cll" type="uint" summary="max content light level"/>
+      <arg name="max_fall" type="uint" summary="max frame average light level"/>
+    </request>
   </interface>
 </protocol>

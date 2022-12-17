@@ -543,6 +543,29 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 	}
 }
 
+static void gamescope_xwayland_handle_set_hdr_metadata( struct wl_client *client, struct wl_resource *resource,
+	struct wl_resource *surface_resource,
+	uint32_t display_primary_red_x,
+	uint32_t display_primary_red_y,
+	uint32_t display_primary_green_x,
+	uint32_t display_primary_green_y,
+	uint32_t display_primary_blue_x,
+	uint32_t display_primary_blue_y,
+	uint32_t white_point_x,
+	uint32_t white_point_y,
+	uint32_t max_display_mastering_luminance,
+	uint32_t min_display_mastering_luminance,
+	uint32_t max_cll,
+	uint32_t max_fall)
+{
+	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
+	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	if ( wl_info )
+	{
+		fprintf(stderr, "GOT HDR METADATA FOR SURFACE!\n");
+	}
+}
+
 static void gamescope_xwayland_handle_destroy( struct wl_client *client, struct wl_resource *resource )
 {
 	wl_resource_destroy( resource );
@@ -552,6 +575,7 @@ static const struct gamescope_xwayland_interface gamescope_xwayland_impl = {
 	.destroy = gamescope_xwayland_handle_destroy,
 	.override_window_content = gamescope_xwayland_handle_override_window_content,
 	.swapchain_feedback = gamescope_xwayland_handle_swapchain_feedback,
+	.set_hdr_metadata = gamescope_xwayland_handle_set_hdr_metadata,
 };
 
 static void gamescope_xwayland_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
