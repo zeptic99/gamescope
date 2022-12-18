@@ -102,7 +102,8 @@ struct VulkanOutput_t
 	uint32_t nOutImage; // swapchain index in nested mode, or ping/pong between two RTs
 	std::vector<std::shared_ptr<CVulkanTexture>> outputImages;
 
-	VkFormat outputFormat;
+	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
+	VkFormat outputFormatHDR = VK_FORMAT_UNDEFINED;
 
 	std::array<std::shared_ptr<CVulkanTexture>, 8> pScreenshotImages;
 
@@ -2810,8 +2811,10 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	pOutput->outputImages[0] = nullptr;
 	pOutput->outputImages[1] = nullptr;
 
+	VkFormat format = g_bOutputHDREnabled ? pOutput->outputFormatHDR : pOutput->outputFormat;
+
 	pOutput->outputImages[0] = std::make_shared<CVulkanTexture>();
-	bool bSuccess = pOutput->outputImages[0]->BInit( g_nOutputWidth, g_nOutputHeight, VulkanFormatToDRM(pOutput->outputFormat), outputImageflags );
+	bool bSuccess = pOutput->outputImages[0]->BInit( g_nOutputWidth, g_nOutputHeight, VulkanFormatToDRM(format), outputImageflags );
 	if ( bSuccess != true )
 	{
 		vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -2819,7 +2822,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	}
 
 	pOutput->outputImages[1] = std::make_shared<CVulkanTexture>();
-	bSuccess = pOutput->outputImages[1]->BInit( g_nOutputWidth, g_nOutputHeight, VulkanFormatToDRM(pOutput->outputFormat), outputImageflags );
+	bSuccess = pOutput->outputImages[1]->BInit( g_nOutputWidth, g_nOutputHeight, VulkanFormatToDRM(format), outputImageflags );
 	if ( bSuccess != true )
 	{
 		vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -2829,7 +2832,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	return true;
 }
 
-bool vulkan_remake_output_images( void )
+bool vulkan_remake_output_images()
 {
 	VulkanOutput_t *pOutput = &g_output;
 	g_device.waitIdle();
@@ -2920,6 +2923,7 @@ bool vulkan_make_output( void )
 	else
 	{
 		pOutput->outputFormat = DRMFormatToVulkan( g_nDRMFormat, false );
+		pOutput->outputFormatHDR = DRMFormatToVulkan( g_nDRMFormatHDR, false );
 		
 		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{
@@ -3336,7 +3340,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 	}
 	else
 	{
-		cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, frameInfo->layerCount, frameInfo->ycbcrMask(), 0u, frameInfo->colorspaceMask()));
+		cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, frameInfo->layerCount, frameInfo->ycbcrMask(), 0u, frameInfo->colorspaceMask(), g_bOutputHDREnabled));
 		bind_all_layers(cmdBuffer.get(), frameInfo);
 		cmdBuffer->bindTarget(compositeImage);
 		cmdBuffer->pushConstants<BlitPushData_t>(frameInfo);

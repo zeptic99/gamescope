@@ -307,6 +307,7 @@ struct global_focus_t : public focus_t
 
 
 uint32_t		currentOutputWidth, currentOutputHeight;
+bool			currentHDROutput = false;
 
 bool hasFocusWindow;
 
@@ -1920,6 +1921,9 @@ paint_all(bool async)
 	bNeedsComposite |= frameInfo.blurLayer0;
 	bNeedsComposite |= bNeedsNearest;
 	bNeedsComposite |= bDrewCursor;
+
+	// For now! We can avoid this in the future in some cases.
+	bNeedsComposite |= g_bOutputHDREnabled;
 
 	if ( !bNeedsComposite )
 	{
@@ -5766,11 +5770,14 @@ steamcompmgr_main(int argc, char **argv)
 			}
 		}
 
+		g_bOutputHDREnabled = (g_bSupportsST2084_CachedValue || g_bForceHDR10SupportDebug) && g_bHDREnabled;
+
 		// Pick our width/height for this potential frame, regardless of how it might change later
 		// At some point we might even add proper locking so we get real updates atomically instead
 		// of whatever jumble of races the below might cause over a couple of frames
 		if ( currentOutputWidth != g_nOutputWidth ||
-			 currentOutputHeight != g_nOutputHeight )
+			 currentOutputHeight != g_nOutputHeight ||
+			 currentHDROutput != g_bOutputHDREnabled )
 		{
 			if ( BIsNested() == true )
 			{
@@ -5795,6 +5802,7 @@ steamcompmgr_main(int argc, char **argv)
 
 			currentOutputWidth = g_nOutputWidth;
 			currentOutputHeight = g_nOutputHeight;
+			currentHDROutput = g_bOutputHDREnabled;
 
 #if HAVE_PIPEWIRE
 			nudge_pipewire();

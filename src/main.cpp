@@ -161,6 +161,7 @@ int g_nNestedUnfocusedRefresh = 0;
 uint32_t g_nOutputWidth = 0;
 uint32_t g_nOutputHeight = 0;
 int g_nOutputRefresh = 0;
+bool g_bOutputHDREnabled = false;
 
 bool g_bFullscreen = false;
 

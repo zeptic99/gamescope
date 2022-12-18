@@ -41,6 +41,7 @@ extern "C" {
 struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
+uint32_t g_nDRMFormatHDR = DRM_FORMAT_INVALID;
 bool g_bRotated = false;
 bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
@@ -124,15 +125,15 @@ static const char *get_enum_name(const drmModePropertyRes *prop, uint64_t value)
 	return nullptr;
 }
 
-static uint32_t pick_plane_format( const struct wlr_drm_format_set *formats )
+static uint32_t pick_plane_format( const struct wlr_drm_format_set *formats, uint32_t Xformat, uint32_t Aformat )
 {
 	uint32_t result = DRM_FORMAT_INVALID;
 	for ( size_t i = 0; i < formats->len; i++ ) {
 		uint32_t fmt = formats->formats[i]->format;
-		if ( fmt == DRM_FORMAT_XRGB8888 ) {
+		if ( fmt == Xformat ) {
 			// Prefer formats without alpha channel for main plane
 			result = fmt;
-		} else if ( result == DRM_FORMAT_INVALID && fmt == DRM_FORMAT_ARGB8888 ) {
+		} else if ( result == DRM_FORMAT_INVALID && fmt == Aformat ) {
 			result = fmt;
 		}
 	}
@@ -938,10 +939,18 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_
 		return false;
 	}
 
-	g_nDRMFormat = pick_plane_format(&drm->primary_formats);
+	g_nDRMFormat = pick_plane_format(&drm->primary_formats, DRM_FORMAT_XRGB8888, DRM_FORMAT_ARGB8888);
 	if ( g_nDRMFormat == DRM_FORMAT_INVALID ) {
 		drm_log.errorf("Primary plane doesn't support XRGB8888 nor ARGB8888");
 		return false;
+	}
+
+	g_nDRMFormatHDR = pick_plane_format(&drm->primary_formats, DRM_FORMAT_XRGB2101010, DRM_FORMAT_ARGB2101010);
+	if ( g_nDRMFormatHDR == DRM_FORMAT_INVALID ) {
+		g_nDRMFormatHDR = pick_plane_format(&drm->primary_formats, DRM_FORMAT_XBGR2101010, DRM_FORMAT_ABGR2101010);
+		if ( g_nDRMFormatHDR == DRM_FORMAT_INVALID ) {
+			drm_log.errorf("Primary plane doesn't support any 10 bit formats. No HDR.");
+		}
 	}
 
 	drm->kms_in_fence_fd = -1;
@@ -2469,6 +2478,9 @@ bool drm_get_vrr_capable(struct drm_t *drm)
 
 bool drm_supports_st2084(struct drm_t *drm)
 {
+	if ( g_nDRMFormatHDR == DRM_FORMAT_INVALID )
+		return false;
+
 	if ( drm->connector )
 		return drm->connector->metadata.supportsST2084;
 

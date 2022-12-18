@@ -17,6 +17,7 @@ extern int g_nNestedUnfocusedRefresh; // Hz
 extern uint32_t g_nOutputWidth;
 extern uint32_t g_nOutputHeight;
 extern int g_nOutputRefresh; // Hz
+extern bool g_bOutputHDREnabled;
 
 extern bool g_bFullscreen;
 
