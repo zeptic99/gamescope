@@ -78,8 +78,9 @@ struct crtc {
 };
 
 struct connector_metadata_t {
-   struct hdr_metadata_infoframe defaultHdrMetadata;
-   bool supportsST2084;
+   struct hdr_output_metadata defaultHdrMetadata = {};
+   uint32_t hdr10_metadata_blob = 0;
+   bool supportsST2084 = false;
 };
 
 struct connector {
@@ -101,6 +102,8 @@ struct connector {
 
 	struct {
 		uint32_t crtc_id;
+		uint32_t colorspace;
+		uint32_t hdr_output_metadata;
 	} current, pending;
 };
 
@@ -201,6 +204,7 @@ struct drm_t {
 	std::unordered_map< std::string, int > connector_priorities;
 
 	bool force_internal = false;
+	bool enable_hdr = false;
 
 	char *device_name = nullptr;
 };
@@ -271,5 +275,35 @@ const char *drm_get_connector_name(struct drm_t *drm);
 const char *drm_get_device_name(struct drm_t *drm);
 
 std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm);
+void drm_set_hdr_state(struct drm_t *drm, bool enabled);
 
 extern bool g_bSupportsAsyncFlips;
+
+/* from CTA-861-G */
+#define HDMI_EOTF_SDR 0
+#define HDMI_EOTF_TRADITIONAL_HDR 1
+#define HDMI_EOTF_ST2084 2
+#define HDMI_EOTF_HLG 3
+
+/* For Default case, driver will set the colorspace */
+#define DRM_MODE_COLORIMETRY_DEFAULT			0
+/* CEA 861 Normal Colorimetry options */
+#define DRM_MODE_COLORIMETRY_NO_DATA			0
+#define DRM_MODE_COLORIMETRY_SMPTE_170M_YCC		1
+#define DRM_MODE_COLORIMETRY_BT709_YCC			2
+/* CEA 861 Extended Colorimetry Options */
+#define DRM_MODE_COLORIMETRY_XVYCC_601			3
+#define DRM_MODE_COLORIMETRY_XVYCC_709			4
+#define DRM_MODE_COLORIMETRY_SYCC_601			5
+#define DRM_MODE_COLORIMETRY_OPYCC_601			6
+#define DRM_MODE_COLORIMETRY_OPRGB			7
+#define DRM_MODE_COLORIMETRY_BT2020_CYCC		8
+#define DRM_MODE_COLORIMETRY_BT2020_RGB			9
+#define DRM_MODE_COLORIMETRY_BT2020_YCC			10
+/* Additional Colorimetry extension added as part of CTA 861.G */
+#define DRM_MODE_COLORIMETRY_DCI_P3_RGB_D65		11
+#define DRM_MODE_COLORIMETRY_DCI_P3_RGB_THEATER		12
+/* Additional Colorimetry Options added for DP 1.4a VSC Colorimetry Format */
+#define DRM_MODE_COLORIMETRY_RGB_WIDE_FIXED		13
+#define DRM_MODE_COLORIMETRY_RGB_WIDE_FLOAT		14
+#define DRM_MODE_COLORIMETRY_BT601_YCC			15

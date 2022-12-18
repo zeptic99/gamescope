@@ -5797,6 +5797,11 @@ steamcompmgr_main(int argc, char **argv)
 					wlserver_unlock();
 				}
 
+				if (g_bOutputHDREnabled != currentHDROutput)
+				{
+					drm_set_hdr_state(&g_DRM, g_bOutputHDREnabled);
+				}
+
 				vulkan_remake_output_images();
 			}
 

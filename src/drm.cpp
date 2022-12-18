@@ -350,29 +350,47 @@ drm_hdr_parse_edid(drm_t *drm, struct connector *connector, drmModePropertyBlobR
 		}
 	}
 
+	struct hdr_metadata_infoframe *infoframe = &metadata->defaultHdrMetadata.hdmi_metadata_type1;
+
 	if (chroma) {
-		metadata->defaultHdrMetadata.display_primaries[0].x = color_xy_to_u16(chroma->red_x);
-		metadata->defaultHdrMetadata.display_primaries[0].y = color_xy_to_u16(chroma->red_y);
-		metadata->defaultHdrMetadata.display_primaries[1].x = color_xy_to_u16(chroma->green_x);
-		metadata->defaultHdrMetadata.display_primaries[1].y = color_xy_to_u16(chroma->green_y);
-		metadata->defaultHdrMetadata.display_primaries[2].x = color_xy_to_u16(chroma->blue_x);
-		metadata->defaultHdrMetadata.display_primaries[2].y = color_xy_to_u16(chroma->blue_y);
-		metadata->defaultHdrMetadata.white_point.x = color_xy_to_u16(chroma->white_x);
-		metadata->defaultHdrMetadata.white_point.y = color_xy_to_u16(chroma->white_y);
+		infoframe->display_primaries[0].x = color_xy_to_u16(chroma->red_x);
+		infoframe->display_primaries[0].y = color_xy_to_u16(chroma->red_y);
+		infoframe->display_primaries[1].x = color_xy_to_u16(chroma->green_x);
+		infoframe->display_primaries[1].y = color_xy_to_u16(chroma->green_y);
+		infoframe->display_primaries[2].x = color_xy_to_u16(chroma->blue_x);
+		infoframe->display_primaries[2].y = color_xy_to_u16(chroma->blue_y);
+		infoframe->white_point.x = color_xy_to_u16(chroma->white_x);
+		infoframe->white_point.y = color_xy_to_u16(chroma->white_y);
 	}
 
 	if (hdr_static_metadata) {
-		metadata->defaultHdrMetadata.max_display_mastering_luminance = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
-		metadata->defaultHdrMetadata.min_display_mastering_luminance = nits_to_u16_dark(hdr_static_metadata->desired_content_min_luminance);
+		infoframe->max_display_mastering_luminance = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
+		infoframe->min_display_mastering_luminance = nits_to_u16_dark(hdr_static_metadata->desired_content_min_luminance);
 		/* To be filled in by the app based on the scene, default to desired_content_max_luminance. */
-		metadata->defaultHdrMetadata.max_cll = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
-		metadata->defaultHdrMetadata.max_fall = nits_to_u16(hdr_static_metadata->desired_content_max_frame_avg_luminance);
+		infoframe->max_cll = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
+		infoframe->max_fall = nits_to_u16(hdr_static_metadata->desired_content_max_frame_avg_luminance);
 	}
 
 	metadata->supportsST2084 =
 		chroma &&
 		colorimetry && colorimetry->bt2020_rgb &&
 		hdr_static_metadata && hdr_static_metadata->eotfs && hdr_static_metadata->eotfs->pq;
+
+	if (metadata->supportsST2084) {
+		metadata->defaultHdrMetadata.metadata_type = 0;
+		infoframe->metadata_type = 0;
+		infoframe->eotf = HDMI_EOTF_ST2084;
+
+		int ret = drmModeCreatePropertyBlob(drm->fd,
+											&metadata->defaultHdrMetadata,
+											sizeof(metadata->defaultHdrMetadata),
+											&metadata->hdr10_metadata_blob);
+
+		if (ret != 0) {
+			fprintf(stderr, "Failed to create blob for HDR_OUTPUT_METADATA. (%s) Falling back to null blob.\n", strerror(-ret));
+			metadata->hdr10_metadata_blob = 0;
+		}
+	}
 
 	di_info_destroy(info);
 }
@@ -486,6 +504,8 @@ static bool refresh_state( drm_t *drm )
 
 			free(conn->name);
 			conn->name = nullptr;
+			drmModeDestroyPropertyBlob(drm->fd, conn->metadata.hdr10_metadata_blob);
+			conn->metadata.hdr10_metadata_blob = 0;
 			drmModeFreeConnector(conn->connector);
 			it = drm->connectors.erase(it);
 		} else {
@@ -498,8 +518,11 @@ static bool refresh_state( drm_t *drm )
 	// Re-probe connectors props and status
 	for (auto &kv : drm->connectors) {
 		struct connector *conn = &kv.second;
-		if (conn->connector != nullptr)
+		if (conn->connector != nullptr) {
+			drmModeDestroyPropertyBlob(drm->fd, conn->metadata.hdr10_metadata_blob);
+			conn->metadata.hdr10_metadata_blob = 0;
 			drmModeFreeConnector(conn->connector);
+		}
 
 		conn->connector = drmModeGetConnector(drm->fd, conn->id);
 		if (conn->connector == nullptr) {
@@ -533,6 +556,8 @@ static bool refresh_state( drm_t *drm )
 			drm_log.errorf_errno("drmModeConnectorGetPossibleCrtcs failed");
 
 		conn->current.crtc_id = conn->initial_prop_values["CRTC_ID"];
+		conn->current.colorspace = conn->initial_prop_values["Colorspace"];
+		conn->current.hdr_output_metadata = conn->initial_prop_values["HDR_OUTPUT_METADATA"];
 
 		conn->target_refresh = 0;
 
@@ -1012,6 +1037,8 @@ void finish_drm(struct drm_t *drm)
 	for ( auto &kv : drm->connectors ) {
 		struct connector *conn = &kv.second;
 		add_connector_property(req, conn, "CRTC_ID", 0);
+		add_connector_property(req, conn, "Colorspace", 0);
+		add_connector_property(req, conn, "HDR_OUTPUT_METADATA", 0);
 	}
 	for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
@@ -1752,6 +1779,14 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 			int ret = add_connector_property( drm->req, conn, "CRTC_ID", 0 );
 			if (ret < 0)
 				return ret;
+
+			ret = add_connector_property( drm->req, conn, "Colorspace", 0 );
+			if (ret < 0)
+				return ret;
+
+			ret = add_connector_property( drm->req, conn, "HDR_OUTPUT_METADATA", 0 );
+			if (ret < 0)
+				return ret;
 		}
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 			struct crtc *crtc = &drm->crtcs[i];
@@ -1802,6 +1837,16 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		// as we zero-ed it above.
 		drm->connector->pending.crtc_id = drm->crtc->id;
 		ret = add_connector_property(drm->req, drm->connector, "CRTC_ID", drm->crtc->id);
+		if (ret < 0)
+			return ret;
+
+		drm->connector->pending.colorspace = g_bOutputHDREnabled ? DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
+		ret = add_connector_property(drm->req, drm->connector, "Colorspace", drm->connector->pending.colorspace);
+		if (ret < 0)
+			return ret;
+
+		drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? drm->connector->metadata.hdr10_metadata_blob : 0;
+		ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
 		if (ret < 0)
 			return ret;
 
@@ -2485,6 +2530,13 @@ bool drm_supports_st2084(struct drm_t *drm)
 		return drm->connector->metadata.supportsST2084;
 
 	return false;
+}
+
+void drm_set_hdr_state(struct drm_t *drm, bool enabled) {
+	if (drm->enable_hdr != enabled) {
+		drm->needs_modeset = true;
+		drm->enable_hdr = enabled;
+	}
 }
 
 const char *drm_get_connector_name(struct drm_t *drm)
