@@ -1845,7 +1845,16 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		if (ret < 0)
 			return ret;
 
-		drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? drm->connector->metadata.hdr10_metadata_blob : 0;
+		uint32_t hdr_output_metadata_blob = 0;
+		if ( g_bOutputHDREnabled ) {
+			hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
+
+			auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
+			if (feedback && feedback->hdr_metadata_blob)
+				hdr_output_metadata_blob = feedback->hdr_metadata_blob;
+		}
+
+		drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? hdr_output_metadata_blob : 0;
 		ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
 		if (ret < 0)
 			return ret;
@@ -2558,4 +2567,21 @@ std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm)
 		return { 0u, 0u };
 
 	return std::make_pair(drm->connector->connector->connector_type, drm->connector->connector->connector_type_id);
+}
+
+uint32_t drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata)
+{
+	uint32_t blob = 0;
+	int ret = drmModeCreatePropertyBlob(drm->fd, metadata, sizeof(*metadata), &blob);
+
+	if (ret != 0) {
+		drm_log.errorf("Failed to create blob for HDR_OUTPUT_METADATA. (%s) Falling back to null blob.", strerror(-ret));
+		blob = 0;
+	}
+
+	return blob;
+}
+void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob)
+{
+	drmModeDestroyPropertyBlob(drm->fd, blob);
 }

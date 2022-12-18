@@ -1478,6 +1478,17 @@ namespace PaintWindowFlag
 }
 using PaintWindowFlags = uint32_t;
 
+wlserver_vk_swapchain_feedback* steamcompmgr_get_base_layer_swapchain_feedback()
+{
+	if ( !g_HeldCommits[ HELD_COMMIT_BASE ] )
+		return nullptr;
+
+	if ( !g_HeldCommits[ HELD_COMMIT_BASE ]->feedback )
+		return nullptr;
+
+	return &(*g_HeldCommits[ HELD_COMMIT_BASE ]->feedback);
+}
+
 static void
 paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 			  MouseCursor *cursor, PaintWindowFlags flags = 0, float flOpacityScale = 1.0f, win *fit = nullptr )

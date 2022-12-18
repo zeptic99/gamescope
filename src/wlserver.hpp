@@ -12,6 +12,8 @@
 #include <optional>
 #include <vulkan/vulkan_core.h>
 
+#include "drm.hpp"
+
 #define WLSERVER_BUTTON_COUNT 4
 
 struct _XDisplay;
@@ -19,6 +21,11 @@ struct xwayland_ctx_t;
 
 struct wlserver_vk_swapchain_feedback
 {
+	~wlserver_vk_swapchain_feedback()
+	{
+		drm_destroy_hdr_metadata_blob( &g_DRM, hdr_metadata_blob );
+	}
+
 	uint32_t image_count;
 	VkFormat vk_format;
 	VkColorSpaceKHR vk_colorspace;
@@ -26,6 +33,7 @@ struct wlserver_vk_swapchain_feedback
 	VkSurfaceTransformFlagBitsKHR vk_pre_transform;
 	VkPresentModeKHR vk_present_mode;
 	VkBool32 vk_clipped;
+	uint32_t hdr_metadata_blob;
 };
 
 struct ResListEntry_t {

@@ -546,6 +546,7 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 			.vk_pre_transform = VkSurfaceTransformFlagBitsKHR(vk_pre_transform),
 			.vk_present_mode = VkPresentModeKHR(vk_present_mode),
 			.vk_clipped = VkBool32(vk_clipped),
+			.hdr_metadata_blob = 0,
 		});
 	}
 }
@@ -567,9 +568,43 @@ static void gamescope_xwayland_handle_set_hdr_metadata( struct wl_client *client
 {
 	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
 	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	if ( BIsNested() )
+	{
+		wl_log.infof("Ignoring HDR metadata when nested.");
+		return;
+	}
+
 	if ( wl_info )
 	{
-		fprintf(stderr, "GOT HDR METADATA FOR SURFACE!\n");
+		if ( !wl_info->swapchain_feedback ) {
+			wl_log.errorf("set_hdr_metadata with no swapchain_feedback.");
+			return;
+		}
+
+		drm_destroy_hdr_metadata_blob( &g_DRM, wl_info->swapchain_feedback->hdr_metadata_blob );
+		wl_info->swapchain_feedback->hdr_metadata_blob = 0;
+
+		hdr_output_metadata metadata = {};
+		metadata.metadata_type = 0;
+
+		hdr_metadata_infoframe& infoframe = metadata.hdmi_metadata_type1;
+		infoframe.eotf = HDMI_EOTF_ST2084;
+		infoframe.metadata_type = 0;
+		infoframe.display_primaries[0].x = display_primary_red_x;
+		infoframe.display_primaries[0].y = display_primary_red_y;
+		infoframe.display_primaries[1].x = display_primary_green_x;
+		infoframe.display_primaries[1].y = display_primary_green_y;
+		infoframe.display_primaries[2].x = display_primary_blue_x;
+		infoframe.display_primaries[2].y = display_primary_blue_y;
+		infoframe.white_point.x = white_point_x;
+		infoframe.white_point.y = white_point_y;
+		infoframe.max_display_mastering_luminance = max_display_mastering_luminance;
+		infoframe.min_display_mastering_luminance = min_display_mastering_luminance;
+		infoframe.max_cll = max_cll;
+		infoframe.max_fall = max_fall;
+
+		wl_info->swapchain_feedback->hdr_metadata_blob =
+			drm_create_hdr_metadata_blob( &g_DRM, &metadata );
 	}
 }
 

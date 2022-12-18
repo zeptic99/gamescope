@@ -6,6 +6,7 @@
 #include <xf86drmMode.h>
 #include <assert.h>
 #include <drm_fourcc.h>
+#include <drm_mode.h>
 #include "color_helpers.h"
 
 // Josh: Okay whatever, this header isn't
@@ -270,6 +271,8 @@ bool drm_get_vrr_capable(struct drm_t *drm);
 bool drm_supports_st2084(struct drm_t *drm);
 void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
+uint32_t drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata);
+void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob);
 
 const char *drm_get_connector_name(struct drm_t *drm);
 const char *drm_get_device_name(struct drm_t *drm);
