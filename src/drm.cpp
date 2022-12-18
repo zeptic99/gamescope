@@ -555,9 +555,14 @@ static bool refresh_state( drm_t *drm )
 		if (!conn->possible_crtcs)
 			drm_log.errorf_errno("drmModeConnectorGetPossibleCrtcs failed");
 
+		conn->has_colorspace = conn->props.find( "Colorspace" ) != conn->props.end();
+		conn->has_hdr_output_metadata = conn->props.find( "HDR_OUTPUT_METADATA" ) != conn->props.end();
+
 		conn->current.crtc_id = conn->initial_prop_values["CRTC_ID"];
-		conn->current.colorspace = conn->initial_prop_values["Colorspace"];
-		conn->current.hdr_output_metadata = conn->initial_prop_values["HDR_OUTPUT_METADATA"];
+		if (conn->has_colorspace)
+			conn->current.colorspace = conn->initial_prop_values["Colorspace"];
+		if (conn->has_hdr_output_metadata)
+			conn->current.hdr_output_metadata = conn->initial_prop_values["HDR_OUTPUT_METADATA"];
 
 		conn->target_refresh = 0;
 
@@ -1037,8 +1042,10 @@ void finish_drm(struct drm_t *drm)
 	for ( auto &kv : drm->connectors ) {
 		struct connector *conn = &kv.second;
 		add_connector_property(req, conn, "CRTC_ID", 0);
-		add_connector_property(req, conn, "Colorspace", 0);
-		add_connector_property(req, conn, "HDR_OUTPUT_METADATA", 0);
+		if (conn->has_colorspace)
+			add_connector_property(req, conn, "Colorspace", 0);
+		if (conn->has_hdr_output_metadata)
+			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", 0);
 	}
 	for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
@@ -1780,13 +1787,17 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 			if (ret < 0)
 				return ret;
 
-			ret = add_connector_property( drm->req, conn, "Colorspace", 0 );
-			if (ret < 0)
-				return ret;
+			if (conn->has_colorspace) {
+				ret = add_connector_property( drm->req, conn, "Colorspace", 0 );
+				if (ret < 0)
+					return ret;
+			}
 
-			ret = add_connector_property( drm->req, conn, "HDR_OUTPUT_METADATA", 0 );
-			if (ret < 0)
-				return ret;
+			if (conn->has_hdr_output_metadata) {
+				ret = add_connector_property( drm->req, conn, "HDR_OUTPUT_METADATA", 0 );
+				if (ret < 0)
+					return ret;
+			}
 		}
 		for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 			struct crtc *crtc = &drm->crtcs[i];
@@ -1840,24 +1851,28 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		if (ret < 0)
 			return ret;
 
-		drm->connector->pending.colorspace = g_bOutputHDREnabled ? DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
-		ret = add_connector_property(drm->req, drm->connector, "Colorspace", drm->connector->pending.colorspace);
-		if (ret < 0)
-			return ret;
-
-		uint32_t hdr_output_metadata_blob = 0;
-		if ( g_bOutputHDREnabled ) {
-			hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
-
-			auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
-			if (feedback && feedback->hdr_metadata_blob)
-				hdr_output_metadata_blob = feedback->hdr_metadata_blob;
+		if (drm->connector->has_colorspace) {
+			drm->connector->pending.colorspace = g_bOutputHDREnabled ? DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
+			ret = add_connector_property(drm->req, drm->connector, "Colorspace", drm->connector->pending.colorspace);
+			if (ret < 0)
+				return ret;
 		}
 
-		drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? hdr_output_metadata_blob : 0;
-		ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
-		if (ret < 0)
-			return ret;
+		if (drm->connector->has_hdr_output_metadata) {
+			uint32_t hdr_output_metadata_blob = 0;
+			if ( g_bOutputHDREnabled ) {
+				hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
+
+				auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
+				if (feedback && feedback->hdr_metadata_blob)
+					hdr_output_metadata_blob = feedback->hdr_metadata_blob;
+			}
+
+			drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? hdr_output_metadata_blob : 0;
+			ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
+			if (ret < 0)
+				return ret;
+		}
 
 		ret = add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id);
 		if (ret < 0)

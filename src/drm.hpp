@@ -106,6 +106,9 @@ struct connector {
 		uint32_t colorspace;
 		uint32_t hdr_output_metadata;
 	} current, pending;
+
+	bool has_colorspace;
+	bool has_hdr_output_metadata;
 };
 
 struct fb {
