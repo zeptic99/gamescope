@@ -83,6 +83,9 @@ const struct option *gamescope_options = (struct option[]){
 	{ "fade-out-duration", required_argument, nullptr, 0 },
 	{ "force-orientation", required_argument, nullptr, 0 },
 
+	{ "hdr-enabled", no_argument, nullptr, 0 },
+	{ "hdr-debug-force-support", no_argument, nullptr, 0 },
+
 	{} // keep last
 };
 
@@ -111,6 +114,8 @@ const char usage[] =
 	"  --xwayland-count               create N xwayland servers\n"
 	"  --prefer-vk-device             prefer Vulkan device for compositing (ex: 1002:7300)\n"
 	"  --force-orientation            rotate the internal display (left, right, normal, upsidedown)\n"
+	"  --hdr-enabled                  enable HDR output (needs Gamescope WSI layer enabled for support from clients)\n"
+	"                                 If this is not set, and there is a HDR client, it will be tonemapped SDR.\n"
 	"\n"
 	"Nested mode options:\n"
 	"  -o, --nested-unfocused-refresh game refresh rate when unfocused\n"
@@ -134,6 +139,7 @@ const char usage[] =
 	"  --force-composition            disable direct scan-out\n"
 	"  --composite-debug              draw frame markers on alternating corners of the screen when compositing\n"
 	"  --disable-xres                 disable XRes for PID lookup\n"
+	"  --hdr-debug-force-support      forces output to HDR10 PQ even if the output does not support it (will look wrong if it doesn't)\n"
 	"\n"
 	"Keyboard shortcuts:\n"
 	"  Super + F                      toggle fullscreen\n"

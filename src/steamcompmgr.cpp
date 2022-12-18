@@ -226,6 +226,9 @@ int g_nAsyncFlipsEnabled = 0;
 int g_nSteamMaxHeight = 0;
 bool g_bVRRCapable_CachedValue = false;
 bool g_bVRRInUse_CachedValue = false;
+bool g_bSupportsST2084_CachedValue = false;
+bool g_bForceHDR10SupportDebug = false;
+bool g_bHDREnabled = false;
 std::pair<uint32_t, uint32_t> g_LastConnectorIdentifier = { 0u, 0u };
 
 struct motif_hints_t
@@ -4401,6 +4404,16 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			hasRepaint = true;
 		}
 	}
+	if ( ev->atom == ctx->atoms.gamescopeDisplayHDREnabled )
+	{
+		g_bHDREnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayHDREnabled, 0 );
+		hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDR10OutputSupport )
+	{
+		g_bForceHDR10SupportDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDR10OutputSupport, 0 );
+		hasRepaint = true;
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -5357,6 +5370,10 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDisplayEdidPath = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_EDID_PATH", false );
 	ctx->atoms.gamescopeXwaylandServerId = XInternAtom( ctx->dpy, "GAMESCOPE_XWAYLAND_SERVER_ID", false );
 
+	ctx->atoms.gamescopeDisplaySupportsHDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_SUPPORTS_HDR", false );
+	ctx->atoms.gamescopeDisplayHDREnabled = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_ENABLED", false );
+	ctx->atoms.gamescopeDebugForceHDR10OutputSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_OUTPUT_SUPPORT", false );
+
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
 
@@ -5411,6 +5428,15 @@ void update_vrr_atoms(xwayland_ctx_t *root_ctx, bool force)
 		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeVRRCapable, XA_CARDINAL, 32, PropModeReplace,
 			(unsigned char *)&capable_value, 1 );
 		g_bVRRCapable_CachedValue = capable;
+	}
+
+	bool st2084 = drm_supports_st2084( &g_DRM );
+	if ( st2084 != g_bSupportsST2084_CachedValue || force )
+	{
+		uint32_t hdr_value = st2084 ? 1 : 0;
+		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplaySupportsHDR, XA_CARDINAL, 32, PropModeReplace,
+			(unsigned char *)&hdr_value, 1 );
+		g_bSupportsST2084_CachedValue = capable;
 	}
 
 	bool in_use = drm_get_vrr_in_use( &g_DRM );
@@ -5525,6 +5551,10 @@ steamcompmgr_main(int argc, char **argv)
 					sscanf(optarg, "%d,%d", &g_customCursorHotspotX, &g_customCursorHotspotY);
 				} else if (strcmp(opt_name, "fade-out-duration") == 0) {
 					g_FadeOutDuration = atoi(optarg);
+				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
+					g_bHDREnabled = true;
+				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {
+					g_bForceHDR10SupportDebug = true;
 				}
 				break;
 			case '?':

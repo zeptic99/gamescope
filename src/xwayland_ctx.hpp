@@ -168,6 +168,10 @@ struct xwayland_ctx_t
 
 		Atom gamescopeXwaylandServerId;
 
+		Atom gamescopeDisplaySupportsHDR;
+		Atom gamescopeDisplayHDREnabled;
+		Atom gamescopeDebugForceHDR10OutputSupport;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 	} atoms;
