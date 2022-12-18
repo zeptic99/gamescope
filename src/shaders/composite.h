@@ -59,12 +59,14 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
         color.rgb = srgbToLinear(color.rgb);
         if (c_st2084Output) {
             color.rgb = linearToNits(color.rgb);
-            color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+            if (!c_forceWideGammut)
+                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_linear) {
         if (c_st2084Output) {
             color.rgb = linearToNits(color.rgb);
-            color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+            if (!c_forceWideGammut)
+                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
         }
     }
     return color;

@@ -229,6 +229,7 @@ bool g_bVRRInUse_CachedValue = false;
 bool g_bSupportsST2084_CachedValue = false;
 bool g_bForceHDR10SupportDebug = false;
 bool g_bHDREnabled = false;
+bool g_bHDRForceWideGammutForSDR = false;
 std::pair<uint32_t, uint32_t> g_LastConnectorIdentifier = { 0u, 0u };
 
 struct motif_hints_t
@@ -4424,6 +4425,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_bHDREnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayHDREnabled, 0 );
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR )
+	{
+		g_bHDRForceWideGammutForSDR = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR, 0 );
+		hasRepaint = true;
+	}
 	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDR10OutputSupport )
 	{
 		g_bForceHDR10SupportDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDR10OutputSupport, 0 );
@@ -5387,6 +5393,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 	ctx->atoms.gamescopeDisplaySupportsHDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_SUPPORTS_HDR", false );
 	ctx->atoms.gamescopeDisplayHDREnabled = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_ENABLED", false );
+	ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_FORCE_WIDE_GAMMUT_FOR_SDR", false );
 	ctx->atoms.gamescopeDebugForceHDR10OutputSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_OUTPUT_SUPPORT", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
@@ -5570,6 +5577,8 @@ steamcompmgr_main(int argc, char **argv)
 					g_bHDREnabled = true;
 				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {
 					g_bForceHDR10SupportDebug = true;
+				} else if (strcmp(opt_name, "hdr-wide-gammut-for-sdr") == 0) {
+					g_bHDRForceWideGammutForSDR = true;
 				}
 				break;
 			case '?':

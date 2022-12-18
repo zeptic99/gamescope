@@ -170,6 +170,7 @@ struct xwayland_ctx_t
 
 		Atom gamescopeDisplaySupportsHDR;
 		Atom gamescopeDisplayHDREnabled;
+		Atom gamescopeDisplayHDRForceWideGammutForSDR;
 		Atom gamescopeDebugForceHDR10OutputSupport;
 
 		Atom wineHwndStyle;
