@@ -32,6 +32,12 @@ extern "C" {
 #include <thread>
 #include <unordered_set>
 
+extern "C" {
+#include "libdisplay-info/info.h"
+#include "libdisplay-info/edid.h"
+#include "libdisplay-info/cta.h"
+}
+
 struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
@@ -309,6 +315,67 @@ static bool compare_modes( drmModeModeInfo mode1, drmModeModeInfo mode2 )
 	return mode1.vrefresh > mode2.vrefresh;
 }
 
+static void
+drm_hdr_parse_edid(drm_t *drm, struct connector *connector, drmModePropertyBlobRes *blob)
+{
+	struct connector_metadata_t *metadata = &connector->metadata;
+	struct di_info* info = di_info_parse_edid(blob->data, blob->length);
+
+	if (!info) {
+		fprintf(stderr, "drm_hdr_parse_edid: Failed to parse edid.\n");
+		return;
+	}
+
+	const struct di_edid* edid = di_info_get_edid(info);
+
+	const struct di_edid_chromaticity_coords* chroma = di_edid_get_chromaticity_coords(edid);
+	const struct di_cta_hdr_static_metadata_block* hdr_static_metadata = NULL;
+	const struct di_cta_colorimetry_block* colorimetry = NULL;
+
+	const struct di_edid_cta* cta = NULL;
+	const struct di_edid_ext* const* exts = di_edid_get_extensions(edid);
+	for (; *exts != NULL; exts++) {
+		if ((cta = di_edid_ext_get_cta(*exts)))
+			break;
+	}
+
+	if (cta) {
+		const struct di_cta_data_block* const* blocks = di_edid_cta_get_data_blocks(cta);
+		for (; *blocks != NULL; blocks++) {
+			if (!hdr_static_metadata && (hdr_static_metadata = di_cta_data_block_get_hdr_static_metadata(*blocks)))
+				continue;
+			if (!colorimetry && (colorimetry = di_cta_data_block_get_colorimetry(*blocks)))
+				continue;
+		}
+	}
+
+	if (chroma) {
+		metadata->defaultHdrMetadata.display_primaries[0].x = color_xy_to_u16(chroma->red_x);
+		metadata->defaultHdrMetadata.display_primaries[0].y = color_xy_to_u16(chroma->red_y);
+		metadata->defaultHdrMetadata.display_primaries[1].x = color_xy_to_u16(chroma->green_x);
+		metadata->defaultHdrMetadata.display_primaries[1].y = color_xy_to_u16(chroma->green_y);
+		metadata->defaultHdrMetadata.display_primaries[2].x = color_xy_to_u16(chroma->blue_x);
+		metadata->defaultHdrMetadata.display_primaries[2].y = color_xy_to_u16(chroma->blue_y);
+		metadata->defaultHdrMetadata.white_point.x = color_xy_to_u16(chroma->white_x);
+		metadata->defaultHdrMetadata.white_point.y = color_xy_to_u16(chroma->white_y);
+	}
+
+	if (hdr_static_metadata) {
+		metadata->defaultHdrMetadata.max_display_mastering_luminance = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
+		metadata->defaultHdrMetadata.min_display_mastering_luminance = nits_to_u16_dark(hdr_static_metadata->desired_content_min_luminance);
+		/* To be filled in by the app based on the scene, default to desired_content_max_luminance. */
+		metadata->defaultHdrMetadata.max_cll = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
+		metadata->defaultHdrMetadata.max_fall = nits_to_u16(hdr_static_metadata->desired_content_max_frame_avg_luminance);
+	}
+
+	metadata->supportsST2084 =
+		chroma &&
+		colorimetry && colorimetry->bt2020_rgb &&
+		hdr_static_metadata && hdr_static_metadata->eotfs && hdr_static_metadata->eotfs->pq;
+
+	di_info_destroy(info);
+}
+
 static void parse_edid( drm_t *drm, struct connector *conn)
 {
 	memset(conn->make_pnp, 0, sizeof(conn->make_pnp));
@@ -371,6 +438,8 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 			conn->model = strdup(model);
 		}
 	}
+
+	drm_hdr_parse_edid(drm, conn, blob);
 
 	drmModeFreePropertyBlob(blob);
 }
@@ -2394,6 +2463,14 @@ bool drm_get_vrr_capable(struct drm_t *drm)
 {
 	if ( drm->connector )
 		return drm->connector->vrr_capable;
+
+	return false;
+}
+
+bool drm_supports_st2084(struct drm_t *drm)
+{
+	if ( drm->connector )
+		return drm->connector->metadata.supportsST2084;
 
 	return false;
 }

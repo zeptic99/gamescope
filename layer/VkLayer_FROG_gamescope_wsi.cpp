@@ -4,7 +4,7 @@
 #include "vkroots.h"
 #include <X11/Xlib-xcb.h>
 #include "gamescope-xwayland-client-protocol.h"
-#include "color_helpers.h"
+#include "../src/color_helpers.h"
 
 #include <cstdio>
 #include <vector>

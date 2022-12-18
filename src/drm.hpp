@@ -6,6 +6,7 @@
 #include <xf86drmMode.h>
 #include <assert.h>
 #include <drm_fourcc.h>
+#include "color_helpers.h"
 
 // Josh: Okay whatever, this header isn't
 // available for whatever stupid reason. :v
@@ -76,6 +77,11 @@ struct crtc {
 	} current, pending;
 };
 
+struct connector_metadata_t {
+   struct hdr_metadata_infoframe defaultHdrMetadata;
+   bool supportsST2084;
+};
+
 struct connector {
 	uint32_t id;
 	char *name;
@@ -90,6 +96,8 @@ struct connector {
 
 	int target_refresh;
 	bool vrr_capable;
+
+	connector_metadata_t metadata;
 
 	struct {
 		uint32_t crtc_id;
@@ -254,6 +262,7 @@ drm_screen_type drm_get_screen_type(struct drm_t *drm);
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);
 bool drm_get_vrr_capable(struct drm_t *drm);
+bool drm_supports_st2084(struct drm_t *drm);
 void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
 
