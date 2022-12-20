@@ -5395,6 +5395,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDisplayHDREnabled = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_ENABLED", false );
 	ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_FORCE_WIDE_GAMMUT_FOR_SDR", false );
 	ctx->atoms.gamescopeDebugForceHDR10OutputSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_OUTPUT_SUPPORT", false );
+	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
@@ -5823,6 +5824,17 @@ steamcompmgr_main(int argc, char **argv)
 				}
 
 				vulkan_remake_output_images();
+			}
+
+
+			{
+				gamescope_xwayland_server_t *server = NULL;
+				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
+				{
+					uint32_t hdr_value = g_bOutputHDREnabled ? 1 : 0;
+					XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeHDROutputFeedback, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)&hdr_value, 1 );
+				}
 			}
 
 			currentOutputWidth = g_nOutputWidth;
