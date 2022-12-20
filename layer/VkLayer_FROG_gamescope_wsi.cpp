@@ -5,6 +5,7 @@
 #include <X11/Xlib-xcb.h>
 #include "gamescope-xwayland-client-protocol.h"
 #include "../src/color_helpers.h"
+#include "../src/layer_defines.h"
 
 #include <cstdio>
 #include <vector>
@@ -34,6 +35,13 @@ namespace GamescopeWSILayer {
 
     xcb_connection_t* connection;
     xcb_window_t window;
+    GamescopeLayerClient::Flags flags;
+    bool hdrOutput;
+
+    bool shouldExposeHDR() const {
+      const bool hdrAllowed = !(flags & GamescopeLayerClient::Flag::DisableHDR);
+      return hdrOutput && hdrAllowed;
+    }
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
 
@@ -152,16 +160,16 @@ namespace GamescopeWSILayer {
       return CreateGamescopeSurface(pDispatch, gamescopeInstance, instance, XGetXCBConnection(pCreateInfo->dpy), xcb_window_t(pCreateInfo->window), pAllocator, pSurface);
     }
 
-    static constexpr std::array<VkSurfaceFormat2KHR, 3> s_ExtraSurfaceFormat2s = {{
+    static constexpr std::array<VkSurfaceFormat2KHR, 3> s_ExtraHDRSurfaceFormat2s = {{
       { .surfaceFormat = { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, } },
       { .surfaceFormat = { VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, } },
       { .surfaceFormat = { VK_FORMAT_R16G16B16A16_SFLOAT,      VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT, } },
     }};
 
-    static constexpr auto s_ExtraSurfaceFormats = []() {
-      std::array<VkSurfaceFormatKHR, s_ExtraSurfaceFormat2s.size()> array;
-      for (size_t i = 0; i < s_ExtraSurfaceFormat2s.size(); i++)
-        array[i] = s_ExtraSurfaceFormat2s[i].surfaceFormat;
+    static constexpr auto s_ExtraHDRSurfaceFormats = []() {
+      std::array<VkSurfaceFormatKHR, s_ExtraHDRSurfaceFormat2s.size()> array;
+      for (size_t i = 0; i < s_ExtraHDRSurfaceFormat2s.size(); i++)
+        array[i] = s_ExtraHDRSurfaceFormat2s[i].surfaceFormat;
       return array;
     }();
 
@@ -171,9 +179,13 @@ namespace GamescopeWSILayer {
             VkSurfaceKHR                 surface,
             uint32_t*                    pSurfaceFormatCount,
             VkSurfaceFormatKHR*          pSurfaceFormats) {
+      auto gamescopeSurface = GamescopeSurface::get(surface);
+      if (!gamescopeSurface || !gamescopeSurface->shouldExposeHDR())
+        return pDispatch->GetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, pSurfaceFormatCount, pSurfaceFormats);
+      
       return vkroots::helpers::append(
         pDispatch->GetPhysicalDeviceSurfaceFormatsKHR,
-        s_ExtraSurfaceFormats,
+        s_ExtraHDRSurfaceFormats,
         pSurfaceFormatCount,
         pSurfaceFormats,
         physicalDevice,
@@ -186,9 +198,13 @@ namespace GamescopeWSILayer {
       const VkPhysicalDeviceSurfaceInfo2KHR* pSurfaceInfo,
             uint32_t*                        pSurfaceFormatCount,
             VkSurfaceFormat2KHR*             pSurfaceFormats) {
+      auto gamescopeSurface = GamescopeSurface::get(pSurfaceInfo->surface);
+      if (!gamescopeSurface || !gamescopeSurface->shouldExposeHDR())
+        return pDispatch->GetPhysicalDeviceSurfaceFormats2KHR(physicalDevice, pSurfaceInfo, pSurfaceFormatCount, pSurfaceFormats);
+
       return vkroots::helpers::append(
         pDispatch->GetPhysicalDeviceSurfaceFormats2KHR,
-        s_ExtraSurfaceFormat2s,
+        s_ExtraHDRSurfaceFormat2s,
         pSurfaceFormatCount,
         pSurfaceFormats,
         physicalDevice,
@@ -275,6 +291,14 @@ namespace GamescopeWSILayer {
         return VK_ERROR_SURFACE_LOST_KHR;
       }
 
+      GamescopeLayerClient::Flags flags = 0u;
+      if (auto prop = getPropertyValue<GamescopeLayerClient::Flags>(connection, "GAMESCOPE_LAYER_CLIENT_FLAGS"sv))
+        flags = *prop;
+
+      bool hdrOutput = false;
+      if (auto prop = getPropertyValue<uint32_t>(connection, "GAMESCOPE_HDR_OUTPUT_FEEDBACK"sv))
+        hdrOutput = !!*prop;
+
       auto serverId = getPropertyValue<uint32_t>(connection, "GAMESCOPE_XWAYLAND_SERVER_ID"sv);
       if (!serverId) {
         fprintf(stderr, "[Gamescope WSI] Failed to get Xwayland server id. Failing surface creation.\n");
@@ -304,6 +328,8 @@ namespace GamescopeWSILayer {
         .surface    = waylandSurface,
         .connection = connection,
         .window     = window,
+        .flags      = flags,
+        .hdrOutput  = hdrOutput,
       });
 
       return result;
