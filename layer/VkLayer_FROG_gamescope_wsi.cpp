@@ -152,9 +152,10 @@ namespace GamescopeWSILayer {
       return CreateGamescopeSurface(pDispatch, gamescopeInstance, instance, XGetXCBConnection(pCreateInfo->dpy), xcb_window_t(pCreateInfo->window), pAllocator, pSurface);
     }
 
-    static constexpr std::array<VkSurfaceFormat2KHR, 2> s_ExtraSurfaceFormat2s = {{
+    static constexpr std::array<VkSurfaceFormat2KHR, 3> s_ExtraSurfaceFormat2s = {{
       { .surfaceFormat = { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, } },
       { .surfaceFormat = { VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT, } },
+      { .surfaceFormat = { VK_FORMAT_R16G16B16A16_SFLOAT,      VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT, } },
     }};
 
     static constexpr auto s_ExtraSurfaceFormats = []() {
