@@ -1921,8 +1921,7 @@ paint_all(bool async)
 			pCaptureTexture = pw_buffer->texture;
 		}
 #endif
-		// hack: forced to nv12 rn
-		bool bHackForceNV12DumpScreenshot = true;
+		constexpr bool bHackForceNV12DumpScreenshot = false;
 
 		uint32_t drmCaptureFormat = bHackForceNV12DumpScreenshot
 			? DRM_FORMAT_NV12
