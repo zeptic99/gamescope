@@ -2,7 +2,7 @@
 
 layout(constant_id = 0) const int  c_layerCount   = 1;
 layout(constant_id = 1) const uint c_ycbcrMask    = 0;
-layout(constant_id = 2) const bool c_compositing_debug = false;
+layout(constant_id = 2) const uint c_compositing_debug = 0;
 layout(constant_id = 3) const int  c_blur_layer_count = 0;
 
 layout(constant_id = 4) const uint c_colorspaceMask = 0;
@@ -15,6 +15,13 @@ const int colorspace_scRGB = 2;
 const int colorspace_pq = 3;
 const int colorspace_reserved = 3;
 const int colorspace_max_bits = 2;
+
+const uint compositedebug_Markers = 1u << 0;
+const uint compositedebug_PlaneBorders = 1u << 1;
+
+bool checkDebugFlag(uint flag) {
+    return (c_compositing_debug & flag) != 0;
+}
 
 uint get_layer_colorspace(uint layerIdx) {
     return bitfieldExtract(c_colorspaceMask, int(layerIdx) * colorspace_max_bits, colorspace_max_bits);

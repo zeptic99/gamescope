@@ -302,7 +302,13 @@ struct FrameInfo_t
 	}
 };
 
-extern bool g_bIsCompositeDebug;
+extern uint32_t g_uCompositeDebug;
+
+namespace CompositeDebugFlag
+{
+	static constexpr uint32_t Markers = 1u << 0;
+	static constexpr uint32_t PlaneBorders = 1u << 1;
+};
 
 bool vulkan_init(void);
 bool vulkan_init_formats(void);

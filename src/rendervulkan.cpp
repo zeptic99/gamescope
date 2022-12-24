@@ -86,7 +86,7 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(
 }
 
 
-bool g_bIsCompositeDebug = false;
+uint32_t g_uCompositeDebug = 0u;
 
 struct VulkanOutput_t
 {
@@ -169,7 +169,7 @@ struct PipelineInfo_t
 	uint32_t ycbcrMask;
 	uint32_t blurLayerCount;
 
-	bool compositeDebug;
+	uint32_t compositeDebug;
 
 	uint32_t colorspaceMask;
 	bool st2084Output;
@@ -535,7 +535,7 @@ private:
 	bool createPools();
 	bool createShaders();
 	bool createScratchResources();
-	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug, uint32_t colorspace_mask, bool st2084_output, bool force_wide_gammut);
+	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, uint32_t composite_debug, uint32_t colorspace_mask, bool st2084_output, bool force_wide_gammut);
 	void compileAllPipelines();
 	void resetCmdBuffers(uint64_t sequence);
 
@@ -1245,7 +1245,7 @@ VkSampler CVulkanDevice::sampler( SamplerState key )
 	return ret;
 }
 
-VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, bool composite_debug, uint32_t colorspace_mask, bool st2084_output, bool force_wide_gammut)
+VkPipeline CVulkanDevice::compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, uint32_t composite_debug, uint32_t colorspace_mask, bool st2084_output, bool force_wide_gammut)
 {
 	const std::array<VkSpecializationMapEntry, 7> specializationEntries = {{
 		{
@@ -1377,11 +1377,11 @@ void CVulkanDevice::compileAllPipelines()
 VkPipeline CVulkanDevice::pipeline(ShaderType type, uint32_t layerCount, uint32_t ycbcrMask, uint32_t blur_layers, uint32_t colorspace_mask, bool st2084_output, bool force_wide_gammut)
 {
 	std::lock_guard<std::mutex> lock(m_pipelineMutex);
-	PipelineInfo_t key = {type, layerCount, ycbcrMask, blur_layers, g_bIsCompositeDebug, colorspace_mask, st2084_output, force_wide_gammut};
+	PipelineInfo_t key = {type, layerCount, ycbcrMask, blur_layers, g_uCompositeDebug, colorspace_mask, st2084_output, force_wide_gammut};
 	auto search = m_pipelineMap.find(key);
 	if (search == m_pipelineMap.end())
 	{
-		VkPipeline result = compilePipeline(layerCount, ycbcrMask, type, blur_layers, g_bIsCompositeDebug, colorspace_mask, st2084_output, force_wide_gammut);
+		VkPipeline result = compilePipeline(layerCount, ycbcrMask, type, blur_layers, g_uCompositeDebug, colorspace_mask, st2084_output, force_wide_gammut);
 		m_pipelineMap[key] = result;
 		return result;
 	}

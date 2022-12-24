@@ -36,7 +36,7 @@ void main() {
     vec2 uv = vec2(coord);
     vec3 outputValue = vec3(0.0f);
 
-    if (c_compositing_debug)
+    if (checkDebugFlag(compositedebug_PlaneBorders))
         outputValue = vec3(1.0f, 0.0f, 0.0f);
 
     if (c_layerCount > 0)
@@ -58,6 +58,6 @@ void main() {
     imageStore(dst, ivec2(coord), vec4(outputValue, 0));
 
     // Indicator to quickly tell if we're in the compositing path or not.
-    if (c_compositing_debug)
+    if (checkDebugFlag(compositedebug_Markers))
         compositing_debug(coord);
 }

@@ -398,7 +398,8 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "xwayland-count") == 0) {
 					g_nXWaylandCount = atoi( optarg );
 				} else if (strcmp(opt_name, "composite-debug") == 0) {
-					g_bIsCompositeDebug = true;
+					g_uCompositeDebug |= CompositeDebugFlag::Markers;
+					g_uCompositeDebug |= CompositeDebugFlag::PlaneBorders;
 				} else if (strcmp(opt_name, "default-touch-mode") == 0) {
 					g_nDefaultTouchClickMode = (enum wlserver_touch_click_mode) atoi( optarg );
 					g_nTouchClickMode = g_nDefaultTouchClickMode;

@@ -4369,7 +4369,8 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeCompositeDebug )
 	{
-		g_bIsCompositeDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
+		g_uCompositeDebug = get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
+
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeAllowTearing )
