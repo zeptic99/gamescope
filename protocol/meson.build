@@ -37,5 +37,3 @@ foreach name : protocols
 	protocols_server_src += [code, server_header]
 	protocols_client_src += [code, client_header]
 endforeach
-
-src += protocols_server_src
