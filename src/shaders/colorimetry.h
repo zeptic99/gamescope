@@ -63,6 +63,7 @@ vec3 pqToNits(vec3 pq) {
 
 // pq -> nits -> linear (nits / 80)
 const float c_nitsToLinearLightScale = 80.0f;
+const float c_scRGBLightScale = 80.0f;
 vec3 nitsToLinear(vec3 nits) {
     // This is typical, but we might want to make this customizable.
     return nits / c_nitsToLinearLightScale;
@@ -121,3 +122,5 @@ const PrimaryInfo rec2020_primaries = {
 vec3 convert_primaries(vec3 color, mat3 src_to_xyz, mat3 xyz_to_dst) {
     return color * mat3(src_to_xyz * xyz_to_dst);
 }
+
+#include "heatmap.h"

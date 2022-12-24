@@ -18,6 +18,7 @@ const int colorspace_max_bits = 2;
 
 const uint compositedebug_Markers = 1u << 0;
 const uint compositedebug_PlaneBorders = 1u << 1;
+const uint compositedebug_Heatmap = 1u << 2;
 
 bool checkDebugFlag(uint flag) {
     return (c_compositing_debug & flag) != 0;

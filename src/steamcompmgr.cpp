@@ -227,7 +227,8 @@ int g_nSteamMaxHeight = 0;
 bool g_bVRRCapable_CachedValue = false;
 bool g_bVRRInUse_CachedValue = false;
 bool g_bSupportsST2084_CachedValue = false;
-bool g_bForceHDR10SupportDebug = false;
+bool g_bForceHDR10OutputDebug = false;
+bool g_bForceHDRSupportDebug = false;
 bool g_bHDREnabled = false;
 bool g_bHDRForceWideGammutForSDR = false;
 std::pair<uint32_t, uint32_t> g_LastConnectorIdentifier = { 0u, 0u };
@@ -309,6 +310,7 @@ struct global_focus_t : public focus_t
 
 uint32_t		currentOutputWidth, currentOutputHeight;
 bool			currentHDROutput = false;
+bool			currentHDRForce = false;
 
 bool hasFocusWindow;
 
@@ -4431,9 +4433,14 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_bHDRForceWideGammutForSDR = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR, 0 );
 		hasRepaint = true;
 	}
-	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDR10OutputSupport )
+	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDR10Output )
 	{
-		g_bForceHDR10SupportDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDR10OutputSupport, 0 );
+		g_bForceHDR10OutputDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDR10Output, 0 );
+		hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDRSupport )
+	{
+		g_bForceHDRSupportDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDRSupport, 0 );
 		hasRepaint = true;
 	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
@@ -5395,7 +5402,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDisplaySupportsHDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_SUPPORTS_HDR", false );
 	ctx->atoms.gamescopeDisplayHDREnabled = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_ENABLED", false );
 	ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_FORCE_WIDE_GAMMUT_FOR_SDR", false );
-	ctx->atoms.gamescopeDebugForceHDR10OutputSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_OUTPUT_SUPPORT", false );
+	ctx->atoms.gamescopeDebugForceHDR10Output = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_PQ_OUTPUT", false );
+	ctx->atoms.gamescopeDebugForceHDRSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR_SUPPORT", false );
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
@@ -5578,7 +5586,9 @@ steamcompmgr_main(int argc, char **argv)
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
 					g_bHDREnabled = true;
 				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {
-					g_bForceHDR10SupportDebug = true;
+					g_bForceHDRSupportDebug = true;
+ 				} else if (strcmp(opt_name, "hdr-debug-force-output") == 0) {
+					g_bForceHDR10OutputDebug = true;
 				} else if (strcmp(opt_name, "hdr-wide-gammut-for-sdr") == 0) {
 					g_bHDRForceWideGammutForSDR = true;
 				}
@@ -5792,14 +5802,15 @@ steamcompmgr_main(int argc, char **argv)
 			}
 		}
 
-		g_bOutputHDREnabled = (g_bSupportsST2084_CachedValue || g_bForceHDR10SupportDebug) && g_bHDREnabled;
+		g_bOutputHDREnabled = (g_bSupportsST2084_CachedValue || g_bForceHDR10OutputDebug) && g_bHDREnabled;
 
 		// Pick our width/height for this potential frame, regardless of how it might change later
 		// At some point we might even add proper locking so we get real updates atomically instead
 		// of whatever jumble of races the below might cause over a couple of frames
 		if ( currentOutputWidth != g_nOutputWidth ||
 			 currentOutputHeight != g_nOutputHeight ||
-			 currentHDROutput != g_bOutputHDREnabled )
+			 currentHDROutput != g_bOutputHDREnabled ||
+			 currentHDRForce != g_bForceHDRSupportDebug )
 		{
 			if ( BIsNested() == true )
 			{
@@ -5832,7 +5843,7 @@ steamcompmgr_main(int argc, char **argv)
 				gamescope_xwayland_server_t *server = NULL;
 				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 				{
-					uint32_t hdr_value = g_bOutputHDREnabled ? 1 : 0;
+					uint32_t hdr_value = ( g_bOutputHDREnabled || g_bForceHDRSupportDebug ) ? 1 : 0;
 					XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeHDROutputFeedback, XA_CARDINAL, 32, PropModeReplace,
 						(unsigned char *)&hdr_value, 1 );
 				}
@@ -5841,6 +5852,7 @@ steamcompmgr_main(int argc, char **argv)
 			currentOutputWidth = g_nOutputWidth;
 			currentOutputHeight = g_nOutputHeight;
 			currentHDROutput = g_bOutputHDREnabled;
+			currentHDRForce = g_bForceHDRSupportDebug;
 
 #if HAVE_PIPEWIRE
 			nudge_pipewire();

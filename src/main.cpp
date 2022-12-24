@@ -84,8 +84,10 @@ const struct option *gamescope_options = (struct option[]){
 	{ "force-orientation", required_argument, nullptr, 0 },
 
 	{ "hdr-enabled", no_argument, nullptr, 0 },
-	{ "hdr-debug-force-support", no_argument, nullptr, 0 },
 	{ "hdr-wide-gammut-for-sdr", no_argument, nullptr, 0 },
+	{ "hdr-debug-force-support", no_argument, nullptr, 0 },
+	{ "hdr-debug-force-output", no_argument, nullptr, 0 },
+	{ "hdr-debug-heatmap", no_argument, nullptr, 0 },
 
 	{} // keep last
 };
@@ -141,7 +143,8 @@ const char usage[] =
 	"  --force-composition            disable direct scan-out\n"
 	"  --composite-debug              draw frame markers on alternating corners of the screen when compositing\n"
 	"  --disable-xres                 disable XRes for PID lookup\n"
-	"  --hdr-debug-force-support      forces output to HDR10 PQ even if the output does not support it (will look wrong if it doesn't)\n"
+	"  --hdr-debug-force-support      forces support for HDR, etc even if the display doesn't support it. HDR clients will be outputted as SDR still in that case.\n"
+	"  --hdr-debug-force-output       forces support and output to HDR10 PQ even if the output does not support it (will look very wrong if it doesn't)\n"
 	"\n"
 	"Keyboard shortcuts:\n"
 	"  Super + F                      toggle fullscreen\n"
@@ -400,6 +403,8 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "composite-debug") == 0) {
 					g_uCompositeDebug |= CompositeDebugFlag::Markers;
 					g_uCompositeDebug |= CompositeDebugFlag::PlaneBorders;
+				} else if (strcmp(opt_name, "hdr-debug-heatmap") == 0) {
+					g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
 				} else if (strcmp(opt_name, "default-touch-mode") == 0) {
 					g_nDefaultTouchClickMode = (enum wlserver_touch_click_mode) atoi( optarg );
 					g_nTouchClickMode = g_nDefaultTouchClickMode;
