@@ -8,7 +8,12 @@ gamescope_wsi_layer = shared_library('VkLayer_FROG_gamescope_wsi', 'VkLayer_FROG
   override_options : [ 'cpp_std=c++20' ],
   install          : true )
 
-install_data(
-  files('VkLayer_FROG_gamescope_wsi.json'),
-  install_dir : join_paths(get_option('datadir'), 'vulkan', 'implicit_layer.d'),
+out_lib_dir = join_paths(prefix, lib_dir)
+
+configure_file(
+    input         : 'VkLayer_FROG_gamescope_wsi.json.in',
+    output        : 'VkLayer_FROG_gamescope_wsi.' + build_machine.cpu_family() + '.json',
+    configuration : {'family' : build_machine.cpu_family(), 'lib_dir' : out_lib_dir },
+    install       : true,
+    install_dir   : join_paths(data_dir, 'vulkan', 'implicit_layer.d'),
 )

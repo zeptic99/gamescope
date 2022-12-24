@@ -16,6 +16,10 @@ add_project_arguments([
 
 cppc = meson.get_compiler('cpp')
 
+data_dir = get_option('datadir')
+prefix = get_option('prefix')
+lib_dir = get_option('libdir')
+
 add_project_arguments(cppc.get_supported_arguments([
   '-Wno-unused-parameter',
   '-Wno-missing-field-initializers',
