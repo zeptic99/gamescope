@@ -396,9 +396,17 @@ namespace GamescopeWSILayer {
     }
 
     static uint32_t getMinImageCount() {
-      const char *overrideStr = std::getenv("GAMESCOPE_WSI_MIN_IMAGE_COUNT");
-      if (overrideStr && *overrideStr)
-        return uint32_t(std::atoi(overrideStr));
+      {
+        const char *overrideStr = std::getenv("GAMESCOPE_WSI_MIN_IMAGE_COUNT");
+        if (overrideStr && *overrideStr)
+          return uint32_t(std::atoi(overrideStr));
+      }
+
+      {
+        const char *overrideStr = std::getenv("vk_x11_override_min_image_count");
+        if (overrideStr && *overrideStr)
+          return uint32_t(std::atoi(overrideStr));
+      }
 
       return 3;
     }
