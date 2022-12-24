@@ -323,7 +323,7 @@ namespace GamescopeWSILayer {
       }
 
       fprintf(stderr, "[Gamescope WSI] Made gamescope surface for xid: 0x%x\n", window);
-      GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
+      auto gamescopeSurface = GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
         .instance   = instance,
         .surface    = waylandSurface,
         .connection = connection,
@@ -332,7 +332,18 @@ namespace GamescopeWSILayer {
         .hdrOutput  = hdrOutput,
       });
 
+      DumpGamescopeSurfaceState(gamescopeSurface);
+
       return result;
+    }
+
+    static void DumpGamescopeSurfaceState(GamescopeSurface& surface) {
+      fprintf(stderr, "[Gamescope WSI] Surface state:\n");
+      fprintf(stderr, "  window xid:                    0x%x\n", surface->window);
+      fprintf(stderr, "  wayland surface res id:        %u\n", wl_proxy_get_id(reinterpret_cast<struct wl_proxy *>(surface->surface)));
+      fprintf(stderr, "  layer client flags:            0x%x\n", surface->flags);
+      fprintf(stderr, "  server hdr output enabled:     %s\n", surface->hdrOutput ? "true" : "false");
+      fprintf(stderr, "  hdr formats exposed to client: %s\n", surface->shouldExposeHDR() ? "true" : "false");
     }
 
     static VkBool32 GetPhysicalDeviceGamescopePresentationSupport(
