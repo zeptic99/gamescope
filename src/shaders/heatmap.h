@@ -2,6 +2,10 @@
 // https://github.com/microsoft/Windows-universal-samples/blob/main/Samples/D2DAdvancedColorImages/cpp/D2DAdvancedColorImages/LuminanceHeatmapEffect.hlsl
 // Licensed under MIT.
 
+//////////////////////////////////////
+// MS WCG Image Viewer Luminance Map
+//////////////////////////////////////
+
 // Nits to color mappings:
 //     0.00 Black
 //     3.16 Blue
@@ -37,7 +41,7 @@
 #define STOP7_COLOR vec3(1.0f, 0.0f, 1.0f) // Magenta
 #define STOP8_COLOR vec3(1.0f, 1.0f, 1.0f) // White
 
-vec3 hdr_heatmap_impl(float nits) {
+vec3 hdr_heatmap_impl_ms_wcg(float nits) {
 
   // 2: Determine which gradient segment will be used.
   // Only one of useSegmentN will be 1 (true) for a given nits value.
@@ -72,6 +76,61 @@ vec3 hdr_heatmap_impl(float nits) {
     mix(STOP7_COLOR, STOP8_COLOR, lerpSegment7) * useSegment7;
 }
 
+//////////////////////////////////////
+// Nicer looking HDR heatmap by Lilium
+// Has some cool greyscale stuff 8)
+//////////////////////////////////////
+
+#define LILIUM_STOP0_NITS 0.f
+#define LILIUM_STOP1_NITS 100.f
+#define LILIUM_STOP2_NITS 100.001f
+#define LILIUM_STOP3_NITS 203.f
+#define LILIUM_STOP4_NITS 400.f
+#define LILIUM_STOP5_NITS 1000.f
+#define LILIUM_STOP6_NITS 4000.f
+#define LILIUM_STOP7_NITS 10000.f
+
+#define LILIUM_STOP0_COLOR vec3(0.0f, 0.0f, 0.0f) // Black
+#define LILIUM_STOP1_COLOR vec3(0.25f, 0.25f, 0.25f) // Black and White
+#define LILIUM_STOP2_COLOR vec3(0.0f, 1.0f, 1.0f) // Cyan
+#define LILIUM_STOP3_COLOR vec3(0.0f, 1.0f, 0.0f) // Green
+#define LILIUM_STOP4_COLOR vec3(1.0f, 1.0f, 0.0f) // Yellow
+#define LILIUM_STOP5_COLOR vec3(1.0f, 0.0f, 0.0f) // Red
+#define LILIUM_STOP6_COLOR vec3(1.0f, 0.0f, 1.0f) // Pink
+#define LILIUM_STOP7_COLOR vec3(0.0f, 0.0f, 1.0f) // Blue
+
+vec3 hdr_heatmap_lilium_impl(float nits) {
+
+    // 2: Determine which gradient segment will be used.
+    // Only one of useSegmentN will be 1 (true) for a given nits value.
+    float useSegment0 = sign(nits - LILIUM_STOP0_NITS) - sign(nits - LILIUM_STOP1_NITS);
+    float useSegment1 = sign(nits - LILIUM_STOP1_NITS) - sign(nits - LILIUM_STOP2_NITS);
+    float useSegment2 = sign(nits - LILIUM_STOP2_NITS) - sign(nits - LILIUM_STOP3_NITS);
+    float useSegment3 = sign(nits - LILIUM_STOP3_NITS) - sign(nits - LILIUM_STOP4_NITS);
+    float useSegment4 = sign(nits - LILIUM_STOP4_NITS) - sign(nits - LILIUM_STOP5_NITS);
+    float useSegment5 = sign(nits - LILIUM_STOP5_NITS) - sign(nits - LILIUM_STOP6_NITS);
+    float useSegment6 = sign(nits - LILIUM_STOP6_NITS) - sign(nits - LILIUM_STOP7_NITS);
+
+    // 3: Calculate the interpolated color.
+    float lerpSegment0 = (nits - LILIUM_STOP0_NITS) / (LILIUM_STOP1_NITS - LILIUM_STOP0_NITS);
+    float lerpSegment1 = (nits - LILIUM_STOP1_NITS) / (LILIUM_STOP2_NITS - LILIUM_STOP1_NITS);
+    float lerpSegment2 = (nits - LILIUM_STOP2_NITS) / (LILIUM_STOP3_NITS - LILIUM_STOP2_NITS);
+    float lerpSegment3 = (nits - LILIUM_STOP3_NITS) / (LILIUM_STOP4_NITS - LILIUM_STOP3_NITS);
+    float lerpSegment4 = (nits - LILIUM_STOP4_NITS) / (LILIUM_STOP5_NITS - LILIUM_STOP4_NITS);
+    float lerpSegment5 = (nits - LILIUM_STOP5_NITS) / (LILIUM_STOP6_NITS - LILIUM_STOP5_NITS);
+    float lerpSegment6 = (nits - LILIUM_STOP6_NITS) / (LILIUM_STOP7_NITS - LILIUM_STOP6_NITS);
+
+    //  Only the "active" gradient segment contributes to the output color.
+    return
+        mix(LILIUM_STOP0_COLOR, LILIUM_STOP1_COLOR, lerpSegment0) * useSegment0 +
+        mix(LILIUM_STOP1_COLOR, LILIUM_STOP2_COLOR, lerpSegment1) * useSegment1 +
+        mix(LILIUM_STOP2_COLOR, LILIUM_STOP3_COLOR, lerpSegment2) * useSegment2 +
+        mix(LILIUM_STOP3_COLOR, LILIUM_STOP4_COLOR, lerpSegment3) * useSegment3 +
+        mix(LILIUM_STOP4_COLOR, LILIUM_STOP5_COLOR, lerpSegment4) * useSegment4 +
+        mix(LILIUM_STOP5_COLOR, LILIUM_STOP6_COLOR, lerpSegment5) * useSegment5 +
+        mix(LILIUM_STOP6_COLOR, LILIUM_STOP7_COLOR, lerpSegment6) * useSegment6;
+}
+
 vec3 hdr_heatmap(vec3 inputColor, bool in_2020, bool in_nits, bool out_nits) {
   vec3 xyz;
 
@@ -83,7 +142,11 @@ vec3 hdr_heatmap(vec3 inputColor, bool in_2020, bool in_nits, bool out_nits) {
   else
     xyz = inputColor * rec709_to_xyz;
 
-  vec3 outputColor = hdr_heatmap_impl(xyz.y);
+  vec3 outputColor;
+  if (checkDebugFlag(compositedebug_Heatmap_MSWCG))
+    outputColor = hdr_heatmap_impl_ms_wcg(xyz.y); // MS WCG viewer heatmap
+  else
+    outputColor = hdr_heatmap_lilium_impl(xyz.y); // Lilium Heatmap
 
   if (c_st2084Output)
     outputColor = convert_primaries(outputColor, rec709_to_xyz, xyz_to_rec2020);
