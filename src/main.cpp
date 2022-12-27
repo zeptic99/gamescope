@@ -323,7 +323,8 @@ int g_nPreferredOutputHeight = 0;
 
 int main(int argc, char **argv)
 {
-
+	// Force disable this horrible broken layer.
+	setenv("DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1", "1", 1);
 
 	static std::string optstring = build_optstring(gamescope_options);
 	gamescope_optstring = optstring.c_str();
