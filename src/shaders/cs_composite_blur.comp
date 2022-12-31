@@ -9,15 +9,7 @@ layout(
   local_size_y = 8,
   local_size_z = 1) in;
 
-layout(push_constant)
-uniform layers_t {
-    vec2 u_scale[VKR_MAX_LAYERS];
-    vec2 u_offset[VKR_MAX_LAYERS];
-    float u_opacity[VKR_MAX_LAYERS];
-    uint u_borderMask;
-    uint u_frameId;
-    uint u_blur_radius;
-};
+#include "blit_push_data.h"
 
 #define BLUR_DONT_SCALE 1
 #include "composite.h"

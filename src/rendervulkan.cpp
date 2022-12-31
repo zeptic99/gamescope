@@ -3085,6 +3085,9 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 	return nullptr;
 }
 
+float g_flLinearToNits = 400.0f;
+float g_flNitsToLinear = 1.0f / 100.0f;
+
 struct BlitPushData_t
 {
 	vec2_t scale[k_nMaxLayers];
@@ -3093,6 +3096,9 @@ struct BlitPushData_t
 	uint32_t borderMask;
 	uint32_t frameId;
 	uint32_t blurRadius;
+
+	float linearToNits;
+	float nitsToLinear;
 
 	explicit BlitPushData_t(const struct FrameInfo_t *frameInfo)
 	{
@@ -3105,6 +3111,9 @@ struct BlitPushData_t
 		borderMask = frameInfo->borderMask();
 		frameId = s_frameId++;
 		blurRadius = frameInfo->blurRadius ? ( frameInfo->blurRadius * 2 ) - 1 : 0;
+
+		linearToNits = g_flLinearToNits;
+		nitsToLinear = g_flNitsToLinear;
 	}
 
 	explicit BlitPushData_t(float blit_scale) {
@@ -3113,6 +3122,9 @@ struct BlitPushData_t
 		opacity[0] = 1.0f;
 		borderMask = 0;
 		frameId = s_frameId;
+
+		linearToNits = g_flLinearToNits;
+		nitsToLinear = g_flNitsToLinear;
 	}
 };
 
@@ -3170,6 +3182,9 @@ struct RcasPushData_t
 	uint32_t u_frameId;
 	uint32_t u_c1;
 
+    float linearToNits;
+    float nitsToLinear;
+
 	RcasPushData_t(const struct FrameInfo_t *frameInfo, float sharpness)
 	{
 		uvec4_t tmp;
@@ -3180,6 +3195,8 @@ struct RcasPushData_t
 		u_borderMask = frameInfo->borderMask() >> 1u;
 		u_frameId = s_frameId++;
 		u_c1 = tmp.x;
+		linearToNits = g_flLinearToNits;
+		nitsToLinear = g_flNitsToLinear;
 		for (uint32_t i = 1; i < k_nMaxLayers; i++)
 		{
 			u_scale[i - 1] = frameInfo->layers[i].scale;

@@ -134,8 +134,10 @@ vec3 hdr_heatmap_lilium_impl(float nits) {
 vec3 hdr_heatmap(vec3 inputColor, bool in_2020, bool in_nits, bool out_nits) {
   vec3 xyz;
 
+  // If the input is SDR, then just multiply by 100 (typical sRGB mastering)
+  // don't multiply by our typical SDR scale.
   if (!in_nits)
-    inputColor *= c_nitsToLinearLightScale;
+    inputColor *= 100.0f;
 
   if (in_2020)
     xyz = inputColor * rec2020_to_xyz;
@@ -152,7 +154,7 @@ vec3 hdr_heatmap(vec3 inputColor, bool in_2020, bool in_nits, bool out_nits) {
     outputColor = convert_primaries(outputColor, rec709_to_xyz, xyz_to_rec2020);
 
   if (out_nits)
-    outputColor *= c_nitsToLinearLightScale;
+    outputColor *= u_linearToNits;
 
   return outputColor;
 }

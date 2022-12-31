@@ -61,16 +61,20 @@ vec3 pqToNits(vec3 pq) {
     return 10000.0 * pow(num / den, vec3(oo_m1));
 }
 
-// pq -> nits -> linear (nits / 80)
-const float c_nitsToLinearLightScale = 80.0f;
+// This is apparently defined at 80 nits...
+// May want to take liberties with this when displaying
+// on SDR though... 100 may be a better fit for most content
+// to match typical sRGB mastering.
 const float c_scRGBLightScale = 80.0f;
+
+// nits -> linear (nits / scale)
 vec3 nitsToLinear(vec3 nits) {
-    // This is typical, but we might want to make this customizable.
-    return nits / c_nitsToLinearLightScale;
+    return nits * u_nitsToLinear;
 }
 
+// linear -> nits (linear * scale)
 vec3 linearToNits(vec3 linear) {
-    return linear * c_nitsToLinearLightScale;
+    return linear * u_linearToNits;
 }
 
 /////////////////////////////

@@ -18,6 +18,10 @@ uniform layers_t {
     uint u_borderMask;
     uint u_frameId;
     uint u_c1;
+
+    // hdr
+    float u_linearToNits;
+    float u_nitsToLinear;
 };
 
 #include "composite.h"

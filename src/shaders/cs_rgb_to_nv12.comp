@@ -15,6 +15,8 @@ layout(
 // UVUVUVUVUVUVUVU...
 
 const uint u_frameId = 0;
+const float u_linearToNits = 400.0f;
+const float u_nitsToLinear = 1.0f / 100.0f;
 
 layout(push_constant)
 uniform layers_t {
