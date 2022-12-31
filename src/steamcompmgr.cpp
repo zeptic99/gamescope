@@ -5468,7 +5468,7 @@ void update_vrr_atoms(xwayland_ctx_t *root_ctx, bool force)
 		uint32_t hdr_value = st2084 ? 1 : 0;
 		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplaySupportsHDR, XA_CARDINAL, 32, PropModeReplace,
 			(unsigned char *)&hdr_value, 1 );
-		g_bSupportsST2084_CachedValue = capable;
+		g_bSupportsST2084_CachedValue = st2084;
 	}
 
 	bool in_use = drm_get_vrr_in_use( &g_DRM );
