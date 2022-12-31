@@ -66,6 +66,13 @@ vec3 pqToNits(vec3 pq) {
 // on SDR though... 100 may be a better fit for most content
 // to match typical sRGB mastering.
 const float c_scRGBLightScale = 80.0f;
+vec3 scrgbToNits(vec3 scRGB) {
+    return scRGB * c_scRGBLightScale;
+}
+
+vec3 nitsToScRGB(vec3 nits) {
+    return nits / c_scRGBLightScale;
+}
 
 // nits -> linear (nits / scale)
 vec3 nitsToLinear(vec3 nits) {

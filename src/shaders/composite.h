@@ -46,41 +46,47 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
     if (get_layer_colorspace(layerIdx) == colorspace_pq) {
         color.rgb = pqToNits(color.rgb);
 
-        if (checkDebugFlag(compositedebug_Heatmap))
-            color.rgb = hdr_heatmap(color.rgb, true, true, true);
-
-        if (!c_st2084Output) {
-            color.rgb = convert_primaries(color.rgb, rec2020_to_xyz, xyz_to_rec709);
-            color.rgb = nitsToLinear(color.rgb);
+        if (checkDebugFlag(compositedebug_Heatmap)) {
+            color.rgb = hdr_heatmap(color.rgb, true, true, c_st2084Output);
+        } else {
+            if (!c_st2084Output) {
+                // HDR10 ST2048 is rec2020.
+                color.rgb = convert_primaries(color.rgb, rec2020_to_xyz, xyz_to_rec709);
+                color.rgb = nitsToLinear(color.rgb);
+            }
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_scRGB) {
-        if (checkDebugFlag(compositedebug_Heatmap))
-            color.rgb = hdr_heatmap(color.rgb * c_scRGBLightScale, false, true, true);
+        color.rgb = scrgbToNits(color.rgb);
 
-        if (c_st2084Output) {
-            color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+        if (checkDebugFlag(compositedebug_Heatmap)) {
+            color.rgb = hdr_heatmap(color.rgb, false, true, c_st2084Output);
         } else {
-            color.rgb = nitsToLinear(color.rgb);
+            if (!c_st2084Output) {
+                // scRGB is rec709.
+                color.rgb = nitsToLinear(color.rgb);
+            }
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_sRGB) {
         color.rgb = srgbToLinear(color.rgb);
 
-        if (checkDebugFlag(compositedebug_Heatmap))
-            color.rgb = hdr_heatmap(color.rgb, false, false, false);
-
-        if (c_st2084Output) {
-            color.rgb = linearToNits(color.rgb);
-            if (!c_forceWideGammut)
-                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+        if (checkDebugFlag(compositedebug_Heatmap)) {
+            color.rgb = hdr_heatmap(color.rgb, false, false, c_st2084Output);
+        } else {
+            if (c_st2084Output) {
+                color.rgb = linearToNits(color.rgb);
+                if (!c_forceWideGammut)
+                    color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+            }
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_linear) {
-        if (checkDebugFlag(compositedebug_Heatmap))
-            color.rgb = hdr_heatmap(color.rgb, false, false, false);
-
-        if (c_st2084Output) {
-            color.rgb = linearToNits(color.rgb);
-            if (!c_forceWideGammut)
-                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+        if (checkDebugFlag(compositedebug_Heatmap)) {
+            color.rgb = hdr_heatmap(color.rgb, false, false, c_st2084Output);
+        } else {
+            if (c_st2084Output) {
+                color.rgb = linearToNits(color.rgb);
+                if (!c_forceWideGammut)
+                    color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+            }
         }
     }
     return color;
