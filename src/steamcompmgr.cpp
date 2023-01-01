@@ -5536,6 +5536,7 @@ extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
 
 static bool g_bWasFSRActive = false;
+extern float g_flLinearToNits;
 
 extern std::atomic<uint64_t> g_nCompletedPageFlipCount;
 
@@ -5595,6 +5596,8 @@ steamcompmgr_main(int argc, char **argv)
 					g_FadeOutDuration = atoi(optarg);
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
 					g_bHDREnabled = true;
+				} else if (strcmp(opt_name, "hdr-sdr-content-nits") == 0) {
+					g_flLinearToNits = atof(optarg);
 				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {
 					g_bForceHDRSupportDebug = true;
  				} else if (strcmp(opt_name, "hdr-debug-force-output") == 0) {
