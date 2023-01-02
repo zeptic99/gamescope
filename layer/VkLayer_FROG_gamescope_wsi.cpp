@@ -112,6 +112,9 @@ namespace GamescopeWSILayer {
       if (!contains(enabledExts, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
         enabledExts.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 
+      if (!contains(enabledExts, VK_KHR_XCB_SURFACE_EXTENSION_NAME))
+        enabledExts.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+
       VkInstanceCreateInfo createInfo = *pCreateInfo;
       createInfo.enabledExtensionCount   = uint32_t(enabledExts.size());
       createInfo.ppEnabledExtensionNames = enabledExts.data();
