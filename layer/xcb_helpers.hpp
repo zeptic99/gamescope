@@ -139,6 +139,8 @@ namespace xcb {
           largestExtent = max(largestExtent, clippedRect.extent);
         }
       }
+
+      free(attributeReply);
     }
 
     free(reply);
