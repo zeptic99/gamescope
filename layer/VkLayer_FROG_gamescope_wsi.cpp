@@ -2,7 +2,7 @@
 #define VK_USE_PLATFORM_XCB_KHR
 #define VK_USE_PLATFORM_XLIB_KHR
 #include "vkroots.h"
-#include <X11/Xlib-xcb.h>
+#include "xcb_helpers.hpp"
 #include "gamescope-xwayland-client-protocol.h"
 #include "../src/color_helpers.h"
 #include "../src/layer_defines.h"
@@ -292,14 +292,14 @@ namespace GamescopeWSILayer {
       }
 
       GamescopeLayerClient::Flags flags = 0u;
-      if (auto prop = getPropertyValue<GamescopeLayerClient::Flags>(connection, "GAMESCOPE_LAYER_CLIENT_FLAGS"sv))
+      if (auto prop = xcb::getPropertyValue<GamescopeLayerClient::Flags>(connection, "GAMESCOPE_LAYER_CLIENT_FLAGS"sv))
         flags = *prop;
 
       bool hdrOutput = false;
-      if (auto prop = getPropertyValue<uint32_t>(connection, "GAMESCOPE_HDR_OUTPUT_FEEDBACK"sv))
+      if (auto prop = xcb::getPropertyValue<uint32_t>(connection, "GAMESCOPE_HDR_OUTPUT_FEEDBACK"sv))
         hdrOutput = !!*prop;
 
-      auto serverId = getPropertyValue<uint32_t>(connection, "GAMESCOPE_XWAYLAND_SERVER_ID"sv);
+      auto serverId = xcb::getPropertyValue<uint32_t>(connection, "GAMESCOPE_XWAYLAND_SERVER_ID"sv);
       if (!serverId) {
         fprintf(stderr, "[Gamescope WSI] Failed to get Xwayland server id. Failing surface creation.\n");
         return VK_ERROR_SURFACE_LOST_KHR;
@@ -409,51 +409,6 @@ namespace GamescopeWSILayer {
       }
 
       return 3;
-    }
-
-    static std::optional<xcb_atom_t> getXcbAtom(xcb_connection_t* connection, std::string_view name) {
-      xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, false, name.length(), name.data());
-      xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, nullptr);
-      if (!reply) {
-        fprintf(stderr, "[Gamescope WSI] Failed to get xcb atom.\n");
-        return std::nullopt;
-      }
-      xcb_atom_t atom = reply->atom;
-      free(reply);
-      return atom;
-    }
-
-    template <typename T>
-    static std::optional<T> getPropertyValue(xcb_connection_t* connection, xcb_atom_t atom) {
-      static_assert(sizeof(T) % 4 == 0);
-
-      xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data;
-
-      xcb_get_property_cookie_t cookie = xcb_get_property(connection, false, screen->root, atom, XCB_ATOM_CARDINAL, 0, sizeof(T) / sizeof(uint32_t));
-      xcb_get_property_reply_t* reply = xcb_get_property_reply(connection, cookie, nullptr);
-      if (!reply) {
-        fprintf(stderr, "[Gamescope WSI] Failed to read T root window property.\n");
-        return std::nullopt;
-      }
-
-      if (reply->type != XCB_ATOM_CARDINAL) {
-        fprintf(stderr, "[Gamescope WSI] Atom of T was wrong type. Expected XCB_ATOM_CARDINAL.\n");
-        free(reply);
-        return std::nullopt;
-      }
-
-      T value = *reinterpret_cast<const T *>(xcb_get_property_value(reply));
-      free(reply);
-      return value;
-    }
-
-    template <typename T>
-    static std::optional<T> getPropertyValue(xcb_connection_t* connection, std::string_view name) {
-      std::optional<xcb_atom_t> atom = getXcbAtom(connection, name);
-      if (!atom)
-        return std::nullopt;
-
-      return getPropertyValue<T>(connection, *atom);
     }
 
     static constexpr wl_registry_listener s_registryListener = {
