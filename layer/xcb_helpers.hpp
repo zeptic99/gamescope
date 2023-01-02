@@ -62,8 +62,10 @@ namespace xcb {
         return std::nullopt;
       }
 
-      if (reply->root == reply->parent)
+      if (reply->root == reply->parent) {
+        free(reply);
         return window;
+      }
 
       window = reply->parent;
       free(reply);
