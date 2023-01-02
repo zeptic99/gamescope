@@ -31,6 +31,7 @@ namespace GamescopeWSILayer {
 
   struct GamescopeSurfaceData {
     VkInstance instance;
+    VkSurfaceKHR fallbackSurface;
     wl_surface* surface;
 
     xcb_connection_t* connection;
@@ -42,11 +43,53 @@ namespace GamescopeWSILayer {
       const bool hdrAllowed = !(flags & GamescopeLayerClient::Flag::DisableHDR);
       return hdrOutput && hdrAllowed;
     }
+
+    bool canBypassXWayland() const {
+      auto rect = xcb::getWindowRect(connection, window);
+      auto largestObscuringWindowSize = xcb::getLargestObscuringChildWindowSize(connection, window);
+      auto toplevelWindow = xcb::getToplevelWindow(connection, window);
+      if (!rect || !largestObscuringWindowSize || !toplevelWindow) {
+        fprintf(stderr, "[Gamescope WSI] canBypassXWayland: failed to get window info for window 0x%x.\n", window);
+        return false;
+      }
+
+      auto toplevelRect = xcb::getWindowRect(connection, *toplevelWindow);
+      if (!toplevelRect) {
+        fprintf(stderr, "[Gamescope WSI] canBypassXWayland: failed to get window info for window 0x%x.\n", window);
+        return false;
+      }
+
+      // If we have any child windows obscuring us bigger than 1x1,
+      // then we cannot flip.
+      // (There can be dummy composite redirect windows and whatever.)
+      if (largestObscuringWindowSize->width > 1 || largestObscuringWindowSize->height > 1)
+        return false;
+
+      // If this window is not within 1px margin of error for the size of
+      // it's top level window, then it cannot be flipped.
+      if (iabs(rect->offset.x) > 1 ||
+          iabs(rect->offset.y) > 1 ||
+          iabs(int32_t(toplevelRect->extent.width)  - int32_t(rect->extent.width)) > 1 ||
+          iabs(int32_t(toplevelRect->extent.height) - int32_t(rect->extent.height)) > 1)
+        return false;
+
+      // If we have a child window that is visible and not a
+      // override redirect obscuring us, then we cannot flip.
+      if (largestObscuringWindowSize->width > 1 || largestObscuringWindowSize->height > 1)
+        return false;
+
+      // I want to add more checks wrt. composite redirects and such here,
+      // but it seems what is exposed in xcb_composite is quite limited.
+      // So let's see how it goes for now. :-)
+      // Come back to this eventually.
+      return true;
+    }
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSurface, VkSurfaceKHR);
 
   struct GamescopeSwapchainData {
-    VkSurfaceKHR surface;
+    VkSurfaceKHR surface; // Always the Gamescope Surface surface -- so the Wayland one.
+    bool isBypassingXWayland;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSwapchain, VkSwapchainKHR);
 
@@ -180,16 +223,22 @@ namespace GamescopeWSILayer {
             uint32_t*                    pSurfaceFormatCount,
             VkSurfaceFormatKHR*          pSurfaceFormats) {
       auto gamescopeSurface = GamescopeSurface::get(surface);
-      if (!gamescopeSurface || !gamescopeSurface->shouldExposeHDR())
+      if (!gamescopeSurface)
         return pDispatch->GetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, pSurfaceFormatCount, pSurfaceFormats);
-      
+
+      const bool canBypass = gamescopeSurface->canBypassXWayland();
+      VkSurfaceKHR selectedSurface = canBypass ? surface : gamescopeSurface->fallbackSurface;
+
+      if (!canBypass || !gamescopeSurface->shouldExposeHDR())
+        return pDispatch->GetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, selectedSurface, pSurfaceFormatCount, pSurfaceFormats);
+
       return vkroots::helpers::append(
         pDispatch->GetPhysicalDeviceSurfaceFormatsKHR,
         s_ExtraHDRSurfaceFormats,
         pSurfaceFormatCount,
         pSurfaceFormats,
         physicalDevice,
-        surface);
+        selectedSurface);
     }
 
     static VkResult GetPhysicalDeviceSurfaceFormats2KHR(
@@ -199,8 +248,15 @@ namespace GamescopeWSILayer {
             uint32_t*                        pSurfaceFormatCount,
             VkSurfaceFormat2KHR*             pSurfaceFormats) {
       auto gamescopeSurface = GamescopeSurface::get(pSurfaceInfo->surface);
-      if (!gamescopeSurface || !gamescopeSurface->shouldExposeHDR())
+      if (!gamescopeSurface)
         return pDispatch->GetPhysicalDeviceSurfaceFormats2KHR(physicalDevice, pSurfaceInfo, pSurfaceFormatCount, pSurfaceFormats);
+
+      VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo = *pSurfaceInfo;
+      const bool canBypass = gamescopeSurface->canBypassXWayland();
+      surfaceInfo.surface = canBypass ? surfaceInfo.surface : gamescopeSurface->fallbackSurface;
+
+      if (!canBypass || !gamescopeSurface->shouldExposeHDR())
+        return pDispatch->GetPhysicalDeviceSurfaceFormats2KHR(physicalDevice, &surfaceInfo, pSurfaceFormatCount, pSurfaceFormats);
 
       return vkroots::helpers::append(
         pDispatch->GetPhysicalDeviceSurfaceFormats2KHR,
@@ -208,7 +264,7 @@ namespace GamescopeWSILayer {
         pSurfaceFormatCount,
         pSurfaceFormats,
         physicalDevice,
-        pSurfaceInfo);
+        &surfaceInfo);
     }
 
     static VkResult GetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -309,9 +365,9 @@ namespace GamescopeWSILayer {
       wl_display_flush(gamescopeInstance->display);
 
       VkWaylandSurfaceCreateInfoKHR waylandCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
-        .pNext = nullptr,
-        .flags = 0,
+        .sType   = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+        .pNext   = nullptr,
+        .flags   = 0,
         .display = gamescopeInstance->display,
         .surface = waylandSurface,
       };
@@ -322,14 +378,29 @@ namespace GamescopeWSILayer {
         return result;
       }
 
-      fprintf(stderr, "[Gamescope WSI] Made gamescope surface for xid: 0x%x\n", window);
-      auto gamescopeSurface = GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
-        .instance   = instance,
-        .surface    = waylandSurface,
+      VkXcbSurfaceCreateInfoKHR xcbCreateInfo = {
+        .sType      = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+        .pNext      = nullptr,
+        .flags      = 0,
         .connection = connection,
         .window     = window,
-        .flags      = flags,
-        .hdrOutput  = hdrOutput,
+      };
+      VkSurfaceKHR fallbackSurface = VK_NULL_HANDLE;
+      result = pDispatch->CreateXcbSurfaceKHR(instance, &xcbCreateInfo, pAllocator, &fallbackSurface);
+      if (result != VK_SUCCESS) {
+        fprintf(stderr, "[Gamescope WSI] Failed to create Vulkan xcb (fallback) surface - vr: %s xid: 0x%x\n", vkroots::helpers::enumString(result), window);
+        return result;
+      }
+
+      fprintf(stderr, "[Gamescope WSI] Made gamescope surface for xid: 0x%x\n", window);
+      auto gamescopeSurface = GamescopeSurface::create(*pSurface, GamescopeSurfaceData {
+        .instance        = instance,
+        .fallbackSurface = fallbackSurface,
+        .surface         = waylandSurface,
+        .connection      = connection,
+        .window          = window,
+        .flags           = flags,
+        .hdrOutput       = hdrOutput,
       });
 
       DumpGamescopeSurfaceState(gamescopeSurface);
@@ -447,24 +518,34 @@ namespace GamescopeWSILayer {
       const VkAllocationCallbacks*     pAllocator,
             VkSwapchainKHR*            pSwapchain) {
       auto gamescopeSurface = GamescopeSurface::get(pCreateInfo->surface);
+      if (!gamescopeSurface)
+        return pDispatch->CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
 
       VkSwapchainCreateInfoKHR swapchainInfo = *pCreateInfo;
+
+      const bool canBypass = gamescopeSurface->canBypassXWayland();
+      // If we can't flip, fallback to the regular XCB surface on the XCB window.
+      if (!canBypass)
+        swapchainInfo.surface = gamescopeSurface->fallbackSurface;
+
       if (gamescopeSurface) {
         // If this is a gamescope surface
         // Force the colorspace to sRGB before sending to the driver.
         swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-        fprintf(stderr, "[Gamescope WSI] Creating swapchain for xid: 0x%0x - format: %s - colorspace: %s\n",
+        fprintf(stderr, "[Gamescope WSI] Creating swapchain for xid: 0x%0x - format: %s - colorspace: %s - flip: %s\n",
           gamescopeSurface->window,
           vkroots::helpers::enumString(pCreateInfo->imageFormat),
-          vkroots::helpers::enumString(pCreateInfo->imageColorSpace));
+          vkroots::helpers::enumString(pCreateInfo->imageColorSpace),
+          canBypass ? "true" : "false");
       }
 
       VkResult result = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
       if (gamescopeSurface) {
         if (result == VK_SUCCESS) {
           GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
-            .surface = pCreateInfo->surface,
+            .surface             = pCreateInfo->surface, // Always the Wayland side surface.
+            .isBypassingXWayland = canBypass,
           });
 
           auto gamescopeInstance = GamescopeInstance::get(gamescopeSurface->instance);
@@ -488,6 +569,38 @@ namespace GamescopeWSILayer {
         }
       }
       return result;
+    }
+
+    static VkResult QueuePresentKHR(
+      const vkroots::VkDeviceDispatch* pDispatch,
+            VkQueue                    queue,
+      const VkPresentInfoKHR*          pPresentInfo) {
+      bool forceSuboptimal = false;
+
+      for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
+        VkSwapchainKHR swapchain = pPresentInfo->pSwapchains[i];
+        if (auto gamescopeSwapchain = GamescopeSwapchain::get(swapchain)) {
+          auto gamescopeSurface = GamescopeSurface::get(gamescopeSwapchain->surface);
+          if (!gamescopeSurface) {
+            fprintf(stderr, "[Gamescope WSI] QueuePresentKHR: Surface for swapchain %u was already destroyed. (App use after free).\n", i);
+            abort();
+            continue;
+          }
+
+          const bool canBypass = gamescopeSurface->canBypassXWayland();
+
+          if (gamescopeSwapchain->isBypassingXWayland && !canBypass)
+            return VK_ERROR_OUT_OF_DATE_KHR;
+
+          if (canBypass && !gamescopeSwapchain->isBypassingXWayland)
+            forceSuboptimal = true;
+        }
+      }
+
+      VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
+      if (forceSuboptimal && result == VK_SUCCESS)
+        return VK_SUBOPTIMAL_KHR;
+      return VK_SUCCESS;
     }
 
     static void SetHdrMetadataEXT(
@@ -535,6 +648,7 @@ namespace GamescopeWSILayer {
           nits_to_u16(metadata.maxFrameAverageLightLevel));
       }
     }
+
   };
 
 }
