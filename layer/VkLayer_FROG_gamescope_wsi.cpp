@@ -280,11 +280,11 @@ namespace GamescopeWSILayer {
       if ((res = pDispatch->GetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, pSurfaceCapabilities)) != VK_SUCCESS)
         return res;
 
-      VkExtent2D currentExtent = {};
-      if ((res = getCurrentExtent(gamescopeSurface->connection, gamescopeSurface->window, &currentExtent)) != VK_SUCCESS)
-        return res;
+      auto rect = xcb::getWindowRect(gamescopeSurface->connection, gamescopeSurface->window);
+      if (!rect)
+        return VK_ERROR_SURFACE_LOST_KHR;
 
-      pSurfaceCapabilities->currentExtent = currentExtent;
+      pSurfaceCapabilities->currentExtent = rect->extent;
       pSurfaceCapabilities->minImageCount = getMinImageCount();
 
       return VK_SUCCESS;
@@ -453,17 +453,6 @@ namespace GamescopeWSILayer {
       }();
 
       return s_isRunningUnderGamescope;
-    }
-
-    static VkResult getCurrentExtent(xcb_connection_t* xcb_conn, xcb_window_t window, VkExtent2D* pExtent) {
-      xcb_get_geometry_cookie_t geom_cookie = xcb_get_geometry(xcb_conn, window);
-      xcb_get_geometry_reply_t* geom = xcb_get_geometry_reply(xcb_conn, geom_cookie, nullptr);
-      if (!geom)
-        return VK_ERROR_SURFACE_LOST_KHR;
-
-      *pExtent = VkExtent2D{ geom->width, geom->height };
-      free(geom);
-      return VK_SUCCESS;
     }
 
     static uint32_t getMinImageCount() {
