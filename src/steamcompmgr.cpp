@@ -90,6 +90,7 @@
 #define GPUVIS_TRACE_IMPLEMENTATION
 #include "gpuvis_trace_utils.h"
 
+extern float g_flLinearToNits;
 
 const uint32_t WS_OVERLAPPED          		= 0x00000000u;
 const uint32_t WS_POPUP               		= 0x80000000u;
@@ -4469,6 +4470,13 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			g_uCompositeDebug |= CompositeDebugFlag::Tonemap_Reinhard;
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeHDRSDRContentBrightness )
+	{
+		g_flLinearToNits = get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDRSDRContentBrightness, 0 );
+		if ( g_flLinearToNits < 1.0f )
+			g_flLinearToNits = 400.0f;
+		hasRepaint = true;
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -5439,6 +5447,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDebugHDRHeatmap = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_HDR_HEATMAP", false );
 	ctx->atoms.gamescopeHDROnSDRTonemapOperator = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ON_SDR_TONEMAP_OPERATOR", false );
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
+	ctx->atoms.gamescopeHDRSDRContentBrightness = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_SDR_CONTENT_BRIGHTNESS", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
@@ -5560,7 +5569,6 @@ extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
 
 static bool g_bWasFSRActive = false;
-extern float g_flLinearToNits;
 
 extern std::atomic<uint64_t> g_nCompletedPageFlipCount;
 
