@@ -4447,6 +4447,14 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_bForceHDRSupportDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDRSupport, 0 );
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeDebugHDRHeatmap )
+	{
+		bool heatmap = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
+		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap;
+		if (heatmap)
+			g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
+		hasRepaint = true;
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -5414,6 +5422,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDisplayHDRForceWideGammutForSDR = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_HDR_FORCE_WIDE_GAMMUT_FOR_SDR", false );
 	ctx->atoms.gamescopeDebugForceHDR10Output = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_PQ_OUTPUT", false );
 	ctx->atoms.gamescopeDebugForceHDRSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR_SUPPORT", false );
+	ctx->atoms.gamescopeDebugHDRHeatmap = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_HDR_HEATMAP", false );
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
