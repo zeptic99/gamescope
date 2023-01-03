@@ -149,6 +149,7 @@ const char usage[] =
 	"  --disable-xres                 disable XRes for PID lookup\n"
 	"  --hdr-debug-force-support      forces support for HDR, etc even if the display doesn't support it. HDR clients will be outputted as SDR still in that case.\n"
 	"  --hdr-debug-force-output       forces support and output to HDR10 PQ even if the output does not support it (will look very wrong if it doesn't)\n"
+	"  --hdr-debug-heatmap            displays a heatmap-style debug view of HDR luminence across the scene in nits."
 	"\n"
 	"Keyboard shortcuts:\n"
 	"  Super + F                      toggle fullscreen\n"
