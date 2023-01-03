@@ -4449,10 +4449,24 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDebugHDRHeatmap )
 	{
-		bool heatmap = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
+		uint32_t heatmap = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
 		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap;
-		if (heatmap)
+		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_MSWCG;
+		if (heatmap != 0)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
+		if (heatmap == 1)
+			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_MSWCG;
+		hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeHDROnSDRTonemapOperator )
+	{
+		uint32_t tonemapOperator = get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDROnSDRTonemapOperator, 0 );
+
+		// For now, we only have two, so this is a flag.
+		bool reinhard = tonemapOperator == 1;
+		g_uCompositeDebug &= ~CompositeDebugFlag::Tonemap_Reinhard;
+		if (reinhard)
+			g_uCompositeDebug |= CompositeDebugFlag::Tonemap_Reinhard;
 		hasRepaint = true;
 	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
@@ -5423,6 +5437,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeDebugForceHDR10Output = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_PQ_OUTPUT", false );
 	ctx->atoms.gamescopeDebugForceHDRSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR_SUPPORT", false );
 	ctx->atoms.gamescopeDebugHDRHeatmap = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_HDR_HEATMAP", false );
+	ctx->atoms.gamescopeHDROnSDRTonemapOperator = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ON_SDR_TONEMAP_OPERATOR", false );
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );

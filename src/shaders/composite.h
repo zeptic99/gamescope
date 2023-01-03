@@ -53,6 +53,7 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
                 // HDR10 ST2048 is rec2020.
                 color.rgb = convert_primaries(color.rgb, rec2020_to_xyz, xyz_to_rec709);
                 color.rgb = nitsToLinear(color.rgb);
+                color.rgb = tonemap(color.rgb);
             }
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_scRGB) {
@@ -64,6 +65,7 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
             if (!c_st2084Output) {
                 // scRGB is rec709.
                 color.rgb = nitsToLinear(color.rgb);
+                color.rgb = tonemap(color.rgb);
             }
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_sRGB) {

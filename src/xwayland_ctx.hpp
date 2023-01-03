@@ -174,6 +174,8 @@ struct xwayland_ctx_t
 		Atom gamescopeDebugForceHDR10Output;
 		Atom gamescopeDebugForceHDRSupport;
 		Atom gamescopeDebugHDRHeatmap;
+		Atom gamescopeDebugHDRHeatmap_MSWCG;
+		Atom gamescopeHDROnSDRTonemapOperator;
 		Atom gamescopeHDROutputFeedback;
 
 		Atom wineHwndStyle;

@@ -134,4 +134,37 @@ vec3 convert_primaries(vec3 color, mat3 src_to_xyz, mat3 xyz_to_dst) {
     return color * mat3(src_to_xyz * xyz_to_dst);
 }
 
+const float A = 0.15f;
+const float B = 0.50f;
+const float C = 0.10f;
+const float D = 0.20f;
+const float E = 0.02f;
+const float F = 0.30f;
+const float W = 11.2f;
+
+vec3 Uncharted2Tonemap(vec3 x) {
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+float Uncharted2Tonemap(float x) {
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+vec3 tonemap_filmic(vec3 color) {
+    vec3 curr = Uncharted2Tonemap(color);
+    float white_scale = 1.0 / Uncharted2Tonemap(W);
+    return curr * white_scale;
+}
+
+vec3 tonemap_reinhard(vec3 color) {
+    color = color / (1.0 + color);
+    return color;
+}
+
+vec3 tonemap(vec3 color) {
+     if (checkDebugFlag(compositedebug_Tonemap_Reinhard))
+        return tonemap_reinhard(color);
+    return tonemap_filmic(color);
+}
+
 #include "heatmap.h"
