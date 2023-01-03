@@ -592,7 +592,7 @@ namespace GamescopeWSILayer {
       VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
       if (forceSuboptimal && result == VK_SUCCESS)
         return VK_SUBOPTIMAL_KHR;
-      return VK_SUCCESS;
+      return result;
     }
 
     static void SetHdrMetadataEXT(
