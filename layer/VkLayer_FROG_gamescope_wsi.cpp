@@ -73,11 +73,6 @@ namespace GamescopeWSILayer {
           iabs(int32_t(toplevelRect->extent.height) - int32_t(rect->extent.height)) > 1)
         return false;
 
-      // If we have a child window that is visible and not a
-      // override redirect obscuring us, then we cannot flip.
-      if (largestObscuringWindowSize->width > 1 || largestObscuringWindowSize->height > 1)
-        return false;
-
       // I want to add more checks wrt. composite redirects and such here,
       // but it seems what is exposed in xcb_composite is quite limited.
       // So let's see how it goes for now. :-)
