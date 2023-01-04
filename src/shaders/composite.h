@@ -66,6 +66,10 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
                 // scRGB is rec709.
                 color.rgb = nitsToLinear(color.rgb);
                 color.rgb = tonemap(color.rgb);
+            } else {
+                // scRGB is rec709.
+                // ST2084 output needs rec2020.
+                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
             }
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_sRGB) {
