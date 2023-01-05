@@ -5889,7 +5889,7 @@ steamcompmgr_main(int argc, char **argv)
 				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 				{
 					uint32_t hdr_value = ( g_bOutputHDREnabled || g_bForceHDRSupportDebug ) ? 1 : 0;
-					XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeHDROutputFeedback, XA_CARDINAL, 32, PropModeReplace,
+					XChangeProperty(server->ctx->dpy, server->ctx->root, server->ctx->atoms.gamescopeHDROutputFeedback, XA_CARDINAL, 32, PropModeReplace,
 						(unsigned char *)&hdr_value, 1 );
 				}
 			}
