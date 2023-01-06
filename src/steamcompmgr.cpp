@@ -1943,6 +1943,7 @@ paint_all(bool async)
 
 	// For now! We can avoid this in the future in some cases.
 	bNeedsComposite |= g_bOutputHDREnabled;
+	bNeedsComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
 
 	if ( !bNeedsComposite )
 	{
