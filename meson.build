@@ -4,7 +4,7 @@ project(
   'cpp',
   meson_version: '>=0.58.0',
   default_options: [
-    'cpp_std=c++17',
+    'cpp_std=c++20',
     'warning_level=2',
     'force_fallback_for=wlroots,libliftoff',
   ],

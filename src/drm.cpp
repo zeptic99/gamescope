@@ -555,8 +555,8 @@ static bool refresh_state( drm_t *drm )
 		if (!conn->possible_crtcs)
 			drm_log.errorf_errno("drmModeConnectorGetPossibleCrtcs failed");
 
-		conn->has_colorspace = conn->props.find( "Colorspace" ) != conn->props.end();
-		conn->has_hdr_output_metadata = conn->props.find( "HDR_OUTPUT_METADATA" ) != conn->props.end();
+		conn->has_colorspace = conn->props.contains( "Colorspace" );
+		conn->has_hdr_output_metadata = conn->props.contains( "HDR_OUTPUT_METADATA" );
 
 		conn->current.crtc_id = conn->initial_prop_values["CRTC_ID"];
 		if (conn->has_colorspace)
@@ -577,16 +577,16 @@ static bool refresh_state( drm_t *drm )
 			return false;
 		}
 
-		crtc->has_gamma_lut = (crtc->props.find( "GAMMA_LUT" ) != crtc->props.end());
+		crtc->has_gamma_lut = crtc->props.contains( "GAMMA_LUT" );
 		if (!crtc->has_gamma_lut)
 			drm_log.infof("CRTC %" PRIu32 " has no gamma LUT support", crtc->id);
-		crtc->has_degamma_lut = (crtc->props.find( "DEGAMMA_LUT" ) != crtc->props.end());
+		crtc->has_degamma_lut = crtc->props.contains( "DEGAMMA_LUT" );
 		if (!crtc->has_degamma_lut)
 			drm_log.infof("CRTC %" PRIu32 " has no degamma LUT support", crtc->id);
-		crtc->has_ctm = (crtc->props.find( "CTM" ) != crtc->props.end());
+		crtc->has_ctm = crtc->props.contains( "CTM" );
 		if (!crtc->has_ctm)
 			drm_log.infof("CRTC %" PRIu32 " has no CTM support", crtc->id);
-		crtc->has_vrr_enabled = (crtc->props.find( "VRR_ENABLED" ) != crtc->props.end());
+		crtc->has_vrr_enabled = crtc->props.contains( "VRR_ENABLED" );
 		if (!crtc->has_vrr_enabled)
 			drm_log.infof("CRTC %" PRIu32 " has no VRR_ENABLED support", crtc->id);
 
@@ -2172,7 +2172,7 @@ drm_screen_type drm_get_screen_type(struct drm_t *drm)
 	return drm_get_connector_type(drm->connector->connector);
 }
 
-inline float lerp( float a, float b, float t )
+inline float flerp( float a, float b, float t )
 {
     return a + t * (b - a);
 }
@@ -2184,7 +2184,7 @@ inline uint16_t drm_quantize_lut_value( float flValue )
 
 inline uint16_t drm_calc_lut_value( float input, float flLinearGain, float flGain, float flBlend )
 {
-    float flValue = lerp( flGain * input, linear_to_srgb( flLinearGain * srgb_to_linear( input ) ), flBlend );
+    float flValue = flerp( flGain * input, linear_to_srgb( flLinearGain * srgb_to_linear( input ) ), flBlend );
 	return drm_quantize_lut_value( flValue );
 }
 
