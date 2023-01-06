@@ -590,6 +590,9 @@ static bool refresh_state( drm_t *drm )
 		if (!crtc->has_vrr_enabled)
 			drm_log.infof("CRTC %" PRIu32 " has no VRR_ENABLED support", crtc->id);
 
+		crtc->lut3d_size = crtc->props.contains( "VALVE1_LUT3D_SIZE" ) ? uint32_t(crtc->initial_prop_values["VALVE1_LUT3D_SIZE"]) : 0;
+		crtc->shaperlut_size = crtc->props.contains( "VALVE1_SHAPER_LUT_SIZE" ) ? uint32_t(crtc->initial_prop_values["VALVE1_SHAPER_LUT_SIZE"]) : 0;
+
 		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
 		if (crtc->has_vrr_enabled)
 			drm->current.vrr_enabled = crtc->initial_prop_values["VRR_ENABLED"];
@@ -1055,6 +1058,10 @@ void finish_drm(struct drm_t *drm)
 			add_crtc_property(req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
 		if ( drm->crtcs[i].has_ctm )
 			add_crtc_property(req, &drm->crtcs[i], "CTM", 0);
+		if ( drm->crtcs[i].lut3d_size )
+			add_crtc_property(req, &drm->crtcs[i], "VALVE1_LUT3D", 0);
+		if ( drm->crtcs[i].shaperlut_size )
+			add_crtc_property(req, &drm->crtcs[i], "VALVE1_SHAPER_LUT", 0);
 		if ( drm->crtcs[i].has_vrr_enabled )
 			add_crtc_property(req, &drm->crtcs[i], "VRR_ENABLED", 0);
 		add_crtc_property(req, &drm->crtcs[i], "ACTIVE", 0);
@@ -1175,6 +1182,10 @@ int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.gamma_lut_id);
 			if ( drm->pending.degamma_lut_id != drm->current.degamma_lut_id )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.degamma_lut_id);
+			if ( drm->pending.lut3d_id != drm->current.lut3d_id )
+				drmModeDestroyPropertyBlob(drm->fd, drm->current.lut3d_id);
+			if ( drm->pending.shaperlut_id != drm->current.shaperlut_id )
+				drmModeDestroyPropertyBlob(drm->fd, drm->current.shaperlut_id);
 			drm->crtcs[i].current = drm->crtcs[i].pending;
 		}
 
@@ -1755,6 +1766,8 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	drm_update_degamma_lut(drm);
 	drm_update_color_mtx(drm);
 	drm_update_vrr_state(drm);
+	drm_update_lut3d(drm);
+	drm_update_shaperlut(drm);
 
 	drm->fbids_in_req.clear();
 
@@ -1824,6 +1837,18 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 			if (crtc->has_ctm)
 			{
 				int ret = add_crtc_property(drm->req, crtc, "CTM", 0);
+				if (ret < 0)
+					return ret;
+			}
+			if (crtc->lut3d_size)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VALVE1_LUT3D", 0);
+				if (ret < 0)
+					return ret;
+			}
+			if (crtc->shaperlut_size)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VALVE1_SHAPER_LUT", 0);
 				if (ret < 0)
 					return ret;
 			}
@@ -1899,6 +1924,20 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				return false;
 		}
 
+		if (drm->crtc->lut3d_size)
+		{
+			ret = add_crtc_property(drm->req, drm->crtc, "VALVE1_LUT3D", drm->pending.lut3d_id);
+			if (ret < 0)
+				return false;
+		}
+
+		if (drm->crtc->shaperlut_size)
+		{
+			ret = add_crtc_property(drm->req, drm->crtc, "VALVE1_SHAPER_LUT", drm->pending.shaperlut_id);
+			if (ret < 0)
+				return false;
+		}
+
 		if (drm->crtc->has_vrr_enabled)
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "VRR_ENABLED", drm->pending.vrr_enabled);
@@ -1930,6 +1969,20 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		if ( drm->crtc->has_ctm && drm->pending.ctm_id != drm->current.ctm_id )
 		{
 			int ret = add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id);
+			if (ret < 0)
+				return ret;
+		}
+
+		if ( drm->crtc->lut3d_size && drm->pending.lut3d_id != drm->current.lut3d_id )
+		{
+			int ret = add_crtc_property(drm->req, drm->crtc, "VALVE1_LUT3D", drm->pending.lut3d_id);
+			if (ret < 0)
+				return ret;
+		}
+
+		if ( drm->crtc->shaperlut_size && drm->pending.shaperlut_id != drm->current.shaperlut_id )
+		{
+			int ret = add_crtc_property(drm->req, drm->crtc, "VALVE1_SHAPER_LUT", drm->pending.shaperlut_id);
 			if (ret < 0)
 				return ret;
 		}
@@ -2105,6 +2158,66 @@ bool drm_set_color_mtx(struct drm_t *drm, float *mtx, enum drm_screen_type scree
 	return false;
 }
 
+bool drm_set_3dlut(struct drm_t *drm, const char *path, enum drm_screen_type screen_type)
+{
+	bool current_screen = drm_get_screen_type(drm) == screen_type;
+	bool had_lut = drm->current.color_lut3d[screen_type] != nullptr;
+
+	drm->pending.color_lut3d[screen_type] = nullptr;
+
+	FILE *f = fopen(path, "rb");
+	if (!f) {
+		return had_lut && current_screen;
+	}
+
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	size_t elems = fsize / sizeof(drm_color_lut);
+
+	if (elems == 0) {
+		return had_lut && current_screen;
+	}
+
+	auto data = std::make_shared<std::vector<drm_color_lut>>(elems);
+	fread(data->data(), elems, sizeof(drm_color_lut), f);
+
+	drm->pending.color_lut3d[screen_type] = std::move(data);
+
+	return current_screen;
+}
+
+bool drm_set_shaperlut(struct drm_t *drm, const char *path, enum drm_screen_type screen_type)
+{
+	bool current_screen = drm_get_screen_type(drm) == screen_type;
+	bool had_lut = drm->current.color_shaperlut[screen_type] != nullptr;
+
+	drm->pending.color_shaperlut[screen_type] = nullptr;
+
+	FILE *f = fopen(path, "rb");
+	if (!f) {
+		return had_lut && current_screen;
+	}
+
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	size_t elems = fsize / sizeof(drm_color_lut);
+
+	if (elems == 0) {
+		return had_lut && current_screen;
+	}
+
+	auto data = std::make_shared<std::vector<drm_color_lut>>(elems);
+	fread(data->data(), elems, sizeof(drm_color_lut), f);
+
+	drm->pending.color_shaperlut[screen_type] = std::move(data);
+
+	return current_screen;
+}
+
 void drm_set_vrr_enabled(struct drm_t *drm, bool enabled)
 {
 	drm->wants_vrr_enabled = enabled;
@@ -2265,6 +2378,88 @@ bool drm_update_color_mtx(struct drm_t *drm)
 	}
 
 	drm->pending.ctm_id = blob_id;
+	return true;
+}
+
+bool drm_update_lut3d(struct drm_t *drm)
+{
+	if ( !drm->crtc->lut3d_size )
+		return true;
+
+	bool dirty = false;
+
+	enum drm_screen_type screen_type = drm->pending.screen_type;
+
+	if (drm->pending.screen_type != drm->current.screen_type)
+		dirty = true;
+
+	if (drm->pending.color_lut3d[screen_type] != drm->current.color_lut3d[screen_type])
+		dirty = true;
+
+	if (!dirty)
+		return true;
+
+	// Don't actually check for this, it's a lot of values...
+	// Just check if it's empty or missing.
+	bool identity =
+		!drm->pending.color_lut3d[screen_type] ||
+		drm->pending.color_lut3d[screen_type]->empty();
+
+	if (identity)
+	{
+		drm->pending.lut3d_id = 0;
+		return true;
+	}
+
+	uint32_t blob_id = 0;
+	if (drmModeCreatePropertyBlob(drm->fd, drm->pending.color_lut3d[screen_type]->data(),
+			sizeof(drm_color_lut) * drm->pending.color_lut3d[screen_type]->size(), &blob_id) != 0) {
+		drm_log.errorf_errno("Unable to create LUT3D property blob");
+		return false;
+	}
+
+	drm->pending.lut3d_id = blob_id;
+	return true;
+}
+
+bool drm_update_shaperlut(struct drm_t *drm)
+{
+	if ( !drm->crtc->shaperlut_size )
+		return true;
+
+	bool dirty = false;
+
+	enum drm_screen_type screen_type = drm->pending.screen_type;
+
+	if (drm->pending.screen_type != drm->current.screen_type)
+		dirty = true;
+
+	if (drm->pending.color_shaperlut[screen_type] != drm->current.color_shaperlut[screen_type])
+		dirty = true;
+
+	if (!dirty)
+		return true;
+
+	// Don't actually check for this, it's a lot of values...
+	// Just check if it's empty or missing.
+	bool identity =
+		!drm->pending.color_shaperlut[screen_type] ||
+		drm->pending.color_shaperlut[screen_type]->empty();
+
+	if (identity)
+	{
+		drm->pending.shaperlut_id = 0;
+		return true;
+	}
+
+	uint32_t blob_id = 0;
+	if (drmModeCreatePropertyBlob(drm->fd, drm->pending.color_shaperlut[screen_type]->data(),
+			sizeof(drm_color_lut) * drm->pending.color_shaperlut[screen_type]->size(), &blob_id) != 0) {
+		drm_log.errorf_errno("Unable to create SHAPERLUT property blob");
+		return false;
+	}
+
+	drm->pending.shaperlut_id = blob_id;
 	return true;
 }
 

@@ -72,6 +72,8 @@ struct crtc {
 	bool has_degamma_lut;
 	bool has_ctm;
 	bool has_vrr_enabled;
+	uint32_t lut3d_size;
+	uint32_t shaperlut_size;
 
 	struct {
 		bool active;
@@ -159,6 +161,8 @@ struct drm_t {
 		uint32_t gamma_lut_id;
 		uint32_t degamma_lut_id;
 		uint32_t ctm_id;
+		uint32_t lut3d_id;
+		uint32_t shaperlut_id;
 		float color_gain[3] = { 1.0f, 1.0f, 1.0f };
 		float color_linear_gain[3] = { 1.0f, 1.0f, 1.0f };
 		float color_gamma_exponent[DRM_SCREEN_TYPE_COUNT][3]   = { { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f } };
@@ -180,6 +184,8 @@ struct drm_t {
 		float gain_blend = 0.0f;
 		enum drm_screen_type screen_type = DRM_SCREEN_TYPE_INTERNAL;
 		bool vrr_enabled = false;
+		std::shared_ptr<std::vector<drm_color_lut>> color_lut3d[DRM_SCREEN_TYPE_COUNT];
+		std::shared_ptr<std::vector<drm_color_lut>> color_shaperlut[DRM_SCREEN_TYPE_COUNT];
 	} current, pending;
 	bool wants_vrr_enabled = false;
 
@@ -263,6 +269,8 @@ bool drm_set_color_gain_blend(struct drm_t *drm, float blend);
 bool drm_update_gamma_lut(struct drm_t *drm);
 bool drm_update_degamma_lut(struct drm_t *drm);
 bool drm_update_color_mtx(struct drm_t *drm);
+bool drm_update_lut3d(struct drm_t *drm);
+bool drm_update_shaperlut(struct drm_t *drm);
 bool drm_update_vrr_state(struct drm_t *drm);
 bool drm_set_gamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_type screen_type);
 bool drm_set_degamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_type screen_type);
@@ -282,6 +290,9 @@ const char *drm_get_device_name(struct drm_t *drm);
 
 std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm);
 void drm_set_hdr_state(struct drm_t *drm, bool enabled);
+
+bool drm_set_3dlut(struct drm_t *drm, const char *path, enum drm_screen_type screen_type);
+bool drm_set_shaperlut(struct drm_t *drm, const char *path, enum drm_screen_type screen_type);
 
 extern bool g_bSupportsAsyncFlips;
 

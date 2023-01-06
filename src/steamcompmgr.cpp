@@ -2221,6 +2221,17 @@ bool get_prop( xwayland_ctx_t *ctx, Window win, Atom prop, std::vector< uint32_t
 	return false;
 }
 
+std::string get_string_prop( xwayland_ctx_t *ctx, Window win, Atom prop )
+{
+	XTextProperty tp;
+	if ( !XGetTextProperty( ctx->dpy, win, &tp, prop ) )
+		return "";
+
+	std::string value = reinterpret_cast<const char *>( tp.value );
+	XFree( tp.value );
+	return value;
+}
+
 static bool
 win_has_game_id( win *w )
 {
@@ -4484,6 +4495,24 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			g_flLinearToNits = 400.0f;
 		hasRepaint = true;
 	}
+	for (int i = 0; i < DRM_SCREEN_TYPE_COUNT; i++)
+	{
+		if ( ev->atom == ctx->atoms.gamescopeColorLut3D[i] )
+		{
+			std::string path = get_string_prop( ctx, ctx->root, ctx->atoms.gamescopeColorLut3D[i] );
+			if ( drm_set_3dlut( &g_DRM, path.c_str(), drm_screen_type(i) ) )
+				hasRepaint = true;
+		}
+	}
+	for (int i = 0; i < DRM_SCREEN_TYPE_COUNT; i++)
+	{
+		if ( ev->atom == ctx->atoms.gamescopeColorShaperLut[i] )
+		{
+			std::string path = get_string_prop( ctx, ctx->root, ctx->atoms.gamescopeColorShaperLut[i] );
+			if ( drm_set_shaperlut( &g_DRM, path.c_str(), drm_screen_type(i) ) )
+				hasRepaint = true;
+		}
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		win * w = find_win(ctx, ev->window);
@@ -5455,6 +5484,12 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeHDROnSDRTonemapOperator = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ON_SDR_TONEMAP_OPERATOR", false );
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 	ctx->atoms.gamescopeHDRSDRContentBrightness = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_SDR_CONTENT_BRIGHTNESS", false );
+
+	ctx->atoms.gamescopeColorLut3D[DRM_SCREEN_TYPE_INTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_3DLUT", false );
+	ctx->atoms.gamescopeColorLut3D[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_3DLUT_EXTERNAL", false );
+
+	ctx->atoms.gamescopeColorShaperLut[DRM_SCREEN_TYPE_INTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_SHAPERLUT", false );
+	ctx->atoms.gamescopeColorShaperLut[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_SHAPERLUT_EXTERNAL", false );
 
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
