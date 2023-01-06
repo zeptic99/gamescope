@@ -4461,7 +4461,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_MSWCG;
 		if (heatmap != 0)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
-		if (heatmap == 1)
+		if (heatmap == 2)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_MSWCG;
 		hasRepaint = true;
 	}
