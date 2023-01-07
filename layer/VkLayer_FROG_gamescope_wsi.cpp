@@ -527,6 +527,33 @@ namespace GamescopeWSILayer {
           canBypass ? "true" : "false");
       }
 
+      // Check for VkFormat support and return VK_ERROR_INITIALIZATION_FAILED
+      // if that VkFormat is unsupported for the underlying surface.
+      {
+        std::vector<VkSurfaceFormatKHR> supportedSurfaceFormats;
+        vkroots::helpers::enumerate(
+          pDispatch->pPhysicalDeviceDispatch->pInstanceDispatch->GetPhysicalDeviceSurfaceFormatsKHR,
+          supportedSurfaceFormats,
+          pDispatch->PhysicalDevice,
+          swapchainInfo.surface);
+
+        bool supportedSwapchainFormat = std::find_if(
+          supportedSurfaceFormats.begin(),
+          supportedSurfaceFormats.end(),
+          [=](VkSurfaceFormatKHR value) { return value.format == swapchainInfo.imageFormat; })
+          != supportedSurfaceFormats.end();
+
+        if (!supportedSwapchainFormat) {
+          fprintf(stderr, "[Gamescope WSI] Refusing to make swapchain (unsupported VkFormat) for xid: 0x%0x - format: %s - colorspace: %s - flip: %s\n",
+            gamescopeSurface->window,
+            vkroots::helpers::enumString(pCreateInfo->imageFormat),
+            vkroots::helpers::enumString(pCreateInfo->imageColorSpace),
+            canBypass ? "true" : "false");
+
+          return VK_ERROR_INITIALIZATION_FAILED;
+        }
+      }
+
       VkResult result = pDispatch->CreateSwapchainKHR(device, &swapchainInfo, pAllocator, pSwapchain);
       if (gamescopeSurface) {
         if (result == VK_SUCCESS) {
