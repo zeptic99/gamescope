@@ -1564,8 +1564,22 @@ paint_window(win *w, win *scaleW, struct FrameInfo_t *frameInfo,
 	}
 	else
 	{
-		sourceWidth = scaleW->a.width;
-		sourceHeight = scaleW->a.height;
+		// If w == scaleW, then scale the window by the committed buffer size
+		// instead of the window size.
+		//
+		// Some games like Halo Infinite still make swapchains that are eg.
+		// 3840x2160 on a 720p window if you do borderless fullscreen.
+		//
+		// Typically XWayland would do a blit here to avoid that, but when we
+		// are using the bypass layer, we don't get that, so we need to handle
+		// this case explicitly.
+		if (w == scaleW) {
+			sourceWidth = lastCommit->vulkanTex->width();
+			sourceHeight = lastCommit->vulkanTex->height();
+		} else {
+			sourceWidth = scaleW->a.width;
+			sourceHeight = scaleW->a.height;
+		}
 
 		if ( fit )
 		{
