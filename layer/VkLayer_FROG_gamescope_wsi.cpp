@@ -120,8 +120,8 @@ namespace GamescopeWSILayer {
 
       wl_display *display = wl_display_connect(gamescopeWaylandSocket());
       if (!display) {
-        fprintf(stderr, "[Gamescope WSI] Failed to connect to gamescope socket: %s\n", gamescopeWaylandSocket());
-        return VK_ERROR_INCOMPATIBLE_DRIVER;
+        fprintf(stderr, "[Gamescope WSI] Failed to connect to gamescope socket: %s. Bypass layer will be unavailable.\n", gamescopeWaylandSocket());
+        return result;
       }
       wl_registry *registry = wl_display_get_registry(display);
 
