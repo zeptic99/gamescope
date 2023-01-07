@@ -5913,6 +5913,15 @@ steamcompmgr_main(int argc, char **argv)
 			 currentHDROutput != g_bOutputHDREnabled ||
 			 currentHDRForce != g_bForceHDRSupportDebug )
 		{
+			if ( steamMode && g_nXWaylandCount > 1 )
+			{
+				g_nNestedHeight = ( g_nNestedWidth * g_nOutputHeight ) / g_nOutputWidth;
+				wlserver_lock();
+				// Update only Steam, the root ctx, with the new output size for now
+				wlserver_set_xwayland_server_mode( 0, g_nOutputWidth, g_nOutputHeight, g_nOutputRefresh );
+				wlserver_unlock();
+			}
+
 			if ( BIsNested() == true )
 			{
 				vulkan_remake_swapchain();
@@ -5922,15 +5931,6 @@ steamcompmgr_main(int argc, char **argv)
 			}
 			else
 			{
-				if ( steamMode && g_nXWaylandCount > 1 )
-				{
-					g_nNestedHeight = ( g_nNestedWidth * g_nOutputHeight ) / g_nOutputWidth;
-					wlserver_lock();
-					// Update only Steam, the root ctx, with the new output size for now
-					wlserver_set_xwayland_server_mode( 0, g_nOutputWidth, g_nOutputHeight, g_nOutputRefresh );
-					wlserver_unlock();
-				}
-
 				if (g_bOutputHDREnabled != currentHDROutput)
 				{
 					drm_set_hdr_state(&g_DRM, g_bOutputHDREnabled);
