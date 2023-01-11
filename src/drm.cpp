@@ -1790,7 +1790,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				hdr_output_metadata_blob = feedback->hdr_metadata_blob;
 		}
 
-		drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? hdr_output_metadata_blob : 0;
+		drm->connector->pending.hdr_output_metadata = hdr_output_metadata_blob;
 	}
 
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
