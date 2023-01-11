@@ -203,11 +203,11 @@ static struct xkb_keymap *generate_keymap(struct wlserver_input_method *ime)
 		keycode_offset + max_keycode
 	);
 
-	for (const auto kk : ime->keys) {
+	for (const auto& kk : ime->keys) {
 		uint32_t keycode = kk.keycode;
 		fprintf(f, "	<K%u> = %u;\n", keycode, keycode + keycode_offset);
 	}
-	for (const auto kv : actions) {
+	for (const auto& kv : actions) {
 		uint32_t keycode = kv.second.keycode;
 		fprintf(f, "	<K%u> = %u;\n", keycode, keycode + keycode_offset);
 	}
@@ -225,7 +225,7 @@ static struct xkb_keymap *generate_keymap(struct wlserver_input_method *ime)
 		"xkb_symbols \"(unnamed)\" {\n"
 	);
 
-	for (const auto kk : ime->keys) {
+	for (const auto& kk : ime->keys) {
 		if (!generate_keymap_key(f, kk.keycode, kk.keysym))
 		{
 			fclose(f);
@@ -233,7 +233,7 @@ static struct xkb_keymap *generate_keymap(struct wlserver_input_method *ime)
 			return nullptr;
 		}
 	}
-	for (const auto kv : actions) {
+	for (const auto& kv : actions) {
 		const auto kk = kv.second;
 		if (!generate_keymap_key(f, kk.keycode, kk.keysym))
 		{
