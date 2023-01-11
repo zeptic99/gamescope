@@ -3202,6 +3202,8 @@ get_win_title(xwayland_ctx_t *ctx, win *w, Atom atom)
 {
 	assert(atom == XA_WM_NAME || atom == ctx->atoms.netWMNameAtom);
 
+	// Allocates a title we are meant to free,
+	// let's re-use this allocation for w->title :)
 	XTextProperty tp;
 	XGetTextProperty( ctx->dpy, w->id, &tp, atom );
 
@@ -3223,7 +3225,8 @@ get_win_title(xwayland_ctx_t *ctx, win *w, Atom atom)
 
 	free(w->title);
 	if (tp.nitems > 0) {
-		w->title = strndup((char *)tp.value, tp.nitems);
+		// Ride off the allocation from XGetTextProperty.
+		w->title = (char *)tp.value;
 	} else {
 		w->title = NULL;
 	}
