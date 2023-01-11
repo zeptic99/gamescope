@@ -3071,7 +3071,7 @@ determine_and_apply_focus()
 	// Set SDL window title
 	if ( global_focus.focusWindow )
 	{
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		if ( BIsVRSession() )
 		{
 			vrsession_title( global_focus.focusWindow->title );
@@ -4073,7 +4073,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if (ev->atom == ctx->atoms.steamTouchClickModeAtom )
 	{
 		g_nTouchClickMode = (enum wlserver_touch_click_mode) get_prop(ctx, ctx->root, ctx->atoms.steamTouchClickModeAtom, g_nDefaultTouchClickMode );
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		if (BIsVRSession())
 			vrsession_update_touch_mode();
 #endif
@@ -5767,7 +5767,7 @@ steamcompmgr_main(int argc, char **argv)
 	currentOutputHeight = g_nPreferredOutputHeight;
 
 	init_runtime_info();
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 	if ( BIsVRSession() )
 		vrsession_steam_mode( steamMode );
 #endif
@@ -6077,7 +6077,7 @@ steamcompmgr_main(int argc, char **argv)
 		if ( !bShouldPaint && hasRepaintNonBasePlane && vblank )
 			nIgnoredOverlayRepaints++;
 
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		if ( BIsVRSession() && !vrsession_visible() )
 			bShouldPaint = false;
 #endif

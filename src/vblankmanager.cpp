@@ -20,7 +20,7 @@
 #include "main.hpp"
 #include "drm.hpp"
 
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 #include "vr_session.hpp"
 #endif
 
@@ -188,14 +188,14 @@ void vblankThreadVR()
 
 	while ( true )
 	{
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		vrsession_framesync( ~0u );
 #else
 		abort();
 #endif
 
 		// If we are visible, write a vblank event.
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		if ( vrsession_visible() )
 #endif
 		{

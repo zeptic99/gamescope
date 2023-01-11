@@ -568,7 +568,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 	if ( BIsVRSession() )
 	{
 		if ( !vr_init( argc, argv ) )

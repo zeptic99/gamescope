@@ -21,7 +21,7 @@
 #include "steamcompmgr.hpp"
 #include "sdlwindow.hpp"
 #include "log.hpp"
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 #include "vr_session.hpp"
 #endif
 
@@ -622,7 +622,7 @@ bool CVulkanDevice::createInstance()
 	std::vector< const char * > sdlExtensions;
 	if ( BIsVRSession() )
 	{
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		vrsession_append_instance_exts( sdlExtensions );
 #endif
 	}
@@ -865,7 +865,7 @@ bool CVulkanDevice::createDevice()
 
 	if ( BIsVRSession() )
 	{
-#ifdef HAVE_OPENVR
+#if HAVE_OPENVR
 		vrsession_append_device_exts( physDev(), enabledExtensions );
 #endif
 	}
