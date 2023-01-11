@@ -2767,7 +2767,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<win*>& vecGlobalPossi
 	if (w->a.x != 0 || w->a.y != 0)
 		XMoveWindow(ctx->dpy, ctx->focus.focusWindow->id, 0, 0);
 
-	if ( window_is_fullscreen( ctx->focus.focusWindow ) )
+	if ( window_is_fullscreen( ctx->focus.focusWindow ) || ctx->force_windows_fullscreen )
 	{
 		bool bIsSteam = window_is_steam( ctx->focus.focusWindow );
 		int fs_width  = ctx->root_width;
@@ -4509,6 +4509,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			g_flLinearToNits = 400.0f;
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeForceWindowsFullscreen )
+	{
+		ctx->force_windows_fullscreen = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeForceWindowsFullscreen, 0 );
+		focusDirty = true;
+	}
 	for (int i = 0; i < DRM_SCREEN_TYPE_COUNT; i++)
 	{
 		if ( ev->atom == ctx->atoms.gamescopeColorLut3D[i] )
@@ -5499,6 +5504,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 	ctx->atoms.gamescopeHDRSDRContentBrightness = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_SDR_CONTENT_BRIGHTNESS", false );
 
+	ctx->atoms.gamescopeForceWindowsFullscreen = XInternAtom( ctx->dpy, "GAMESCOPE_FORCE_WINDOWS_FULLSCREEN", false );
+
 	ctx->atoms.gamescopeColorLut3D[DRM_SCREEN_TYPE_INTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_3DLUT", false );
 	ctx->atoms.gamescopeColorLut3D[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_3DLUT_EXTERNAL", false );
 
@@ -5638,6 +5645,7 @@ steamcompmgr_main(int argc, char **argv)
 
 	int o;
 	int opt_index = -1;
+	bool bForceWindowsFullscreen = false;
 	while ((o = getopt_long(argc, argv, gamescope_optstring, gamescope_options, &opt_index)) != -1)
 	{
 		const char *opt_name;
@@ -5682,6 +5690,8 @@ steamcompmgr_main(int argc, char **argv)
 					sscanf(optarg, "%d,%d", &g_customCursorHotspotX, &g_customCursorHotspotY);
 				} else if (strcmp(opt_name, "fade-out-duration") == 0) {
 					g_FadeOutDuration = atoi(optarg);
+				} else if (strcmp(opt_name, "force-windows-fullscreen") == 0) {
+					bForceWindowsFullscreen = true;
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
 					g_bHDREnabled = true;
 				} else if (strcmp(opt_name, "hdr-sdr-content-nits") == 0) {
@@ -5784,6 +5794,8 @@ steamcompmgr_main(int argc, char **argv)
 			uint32_t serverId = static_cast<uint32_t>(i);
 			XChangeProperty(server->ctx->dpy, server->ctx->root, server->ctx->atoms.gamescopeXwaylandServerId, XA_CARDINAL, 32, PropModeReplace,
 				(unsigned char *)&serverId, 1 );
+
+			server->ctx->force_windows_fullscreen = bForceWindowsFullscreen;
 		}
 	}
 

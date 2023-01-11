@@ -65,6 +65,8 @@ struct xwayland_ctx_t
 	double accum_x = 0.0;
 	double accum_y = 0.0;
 
+	bool force_windows_fullscreen = false;
+
 	struct {
 		Atom steamAtom;
 		Atom gameAtom;
@@ -178,6 +180,8 @@ struct xwayland_ctx_t
 		Atom gamescopeHDROnSDRTonemapOperator;
 		Atom gamescopeHDROutputFeedback;
 		Atom gamescopeHDRSDRContentBrightness;
+
+		Atom gamescopeForceWindowsFullscreen;
 
 		Atom gamescopeColorLut3D[DRM_SCREEN_TYPE_COUNT];
 		Atom gamescopeColorShaperLut[DRM_SCREEN_TYPE_COUNT];
