@@ -35,20 +35,24 @@ hwdata_dep = dependency('hwdata')
 dep_x11 = dependency('x11')
 vulkan_dep = dependency('vulkan')
 
-cpu_family = target_machine.cpu_family()
-openvr_path_base = meson.source_root() + '/subprojects/openvr'
-openvr_lib_path_base = openvr_path_base + '/lib'
-if (cpu_family == 'x86_64')
-  openvr_lib_path = openvr_lib_path_base +'/linux64'
-elif (cpu_family == 'x86')
-  openvr_lib_path = openvr_lib_path_base +'/linux32'
-elif (cpu_family == 'aarch64')
-  openvr_lib_path = openvr_lib_path_base +'/linuxarm64'
+if get_option('enable_openvr_support')
+  openvr_dep = dependency('openvr_api', required : false)
+  if not openvr_dep.found()
+    cmake = import('cmake')
+    openvr_var = cmake.subproject_options()
+    openvr_var.add_cmake_defines({'USE_LIBCXX': false})
+    openvr_var.set_override_option('warning_level', '0')
+    openvr_proj = cmake.subproject('openvr', options : openvr_var)
+    openvr_dep = openvr_proj.dependency('openvr_api')
+  endif
+else
+  # null dep
+  openvr_dep = dependency('', required : false)
 endif
-openvr_dep = cppc.find_library('openvr_api', dirs: openvr_lib_path, required : get_option('openvr'))
 
 add_project_arguments(
   '-DHAVE_PIPEWIRE=@0@'.format(pipewire_dep.found().to_int()),
+  '-DHAVE_OPENVR=@0@'.format(openvr_dep.found().to_int()),
   '-DHWDATA_PNP_IDS="@0@"'.format(hwdata_dep.get_variable('pkgdatadir') / 'pnp.ids'),
   language: 'cpp',
 )
