@@ -1776,6 +1776,23 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	assert( drm->req == nullptr );
 	drm->req = drmModeAtomicAlloc();
 
+	if (drm->connector->has_colorspace) {
+		drm->connector->pending.colorspace = g_bOutputHDREnabled ? DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
+	}
+
+	if (drm->connector->has_hdr_output_metadata) {
+		uint32_t hdr_output_metadata_blob = 0;
+		if ( g_bOutputHDREnabled ) {
+			hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
+
+			auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
+			if (feedback && feedback->hdr_metadata_blob)
+				hdr_output_metadata_blob = feedback->hdr_metadata_blob;
+		}
+
+		drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? hdr_output_metadata_blob : 0;
+	}
+
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
 
 	// We do internal refcounting with these events
@@ -1877,23 +1894,12 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 			return ret;
 
 		if (drm->connector->has_colorspace) {
-			drm->connector->pending.colorspace = g_bOutputHDREnabled ? DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
 			ret = add_connector_property(drm->req, drm->connector, "Colorspace", drm->connector->pending.colorspace);
 			if (ret < 0)
 				return ret;
 		}
 
 		if (drm->connector->has_hdr_output_metadata) {
-			uint32_t hdr_output_metadata_blob = 0;
-			if ( g_bOutputHDREnabled ) {
-				hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
-
-				auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
-				if (feedback && feedback->hdr_metadata_blob)
-					hdr_output_metadata_blob = feedback->hdr_metadata_blob;
-			}
-
-			drm->connector->pending.hdr_output_metadata = g_bOutputHDREnabled ? hdr_output_metadata_blob : 0;
 			ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
 			if (ret < 0)
 				return ret;
@@ -1952,6 +1958,18 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	}
 	else
 	{
+		if (drm->connector->has_colorspace && drm->connector->pending.colorspace != drm->connector->current.colorspace) {
+			int ret = add_connector_property(drm->req, drm->connector, "Colorspace", drm->connector->pending.colorspace);
+			if (ret < 0)
+				return ret;
+		}
+
+		if (drm->connector->has_hdr_output_metadata && drm->connector->pending.hdr_output_metadata != drm->connector->current.hdr_output_metadata) {
+			int ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
+			if (ret < 0)
+				return ret;
+		}
+
 		if ( drm->crtc->has_gamma_lut && drm->pending.gamma_lut_id != drm->current.gamma_lut_id )
 		{
 			int ret = add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id);
