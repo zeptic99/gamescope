@@ -71,6 +71,8 @@ public:
 		m_y = y;
 	}
 
+	void undirty() { getTexture(); }
+
 private:
 	void warp(int x, int y);
 	void checkSuspension();

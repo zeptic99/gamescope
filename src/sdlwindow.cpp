@@ -34,6 +34,7 @@ enum UserEvents
 	USER_EVENT_TITLE,
 	USER_EVENT_VISIBLE,
 	USER_EVENT_GRAB,
+	USER_EVENT_CURSOR,
 
 	USER_EVENT_COUNT
 };
@@ -43,6 +44,15 @@ static uint32_t g_unSDLUserEventID;
 static std::mutex g_SDLWindowTitleLock;
 static std::string g_SDLWindowTitle;
 static bool g_bUpdateSDLWindowTitle = false;
+
+struct SDLPendingCursor
+{
+	uint32_t width, height, xhot, yhot;
+	std::vector<uint32_t> data;
+};
+static std::mutex g_SDLCursorLock;
+static SDLPendingCursor g_SDLPendingCursorData;
+static bool g_bUpdateSDLCursor = false;
 
 //-----------------------------------------------------------------------------
 // Purpose: Convert from the remote scancode to a Linux event keycode
@@ -316,6 +326,24 @@ void inputSDLThreadRun( void )
 						bRelativeMouse = grab;
 					}
 				}
+				if ( event.type == g_unSDLUserEventID + USER_EVENT_CURSOR )
+				{
+					std::unique_lock lock(g_SDLCursorLock);
+					if ( g_bUpdateSDLCursor )
+					{
+						SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(
+							g_SDLPendingCursorData.data.data(),
+							g_SDLPendingCursorData.width,
+							g_SDLPendingCursorData.height,
+							32,
+							g_SDLPendingCursorData.width * sizeof(uint32_t),
+							0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+
+						SDL_Cursor *cursor = SDL_CreateColorCursor( surface, g_SDLPendingCursorData.xhot, g_SDLPendingCursorData.yhot );
+						SDL_SetCursor( cursor );
+						g_bUpdateSDLCursor = false;
+					}
+				}
 				break;
 		}
 	}
@@ -372,8 +400,39 @@ void sdlwindow_grab( bool bGrab )
 	if ( g_bForceRelativeMouse )
 		return;
 
+	static bool s_bWasGrabbed = false;
+
+	if ( s_bWasGrabbed == bGrab )
+		return;
+
+	s_bWasGrabbed = bGrab;
+
 	SDL_Event event;
 	event.type = g_unSDLUserEventID + USER_EVENT_GRAB;
 	event.user.code = bGrab ? 1 : 0;
+	SDL_PushEvent( &event );
+}
+
+void sdlwindow_cursor(void* pixels, uint32_t width, uint32_t height, uint32_t xhot, uint32_t yhot)
+{
+	if ( !BIsNested() )
+		return;
+
+	if ( g_bForceRelativeMouse )
+		return;
+
+	{
+		std::unique_lock lock( g_SDLCursorLock );
+		g_SDLPendingCursorData.width = width;
+		g_SDLPendingCursorData.height = height;
+		g_SDLPendingCursorData.xhot = xhot;
+		g_SDLPendingCursorData.yhot = yhot;
+		g_SDLPendingCursorData.data.resize( width * height );
+		memcpy(g_SDLPendingCursorData.data.data(), pixels, width * height * sizeof(uint32_t));
+		g_bUpdateSDLCursor = true;
+	}
+
+	SDL_Event event;
+	event.type = g_unSDLUserEventID + USER_EVENT_CURSOR;
 	SDL_PushEvent( &event );
 }

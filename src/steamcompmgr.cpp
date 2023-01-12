@@ -1364,14 +1364,12 @@ bool MouseCursor::getTexture()
 		}
 	}
 
-	if (bNoCursor != m_imageEmpty) {
-		m_imageEmpty = bNoCursor;
+	m_imageEmpty = bNoCursor;
 
-		if ( !g_bForceRelativeMouse )
-		{
-			sdlwindow_grab( m_imageEmpty );
-			bSteamCompMgrGrab = BIsNested() && m_imageEmpty;
-		}
+	if ( !g_bForceRelativeMouse )
+	{
+		sdlwindow_grab( m_imageEmpty );
+		bSteamCompMgrGrab = BIsNested() && m_imageEmpty;
 	}
 
 	m_dirty = false;
@@ -1391,6 +1389,7 @@ bool MouseCursor::getTexture()
 	}
 
 	m_texture = vulkan_create_texture_from_bits(surfaceWidth, surfaceHeight, image->width, image->height, DRM_FORMAT_ARGB8888, texCreateFlags, cursorBuffer.data());
+	sdlwindow_cursor(cursorBuffer.data(), image->width, image->height, image->xhot, image->yhot);
 	assert(m_texture);
 	XFree(image);
 
@@ -1908,6 +1907,13 @@ paint_all(bool async)
 		{
 			paint_window(notification, notification, &frameInfo, global_focus.cursor, PaintWindowFlag::NotificationMode);
 		}
+	}
+
+	if (input)
+	{
+		// Make sure to un-dirty the texture before we do any painting logic.
+		// We determine whether we are grabbed etc this way.
+		global_focus.cursor->undirty();
 	}
 
 	bool bForceHideCursor = BIsNested() && !bSteamCompMgrGrab;
