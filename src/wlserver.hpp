@@ -176,6 +176,7 @@ void wlserver_run(void);
 
 void wlserver_lock(void);
 void wlserver_unlock(void);
+bool wlserver_is_lock_held(void);
 
 void wlserver_keyboardfocus( struct wlr_surface *surface );
 void wlserver_key( uint32_t key, bool press, uint32_t time );

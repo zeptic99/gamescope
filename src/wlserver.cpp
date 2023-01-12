@@ -1034,6 +1034,17 @@ bool wlserver_init( void ) {
 
 pthread_mutex_t waylock = PTHREAD_MUTEX_INITIALIZER;
 
+bool wlserver_is_lock_held(void)
+{
+	int err = pthread_mutex_trylock(&waylock);
+	if (err == 0)
+	{
+		pthread_mutex_unlock(&waylock);
+		return false;
+	}
+	return true;
+}
+
 void wlserver_lock(void)
 {
 	pthread_mutex_lock(&waylock);
@@ -1094,6 +1105,8 @@ void wlserver_run(void)
 
 void wlserver_keyboardfocus( struct wlr_surface *surface )
 {
+	assert( wlserver_is_lock_held() );
+
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard( wlserver.wlr.seat );
 	if ( keyboard == nullptr )
 		wlr_seat_keyboard_notify_enter( wlserver.wlr.seat, surface, nullptr, 0, nullptr);
@@ -1105,6 +1118,8 @@ void wlserver_keyboardfocus( struct wlr_surface *surface )
 
 void wlserver_key( uint32_t key, bool press, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	assert( wlserver.wlr.virtual_keyboard_device != nullptr );
 	wlr_seat_set_keyboard( wlserver.wlr.seat, wlserver.wlr.virtual_keyboard_device );
 	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, time, key, press );
@@ -1114,6 +1129,8 @@ void wlserver_key( uint32_t key, bool press, uint32_t time )
 
 void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y /* = 0 */ )
 {
+	assert( wlserver_is_lock_held() );
+
 	wlserver.mouse_focus_surface = wlrsurface;
 
 	if ( x < wlrsurface->current.width && y < wlrsurface->current.height )
@@ -1131,6 +1148,8 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y
 
 void wlserver_mousemotion( int x, int y, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	// TODO: Pick the xwayland_server with active focus
 	auto server = steamcompmgr_get_focused_server();
 	if ( server != NULL )
@@ -1142,6 +1161,8 @@ void wlserver_mousemotion( int x, int y, uint32_t time )
 
 void wlserver_mousewarp( int x, int y, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	// TODO: Pick the xwayland_server with active focus
 	auto server = steamcompmgr_get_focused_server();
 	if ( server != NULL )
@@ -1153,12 +1174,16 @@ void wlserver_mousewarp( int x, int y, uint32_t time )
 
 void wlserver_mousebutton( int button, bool press, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	wlr_seat_pointer_notify_button( wlserver.wlr.seat, time, button, press ? WLR_BUTTON_PRESSED : WLR_BUTTON_RELEASED );
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
 
 void wlserver_mousewheel( int x, int y, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	if ( x != 0 )
 	{
 		wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_HORIZONTAL, x, x * WLR_POINTER_AXIS_DISCRETE_STEP, WLR_AXIS_SOURCE_WHEEL );
@@ -1172,11 +1197,15 @@ void wlserver_mousewheel( int x, int y, uint32_t time )
 
 void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when )
 {
+	assert( wlserver_is_lock_held() );
+
 	wlr_surface_send_frame_done( surf, when );
 }
 
 bool wlserver_surface_is_async( struct wlr_surface *surf )
 {
+	assert( wlserver_is_lock_held() );
+
 	auto wl_surf = get_wl_surface_info( surf );
 	if ( !wl_surf )
 		return false;
@@ -1196,6 +1225,8 @@ bool wlserver_surface_is_async( struct wlr_surface *surf )
 
 const std::shared_ptr<wlserver_vk_swapchain_feedback>& wlserver_surface_swapchain_feedback( struct wlr_surface *surf )
 {
+	assert( wlserver_is_lock_held() );
+
 	auto wl_surf = get_wl_surface_info( surf );
 
 	return wl_surf->swapchain_feedback;
@@ -1234,6 +1265,8 @@ static void apply_touchscreen_orientation(double *x, double *y )
 
 void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
 		double tx = x;
@@ -1272,6 +1305,8 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 
 void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
 		double tx = x;
@@ -1323,6 +1358,8 @@ void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 
 void wlserver_touchup( int touch_id, uint32_t time )
 {
+	assert( wlserver_is_lock_held() );
+
 	if ( wlserver.mouse_focus_surface != NULL )
 	{
 		bool bReleasedAny = false;
@@ -1371,6 +1408,8 @@ const char *wlserver_get_wl_display_name( void )
 
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf, bool override )
 {
+	assert( wlserver_is_lock_held() );
+
 	if (!override)
 	{
 		wl_list_remove( &surf->pending_link );
@@ -1468,6 +1507,8 @@ const char *gamescope_xwayland_server_t::get_nested_display_name() const
 
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 {
+	assert( wlserver_is_lock_held() );
+
 	if (surf->main_surface)
 	{
 		wlserver_wl_surface_info *wl_info = get_wl_surface_info(surf->main_surface);
@@ -1490,6 +1531,8 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 
 void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh )
 {
+	assert( wlserver_is_lock_held() );
+
 	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( idx );
 	if ( !server )
 		return;
