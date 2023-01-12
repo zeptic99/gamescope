@@ -162,11 +162,13 @@ void inputSDLThreadRun( void )
 				}
 				else
 				{
+					wlserver_lock();
 					wlserver_touchmotion(
 						event.motion.x / float(g_nOutputWidth),
 						event.motion.y / float(g_nOutputHeight),
 						0,
 						fake_timestamp );
+					wlserver_unlock();
 				}
 				break;
 			case SDL_MOUSEBUTTONDOWN:
