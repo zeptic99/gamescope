@@ -23,9 +23,21 @@ static bool g_bWindowShown = false;
 static int g_nOldNestedRefresh = 0;
 static bool g_bWindowFocused = true;
 
+
+extern bool steamMode;
+extern bool g_bFirstFrame;
+
 SDL_Window *g_SDLWindow;
+
+enum UserEvents
+{
+	USER_EVENT_TITLE,
+	USER_EVENT_VISIBLE,
+
+	USER_EVENT_COUNT
+};
+
 static uint32_t g_unSDLUserEventID;
-static SDL_Event g_SDLUserEvent;
 
 static std::mutex g_SDLWindowTitleLock;
 static std::string g_SDLWindowTitle;
@@ -75,10 +87,7 @@ void inputSDLThreadRun( void )
 	SDL_Event event;
 	uint32_t key;
 
-	g_unSDLUserEventID = SDL_RegisterEvents( 1 );
-
-	g_SDLUserEvent.type = g_unSDLUserEventID;
-	g_SDLUserEvent.user.code = 32;
+	g_unSDLUserEventID = SDL_RegisterEvents( USER_EVENT_COUNT );
 
 	uint32_t nSDLWindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI;
 
@@ -243,9 +252,40 @@ void inputSDLThreadRun( void )
 				}
 				break;
 			default:
-				if ( event.type == g_unSDLUserEventID )
+				if ( event.type == g_unSDLUserEventID + USER_EVENT_TITLE )
 				{
-					sdlwindow_update();
+					g_SDLWindowTitleLock.lock();
+					if ( g_bUpdateSDLWindowTitle )
+					{
+						g_bUpdateSDLWindowTitle = false;
+						SDL_SetWindowTitle( g_SDLWindow, g_SDLWindowTitle.c_str() );
+					}
+					g_SDLWindowTitleLock.unlock();
+				}
+				if ( event.type == g_unSDLUserEventID + USER_EVENT_VISIBLE )
+				{
+					bool should_show = !!event.user.code;
+
+					// If we are Steam Mode in nested, show the window
+					// whenever we have had a first frame to match
+					// what we do in embedded with Steam for testing
+					// held commits, etc.
+					if ( steamMode )
+						should_show |= !g_bFirstFrame;
+
+					if ( g_bWindowShown != should_show )
+					{
+						g_bWindowShown = should_show;
+
+						if ( g_bWindowShown )
+						{
+							SDL_ShowWindow( g_SDLWindow );
+						}
+						else
+						{
+							SDL_HideWindow( g_SDLWindow );
+						}
+					}
 				}
 				break;
 		}
@@ -265,43 +305,6 @@ bool sdlwindow_init( void )
 	return g_bSDLInitOK;
 }
 
-extern bool steamMode;
-extern bool g_bFirstFrame;
-
-void sdlwindow_update( void )
-{
-	bool should_show = hasFocusWindow;
-
-	// If we are Steam Mode in nested, show the window
-	// whenever we have had a first frame to match
-	// what we do in embedded with Steam for testing
-	// held commits, etc.
-	if ( steamMode )
-		should_show |= !g_bFirstFrame;
-
-	if ( g_bWindowShown != should_show )
-	{
-		g_bWindowShown = should_show;
-
-		if ( g_bWindowShown )
-		{
-			SDL_ShowWindow( g_SDLWindow );
-		}
-		else
-		{
-			SDL_HideWindow( g_SDLWindow );
-		}
-	}
-
-	g_SDLWindowTitleLock.lock();
-	if ( g_bUpdateSDLWindowTitle )
-	{
-		g_bUpdateSDLWindowTitle = false;
-		SDL_SetWindowTitle( g_SDLWindow, g_SDLWindowTitle.c_str() );
-	}
-	g_SDLWindowTitleLock.unlock();
-}
-
 void sdlwindow_title( const char* title )
 {
 	if ( !BIsNested() )
@@ -313,15 +316,21 @@ void sdlwindow_title( const char* title )
 	{
 		g_SDLWindowTitle = title ? title : DEFAULT_TITLE;
 		g_bUpdateSDLWindowTitle = true;
-		sdlwindow_pushupdate();
+
+		SDL_Event event;
+		event.type = g_unSDLUserEventID + USER_EVENT_TITLE;
+		SDL_PushEvent( &event );
 	}
 	g_SDLWindowTitleLock.unlock();
 }
 
-void sdlwindow_pushupdate( void )
+void sdlwindow_visible( bool bVisible )
 {
 	if ( !BIsNested() )
 		return;
 
-	SDL_PushEvent( &g_SDLUserEvent );
+	SDL_Event event;
+	event.type = g_unSDLUserEventID + USER_EVENT_VISIBLE;
+	event.user.code = bVisible ? 1 : 0;
+	SDL_PushEvent( &event );
 }
