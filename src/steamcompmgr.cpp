@@ -159,6 +159,9 @@ constexpr const T& clamp( const T& x, const T& min, const T& max )
     return x < min ? min : max < x ? max : x;
 }
 
+extern bool g_bForceRelativeMouse;
+bool bSteamCompMgrGrab = false;
+
 struct ignore {
 	struct ignore	*next;
 	unsigned long	sequence;
@@ -1364,8 +1367,10 @@ bool MouseCursor::getTexture()
 	if (bNoCursor != m_imageEmpty) {
 		m_imageEmpty = bNoCursor;
 
-		if (m_imageEmpty) {
-// 				fprintf( stderr, "grab?\n" );
+		if ( !g_bForceRelativeMouse )
+		{
+			sdlwindow_grab( m_imageEmpty );
+			bSteamCompMgrGrab = BIsNested() && m_imageEmpty;
 		}
 	}
 
@@ -1905,10 +1910,12 @@ paint_all(bool async)
 		}
 	}
 
+	bool bForceHideCursor = BIsNested() && !bSteamCompMgrGrab;
+
 	bool bDrewCursor = false;
 
 	// Draw cursor if we need to
-	if (input) {
+	if (input && !bForceHideCursor) {
 		int nLayerCountBefore = frameInfo.layerCount;
 		global_focus.cursor->paint(
 			input, w == input ? override : nullptr,
@@ -5769,6 +5776,8 @@ steamcompmgr_main(int argc, char **argv)
 
 	// Reset getopt() state
 	optind = 1;
+
+	bSteamCompMgrGrab = BIsNested() && g_bForceRelativeMouse;
 
 	int o;
 	int opt_index = -1;

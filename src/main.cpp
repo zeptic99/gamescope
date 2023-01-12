@@ -60,6 +60,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "nested-unfocused-refresh", required_argument, nullptr, 'o' },
 	{ "borderless", no_argument, nullptr, 'b' },
 	{ "fullscreen", no_argument, nullptr, 'f' },
+	{ "force-grab-cursor", no_argument, nullptr, 0 },
 
 	// embedded mode options
 	{ "disable-layers", no_argument, nullptr, 0 },
@@ -153,6 +154,7 @@ const char usage[] =
 	"  -o, --nested-unfocused-refresh game refresh rate when unfocused\n"
 	"  -b, --borderless               make the window borderless\n"
 	"  -f, --fullscreen               make the window fullscreen\n"
+	"  --force-grab-cursor            always use relative mouse mode instead of flipping dependent on cursor visibility.\n"
 	"\n"
 	"Embedded mode options:\n"
 	"  -O, --prefer-output            list of connectors in order of preference\n"
@@ -215,6 +217,7 @@ int g_nOutputRefresh = 0;
 bool g_bOutputHDREnabled = false;
 
 bool g_bFullscreen = false;
+bool g_bForceRelativeMouse = false;
 
 bool g_bIsNested = false;
 
@@ -484,6 +487,8 @@ int main(int argc, char **argv)
 					g_preferDeviceID = deviceID;
 				} else if (strcmp(opt_name, "immediate-flips") == 0) {
 					g_nAsyncFlipsEnabled = 1;
+				} else if (strcmp(opt_name, "force-grab-cursor") == 0) {
+					g_bForceRelativeMouse = true;
 				} else if (strcmp(opt_name, "adaptive-sync") == 0) {
 					s_bInitialWantsVRREnabled = true;
 				}
@@ -568,6 +573,11 @@ int main(int argc, char **argv)
 	{
 		fprintf( stderr, "Failed to initialize Wayland session\n" );
 		return 1;
+	}
+
+	if ( !BisNested() )
+	{
+		g_bForceRelativeMouse = false;
 	}
 
 #if HAVE_OPENVR

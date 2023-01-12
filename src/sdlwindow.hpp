@@ -12,5 +12,6 @@ void sdlwindow_title( const char* title );
 
 // called from other threads with interesting things have happened with clients that might warrant updating the nested window
 void sdlwindow_visible( bool bVisible );
+void sdlwindow_grab( bool bGrab );
 
 extern SDL_Window *g_SDLWindow;

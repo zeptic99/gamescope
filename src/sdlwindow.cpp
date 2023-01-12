@@ -33,6 +33,7 @@ enum UserEvents
 {
 	USER_EVENT_TITLE,
 	USER_EVENT_VISIBLE,
+	USER_EVENT_GRAB,
 
 	USER_EVENT_COUNT
 };
@@ -80,12 +81,15 @@ void updateOutputRefresh( void )
 	}
 }
 
+extern bool g_bForceRelativeMouse;
+
 void inputSDLThreadRun( void )
 {
 	pthread_setname_np( pthread_self(), "gamescope-sdl" );
 
 	SDL_Event event;
 	uint32_t key;
+	bool bRelativeMouse = false;
 
 	g_unSDLUserEventID = SDL_RegisterEvents( USER_EVENT_COUNT );
 
@@ -115,7 +119,12 @@ void inputSDLThreadRun( void )
 		return;
 	}
 
-	SDL_SetRelativeMouseMode(SDL_TRUE);
+	if ( g_bForceRelativeMouse )
+	{
+		SDL_SetRelativeMouseMode( SDL_TRUE );
+		bRelativeMouse = true;
+	}
+
 	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 
 	g_nOldNestedRefresh = g_nNestedRefresh;
@@ -128,11 +137,22 @@ void inputSDLThreadRun( void )
 		switch( event.type )
 		{
 			case SDL_MOUSEMOTION:
-				if ( g_bWindowFocused )
+				if ( bRelativeMouse )
 				{
-					wlserver_lock();
-					wlserver_mousemotion( event.motion.xrel, event.motion.yrel, event.motion.timestamp );
-					wlserver_unlock();
+					if ( g_bWindowFocused )
+					{
+						wlserver_lock();
+						wlserver_mousemotion( event.motion.xrel, event.motion.yrel, event.motion.timestamp );
+						wlserver_unlock();
+					}
+				}
+				else
+				{
+					wlserver_touchmotion(
+						event.motion.x / float(g_nOutputWidth),
+						event.motion.y / float(g_nOutputHeight),
+						0,
+						event.motion.timestamp );
 				}
 				break;
 			case SDL_MOUSEBUTTONDOWN:
@@ -287,6 +307,15 @@ void inputSDLThreadRun( void )
 						}
 					}
 				}
+				if ( event.type == g_unSDLUserEventID + USER_EVENT_GRAB )
+				{
+					bool grab = !!event.user.code;
+					if ( grab != bRelativeMouse )
+					{
+						SDL_SetRelativeMouseMode( grab ? SDL_TRUE : SDL_FALSE );
+						bRelativeMouse = grab;
+					}
+				}
 				break;
 		}
 	}
@@ -332,5 +361,19 @@ void sdlwindow_visible( bool bVisible )
 	SDL_Event event;
 	event.type = g_unSDLUserEventID + USER_EVENT_VISIBLE;
 	event.user.code = bVisible ? 1 : 0;
+	SDL_PushEvent( &event );
+}
+
+void sdlwindow_grab( bool bGrab )
+{
+	if ( !BIsNested() )
+		return;
+
+	if ( g_bForceRelativeMouse )
+		return;
+
+	SDL_Event event;
+	event.type = g_unSDLUserEventID + USER_EVENT_GRAB;
+	event.user.code = bGrab ? 1 : 0;
 	SDL_PushEvent( &event );
 }
