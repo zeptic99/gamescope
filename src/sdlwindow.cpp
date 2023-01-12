@@ -142,8 +142,12 @@ void inputSDLThreadRun( void )
 	g_bSDLInitOK = true;
 	g_SDLInitLock.unlock();
 
+	static uint32_t fake_timestamp = 0;
+
 	while( SDL_WaitEvent( &event ) )
 	{
+		fake_timestamp++;
+
 		switch( event.type )
 		{
 			case SDL_MOUSEMOTION:
@@ -152,7 +156,7 @@ void inputSDLThreadRun( void )
 					if ( g_bWindowFocused )
 					{
 						wlserver_lock();
-						wlserver_mousemotion( event.motion.xrel, event.motion.yrel, event.motion.timestamp );
+						wlserver_mousemotion( event.motion.xrel, event.motion.yrel, fake_timestamp );
 						wlserver_unlock();
 					}
 				}
@@ -162,7 +166,7 @@ void inputSDLThreadRun( void )
 						event.motion.x / float(g_nOutputWidth),
 						event.motion.y / float(g_nOutputHeight),
 						0,
-						event.motion.timestamp );
+						fake_timestamp );
 				}
 				break;
 			case SDL_MOUSEBUTTONDOWN:
@@ -170,27 +174,27 @@ void inputSDLThreadRun( void )
 				wlserver_lock();
 				wlserver_mousebutton( SDLButtonToLinuxButton( event.button.button ),
 									  event.button.state == SDL_PRESSED,
-									  event.button.timestamp );
+									  fake_timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_MOUSEWHEEL:
 				wlserver_lock();
-				wlserver_mousewheel( -event.wheel.x, -event.wheel.y, event.wheel.timestamp );
+				wlserver_mousewheel( -event.wheel.x, -event.wheel.y, fake_timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_FINGERMOTION:
 				wlserver_lock();
-				wlserver_touchmotion( event.tfinger.x, event.tfinger.y, event.tfinger.fingerId, event.tfinger.timestamp );
+				wlserver_touchmotion( event.tfinger.x, event.tfinger.y, event.tfinger.fingerId, fake_timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_FINGERDOWN:
 				wlserver_lock();
-				wlserver_touchdown( event.tfinger.x, event.tfinger.y, event.tfinger.fingerId, event.tfinger.timestamp );
+				wlserver_touchdown( event.tfinger.x, event.tfinger.y, event.tfinger.fingerId, fake_timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_FINGERUP:
 				wlserver_lock();
-				wlserver_touchup( event.tfinger.fingerId, event.tfinger.timestamp );
+				wlserver_touchup( event.tfinger.fingerId, fake_timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_KEYDOWN:
@@ -243,7 +247,7 @@ void inputSDLThreadRun( void )
 					break;
 
 				wlserver_lock();
-				wlserver_key( key, event.type == SDL_KEYDOWN, event.key.timestamp );
+				wlserver_key( key, event.type == SDL_KEYDOWN, fake_timestamp );
 				wlserver_unlock();
 				break;
 			case SDL_WINDOWEVENT:
