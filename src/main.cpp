@@ -575,7 +575,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( !BisNested() )
+	if ( !BIsNested() )
 	{
 		g_bForceRelativeMouse = false;
 	}
