@@ -579,9 +579,6 @@ struct wlserver_input_method *create_local_ime()
 
 	wlr_keyboard_set_repeat_info(&ime->keyboard, 0, 0);
 
-	wl_resource_set_user_data(ime->resource, ime);
-	gamescope_input_method_send_done(ime->resource, ime->serial);
-
 	ime->ime_reset_ime_keyboard_event_source = wl_event_loop_add_timer(global_manager->server->event_loop, reset_ime_keyboard, ime);
 	ime->ime_release_ime_keypress_event_source = wl_event_loop_add_timer(global_manager->server->event_loop, release_key_if_needed, ime);
 
