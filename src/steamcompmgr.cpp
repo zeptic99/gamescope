@@ -5365,6 +5365,46 @@ load_mouse_cursor( MouseCursor *cursor, const char *path, int hx, int hy )
 	return cursor->setCursorImage((char *)data, w, h, hx, hy);
 }
 
+static bool
+load_host_cursor( MouseCursor *cursor )
+{
+	extern const char *g_pOriginalDisplay;
+
+	if ( !g_pOriginalDisplay )
+		return false;
+
+	Display *display = XOpenDisplay( g_pOriginalDisplay );
+	if ( !display )
+		return false;
+	defer( XCloseDisplay( display ) );
+
+	int xfixes_event, xfixes_error;
+	if (!XFixesQueryExtension(display, &xfixes_event, &xfixes_error))
+	{
+		xwm_log.errorf("No XFixes extension on current compositor");
+		return false;
+	}
+
+	XFixesCursorImage *image = XFixesGetCursorImage( display );
+	if ( !image )
+		return false;
+	defer( XFree( image ) );
+
+	// image->pixels is `unsigned long*` :/
+	// Thanks X11.
+	std::vector<uint32_t> cursorData;
+	for (uint32_t y = 0; y < image->height; y++)
+	{
+		for (uint32_t x = 0; x < image->width; x++)
+		{
+			cursorData.push_back((uint32_t)image->pixels[image->height * y + x]);
+		}
+	}
+
+	cursor->setCursorImage((char *)cursorData.data(), image->width, image->height, image->xhot, image->yhot);
+	return true;
+}
+
 enum steamcompmgr_event_type {
 	EVENT_VBLANK,
 	EVENT_NUDGE,
@@ -5630,7 +5670,21 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	}
 	else
 	{
-		ctx->cursor->setCursorImageByName("left_ptr");
+		if ( BIsNested() )
+		{
+			if ( !load_host_cursor( ctx->cursor.get() ) )
+			{
+				xwm_log.errorf("Failed to load host cursor. Falling back to left_ptr.");
+				if (!ctx->cursor->setCursorImageByName("left_ptr"))
+					xwm_log.errorf("Failed to load mouse cursor: left_ptr");
+			}
+		}
+		else
+		{
+			xwm_log.infof("Embedded, no cursor set. Using left_ptr by default.");
+			if (!ctx->cursor->setCursorImageByName("left_ptr"))
+				xwm_log.errorf("Failed to load mouse cursor: left_ptr");
+		}
 	}
 }
 

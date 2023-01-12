@@ -37,6 +37,7 @@ EStreamColorspace g_ForcedNV12ColorSpace = k_EStreamColorspace_Unknown;
 static bool s_bInitialWantsVRREnabled = false;
 
 const char *gamescope_optstring = nullptr;
+const char *g_pOriginalDisplay = nullptr;
 
 const struct option *gamescope_options = (struct option[]){
 	{ "help", no_argument, nullptr, 0 },
@@ -560,6 +561,7 @@ int main(int argc, char **argv)
 	if ( getenv("DISPLAY") != NULL || getenv("WAYLAND_DISPLAY") != NULL )
 	{
 		g_bIsNested = true;
+		g_pOriginalDisplay = getenv("DISPLAY");
 	}
 
 	if ( !wlsession_init() )
