@@ -6,6 +6,7 @@ dep_xfixes = dependency('xfixes')
 dep_xxf86vm = dependency('xxf86vm')
 dep_xtst = dependency('xtst')
 dep_xres = dependency('xres')
+dep_xmu = dependency('xmu')
 
 drm_dep = dependency('libdrm', version: '>= 2.4.113')
 
@@ -113,7 +114,7 @@ endif
       dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
       dep_xxf86vm, dep_xres, drm_dep, wayland_server,
       xkbcommon, thread_dep, sdl_dep, wlroots_dep,
-      vulkan_dep, liftoff_dep, dep_xtst, cap_dep, pipewire_dep, librt_dep,
+      vulkan_dep, liftoff_dep, dep_xtst, dep_xmu, cap_dep, pipewire_dep, librt_dep,
       stb_dep, displayinfo_dep, openvr_dep,
     ],
     install: true,

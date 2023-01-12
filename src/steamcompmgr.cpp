@@ -66,6 +66,7 @@
 #include <spawn.h>
 #include <signal.h>
 #include <linux/input-event-codes.h>
+#include <X11/Xmu/CurUtil.h>
 
 #include "xwayland_ctx.hpp"
 
@@ -77,6 +78,7 @@
 #include "vblankmanager.hpp"
 #include "sdlwindow.hpp"
 #include "log.hpp"
+#include "defer.hpp"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
@@ -1165,6 +1167,38 @@ error_pixmap:
 	XDestroyImage(ximage);
 error_image:
 	return false;
+}
+
+bool MouseCursor::setCursorImageByName(const char *name)
+{
+	int screen = DefaultScreen(m_ctx->dpy);
+
+	XColor fg;
+	fg.pixel = WhitePixel(m_ctx->dpy, screen);
+	XQueryColor(m_ctx->dpy, DefaultColormap(m_ctx->dpy, screen), &fg);
+
+	XColor bg;
+	bg.pixel = BlackPixel(m_ctx->dpy, screen);
+	XQueryColor(m_ctx->dpy, DefaultColormap(m_ctx->dpy, screen), &bg);
+
+	int index = XmuCursorNameToIndex(name);
+	if (index < 0)
+		return false;
+
+	Font font = XLoadFont(m_ctx->dpy, "cursor");
+	if (!font)
+		return false;
+	defer( XUnloadFont(m_ctx->dpy, font) );
+
+	Cursor cursor = XCreateGlyphCursor(m_ctx->dpy, font, font, index, index + 1, &fg, &bg);
+	if ( !cursor )
+		return false;
+	defer( XFreeCursor(m_ctx->dpy, cursor) );
+
+	XDefineCursor(m_ctx->dpy, DefaultRootWindow(m_ctx->dpy), cursor);
+	XFlush(m_ctx->dpy);
+	setDirty();
+	return true;
 }
 
 void MouseCursor::constrainPosition()
@@ -5593,6 +5627,10 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	{
 		if (!load_mouse_cursor(ctx->cursor.get(), g_customCursorPath, g_customCursorHotspotX, g_customCursorHotspotY))
 			xwm_log.errorf("Failed to load mouse cursor: %s", g_customCursorPath);
+	}
+	else
+	{
+		ctx->cursor->setCursorImageByName("left_ptr");
 	}
 }
 

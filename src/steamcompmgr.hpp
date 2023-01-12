@@ -58,6 +58,7 @@ public:
 
 	// Will take ownership of data.
 	bool setCursorImage(char *data, int w, int h, int hx, int hy);
+	bool setCursorImageByName(const char *name);
 
 	void hide() { m_lastMovedTime = 0; checkSuspension(); }
 
