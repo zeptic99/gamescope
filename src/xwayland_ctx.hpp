@@ -101,6 +101,7 @@ struct xwayland_ctx_t
 		Atom steamTouchClickModeAtom;
 		Atom utf8StringAtom;
 		Atom netWMNameAtom;
+		Atom netWMIcon;
 		Atom motifWMHints;
 		Atom netSystemTrayOpcodeAtom;
 		Atom steamStreamingClientAtom;

@@ -42,13 +42,15 @@ enum UserEvents
 static uint32_t g_unSDLUserEventID;
 
 static std::mutex g_SDLWindowTitleLock;
-static std::string g_SDLWindowTitle;
+static std::shared_ptr<std::string> g_SDLWindowTitle;
+static std::shared_ptr<std::vector<uint32_t>> g_SDLWindowIcon;
 static bool g_bUpdateSDLWindowTitle = false;
+static bool g_bUpdateSDLWindowIcon = false;
 
 struct SDLPendingCursor
 {
 	uint32_t width, height, xhot, yhot;
-	std::vector<uint32_t> data;
+	std::shared_ptr<std::vector<uint32_t>> data;
 };
 static std::mutex g_SDLCursorLock;
 static SDLPendingCursor g_SDLPendingCursorData;
@@ -92,6 +94,8 @@ void updateOutputRefresh( void )
 }
 
 extern bool g_bForceRelativeMouse;
+
+static std::string gamescope_str = DEFAULT_TITLE;
 
 void inputSDLThreadRun( void )
 {
@@ -149,6 +153,8 @@ void inputSDLThreadRun( void )
 
 	static uint32_t fake_timestamp = 0;
 	SDL_Surface *cursor_surface = nullptr;
+	SDL_Surface *icon_surface = nullptr;
+	SDL_Cursor *cursor = nullptr;
 
 	while( SDL_WaitEvent( &event ) )
 	{
@@ -308,13 +314,40 @@ void inputSDLThreadRun( void )
 					g_SDLWindowTitleLock.lock();
 					if ( g_bUpdateSDLWindowTitle )
 					{
-						std::string window_title = g_SDLWindowTitle;
+						std::string tmp_title;
+
+						const std::string *window_title = g_SDLWindowTitle.get();
+						if (!window_title)
+							window_title = &gamescope_str;
+
 						g_bUpdateSDLWindowTitle = false;
 						if ( g_bGrabbed )
 						{
-							window_title += " (grabbed)";
+							tmp_title = *window_title;
+							tmp_title += " (grabbed)";
+
+							window_title = &tmp_title;
 						}
-						SDL_SetWindowTitle( g_SDLWindow, window_title.c_str() );
+						SDL_SetWindowTitle( g_SDLWindow, window_title->c_str() );
+					}
+					
+					if ( g_bUpdateSDLWindowIcon )
+					{
+						if ( icon_surface )
+							SDL_FreeSurface( icon_surface );
+
+						if ( g_SDLWindowIcon )
+						{
+							uint32_t size = sqrt(g_SDLWindowIcon->size());
+
+							icon_surface = SDL_CreateRGBSurfaceFrom(
+								g_SDLWindowIcon->data(),
+								size, size,
+								32, size * sizeof(uint32_t),
+								0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+						}
+
+						SDL_SetWindowIcon( g_SDLWindow, icon_surface );
 					}
 					g_SDLWindowTitleLock.unlock();
 				}
@@ -361,14 +394,17 @@ void inputSDLThreadRun( void )
 							SDL_FreeSurface(cursor_surface);
 
 						cursor_surface = SDL_CreateRGBSurfaceFrom(
-							g_SDLPendingCursorData.data.data(),
+							g_SDLPendingCursorData.data->data(),
 							g_SDLPendingCursorData.width,
 							g_SDLPendingCursorData.height,
 							32,
 							g_SDLPendingCursorData.width * sizeof(uint32_t),
 							0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 
-						SDL_Cursor *cursor = SDL_CreateColorCursor( surface, g_SDLPendingCursorData.xhot, g_SDLPendingCursorData.yhot );
+						if (cursor)
+							SDL_FreeCursor(cursor);
+
+						cursor = SDL_CreateColorCursor( cursor_surface, g_SDLPendingCursorData.xhot, g_SDLPendingCursorData.yhot );
 						SDL_SetCursor( cursor );
 						g_bUpdateSDLCursor = false;
 					}
@@ -391,23 +427,33 @@ bool sdlwindow_init( void )
 	return g_bSDLInitOK;
 }
 
-void sdlwindow_title( const char* title )
+void sdlwindow_title( std::shared_ptr<std::string> title, std::shared_ptr<std::vector<uint32_t>> icon )
 {
 	if ( !BIsNested() )
 		return;
 
-	title = title ? title : DEFAULT_TITLE;
-	g_SDLWindowTitleLock.lock();
-	if ( g_SDLWindowTitle != title )
 	{
-		g_SDLWindowTitle = title ? title : DEFAULT_TITLE;
-		g_bUpdateSDLWindowTitle = true;
+		std::unique_lock lock(g_SDLWindowTitleLock);
 
-		SDL_Event event;
-		event.type = g_unSDLUserEventID + USER_EVENT_TITLE;
-		SDL_PushEvent( &event );
+		if ( g_SDLWindowTitle != title )
+		{
+			g_SDLWindowTitle = title;
+			g_bUpdateSDLWindowTitle = true;
+		}
+
+		if ( g_SDLWindowIcon != icon )
+		{
+			g_SDLWindowIcon = icon;
+			g_bUpdateSDLWindowIcon = true;
+		}
+
+		if ( g_bUpdateSDLWindowTitle || g_bUpdateSDLWindowIcon )
+		{
+			SDL_Event event;
+			event.type = g_unSDLUserEventID + USER_EVENT_TITLE;
+			SDL_PushEvent( &event );
+		}
 	}
-	g_SDLWindowTitleLock.unlock();
 }
 
 void sdlwindow_visible( bool bVisible )
@@ -442,7 +488,7 @@ void sdlwindow_grab( bool bGrab )
 	SDL_PushEvent( &event );
 }
 
-void sdlwindow_cursor(void* pixels, uint32_t width, uint32_t height, uint32_t xhot, uint32_t yhot)
+void sdlwindow_cursor(std::shared_ptr<std::vector<uint32_t>> pixels, uint32_t width, uint32_t height, uint32_t xhot, uint32_t yhot)
 {
 	if ( !BIsNested() )
 		return;
@@ -456,8 +502,7 @@ void sdlwindow_cursor(void* pixels, uint32_t width, uint32_t height, uint32_t xh
 		g_SDLPendingCursorData.height = height;
 		g_SDLPendingCursorData.xhot = xhot;
 		g_SDLPendingCursorData.yhot = yhot;
-		g_SDLPendingCursorData.data.resize( width * height );
-		memcpy(g_SDLPendingCursorData.data.data(), pixels, width * height * sizeof(uint32_t));
+		g_SDLPendingCursorData.data = pixels;
 		g_bUpdateSDLCursor = true;
 	}
 

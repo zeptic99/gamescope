@@ -266,7 +266,7 @@ struct win {
 	unsigned long	map_sequence;
 	unsigned long	damage_sequence;
 
-	char *title;
+	std::shared_ptr<std::string> title;
 	bool utf8_title;
 	pid_t pid;
 
@@ -306,6 +306,7 @@ struct win {
 	xwayland_ctx_t *ctx;
 
 	std::vector< std::shared_ptr<commit_t> > commit_queue;
+	std::shared_ptr<std::vector< uint32_t >> icon;
 };
 
 Window x11_win(win *w) {
@@ -1355,16 +1356,24 @@ bool MouseCursor::getTexture()
 	// Assume the cursor is fully translucent unless proven otherwise.
 	bool bNoCursor = true;
 
-	auto cursorBuffer = std::vector<uint32_t>(surfaceWidth * surfaceHeight);
-	for (int i = 0; i < image->height; i++) {
-		for (int j = 0; j < image->width; j++) {
-			cursorBuffer[i * surfaceWidth + j] = image->pixels[i * image->width + j];
+	std::shared_ptr<std::vector<uint32_t>> cursorBuffer = nullptr;
 
-			if ( cursorBuffer[i * surfaceWidth + j] & 0xff000000 ) {
-				bNoCursor = false;
+	if (image->width && image->height)
+	{
+		cursorBuffer = std::make_shared<std::vector<uint32_t>>(surfaceWidth * surfaceHeight);
+		for (int i = 0; i < image->height; i++) {
+			for (int j = 0; j < image->width; j++) {
+				(*cursorBuffer)[i * surfaceWidth + j] = image->pixels[i * image->width + j];
+
+				if ( (*cursorBuffer)[i * surfaceWidth + j] & 0xff000000 ) {
+					bNoCursor = false;
+				}
 			}
 		}
 	}
+
+	if (bNoCursor)
+		cursorBuffer = nullptr;
 
 	m_imageEmpty = bNoCursor;
 
@@ -1390,8 +1399,8 @@ bool MouseCursor::getTexture()
 		// TODO: choose format & modifiers from cursor plane
 	}
 
-	m_texture = vulkan_create_texture_from_bits(surfaceWidth, surfaceHeight, image->width, image->height, DRM_FORMAT_ARGB8888, texCreateFlags, cursorBuffer.data());
-	sdlwindow_cursor(cursorBuffer.data(), image->width, image->height, image->xhot, image->yhot);
+	m_texture = vulkan_create_texture_from_bits(surfaceWidth, surfaceHeight, image->width, image->height, DRM_FORMAT_ARGB8888, texCreateFlags, cursorBuffer->data());
+	sdlwindow_cursor(std::move(cursorBuffer), image->width, image->height, image->xhot, image->yhot);
 	assert(m_texture);
 	XFree(image);
 
@@ -2286,8 +2295,7 @@ bool get_prop( xwayland_ctx_t *ctx, Window win, Atom prop, std::vector< uint32_t
 
 	vecResult.clear();
 	uint64_t *data;
-	// get up to 16 results in one go, we can add a real loop if we ever need anything beyong that
-	int result = XGetWindowProperty(ctx->dpy, win, prop, 0L, 16L, false,
+	int result = XGetWindowProperty(ctx->dpy, win, prop, 0L, ~0UL, false,
 									XA_CARDINAL, &actual, &format,
 									&n, &left, ( unsigned char** )&data);
 	if (result == Success && data != NULL)
@@ -3126,13 +3134,13 @@ determine_and_apply_focus()
 #if HAVE_OPENVR
 		if ( BIsVRSession() )
 		{
-			vrsession_title( global_focus.focusWindow->title );
+			vrsession_title( global_focus.focusWindow->title->c_str() );
 		}
 #endif
 
 		if ( !BIsVRSession() && BIsNested() )
 		{
-			sdlwindow_title( global_focus.focusWindow->title );
+			sdlwindow_title( global_focus.focusWindow->title, global_focus.focusWindow->icon );
 		}
 	}
 
@@ -3275,10 +3283,9 @@ get_win_title(xwayland_ctx_t *ctx, win *w, Atom atom)
 		return;
 	}
 
-	free(w->title);
 	if (tp.nitems > 0) {
 		// Ride off the allocation from XGetTextProperty.
-		w->title = (char *)tp.value;
+		w->title = std::make_shared<std::string>((const char *)tp.value);
 	} else {
 		w->title = NULL;
 	}
@@ -3315,6 +3322,13 @@ get_net_wm_state(xwayland_ctx_t *ctx, win *w)
 }
 
 static void
+get_win_icon(xwayland_ctx_t* ctx, win* w)
+{
+	w->icon = std::make_shared<std::vector<uint32_t>>();
+	get_prop(ctx, w->id, ctx->atoms.netWMIcon, *w->icon.get());
+}
+
+static void
 map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 {
 	win		*w = find_win(ctx, id);
@@ -3338,6 +3352,7 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 	/* First try to read the UTF8 title prop, then fallback to the non-UTF8 one */
 	get_win_title( ctx, w, ctx->atoms.netWMNameAtom );
 	get_win_title( ctx, w, XA_WM_NAME );
+	get_win_icon( ctx, w );
 
 	w->inputFocusMode = get_prop(ctx, w->id, ctx->atoms.steamInputFocusAtom, 0);
 
@@ -3789,8 +3804,6 @@ finish_destroy_win(xwayland_ctx_t *ctx, Window id, bool gone)
 			wlserver_lock();
 			wlserver_x11_surface_info_finish( &w->surface );
 			wlserver_unlock();
-
-			free(w->title);
 			delete w;
 			break;
 		}
@@ -4274,12 +4287,29 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if (ev->atom == XA_WM_NAME || ev->atom == ctx->atoms.netWMNameAtom)
 	{
-		if (ev->window == x11_win(global_focus.focusWindow))
+		win *w = find_win(ctx, ev->window);
+
+		if (w)
 		{
-			win *w = find_win(ctx, ev->window);
-			if (w) {
-				get_win_title(ctx, w, ev->atom);
-				sdlwindow_title( w->title );
+			get_win_title(ctx, w, ev->atom);
+
+			if (ev->window == x11_win(global_focus.focusWindow))
+			{
+				sdlwindow_title( w->title, w->icon );
+			}
+		}
+	}
+	if (ev->atom == ctx->atoms.netWMIcon)
+	{
+		win *w = find_win(ctx, ev->window);
+
+		if (w)
+		{
+			get_win_icon(ctx, w);
+
+			if (ev->window == x11_win(global_focus.focusWindow))
+			{
+				sdlwindow_title( w->title, w->icon );
 			}
 		}
 	}
@@ -5553,6 +5583,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.WMStateAtom = XInternAtom(ctx->dpy, "WM_STATE", false);
 	ctx->atoms.utf8StringAtom = XInternAtom(ctx->dpy, "UTF8_STRING", false);
 	ctx->atoms.netWMNameAtom = XInternAtom(ctx->dpy, "_NET_WM_NAME", false);
+	ctx->atoms.netWMIcon = XInternAtom(ctx->dpy, "_NET_WM_ICON", false);
 	ctx->atoms.motifWMHints = XInternAtom(ctx->dpy, "_MOTIF_WM_HINTS", false);
 	ctx->atoms.netSystemTrayOpcodeAtom = XInternAtom(ctx->dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
 	ctx->atoms.steamStreamingClientAtom = XInternAtom(ctx->dpy, "STEAM_STREAMING_CLIENT", false);
