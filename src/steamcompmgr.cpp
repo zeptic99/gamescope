@@ -1421,6 +1421,8 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 		sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->a.y + fit->a.height, 0, currentOutputHeight ) );
 	}
 
+	const float cursor_scale = 1.0f;
+
 	float scaledX, scaledY;
 	float currentScaleRatio_x = 1.0;
 	float currentScaleRatio_y = 1.0;
@@ -1442,8 +1444,8 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 	}
 
 	// Apply the cursor offset inside the texture using the display scale
-	scaledX = scaledX - m_hotspotX;
-	scaledY = scaledY - m_hotspotY;
+	scaledX = scaledX - (m_hotspotX * cursor_scale);
+	scaledY = scaledY - (m_hotspotY * cursor_scale);
 
 	int curLayer = frameInfo->layerCount++;
 
@@ -1451,8 +1453,8 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 
 	layer->opacity = 1.0;
 
-	layer->scale.x = 1.0;
-	layer->scale.y = 1.0;
+	layer->scale.x = 1.0f / cursor_scale;
+	layer->scale.y = 1.0f / cursor_scale;
 
 	layer->offset.x = -scaledX;
 	layer->offset.y = -scaledY;
@@ -1462,7 +1464,7 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 	layer->tex = m_texture;
 	layer->fbid = BIsNested() ? 0 : m_texture->fbid();
 
-	layer->linearFilter = false;
+	layer->linearFilter = cursor_scale != 1.0f;
 	layer->blackBorder = false;
 	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 }
