@@ -148,6 +148,7 @@ void inputSDLThreadRun( void )
 	g_SDLInitLock.unlock();
 
 	static uint32_t fake_timestamp = 0;
+	SDL_Surface *cursor_surface = nullptr;
 
 	while( SDL_WaitEvent( &event ) )
 	{
@@ -356,7 +357,10 @@ void inputSDLThreadRun( void )
 					std::unique_lock lock(g_SDLCursorLock);
 					if ( g_bUpdateSDLCursor )
 					{
-						SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(
+						if (cursor_surface)
+							SDL_FreeSurface(cursor_surface);
+
+						cursor_surface = SDL_CreateRGBSurfaceFrom(
 							g_SDLPendingCursorData.data.data(),
 							g_SDLPendingCursorData.width,
 							g_SDLPendingCursorData.height,
