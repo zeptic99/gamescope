@@ -6254,11 +6254,8 @@ steamcompmgr_main(int argc, char **argv)
 		struct timespec now;
 		clock_gettime(CLOCK_MONOTONIC, &now);
 
-		{
-			gamescope_xwayland_server_t *server = NULL;
-			for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
-				server->ctx->cursor->updatePosition();
-		}
+		if (global_focus.cursor)
+			global_focus.cursor->updatePosition();
 
 		// Ask for a new surface every vblank
 		if ( vblank == true )
