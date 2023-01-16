@@ -106,10 +106,12 @@ struct connector {
 	struct {
 		uint32_t crtc_id;
 		uint32_t colorspace;
+		uint32_t content_type;
 		uint32_t hdr_output_metadata;
 	} current, pending;
 
 	bool has_colorspace;
+	bool has_content_type;
 	bool has_hdr_output_metadata;
 };
 
@@ -324,3 +326,10 @@ extern bool g_bSupportsAsyncFlips;
 #define DRM_MODE_COLORIMETRY_RGB_WIDE_FIXED		13
 #define DRM_MODE_COLORIMETRY_RGB_WIDE_FLOAT		14
 #define DRM_MODE_COLORIMETRY_BT601_YCC			15
+
+/* Content type options */
+#define DRM_MODE_CONTENT_TYPE_NO_DATA		0
+#define DRM_MODE_CONTENT_TYPE_GRAPHICS		1
+#define DRM_MODE_CONTENT_TYPE_PHOTO		2
+#define DRM_MODE_CONTENT_TYPE_CINEMA		3
+#define DRM_MODE_CONTENT_TYPE_GAME		4

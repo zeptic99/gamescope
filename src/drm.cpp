@@ -557,12 +557,15 @@ static bool refresh_state( drm_t *drm )
 
 		conn->has_colorspace = conn->props.contains( "Colorspace" );
 		conn->has_hdr_output_metadata = conn->props.contains( "HDR_OUTPUT_METADATA" );
+		conn->has_content_type = conn->props.contains( "content type" );
 
 		conn->current.crtc_id = conn->initial_prop_values["CRTC_ID"];
 		if (conn->has_colorspace)
 			conn->current.colorspace = conn->initial_prop_values["Colorspace"];
 		if (conn->has_hdr_output_metadata)
 			conn->current.hdr_output_metadata = conn->initial_prop_values["HDR_OUTPUT_METADATA"];
+		if (conn->has_content_type)
+			conn->current.content_type = conn->initial_prop_values["content type"];
 
 		conn->target_refresh = 0;
 
@@ -1049,6 +1052,8 @@ void finish_drm(struct drm_t *drm)
 			add_connector_property(req, conn, "Colorspace", 0);
 		if (conn->has_hdr_output_metadata)
 			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", 0);
+		if (conn->has_content_type)
+			add_connector_property(req, conn, "content type", 0);
 	}
 	for ( size_t i = 0; i < drm->crtcs.size(); i++ ) {
 		add_crtc_property(req, &drm->crtcs[i], "MODE_ID", 0);
@@ -1780,6 +1785,10 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		drm->connector->pending.colorspace = g_bOutputHDREnabled ? DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
 	}
 
+	if (drm->connector->has_content_type) {
+		drm->connector->pending.content_type = DRM_MODE_CONTENT_TYPE_GAME;
+	}
+
 	if (drm->connector->has_hdr_output_metadata) {
 		uint32_t hdr_output_metadata_blob = 0;
 		if ( g_bOutputHDREnabled ) {
@@ -1825,6 +1834,12 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 
 			if (conn->has_hdr_output_metadata) {
 				ret = add_connector_property( drm->req, conn, "HDR_OUTPUT_METADATA", 0 );
+				if (ret < 0)
+					return ret;
+			}
+
+			if (conn->has_content_type) {
+				ret = add_connector_property( drm->req, conn, "content type", 0 );
 				if (ret < 0)
 					return ret;
 			}
@@ -1905,6 +1920,12 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				return ret;
 		}
 
+		if (drm->connector->has_content_type) {
+			ret = add_connector_property(drm->req, drm->connector, "content type", drm->connector->pending.content_type);
+			if (ret < 0)
+				return ret;
+		}
+
 		ret = add_crtc_property(drm->req, drm->crtc, "MODE_ID", drm->pending.mode_id);
 		if (ret < 0)
 			return ret;
@@ -1966,6 +1987,12 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 
 		if (drm->connector->has_hdr_output_metadata && drm->connector->pending.hdr_output_metadata != drm->connector->current.hdr_output_metadata) {
 			int ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
+			if (ret < 0)
+				return ret;
+		}
+
+		if (drm->connector->has_content_type && drm->connector->pending.content_type != drm->connector->current.content_type) {
+			int ret = add_connector_property(drm->req, drm->connector, "content type", drm->connector->pending.content_type);
 			if (ret < 0)
 				return ret;
 		}
