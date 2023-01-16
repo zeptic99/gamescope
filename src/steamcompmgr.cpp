@@ -464,6 +464,8 @@ static int g_nudgePipe[2] = {-1, -1};
 
 static LogScope xwm_log("xwm");
 
+static int g_nCursorScaleHeight = -1;
+
 // poor man's semaphore
 class sem
 {
@@ -1421,7 +1423,12 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 		sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->a.y + fit->a.height, 0, currentOutputHeight ) );
 	}
 
-	const float cursor_scale = 1.0f;
+	float cursor_scale = 1.0f;
+	if ( g_nCursorScaleHeight > 0 )
+	{
+		cursor_scale = floor(currentOutputHeight / (float)g_nCursorScaleHeight);
+	}
+	cursor_scale = std::max(cursor_scale, 1.0f);
 
 	float scaledX, scaledY;
 	float currentScaleRatio_x = 1.0;
@@ -5836,6 +5843,8 @@ steamcompmgr_main(int argc, char **argv)
 					g_FadeOutDuration = atoi(optarg);
 				} else if (strcmp(opt_name, "force-windows-fullscreen") == 0) {
 					bForceWindowsFullscreen = true;
+				} else if (strcmp(opt_name, "cursor-scale-height") == 0) {
+					g_nCursorScaleHeight = atoi(optarg);
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
 					g_bHDREnabled = true;
 				} else if (strcmp(opt_name, "hdr-sdr-content-nits") == 0) {

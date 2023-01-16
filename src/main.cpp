@@ -95,6 +95,7 @@ const struct option *gamescope_options = (struct option[]){
 	// steamcompmgr options
 	{ "cursor", required_argument, nullptr, 0 },
 	{ "cursor-hotspot", required_argument, nullptr, 0 },
+	{ "cursor-scale-height", required_argument, nullptr, 0 },
 	{ "ready-fd", required_argument, nullptr, 'R' },
 	{ "stats-path", required_argument, nullptr, 'T' },
 	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
@@ -146,6 +147,7 @@ const char usage[] =
 	"  --prefer-vk-device             prefer Vulkan device for compositing (ex: 1002:7300)\n"
 	"  --force-orientation            rotate the internal display (left, right, normal, upsidedown)\n"
 	"  --force-windows-fullscreen     force windows inside of gamescope to be the size of the nested display (fullscreen)\n"
+	"  --cursor-scale-height		  if specified, sets a base output height to linearly scale the cursor against.\n"
 	"  --hdr-enabled                  enable HDR output (needs Gamescope WSI layer enabled for support from clients)\n"
 	"                                 If this is not set, and there is a HDR client, it will be tonemapped SDR.\n"
 	"  --hdr-wide-gammut-for-sdr      treat SDR sRGB content as having Rec.2020 primaries. Makes colors more vivid at cost of 'correctness'.\n"
