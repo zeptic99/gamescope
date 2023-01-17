@@ -288,7 +288,7 @@ void inputSDLThreadRun( void )
 						break;
 					case SDL_WINDOWEVENT_SIZE_CHANGED:
 						int width, height;
-						SDL_GetWindowSizeInPixels( g_SDLWindow, &width, &height );
+						SDL_GetWindowSize( g_SDLWindow, &width, &height );
 						g_nOutputWidth = width;
 						g_nOutputHeight = height;
 

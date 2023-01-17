@@ -327,11 +327,25 @@ void vrsession_update_touch_mode()
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_HideLaserIntersection, bHideLaserIntersection );
 }
 
-void vrsession_title( const char *title )
+void vrsession_title( const char *title, std::shared_ptr<std::vector<uint32_t>> icon )
 {
     if ( !GetVR().bExplicitOverlayName )
     {
         vr::VROverlay()->SetOverlayName( GetVR().hOverlay, (title && *title) ? title : GetVR().pchOverlayName );
+    }
+
+    if ( icon )
+    {
+        int size = sqrt( icon->size() );
+        vr::VROverlay()->SetOverlayRaw( GetVR().hOverlayThumbnail, icon->data(), size, size, sizeof(uint32_t) );
+    }
+    else if ( GetVR().pchOverlayName )
+    {
+        vr::VROverlay()->SetOverlayFromFile( GetVR().hOverlayThumbnail, GetVR().pchOverlayIcon );
+    }
+    else
+    {
+        vr::VROverlay()->ClearOverlayTexture( GetVR().hOverlayThumbnail );
     }
 }
 

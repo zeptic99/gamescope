@@ -3134,7 +3134,10 @@ determine_and_apply_focus()
 #if HAVE_OPENVR
 		if ( BIsVRSession() )
 		{
-			vrsession_title( global_focus.focusWindow->title->c_str() );
+			const char *title = global_focus.focusWindow->title
+				? global_focus.focusWindow->title->c_str()
+				: nullptr;
+			vrsession_title( title, global_focus.focusWindow->icon );
 		}
 #endif
 
