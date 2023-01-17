@@ -22,6 +22,8 @@ uniform layers_t {
     // hdr
     float u_linearToNits;
     float u_nitsToLinear;
+    float u_itmSdrNits;
+    float u_itmTargetNits;
 };
 
 #include "composite.h"
