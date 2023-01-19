@@ -1937,7 +1937,7 @@ paint_all(bool async)
 		global_focus.cursor->undirty();
 	}
 
-	bool bForceHideCursor = BIsNested() && !bSteamCompMgrGrab;
+	bool bForceHideCursor = BIsNested() && !BIsVRSession() && !bSteamCompMgrGrab;
 
 	bool bDrewCursor = false;
 
