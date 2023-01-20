@@ -76,7 +76,8 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
         color.rgb = srgbToLinear(color.rgb);
 
         if(c_itmEnable) {
-            color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+            if (!c_forceWideGammut)
+                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
             color.rgb = bt2446a_inverse_tonemapping(color.rgb, u_itmSdrNits, u_itmTargetNits);
         }
         if (checkDebugFlag(compositedebug_Heatmap)) {
@@ -90,7 +91,8 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
         }
     } else if (get_layer_colorspace(layerIdx) == colorspace_linear) {
         if(c_itmEnable) {
-            color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
+            if (!c_forceWideGammut)
+                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
             color.rgb = bt2446a_inverse_tonemapping(color.rgb, u_itmSdrNits, u_itmTargetNits);
         }
         if (checkDebugFlag(compositedebug_Heatmap)) {
