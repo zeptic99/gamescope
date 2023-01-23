@@ -263,7 +263,6 @@ struct steamcompmgr_win_t {
 	steamcompmgr_win_t		*next;
 	Window		id;
 	XWindowAttributes	a;
-	int			mode;
 	Damage		damage;
 	unsigned int	opacity;
 	unsigned long	map_sequence;
