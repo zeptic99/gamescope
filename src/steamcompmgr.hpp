@@ -26,7 +26,7 @@ void steamcompmgr_main(int argc, char **argv);
 #include <X11/extensions/Xfixes.h>
 
 struct _XDisplay;
-struct win;
+struct steamcompmgr_win_t;
 struct xwayland_ctx_t;
 class gamescope_xwayland_server_t;
 
@@ -54,7 +54,7 @@ public:
 	void constrainPosition();
 	void resetPosition();
 
-	void paint(struct win *window, struct win *fit, struct FrameInfo_t *frameInfo);
+	void paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, FrameInfo_t *frameInfo);
 	void setDirty();
 
 	// Will take ownership of data.

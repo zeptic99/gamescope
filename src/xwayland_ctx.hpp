@@ -18,18 +18,18 @@
 
 class gamescope_xwayland_server_t;
 struct ignore;
-struct win;
+struct steamcompmgr_win_t;
 class MouseCursor;
 
 struct focus_t
 {
-	win				*focusWindow;
-	win				*inputFocusWindow;
+	steamcompmgr_win_t				*focusWindow;
+	steamcompmgr_win_t				*inputFocusWindow;
 	uint32_t		inputFocusMode;
-	win				*overlayWindow;
-	win				*externalOverlayWindow;
-	win				*notificationWindow;
-	win				*overrideWindow;
+	steamcompmgr_win_t				*overlayWindow;
+	steamcompmgr_win_t				*externalOverlayWindow;
+	steamcompmgr_win_t				*notificationWindow;
+	steamcompmgr_win_t				*overrideWindow;
 	bool			outdatedInteractiveFocus;
 };
 
@@ -38,7 +38,7 @@ struct xwayland_ctx_t
 	gamescope_xwayland_server_t *xwayland_server;
 	Display			*dpy;
 
-	win				*list;
+	steamcompmgr_win_t				*list;
 	int				scr;
 	Window			root;
 	XserverRegion	allDamage;
