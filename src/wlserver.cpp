@@ -1098,9 +1098,11 @@ void wlserver_run(void)
 	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
 	// We need to shutdown Xwayland before disconnecting all clients, otherwise
 	// wlroots will restart it automatically.
+	wlserver_lock();
 	wlserver.wlr.xwayland_servers.clear();
 	wl_display_destroy_clients(wlserver.display);
 	wl_display_destroy(wlserver.display);
+	wlserver_unlock();
 }
 
 void wlserver_keyboardfocus( struct wlr_surface *surface )
