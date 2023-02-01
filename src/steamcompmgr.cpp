@@ -2875,9 +2875,9 @@ wlr_surface *win_surface(steamcompmgr_win_t *window)
 
 const char *get_win_display_name(steamcompmgr_win_t *window)
 {
-	if ( global_focus.focusWindow->type == steamcompmgr_win_type_t::XWAYLAND )
-		return global_focus.focusWindow->xwayland().ctx->xwayland_server->get_nested_display_name();
-	else if ( global_focus.focusWindow->type == steamcompmgr_win_type_t::XDG )
+	if ( window->type == steamcompmgr_win_type_t::XWAYLAND )
+		return window->xwayland().ctx->xwayland_server->get_nested_display_name();
+	else if ( window->type == steamcompmgr_win_type_t::XDG )
 		return wlserver_get_wl_display_name();
 	else
 		return "";
