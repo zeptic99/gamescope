@@ -214,7 +214,11 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 		return;
 	}
 
-	if ( ( event->state == WL_KEYBOARD_KEY_STATE_PRESSED || event->state == WL_KEYBOARD_KEY_STATE_RELEASED ) && ( keysym == XKB_KEY_XF86AudioLowerVolume || keysym == XKB_KEY_XF86AudioRaiseVolume ) )
+	bool forbidden_key =
+		keysym == XKB_KEY_XF86AudioLowerVolume ||
+		keysym == XKB_KEY_XF86AudioRaiseVolume ||
+		keysym == XKB_KEY_XF86PowerOff;
+	if ( ( event->state == WL_KEYBOARD_KEY_STATE_PRESSED || event->state == WL_KEYBOARD_KEY_STATE_RELEASED ) && forbidden_key )
 	{
 		// Always send volume+/- to root server only, to avoid it reaching the game.
 		struct wlr_surface *old_kb_surf = wlserver.kb_focus_surface;
