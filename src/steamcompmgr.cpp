@@ -2467,6 +2467,9 @@ pick_primary_focus_and_override(focus_t *out, Window focusControlWindow, const s
 		{
 			for ( steamcompmgr_win_t *focusable_window : vecPossibleFocusWindows )
 			{
+				if ( focusable_window->type != steamcompmgr_win_type_t::XWAYLAND )
+					continue;
+
 				if ( focusable_window->xwayland().id == focusControlWindow )
 				{
 					focus = focusable_window;
@@ -2480,6 +2483,15 @@ pick_primary_focus_and_override(focus_t *out, Window focusControlWindow, const s
 		{
 			for ( steamcompmgr_win_t *focusable_window : vecPossibleFocusWindows )
 			{
+				// HACK: Bring any Wayland windows to global focus for now
+				// until appID stuff is plumbed for them.
+				if ( focusable_window->type == steamcompmgr_win_type_t::XDG )
+				{
+					focus = focusable_window;
+					localGameFocused = true;
+					goto found;
+				}
+
 				if ( focusable_window->appID == focusable_appid )
 				{
 					focus = focusable_window;
@@ -2503,6 +2515,9 @@ found:;
 
 	auto resolveTransientOverrides = [&](bool maybe)
 	{
+		if ( !focus || focus->type != steamcompmgr_win_type_t::XWAYLAND )
+			return;
+
 		// Do some searches to find transient links to override redirects too.
 		while ( true )
 		{
@@ -2510,6 +2525,9 @@ found:;
 
 			for ( steamcompmgr_win_t *candidate : vecPossibleFocusWindows )
 			{
+				if ( candidate->type != steamcompmgr_win_type_t::XWAYLAND )
+					continue;
+
 				bool is_dropdown = maybe ? win_maybe_a_dropdown( candidate ) : win_is_override_redirect( candidate );
 				if ( ( !override_focus || candidate != override_focus ) && candidate != focus &&
 					( ( !override_focus && candidate->xwayland().transientFor == focus->xwayland().id ) || ( override_focus && candidate->xwayland().transientFor == override_focus->xwayland().id ) ) &&
@@ -2527,53 +2545,59 @@ found:;
 		}
 	};
 
-	if ( focus && !focusControlWindow )
+	if ( focus && focus->type == steamcompmgr_win_type_t::XWAYLAND )
 	{
-		// Do some searches through game windows to follow transient links if needed
-		while ( true )
+		if ( !focusControlWindow )
 		{
-			bool bFoundTransient = false;
-
-			for ( steamcompmgr_win_t *candidate : vecPossibleFocusWindows )
+			// Do some searches through game windows to follow transient links if needed
+			while ( true )
 			{
-				if ( candidate != focus && candidate->xwayland().transientFor == focus->xwayland().id && !win_maybe_a_dropdown( candidate ) )
+				bool bFoundTransient = false;
+
+				for ( steamcompmgr_win_t *candidate : vecPossibleFocusWindows )
 				{
-					bFoundTransient = true;
-					focus = candidate;
-					break;
+					if ( candidate->type != steamcompmgr_win_type_t::XWAYLAND )
+						continue;
+
+					if ( candidate != focus && candidate->xwayland().transientFor == focus->xwayland().id && !win_maybe_a_dropdown( candidate ) )
+					{
+						bFoundTransient = true;
+						focus = candidate;
+						break;
+					}
 				}
+
+				// Hopefully we can't have transient cycles or we'll have to maintain a list of visited windows here
+				if ( bFoundTransient == false )
+					break;
 			}
-
-			// Hopefully we can't have transient cycles or we'll have to maintain a list of visited windows here
-			if ( bFoundTransient == false )
-				break;
 		}
-	}
 
-	if ( !override_focus && focus )
-	{
-		if ( !ctxFocusControlAppIDs.empty() )
+		if ( !override_focus )
 		{
-			for ( steamcompmgr_win_t *override : vecPossibleFocusWindows )
+			if ( !ctxFocusControlAppIDs.empty() )
 			{
-				if ( win_is_override_redirect(override) && is_good_override_candidate(override, focus) && override->appID == focus->appID ) {
-					override_focus = override;
-					break;
+				for ( steamcompmgr_win_t *override : vecPossibleFocusWindows )
+				{
+					if ( win_is_override_redirect(override) && is_good_override_candidate(override, focus) && override->appID == focus->appID ) {
+						override_focus = override;
+						break;
+					}
 				}
 			}
-		}
-		else if ( !vecPossibleFocusWindows.empty() )
-		{
-			for ( steamcompmgr_win_t *override : vecPossibleFocusWindows )
+			else if ( !vecPossibleFocusWindows.empty() )
 			{
-				if ( win_is_override_redirect(override) && is_good_override_candidate(override, focus) ) {
-					override_focus = override;
-					break;
+				for ( steamcompmgr_win_t *override : vecPossibleFocusWindows )
+				{
+					if ( win_is_override_redirect(override) && is_good_override_candidate(override, focus) ) {
+						override_focus = override;
+						break;
+					}
 				}
 			}
-		}
 
-		resolveTransientOverrides( false );
+			resolveTransientOverrides( false );
+		}
 	}
 
 	if ( focus )
