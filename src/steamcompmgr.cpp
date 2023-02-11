@@ -4758,7 +4758,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			gamescope_xwayland_server_t *server = wlserver_get_xwayland_server(server_id);
 			init_xwayland_ctx(server_id, server);
 			char propertyString[256];
-			snprintf(propertyString, sizeof(propertyString), "%u %s", identifier, server->get_nested_display_name());
+			snprintf(propertyString, sizeof(propertyString), "%u %u %s", identifier, server_id, server->get_nested_display_name());
 			XTextProperty text_property =
 			{
 				.value = (unsigned char *)propertyString,
