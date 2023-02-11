@@ -74,6 +74,8 @@ public:
 
 	void undirty() { getTexture(); }
 
+	xwayland_ctx_t *getCtx() const { return m_ctx; }
+
 private:
 	void warp(int x, int y);
 	void checkSuspension();
@@ -133,5 +135,7 @@ struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xw
 
 extern uint64_t g_SteamCompMgrVBlankTime;
 extern pid_t focusWindow_pid;
+
+void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_server);
 
 extern int g_nAsyncFlipsEnabled;

@@ -243,3 +243,6 @@ void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh );
 extern std::atomic<bool> g_bPendingTouchMovement;
 
 void wlserver_open_steam_menu( bool qam );
+
+uint32_t wlserver_make_new_xwayland_server();
+void wlserver_destroy_xwayland_server(gamescope_xwayland_server_t *server);

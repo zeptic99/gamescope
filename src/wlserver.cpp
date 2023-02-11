@@ -1731,3 +1731,27 @@ std::vector<ResListEntry_t> wlserver_xdg_commit_queue()
 	}
 	return commits;
 }
+
+uint32_t wlserver_make_new_xwayland_server()
+{
+	assert( wlserver_is_lock_held() );
+
+	auto& server = wlserver.wlr.xwayland_servers.emplace_back(std::make_unique<gamescope_xwayland_server_t>(wlserver.display));
+
+	while (!server->is_xwayland_ready()) {
+		wl_display_flush_clients(wlserver.display);
+		if (wl_event_loop_dispatch(wlserver.event_loop, -1) < 0) {
+			wl_log.errorf("wl_event_loop_dispatch failed\n");
+			return ~0u;
+		}
+	}
+
+	return uint32_t(wlserver.wlr.xwayland_servers.size() - 1);
+}
+
+void wlserver_destroy_xwayland_server(gamescope_xwayland_server_t *server)
+{
+	assert( wlserver_is_lock_held() );
+
+	std::erase_if(wlserver.wlr.xwayland_servers, [=](const auto& other) { return other.get() == server; });
+}

@@ -195,6 +195,10 @@ struct xwayland_ctx_t
 		Atom gamescopeColorLut3D[DRM_SCREEN_TYPE_COUNT];
 		Atom gamescopeColorShaperLut[DRM_SCREEN_TYPE_COUNT];
 
+		Atom gamescopeCreateXWaylandServer;
+		Atom gamescopeCreateXWaylandServerFeedback;
+		Atom gamescopeDestroyXWaylandServer;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 	} atoms;

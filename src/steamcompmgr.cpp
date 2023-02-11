@@ -213,6 +213,8 @@ struct commit_t
 	std::optional<wlserver_vk_swapchain_feedback> feedback = std::nullopt;
 };
 
+static std::vector<pollfd> pollfds;
+
 #define MWM_HINTS_FUNCTIONS   1
 #define MWM_HINTS_DECORATIONS 2
 #define MWM_HINTS_INPUT_MODE  4
@@ -4745,6 +4747,94 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 				hasRepaint = true;
 		}
 	}
+	if (ev->atom == ctx->atoms.gamescopeCreateXWaylandServer)
+	{
+		uint32_t identifier = get_prop(ctx, ctx->root, ctx->atoms.gamescopeCreateXWaylandServer, 0);
+		if (identifier)
+		{
+			wlserver_lock();
+			uint32_t server_id = (uint32_t)wlserver_make_new_xwayland_server();
+			assert(server_id != ~0u);
+			gamescope_xwayland_server_t *server = wlserver_get_xwayland_server(server_id);
+			init_xwayland_ctx(server_id, server);
+			char propertyString[256];
+			snprintf(propertyString, sizeof(propertyString), "%u %s", identifier, server->get_nested_display_name());
+			XTextProperty text_property =
+			{
+				.value = (unsigned char *)propertyString,
+				.encoding = ctx->atoms.utf8StringAtom,
+				.format = 8,
+				.nitems = strlen(propertyString),
+			};
+			pollfds.push_back(pollfd {
+				.fd = XConnectionNumber( server->ctx->dpy ),
+				.events = POLLIN,
+			});
+			XSetTextProperty( ctx->dpy, ctx->root, &text_property, ctx->atoms.gamescopeCreateXWaylandServerFeedback );
+			wlserver_unlock();
+		}
+	}
+	if (ev->atom == ctx->atoms.gamescopeDestroyXWaylandServer)
+	{
+		uint32_t server_id = get_prop(ctx, ctx->root, ctx->atoms.gamescopeDestroyXWaylandServer, 0);
+
+		gamescope_xwayland_server_t *server = wlserver_get_xwayland_server(server_id);
+		if (server)
+		{
+			if (global_focus.focusWindow &&
+				global_focus.focusWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.focusWindow->xwayland().ctx == server->ctx.get())
+				global_focus.focusWindow = nullptr;
+
+			if (global_focus.inputFocusWindow &&
+				global_focus.inputFocusWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.inputFocusWindow->xwayland().ctx == server->ctx.get())
+				global_focus.inputFocusWindow = nullptr;
+
+			if (global_focus.overlayWindow &&
+				global_focus.overlayWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.overlayWindow->xwayland().ctx == server->ctx.get())
+				global_focus.overlayWindow = nullptr;
+
+			if (global_focus.externalOverlayWindow &&
+				global_focus.externalOverlayWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.externalOverlayWindow->xwayland().ctx == server->ctx.get())
+				global_focus.externalOverlayWindow = nullptr;
+
+			if (global_focus.notificationWindow &&
+				global_focus.notificationWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.notificationWindow->xwayland().ctx == server->ctx.get())
+				global_focus.notificationWindow = nullptr;
+
+			if (global_focus.overrideWindow &&
+				global_focus.overrideWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.overrideWindow->xwayland().ctx == server->ctx.get())
+				global_focus.overrideWindow = nullptr;
+
+			if (global_focus.keyboardFocusWindow &&
+				global_focus.keyboardFocusWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.keyboardFocusWindow->xwayland().ctx == server->ctx.get())
+				global_focus.keyboardFocusWindow = nullptr;
+
+			if (global_focus.fadeWindow &&
+				global_focus.fadeWindow->type == steamcompmgr_win_type_t::XWAYLAND &&
+				global_focus.fadeWindow->xwayland().ctx == server->ctx.get())
+				global_focus.fadeWindow = nullptr;
+
+			if (global_focus.cursor &&
+				global_focus.cursor->getCtx() == server->ctx.get())
+				global_focus.cursor = nullptr;
+
+			wlserver_lock();
+			std::erase_if(pollfds, [=](const auto& other){
+				return other.fd == XConnectionNumber( server->ctx->dpy );
+			});
+			wlserver_destroy_xwayland_server(server);
+			wlserver_unlock();
+
+			focusDirty = true;
+		}
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		steamcompmgr_win_t * w = find_win(ctx, ev->window);
@@ -5615,7 +5705,7 @@ xwayland_ctx_t g_ctx;
 
 static bool setup_error_handlers = false;
 
-void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
+void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_server)
 {
 	assert(!xwayland_server->ctx);
 	xwayland_server->ctx = std::make_unique<xwayland_ctx_t>();
@@ -5824,6 +5914,10 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeColorShaperLut[DRM_SCREEN_TYPE_INTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_SHAPERLUT", false );
 	ctx->atoms.gamescopeColorShaperLut[DRM_SCREEN_TYPE_EXTERNAL] = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_SHAPERLUT_EXTERNAL", false );
 
+	ctx->atoms.gamescopeCreateXWaylandServer = XInternAtom( ctx->dpy, "GAMESCOPE_CREATE_XWAYLAND_SERVER", false );
+	ctx->atoms.gamescopeCreateXWaylandServerFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_CREATE_XWAYLAND_SERVER_FEEDBACK", false );
+	ctx->atoms.gamescopeDestroyXWaylandServer = XInternAtom( ctx->dpy, "GAMESCOPE_DESTROY_XWAYLAND_SERVER", false );
+
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
 
@@ -5832,6 +5926,9 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 	ctx->allDamage = None;
 	ctx->clipChanged = true;
+
+	XChangeProperty(ctx->dpy, ctx->root, ctx->atoms.gamescopeXwaylandServerId, XA_CARDINAL, 32, PropModeReplace,
+		(unsigned char *)&serverId, 1 );
 
 	XGrabServer(ctx->dpy);
 
@@ -6097,7 +6194,7 @@ steamcompmgr_main(int argc, char **argv)
 	{
 		gamescope_xwayland_server_t *server = NULL;
 		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
-			init_xwayland_ctx(server);
+			init_xwayland_ctx(i, server);
 	}
 
 	gamescope_xwayland_server_t *root_server = wlserver_get_xwayland_server(0);
@@ -6126,7 +6223,6 @@ steamcompmgr_main(int argc, char **argv)
 	std::thread imageWaitThread( imageWaitThreadMain );
 	imageWaitThread.detach();
 
-	std::vector<pollfd> pollfds;
 	// EVENT_VBLANK
 	pollfds.push_back(pollfd {
 		.fd = vblankFD,
@@ -6146,10 +6242,6 @@ steamcompmgr_main(int argc, char **argv)
 				.fd = XConnectionNumber( server->ctx->dpy ),
 				.events = POLLIN,
 			});
-
-			uint32_t serverId = static_cast<uint32_t>(i);
-			XChangeProperty(server->ctx->dpy, server->ctx->root, server->ctx->atoms.gamescopeXwaylandServerId, XA_CARDINAL, 32, PropModeReplace,
-				(unsigned char *)&serverId, 1 );
 
 			server->ctx->force_windows_fullscreen = bForceWindowsFullscreen;
 		}
