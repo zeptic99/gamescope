@@ -6356,7 +6356,11 @@ steamcompmgr_main(int argc, char **argv)
 						.format = 8,
 						.nitems = strlen(connectorEdidPath),
 					};
-					XSetTextProperty( root_ctx->dpy, root_ctx->root, &text_property, root_ctx->atoms.gamescopeDisplayEdidPath );
+					gamescope_xwayland_server_t *server = NULL;
+					for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
+					{
+						XSetTextProperty( server->ctx->dpy, server->ctx->root, &text_property, server->ctx->atoms.gamescopeDisplayEdidPath );
+					}
 				}
 
 				g_LastConnectorIdentifier = connector_id;
