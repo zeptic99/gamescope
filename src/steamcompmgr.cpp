@@ -990,24 +990,31 @@ void MouseCursor::checkSuspension()
 
 	bool bWasHidden = m_hideForMovement;
 
-	if (buttonMask & ( Button1Mask | Button2Mask | Button3Mask | Button4Mask | Button5Mask )) {
-		m_hideForMovement = false;
-		m_lastMovedTime = get_time_in_milliseconds();
+	steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
+	if (window && window->ignoreNextClickForVisibility)
+	{
+		window->ignoreNextClickForVisibility--;
+		m_hideForMovement = true;
+		return;
+	}
+	else
+	{
+		if (buttonMask & ( Button1Mask | Button2Mask | Button3Mask | Button4Mask | Button5Mask )) {
+			m_hideForMovement = false;
+			m_lastMovedTime = get_time_in_milliseconds();
 
-		// Move the cursor back to where we left it if the window didn't want us to give
-		// it hover/focus where we left it and we moved it before.
-		steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
-		if (window_wants_no_focus_when_mouse_hidden(window) && bWasHidden)
-		{
-			XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, m_lastX, m_lastY);
+			// Move the cursor back to where we left it if the window didn't want us to give
+			// it hover/focus where we left it and we moved it before.
+			if (window_wants_no_focus_when_mouse_hidden(window) && bWasHidden)
+			{
+				XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, m_lastX, m_lastY);
+			}
 		}
 	}
 
 	const bool suspended = get_time_in_milliseconds() - m_lastMovedTime > cursorHideTime;
 	if (!m_hideForMovement && suspended) {
 		m_hideForMovement = true;
-
-		steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
 
 		// Rearm warp count
 		if (window) {
@@ -3176,7 +3183,22 @@ determine_and_apply_focus()
 	}
 
 	sdlwindow_visible( global_focus.focusWindow != nullptr );
-	
+
+	// Some games such as Disagea PC (405900) don't take controller input until
+	// the window is first clicked on despite it having focus.
+	if ( global_focus.inputFocusWindow && global_focus.inputFocusWindow->appID == 405900 )
+	{
+		global_focus.inputFocusWindow->mouseMoved = 0;
+		global_focus.inputFocusWindow->ignoreNextClickForVisibility = 2;
+
+		auto now = get_time_in_milliseconds();
+
+		wlserver_lock();
+		wlserver_touchdown( 0.5, 0.5, 0, now );
+		wlserver_touchup( 0, now + 1 );
+		wlserver_unlock();
+	}
+
 	focusDirty = false;
 }
 
