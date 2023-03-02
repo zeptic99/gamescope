@@ -373,14 +373,10 @@ drm_hdr_parse_edid(drm_t *drm, struct connector *connector, const struct di_edid
 		infoframe->metadata_type = 0;
 		infoframe->eotf = HDMI_EOTF_ST2084;
 
-		int ret = drmModeCreatePropertyBlob(drm->fd,
-											&metadata->defaultHdrMetadata,
-											sizeof(metadata->defaultHdrMetadata),
-											&metadata->hdr10_metadata_blob);
+		metadata->hdr10_metadata_blob = drm_create_hdr_metadata_blob(drm, &metadata->defaultHdrMetadata);
 
-		if (ret != 0) {
-			fprintf(stderr, "Failed to create blob for HDR_OUTPUT_METADATA. (%s) Falling back to null blob.\n", strerror(-ret));
-			metadata->hdr10_metadata_blob = 0;
+		if (metadata->hdr10_metadata_blob == nullptr) {
+			fprintf(stderr, "Failed to create blob for HDR_OUTPUT_METADATA. Falling back to null blob.\n");
 		}
 	}
 }
@@ -490,8 +486,7 @@ static bool refresh_state( drm_t *drm )
 
 			free(conn->name);
 			conn->name = nullptr;
-			drmModeDestroyPropertyBlob(drm->fd, conn->metadata.hdr10_metadata_blob);
-			conn->metadata.hdr10_metadata_blob = 0;
+			conn->metadata.hdr10_metadata_blob = nullptr;
 			drmModeFreeConnector(conn->connector);
 			it = drm->connectors.erase(it);
 		} else {
@@ -505,8 +500,7 @@ static bool refresh_state( drm_t *drm )
 	for (auto &kv : drm->connectors) {
 		struct connector *conn = &kv.second;
 		if (conn->connector != nullptr) {
-			drmModeDestroyPropertyBlob(drm->fd, conn->metadata.hdr10_metadata_blob);
-			conn->metadata.hdr10_metadata_blob = 0;
+			conn->metadata.hdr10_metadata_blob = nullptr;
 			drmModeFreeConnector(conn->connector);
 		}
 
@@ -549,7 +543,7 @@ static bool refresh_state( drm_t *drm )
 		if (conn->has_colorspace)
 			conn->current.colorspace = conn->initial_prop_values["Colorspace"];
 		if (conn->has_hdr_output_metadata)
-			conn->current.hdr_output_metadata = conn->initial_prop_values["HDR_OUTPUT_METADATA"];
+			conn->current.hdr_output_metadata = std::make_shared<wlserver_hdr_metadata>(conn->initial_prop_values["HDR_OUTPUT_METADATA"], false);
 		if (conn->has_content_type)
 			conn->current.content_type = conn->initial_prop_values["content type"];
 
@@ -1043,7 +1037,7 @@ void finish_drm(struct drm_t *drm)
 		// HACK HACK: Setting to 0 doesn't disable HDR properly.
 		// Set an SDR metadata blob.
 		if (conn->has_hdr_output_metadata)
-			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", drm->sdr_static_metadata);
+			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", drm->sdr_static_metadata->blob);
 		if (conn->has_content_type)
 			add_connector_property(req, conn, "content type", 0);
 	}
@@ -1786,16 +1780,17 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	}
 
 	if (drm->connector->has_hdr_output_metadata) {
-		uint32_t hdr_output_metadata_blob = drm->sdr_static_metadata;
+		auto hdr_output_metadata = drm->sdr_static_metadata;
 		if ( g_bOutputHDREnabled ) {
-			hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
+			if ( drm->connector->metadata.hdr10_metadata_blob )
+				hdr_output_metadata = drm->connector->metadata.hdr10_metadata_blob;
 
 			auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
 			if (feedback && feedback->hdr_metadata_blob)
-				hdr_output_metadata_blob = feedback->hdr_metadata_blob;
+				hdr_output_metadata = feedback->hdr_metadata_blob;
 		}
 
-		drm->connector->pending.hdr_output_metadata = hdr_output_metadata_blob;
+		drm->connector->pending.hdr_output_metadata = hdr_output_metadata;
 	}
 
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
@@ -1911,7 +1906,8 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		}
 
 		if (drm->connector->has_hdr_output_metadata) {
-			ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
+			uint32_t value = drm->connector->pending.hdr_output_metadata ? drm->connector->pending.hdr_output_metadata->blob : 0;
+			ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", value);
 			if (ret < 0)
 				return ret;
 		}
@@ -1982,7 +1978,8 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		}
 
 		if (drm->connector->has_hdr_output_metadata && drm->connector->pending.hdr_output_metadata != drm->connector->current.hdr_output_metadata) {
-			int ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", drm->connector->pending.hdr_output_metadata);
+			uint32_t value = drm->connector->pending.hdr_output_metadata ? drm->connector->pending.hdr_output_metadata->blob : 0;
+			int ret = add_connector_property(drm->req, drm->connector, "HDR_OUTPUT_METADATA", value);
 			if (ret < 0)
 				return ret;
 		}
@@ -2820,7 +2817,7 @@ std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm)
 	return std::make_pair(drm->connector->connector->connector_type, drm->connector->connector->connector_type_id);
 }
 
-uint32_t drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata)
+std::shared_ptr<wlserver_hdr_metadata> drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata)
 {
 	uint32_t blob = 0;
 	int ret = drmModeCreatePropertyBlob(drm->fd, metadata, sizeof(*metadata), &blob);
@@ -2830,7 +2827,10 @@ uint32_t drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *me
 		blob = 0;
 	}
 
-	return blob;
+	if (!blob)
+		return nullptr;
+
+	return std::make_shared<wlserver_hdr_metadata>(blob);
 }
 void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob)
 {

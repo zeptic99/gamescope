@@ -590,7 +590,7 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 			.vk_pre_transform = VkSurfaceTransformFlagBitsKHR(vk_pre_transform),
 			.vk_present_mode = VkPresentModeKHR(vk_present_mode),
 			.vk_clipped = VkBool32(vk_clipped),
-			.hdr_metadata_blob = 0,
+			.hdr_metadata_blob = nullptr,
 		});
 	}
 }
@@ -624,9 +624,6 @@ static void gamescope_xwayland_handle_set_hdr_metadata( struct wl_client *client
 			wl_log.errorf("set_hdr_metadata with no swapchain_feedback.");
 			return;
 		}
-
-		drm_destroy_hdr_metadata_blob( &g_DRM, wl_info->swapchain_feedback->hdr_metadata_blob );
-		wl_info->swapchain_feedback->hdr_metadata_blob = 0;
 
 		hdr_output_metadata metadata = {};
 		metadata.metadata_type = 0;

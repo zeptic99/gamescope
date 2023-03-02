@@ -32,6 +32,32 @@ enum drm_screen_type {
 	DRM_SCREEN_TYPE_COUNT
 };
 
+extern struct drm_t g_DRM;
+void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob);
+
+struct wlserver_hdr_metadata
+{
+	wlserver_hdr_metadata()
+	{
+
+	}
+
+	wlserver_hdr_metadata(uint32_t blob, bool owned = true)
+		: blob(blob)
+	{
+
+	}
+
+	~wlserver_hdr_metadata()
+	{
+		if ( blob && owned )
+			drm_destroy_hdr_metadata_blob( &g_DRM, blob );
+	}
+
+	uint32_t blob = 0;
+	bool owned = true;
+};
+
 #include <wayland-server-core.h>
 
 extern "C" {
@@ -82,7 +108,7 @@ struct crtc {
 
 struct connector_metadata_t {
    struct hdr_output_metadata defaultHdrMetadata = {};
-   uint32_t hdr10_metadata_blob = 0;
+   std::shared_ptr<wlserver_hdr_metadata> hdr10_metadata_blob;
    bool supportsST2084 = false;
 };
 
@@ -107,7 +133,7 @@ struct connector {
 		uint32_t crtc_id;
 		uint32_t colorspace;
 		uint32_t content_type;
-		uint32_t hdr_output_metadata;
+		std::shared_ptr<wlserver_hdr_metadata> hdr_output_metadata;
 	} current, pending;
 
 	bool has_colorspace;
@@ -158,7 +184,7 @@ struct drm_t {
 	struct liftoff_output *lo_output;
 	struct liftoff_layer *lo_layers[ k_nMaxLayers ];
 
-	uint32_t sdr_static_metadata = 0;
+	std::shared_ptr<wlserver_hdr_metadata> sdr_static_metadata;
 
 	struct {
 		uint32_t mode_id;
@@ -286,7 +312,7 @@ bool drm_get_vrr_capable(struct drm_t *drm);
 bool drm_supports_st2084(struct drm_t *drm);
 void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
-uint32_t drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata);
+std::shared_ptr<wlserver_hdr_metadata> drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata);
 void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob);
 
 const char *drm_get_connector_name(struct drm_t *drm);
