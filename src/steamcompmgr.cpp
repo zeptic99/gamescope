@@ -1973,6 +1973,7 @@ paint_all(bool async)
 
 	bool bNeedsNearest = g_upscaleFilter == GamescopeUpscaleFilter::NEAREST && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
 
+
 	bool bNeedsComposite = BIsNested();
 	bNeedsComposite |= alwaysComposite;
 	bNeedsComposite |= bCapture;
@@ -1984,7 +1985,8 @@ paint_all(bool async)
 	bNeedsComposite |= bDrewCursor;
 
 	// For now! We can avoid this in the future in some cases.
-	bNeedsComposite |= g_bOutputHDREnabled;
+	bool bHDRNeedsComposite = g_bOutputHDREnabled && ( frameInfo.layerCount > 1 || frameInfo.layers[0].colorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ );
+	bNeedsComposite |= bHDRNeedsComposite;
 	bNeedsComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
 
 	if ( !bNeedsComposite )
