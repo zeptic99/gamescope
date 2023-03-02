@@ -1984,6 +1984,14 @@ paint_all(bool async)
 	bNeedsComposite |= bNeedsNearest;
 	bNeedsComposite |= bDrewCursor;
 
+	// Disable FSR if outputting HDR or not SDR colorspace game.
+	// We can fix the former at some point, but the latter is much harder.
+	if ( g_bOutputHDREnabled || !( frameInfo.layers[0].colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB || frameInfo.layers[0].colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR ) )
+	{
+		frameInfo.useFSRLayer0 = false;
+		frameInfo.useNISLayer0 = false;
+	}
+
 	// For now! We can avoid this in the future in some cases.
 	bool bHDRNeedsComposite = g_bOutputHDREnabled && ( frameInfo.layerCount > 1 || frameInfo.layers[0].colorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ );
 	bNeedsComposite |= bHDRNeedsComposite;
