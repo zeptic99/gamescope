@@ -158,6 +158,8 @@ struct drm_t {
 	struct liftoff_output *lo_output;
 	struct liftoff_layer *lo_layers[ k_nMaxLayers ];
 
+	uint32_t sdr_static_metadata = 0;
+
 	struct {
 		uint32_t mode_id;
 		uint32_t gamma_lut_id;

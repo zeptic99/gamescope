@@ -984,6 +984,10 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_
 		liftoff_log_set_priority(g_bDebugLayers ? LIFTOFF_DEBUG : LIFTOFF_ERROR);
 	}
 
+	hdr_output_metadata sdr_metadata;
+	memset(&sdr_metadata, 0, sizeof(sdr_metadata));
+	drm->sdr_static_metadata = drm_create_hdr_metadata_blob(drm, &sdr_metadata);
+
 	drm->flipcount = 0;
 	drm->needs_modeset = true;
 
@@ -1036,8 +1040,10 @@ void finish_drm(struct drm_t *drm)
 		add_connector_property(req, conn, "CRTC_ID", 0);
 		if (conn->has_colorspace)
 			add_connector_property(req, conn, "Colorspace", 0);
+		// HACK HACK: Setting to 0 doesn't disable HDR properly.
+		// Set an SDR metadata blob.
 		if (conn->has_hdr_output_metadata)
-			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", 0);
+			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", drm->sdr_static_metadata);
 		if (conn->has_content_type)
 			add_connector_property(req, conn, "content type", 0);
 	}
@@ -1780,7 +1786,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	}
 
 	if (drm->connector->has_hdr_output_metadata) {
-		uint32_t hdr_output_metadata_blob = 0;
+		uint32_t hdr_output_metadata_blob = drm->sdr_static_metadata;
 		if ( g_bOutputHDREnabled ) {
 			hdr_output_metadata_blob = drm->connector->metadata.hdr10_metadata_blob;
 
