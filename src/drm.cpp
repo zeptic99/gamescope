@@ -1021,6 +1021,15 @@ static int add_plane_property(drmModeAtomicReq *req, struct plane *plane, const 
 	return add_property(req, plane->id, plane->props, name, value);
 }
 
+static std::shared_ptr<wlserver_hdr_metadata> get_default_hdr_metadata(struct drm_t *drm, struct connector *connector)
+{
+	if ( !connector->has_hdr_output_metadata )
+		return nullptr;
+	if ( !connector->metadata.supportsST2084 )
+		return nullptr;
+	return drm->sdr_static_metadata;
+}
+
 void finish_drm(struct drm_t *drm)
 {
 	// Disable all connectors, CRTCs and planes. This is necessary to leave a
@@ -1037,7 +1046,10 @@ void finish_drm(struct drm_t *drm)
 		// HACK HACK: Setting to 0 doesn't disable HDR properly.
 		// Set an SDR metadata blob.
 		if (conn->has_hdr_output_metadata)
-			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", drm->sdr_static_metadata->blob);
+		{
+			auto metadata = get_default_hdr_metadata( drm, conn );
+			add_connector_property(req, conn, "HDR_OUTPUT_METADATA", metadata ? metadata->blob : 0);
+		}
 		if (conn->has_content_type)
 			add_connector_property(req, conn, "content type", 0);
 	}
@@ -1780,7 +1792,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	}
 
 	if (drm->connector->has_hdr_output_metadata) {
-		auto hdr_output_metadata = drm->sdr_static_metadata;
+		auto hdr_output_metadata = get_default_hdr_metadata( drm, drm->connector );
 		if ( g_bOutputHDREnabled ) {
 			if ( drm->connector->metadata.hdr10_metadata_blob )
 				hdr_output_metadata = drm->connector->metadata.hdr10_metadata_blob;
