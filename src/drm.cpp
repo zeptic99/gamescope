@@ -1855,8 +1855,9 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 			if (crtc->current.active == 0)
 				continue;
 
-			if (add_crtc_property(drm->req, crtc, "MODE_ID", 0) < 0)
-				return false;
+			int ret = add_crtc_property(drm->req, crtc, "MODE_ID", 0);
+			if (ret < 0)
+				return ret;
 			if (crtc->has_gamma_lut)
 			{
 				int ret = add_crtc_property(drm->req, crtc, "GAMMA_LUT", 0);
@@ -1894,7 +1895,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 					return ret;
 			}
 
-			int ret = add_crtc_property(drm->req, crtc, "ACTIVE", 0);
+			ret = add_crtc_property(drm->req, crtc, "ACTIVE", 0);
 			if (ret < 0)
 				return ret;
 			crtc->pending.active = 0;
@@ -1938,47 +1939,47 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "GAMMA_LUT", drm->pending.gamma_lut_id);
 			if (ret < 0)
-				return false;
+				return ret;
 		}
 
 		if (drm->crtc->has_degamma_lut)
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "DEGAMMA_LUT", drm->pending.degamma_lut_id);
 			if (ret < 0)
-				return false;
+				return ret;
 		}
 
 		if (drm->crtc->has_ctm)
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "CTM", drm->pending.ctm_id);
 			if (ret < 0)
-				return false;
+				return ret;
 		}
 
 		if (drm->crtc->lut3d_size)
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "VALVE1_LUT3D", drm->pending.lut3d_id);
 			if (ret < 0)
-				return false;
+				return ret;
 		}
 
 		if (drm->crtc->shaperlut_size)
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "VALVE1_SHAPER_LUT", drm->pending.shaperlut_id);
 			if (ret < 0)
-				return false;
+				return ret;
 		}
 
 		if (drm->crtc->has_vrr_enabled)
 		{
 			ret = add_crtc_property(drm->req, drm->crtc, "VRR_ENABLED", drm->pending.vrr_enabled);
 			if (ret < 0)
-				return false;
+				return ret;
 		}
 
 		ret = add_crtc_property(drm->req, drm->crtc, "ACTIVE", 1);
 		if (ret < 0)
-			return false;
+			return ret;
 		drm->crtc->pending.active = 1;
 	}
 	else
