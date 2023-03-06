@@ -3168,7 +3168,7 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 	return nullptr;
 }
 
-float g_flLinearToNits = 400.0f;
+float g_flLinearToNits = 203.0f;
 float g_flNitsToLinear = 1.0f / 100.0f;
 float g_flHDRItmSdrNits = 100.f;
 float g_flHDRItmTargetNits = 1000.f;

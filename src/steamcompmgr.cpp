@@ -4730,7 +4730,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_flLinearToNits = get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDRSDRContentBrightness, 0 );
 		if ( g_flLinearToNits < 1.0f )
-			g_flLinearToNits = 400.0f;
+			g_flLinearToNits = 203.0f;
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeHDRItmEnable )
