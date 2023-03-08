@@ -167,8 +167,13 @@ bool vrsession_init()
     return true;
 }
 
+bool g_bOpenVRForceInvisible = false;
+
 bool vrsession_visible()
 {
+    if ( g_bOpenVRForceInvisible )
+        return false;
+
     return vr::VROverlay()->IsOverlayVisible( GetVR().hOverlay ) || GetVR().bNudgeToVisible;
 }
 
