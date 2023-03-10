@@ -352,6 +352,11 @@ void vrsession_update_touch_mode()
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_HideLaserIntersection, bHideLaserIntersection );
 }
 
+struct rgba_t
+{
+	uint8_t r,g,b,a;
+};
+
 void vrsession_title( const char *title, std::shared_ptr<std::vector<uint32_t>> icon )
 {
     if ( !GetVR().bExplicitOverlayName )
@@ -359,10 +364,19 @@ void vrsession_title( const char *title, std::shared_ptr<std::vector<uint32_t>> 
         vr::VROverlay()->SetOverlayName( GetVR().hOverlay, (title && *title) ? title : GetVR().pchOverlayName );
     }
 
-    if ( icon )
+    if ( icon && icon->size() >= 3 )
     {
-        int size = sqrt( icon->size() );
-        vr::VROverlay()->SetOverlayRaw( GetVR().hOverlayThumbnail, icon->data(), size, size, sizeof(uint32_t) );
+        const uint32_t width = (*icon)[0];
+        const uint32_t height = (*icon)[1];
+
+        for (uint32_t& val : *icon)
+        {
+            rgba_t rgb = *((rgba_t*)&val);
+            std::swap(rgb.r, rgb.b);
+            val = *((uint32_t*)&rgb);
+        }
+
+        vr::VROverlay()->SetOverlayRaw( GetVR().hOverlayThumbnail, &(*icon)[2], width, height, sizeof(uint32_t) );
     }
     else if ( GetVR().pchOverlayName )
     {
