@@ -338,12 +338,13 @@ void inputSDLThreadRun( void )
 
 						if ( g_SDLWindowIcon )
 						{
-							uint32_t size = sqrt(g_SDLWindowIcon->size());
+							const uint32_t width = (*g_SDLWindowIcon)[0];
+        					const uint32_t height = (*g_SDLWindowIcon)[1];
 
 							icon_surface = SDL_CreateRGBSurfaceFrom(
-								g_SDLWindowIcon->data(),
-								size, size,
-								32, size * sizeof(uint32_t),
+								&(*g_SDLWindowIcon)[2],
+								width, height,
+								32, width * sizeof(uint32_t),
 								0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 						}
 
