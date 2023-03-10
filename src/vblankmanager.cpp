@@ -189,26 +189,22 @@ void vblankThreadVR()
 	while ( true )
 	{
 #if HAVE_OPENVR
+		vrsession_wait_until_visible();
+
 		vrsession_framesync( ~0u );
 #else
 		abort();
 #endif
 
-		// If we are visible, write a vblank event.
-#if HAVE_OPENVR
-		if ( vrsession_visible() )
-#endif
+		uint64_t vblanktime = get_time_in_nanos();
+		ssize_t ret = write( g_vblankPipe[ 1 ], &vblanktime, sizeof( vblanktime ) );
+		if ( ret <= 0 )
 		{
-			uint64_t vblanktime = get_time_in_nanos();
-			ssize_t ret = write( g_vblankPipe[ 1 ], &vblanktime, sizeof( vblanktime ) );
-			if ( ret <= 0 )
-			{
-				perror( "vblankmanager: write failed" );
-			}
-			else
-			{
-				gpuvis_trace_printf( "sent vblank" );
-			}
+			perror( "vblankmanager: write failed" );
+		}
+		else
+		{
+			gpuvis_trace_printf( "sent vblank" );
 		}
 	}
 }

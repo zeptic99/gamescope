@@ -8,6 +8,8 @@
 
 #include <string.h>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 
 static LogScope openvr_log("openvr");
 
@@ -167,14 +169,22 @@ bool vrsession_init()
     return true;
 }
 
-bool g_bOpenVRForceInvisible = false;
+std::mutex g_OverlayVisibleMutex;
+std::condition_variable g_OverlayVisibleCV;
+std::atomic<bool> g_bOverlayVisible = { false };
 
 bool vrsession_visible()
 {
-    if ( g_bOpenVRForceInvisible )
-        return false;
+    return g_bOverlayVisible.load();
+}
 
-    return vr::VROverlay()->IsOverlayVisible( GetVR().hOverlay ) || GetVR().bNudgeToVisible;
+void vrsession_wait_until_visible()
+{
+    if (vrsession_visible())
+        return;
+
+    std::unique_lock lock(g_OverlayVisibleMutex);
+    g_OverlayVisibleCV.wait( lock, []{ return g_bOverlayVisible.load(); } );
 }
 
 void vrsession_present( vr::VRVulkanTextureData_t *pTextureData )
@@ -319,6 +329,16 @@ static void vrsession_input_thread()
 
                     wlserver_open_steam_menu( button == vr::k_EButton_QAM );
                     break;
+                }
+
+                case vr::VREvent_OverlayShown:
+                case vr::VREvent_OverlayHidden:
+                {
+                    {
+                        std::unique_lock lock(g_OverlayVisibleMutex);
+                        g_bOverlayVisible = vrEvent.eventType == vr::VREvent_OverlayShown;
+                    }
+                    g_OverlayVisibleCV.notify_all();
                 }
             }
         }
