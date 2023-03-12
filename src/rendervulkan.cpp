@@ -3165,6 +3165,7 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 		return pScreenshotImage;
 	}
 
+	vk_log.errorf("Unable to acquire screenshot texture. Out of textures.");
 	return nullptr;
 }
 
