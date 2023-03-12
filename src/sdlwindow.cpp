@@ -336,7 +336,7 @@ void inputSDLThreadRun( void )
 						if ( icon_surface )
 							SDL_FreeSurface( icon_surface );
 
-						if ( g_SDLWindowIcon )
+						if ( g_SDLWindowIcon && g_SDLWindowIcon->size() >= 3 )
 						{
 							const uint32_t width = (*g_SDLWindowIcon)[0];
         					const uint32_t height = (*g_SDLWindowIcon)[1];
