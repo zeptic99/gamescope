@@ -1992,7 +1992,7 @@ paint_all(bool async)
 		frameInfo.useNISLayer0 = false;
 	}
 
-	if ( g_bOutputHDREnabled )
+	if ( !BIsNested() && g_bOutputHDREnabled )
 	{
 		bNeedsComposite |= g_bHDRItmEnable;
 		if ( !drm_supports_hdr_planes(&g_DRM) )
