@@ -66,6 +66,7 @@ public:
 	std::vector<ResListEntry_t> retrieve_commits();
 
 	void handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window );
+	void destroy_content_override( struct wlserver_x11_surface_info *x11_surface, struct wlr_surface *surf);
 	void destroy_content_override(struct wlserver_content_override *co);
 
 	struct wl_client *get_client();

@@ -65,6 +65,7 @@ static struct wlserver_t wlserver = {
 };
 
 struct wlserver_content_override {
+	gamescope_xwayland_server_t *server;
 	struct wlr_surface *surface;
 	uint32_t x11_window;
 	struct wl_listener surface_destroy_listener;
@@ -430,6 +431,8 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 	{
 		wlserver_x11_surface_info *x11_surface = surf->x11_surface;
 
+		x11_surface->xwayland_server->destroy_content_override( x11_surface, surf->wlr );
+
 		wlserver_x11_surface_info_finish(x11_surface);
 		// Re-init it so it can be destroyed for good on the x11 side.
 		// This just clears it out from the main wl surface mainly.
@@ -497,14 +500,22 @@ void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_cont
 	content_overrides.erase( co->x11_window );
 	free( co );
 }
+void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_x11_surface_info *x11_surface, struct wlr_surface *surf )
+{
+	auto iter = content_overrides.find( x11_surface->x11_id );
+	if (iter == content_overrides.end())
+		return;
+
+	struct wlserver_content_override *co = iter->second;
+	if (co->surface == surf)
+		destroy_content_override(iter->second);
+}
+
 
 static void content_override_handle_surface_destroy( struct wl_listener *listener, void *data )
 {
 	struct wlserver_content_override *co = wl_container_of( listener, co, surface_destroy_listener );
-	/* The protocol only works for server 0, so assume that for now.
-	 * A future revision may change this and add a DISPLAY parameter or something.
-	 * That would be cool! */
-	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( 0 );
+	gamescope_xwayland_server_t *server = co->server;
 	assert( server );
 	server->destroy_content_override( co );
 }
@@ -522,6 +533,7 @@ void gamescope_xwayland_server_t::handle_override_window_content( struct wl_clie
 		x11_window = x11_surface->x11_id;
 
 	struct wlserver_content_override *co = (struct wlserver_content_override *)calloc(1, sizeof(*co));
+	co->server = this;
 	co->surface = surface;
 	co->x11_window = x11_window;
 	co->surface_destroy_listener.notify = content_override_handle_surface_destroy;
