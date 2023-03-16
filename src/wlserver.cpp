@@ -1626,7 +1626,6 @@ static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info 
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id )
 {
-	fprintf( stderr, "wlserver_x11_surface_info_init: %p\n", surf );
 	surf->wl_id = 0;
 	surf->x11_id = x11_id;
 	surf->main_surface = nullptr;
@@ -1685,7 +1684,6 @@ const char *gamescope_xwayland_server_t::get_nested_display_name() const
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 {
 	assert( wlserver_is_lock_held() );
-	fprintf( stderr, "wlserver_x11_surface_info_finish: %p (%p %p)\n", surf, surf->main_surface.load(), surf->override_surface.load() );
 
 	if (surf->main_surface)
 	{
