@@ -2370,9 +2370,13 @@ win_maybe_a_dropdown( steamcompmgr_win_t *w )
 	// Only do this if we have CONTROLPARENT right now. Some other apps, such as the
 	// Street Fighter V (310950) Splash Screen also use LAYERED and TOOLWINDOW, and we don't
 	// want that to be overlayed.
+	// Ignore LAYERED if it's marked as top-level with WS_EX_APPWINDOW.
 	// TODO: Find more apps using LAYERED.
 	const uint32_t validLayered = WS_EX_CONTROLPARENT | WS_EX_LAYERED;
-	if ( w->hasHwndStyleEx && ( ( w->hwndStyleEx & validLayered ) == validLayered ) )
+	const uint32_t invalidLayered = WS_EX_APPWINDOW;
+	if ( w->hasHwndStyleEx &&
+		( ( w->hwndStyleEx & validLayered   ) == validLayered ) &&
+		( ( w->hwndStyleEx & invalidLayered ) == 0 ) )
 		return true;
 
 	// Josh:
