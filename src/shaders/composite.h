@@ -43,69 +43,7 @@ vec4 sampleLayer(sampler2D layerSampler, uint layerIdx, vec2 uv, bool unnormaliz
 
     vec4 color = textureLod(layerSampler, coord, 0.0f);
 
-    if (get_layer_colorspace(layerIdx) == colorspace_pq) {
-        color.rgb = pqToNits(color.rgb);
-
-        if (checkDebugFlag(compositedebug_Heatmap)) {
-            color.rgb = hdr_heatmap(color.rgb, true, true, c_st2084Output);
-        } else {
-            if (!c_st2084Output) {
-                // HDR10 ST2084 is rec2020.
-                color.rgb = convert_primaries(color.rgb, rec2020_to_xyz, xyz_to_rec709);
-                color.rgb = nitsToLinear(color.rgb);
-                color.rgb = tonemap(color.rgb);
-            }
-        }
-    } else if (get_layer_colorspace(layerIdx) == colorspace_scRGB) {
-        color.rgb = scrgbToNits(color.rgb);
-
-        if (checkDebugFlag(compositedebug_Heatmap)) {
-            color.rgb = hdr_heatmap(color.rgb, false, true, c_st2084Output);
-        } else {
-            if (!c_st2084Output) {
-                // scRGB is rec709.
-                color.rgb = nitsToLinear(color.rgb);
-                color.rgb = tonemap(color.rgb);
-            } else {
-                // scRGB is rec709.
-                // ST2084 output needs rec2020.
-                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
-            }
-        }
-    } else if (get_layer_colorspace(layerIdx) == colorspace_sRGB) {
-        color.rgb = srgbToLinear(color.rgb);
-
-        if(c_itmEnable) {
-            if (!c_forceWideGammut)
-                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
-            color.rgb = bt2446a_inverse_tonemapping(color.rgb, u_itmSdrNits, u_itmTargetNits);
-        }
-        if (checkDebugFlag(compositedebug_Heatmap)) {
-            color.rgb = hdr_heatmap(color.rgb, c_itmEnable, c_itmEnable, c_st2084Output);
-        } else {
-            if (!c_itmEnable && c_st2084Output) {
-                color.rgb = linearToNits(color.rgb);
-                if (!c_forceWideGammut)
-                    color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
-            }
-        }
-    } else if (get_layer_colorspace(layerIdx) == colorspace_linear) {
-        if(c_itmEnable) {
-            if (!c_forceWideGammut)
-                color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
-            color.rgb = bt2446a_inverse_tonemapping(color.rgb, u_itmSdrNits, u_itmTargetNits);
-        }
-        if (checkDebugFlag(compositedebug_Heatmap)) {
-            color.rgb = hdr_heatmap(color.rgb, c_itmEnable, c_itmEnable, c_st2084Output);
-        } else {
-            if (!c_itmEnable && c_st2084Output) {
-                color.rgb = linearToNits(color.rgb);
-                if (!c_forceWideGammut)
-                    color.rgb = convert_primaries(color.rgb, rec709_to_xyz, xyz_to_rec2020);
-            }
-        }
-    }
-    return color;
+    return convert_to_dst_colorspace(color, get_layer_colorspace(layerIdx));
 }
 
 vec3 encodeOutputColor(vec3 linearOrNits) {

@@ -490,8 +490,27 @@ vec4 gaussian_blur(sampler2D layerSampler, uint layerIdx, vec2 pos, uint radius,
             posOffset = vec2(offsets[i], 0);
 
 
-        color += textureCond(layerSampler, layerIdx, pos - posOffset, unnormalized) * weights[i];
-        color += textureCond(layerSampler, layerIdx, pos + posOffset, unnormalized) * weights[i];
+        vec4 tmp0 = textureCond(layerSampler, layerIdx, pos - posOffset, unnormalized) * weights[i];
+        if (vertical && c_st2084Output)
+        {
+            tmp0.rgb = pqToNits(tmp0.rgb);
+        }
+        else
+        {
+            tmp0 = convert_to_dst_colorspace(tmp0, get_layer_colorspace(layerIdx));
+        }
+        color += tmp0;
+
+        vec4 tmp1 = textureCond(layerSampler, layerIdx, pos + posOffset, unnormalized) * weights[i];
+        if (vertical && c_st2084Output)
+        {
+            tmp1.rgb = pqToNits(tmp1.rgb);
+        }
+        else
+        {
+            tmp1 = convert_to_dst_colorspace(tmp1, get_layer_colorspace(layerIdx));
+        }
+        color += tmp1;
     }
 
     return color;
