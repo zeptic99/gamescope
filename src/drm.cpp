@@ -57,6 +57,7 @@ enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
 std::atomic<uint64_t> g_drmEffectiveOrientation(DRM_MODE_ROTATE_0);
 
+bool g_bForceDisableTransferFunctions = false;
 
 static LogScope drm_log("drm");
 static LogScope drm_verbose_log("drm", LOG_SILENT);
@@ -1690,7 +1691,7 @@ static inline drm_valve1_transfer_function convert_colorspace(GamescopeAppTextur
 	}
 }
 
-LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( const FrameInfo_t *frameInfo )
+LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( struct drm_t *drm, const FrameInfo_t *frameInfo )
 {
 	LiftoffStateCacheEntry entry{};
 
@@ -1733,7 +1734,8 @@ LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( const FrameInfo_t *fra
 		}
 		else
 		{
-			entry.layerState[i].transferFunction = convert_colorspace(frameInfo->layers[ i ].colorspace);
+			if ( drm_supports_hdr_planes( drm ) )
+				entry.layerState[i].transferFunction = convert_colorspace(frameInfo->layers[ i ].colorspace);
 		}
 	}
 
@@ -1759,7 +1761,7 @@ extern float g_flLinearToNits;
 static int
 drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, bool needs_modeset )
 {
-	auto entry = FrameInfoToLiftoffStateCacheEntry( frameInfo );
+	auto entry = FrameInfoToLiftoffStateCacheEntry( drm, frameInfo );
 
 	// If we are modesetting, reset the state cache, we might
 	// move to another CRTC or whatever which might have differing caps.
@@ -1815,7 +1817,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", entry.layerState[i].transferFunction );
 			}
 
-			if ( g_bOutputHDREnabled && ( entry.layerState[i].transferFunction == DRM_VALVE1_TRANSFER_FUNCTION_SRGB ) )
+			if ( g_bOutputHDREnabled && drm_supports_hdr_planes( drm ) && ( entry.layerState[i].transferFunction == DRM_VALVE1_TRANSFER_FUNCTION_SRGB ) )
 			{
 				// Multiplier to 'gain' the plane.
 				// When PQ is decoded using the fixed func transfer function to the internal FP16 fb,
@@ -1918,6 +1920,8 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		drm->pending.regamma_tf = g_bOutputHDREnabled
 			? DRM_VALVE1_TRANSFER_FUNCTION_PQ
 			: DRM_VALVE1_TRANSFER_FUNCTION_SRGB;
+	} else {
+		drm->pending.regamma_tf = DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT;
 	}
 
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
@@ -3015,6 +3019,9 @@ void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob)
 
 bool drm_supports_hdr_planes(struct drm_t *drm)
 {
+	if (g_bForceDisableTransferFunctions)
+		return false;
+
 	if (!drm->crtc)
 		return false;
 
