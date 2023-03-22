@@ -1808,13 +1808,15 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 			{
 				liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_ENCODING", entry.layerState[i].colorEncoding );
 				liftoff_layer_set_property( drm->lo_layers[ i ], "COLOR_RANGE",    entry.layerState[i].colorRange );
-				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", DRM_VALVE1_TRANSFER_FUNCTION_BT709 );
+				if ( drm_supports_hdr_planes( drm ) )
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", DRM_VALVE1_TRANSFER_FUNCTION_BT709 );
 			}
 			else
 			{
 				liftoff_layer_unset_property( drm->lo_layers[ i ], "COLOR_ENCODING" );
 				liftoff_layer_unset_property( drm->lo_layers[ i ], "COLOR_RANGE" );
-				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", entry.layerState[i].transferFunction );
+				if ( drm_supports_hdr_planes( drm ) )
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", entry.layerState[i].transferFunction );
 			}
 
 			if ( g_bOutputHDREnabled && drm_supports_hdr_planes( drm ) && ( entry.layerState[i].transferFunction == DRM_VALVE1_TRANSFER_FUNCTION_SRGB ) )
@@ -1825,12 +1827,14 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 				// When sRGB is decoded, 1.0 -> 1.0, obviously.
 				// Therefore, 1.0 multiplier = 80 nits for SDR content.
 				// So if you want, 203 nits for SDR content, pass in (203.0 / 80.0).
-				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_HDR_MULT", drm_calc_s31_32( g_flLinearToNits / 80.0f ) );
+				if ( drm_supports_hdr_planes( drm ) )
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_HDR_MULT", drm_calc_s31_32( g_flLinearToNits / 80.0f ) );
 			}
 			else
 			{
 				// 1.0 in S32.31 is 0x100000000LL
-				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_HDR_MULT", 0x100000000ULL );
+				if ( drm_supports_hdr_planes( drm ) )
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_HDR_MULT", 0x100000000ULL );
 			}
 
 		}
@@ -1841,8 +1845,11 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 			liftoff_layer_unset_property( drm->lo_layers[ i ], "COLOR_ENCODING" );
 			liftoff_layer_unset_property( drm->lo_layers[ i ], "COLOR_RANGE" );
 
-			liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
-			liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_HDR_MULT", 0x100000000ULL );
+			if ( drm_supports_hdr_planes( drm ) )
+			{
+				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
+				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_HDR_MULT", 0x100000000ULL );
+			}
 		}
 	}
 
