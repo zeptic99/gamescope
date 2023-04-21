@@ -1986,6 +1986,8 @@ bool g_bDisableDegamma = false;
 bool g_bDisableRegamma = false;
 bool g_bDisableBlendTF = false;
 
+bool g_bSinglePlaneOptimizations = true;
+
 static int
 drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, bool needs_modeset )
 {
@@ -2002,6 +2004,8 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 		if (g_LiftoffStateCache.count(entry) != 0)
 			return -EINVAL;
 	}
+
+	bool bSinglePlane = frameInfo->layerCount < 2 && g_bSinglePlaneOptimizations;
 
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
@@ -2072,7 +2076,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_LUT3D", 0 );
 					}
 
-					if (!g_bDisableBlendTF)
+					if (!g_bDisableBlendTF && !bSinglePlane)
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
 					else
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", 0 );
@@ -2187,9 +2191,11 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		}
 	}
 
+	bool bSinglePlane = frameInfo->layerCount < 2 && g_bSinglePlaneOptimizations;
+
 	if ( drm_supports_color_mgmt( &g_DRM ) && frameInfo->applyOutputColorMgmt )
 	{
-		if ( !g_bDisableRegamma )
+		if ( !g_bDisableRegamma && !bSinglePlane )
 		{
 			drm->pending.output_tf = g_bOutputHDREnabled
 				? DRM_VALVE1_TRANSFER_FUNCTION_PQ
