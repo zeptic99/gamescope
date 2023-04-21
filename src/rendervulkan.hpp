@@ -314,7 +314,8 @@ namespace CompositeDebugFlag
 	static constexpr uint32_t PlaneBorders = 1u << 1;
 	static constexpr uint32_t Heatmap = 1u << 2;
 	static constexpr uint32_t Heatmap_MSWCG = 1u << 3;
-	static constexpr uint32_t Tonemap_Reinhard = 1u << 4;
+	static constexpr uint32_t Heatmap_Hard = 1u << 4;
+	static constexpr uint32_t Tonemap_Reinhard = 1u << 7;
 };
 
 bool vulkan_init(void);

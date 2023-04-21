@@ -101,6 +101,11 @@ vec3 hdr_heatmap_impl_ms_wcg(float nits) {
 // 4000-10000 nits is   pink into blue
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+float fit(float x, float inmin, float inmax) {
+  return (x - inmin) / (inmax - inmin);
+}
+
 float hdr_heatmap_lilium_fade_in(float Y, float currentStop, float normaliseTo) {
   return (Y - currentStop) / (normaliseTo - currentStop);
 }
@@ -159,6 +164,36 @@ vec3 hdr_heatmap_lilium_impl(float Y) {
   return outColor;
 }
 
+vec3 hdr_heatmap_hard(float Y) {
+  const float HEATMAP_SCALE_LEVEL0 = 203.f;
+  const float HEATMAP_SCALE_LEVEL1 = 500.f;
+  const float HEATMAP_SCALE_LEVEL2 = 1000.f;
+  const float HEATMAP_SCALE_LEVEL3 = 4000.f;
+  const float currentGreyscale = Y > 0.f ? Y / HEATMAP_SCALE_LEVEL0 * 0.25f : 0.f;
+  const float low = 0.10;
+
+  // Color discontinuities are purposeful to make boundaries obvious
+  vec3 outColor;
+  if (Y <= HEATMAP_SCALE_LEVEL0)
+  {
+    outColor = vec3(currentGreyscale); // grey
+  }
+  else if (Y <= HEATMAP_SCALE_LEVEL1) // 200-500 grey to green
+  {
+    outColor = mix( vec3(currentGreyscale), vec3(low,1,low), vec3(fit(Y, HEATMAP_SCALE_LEVEL0, HEATMAP_SCALE_LEVEL1) * 0.5 ) );
+  }
+  else if (Y <= HEATMAP_SCALE_LEVEL2) // 500-1000 green to yellow
+  {
+    outColor = mix( vec3(0.25,0.75,low), vec3(1,1,low), vec3(fit(Y, HEATMAP_SCALE_LEVEL1, HEATMAP_SCALE_LEVEL2)) );
+  }
+  else  // 1000 - 4000 orange to red
+  {
+    outColor = mix( vec3(1.0,0.75,low), vec3(1,low,low), vec3(fit(Y, HEATMAP_SCALE_LEVEL2, HEATMAP_SCALE_LEVEL3)) );
+  }
+
+  return outColor;
+}
+
 bool colorspace_is_2020(uint colorspace)
 {
   return colorspace == colorspace_pq;
@@ -177,7 +212,9 @@ vec3 hdr_heatmap(vec3 inputColor, uint colorspace)
     xyz = inputColor * rec709_to_xyz;
 
   vec3 outputColor;
-  if (checkDebugFlag(compositedebug_Heatmap_MSWCG))
+  if ( checkDebugFlag(compositedebug_Heatmap_Hard))
+    outputColor = hdr_heatmap_hard( max(max(inputColor.x, inputColor.y), inputColor.z) );
+  else if (checkDebugFlag(compositedebug_Heatmap_MSWCG))
     outputColor = hdr_heatmap_impl_ms_wcg(xyz.y); // MS WCG viewer heatmap
   else
     outputColor = hdr_heatmap_lilium_impl(xyz.y); // Lilium Heatmap

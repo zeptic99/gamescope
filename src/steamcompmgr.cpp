@@ -4921,13 +4921,15 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDebugHDRHeatmap )
 	{
-		uint32_t heatmap = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
+		uint32_t heatmap = get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
 		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap;
 		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_MSWCG;
 		if (heatmap != 0)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
 		if (heatmap == 2)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_MSWCG;
+		if (heatmap == 3)
+			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_Hard;
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeHDROnSDRTonemapOperator )
