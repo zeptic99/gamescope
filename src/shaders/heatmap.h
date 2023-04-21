@@ -102,10 +102,6 @@ vec3 hdr_heatmap_impl_ms_wcg(float nits) {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float fit(float x, float inmin, float inmax) {
-  return (x - inmin) / (inmax - inmin);
-}
-
 float hdr_heatmap_lilium_fade_in(float Y, float currentStop, float normaliseTo) {
   return (Y - currentStop) / (normaliseTo - currentStop);
 }
@@ -164,13 +160,18 @@ vec3 hdr_heatmap_lilium_impl(float Y) {
   return outColor;
 }
 
+float fit(float x, float inmin, float inmax, float outmin, float outmax ) {
+  return (x - inmin) / (inmax - inmin) * ( outmax-outmin ) + outmin;
+}
+
 vec3 hdr_heatmap_hard(float Y) {
   const float HEATMAP_SCALE_LEVEL0 = 203.f;
   const float HEATMAP_SCALE_LEVEL1 = 500.f;
   const float HEATMAP_SCALE_LEVEL2 = 1000.f;
-  const float HEATMAP_SCALE_LEVEL3 = 4000.f;
+  const float HEATMAP_SCALE_LEVEL3 = 5000.f;
+  const float low = 0.15f;
+  const float hi = 1.f;
   const float currentGreyscale = Y > 0.f ? Y / HEATMAP_SCALE_LEVEL0 * 0.25f : 0.f;
-  const float low = 0.10;
 
   // Color discontinuities are purposeful to make boundaries obvious
   vec3 outColor;
@@ -180,15 +181,15 @@ vec3 hdr_heatmap_hard(float Y) {
   }
   else if (Y <= HEATMAP_SCALE_LEVEL1) // 200-500 grey to green
   {
-    outColor = mix( vec3(currentGreyscale), vec3(low,1,low), vec3(fit(Y, HEATMAP_SCALE_LEVEL0, HEATMAP_SCALE_LEVEL1) * 0.5 ) );
+    outColor = mix( vec3(currentGreyscale), vec3(low,hi,low), vec3( fit(Y, HEATMAP_SCALE_LEVEL0, HEATMAP_SCALE_LEVEL1, 0.0, 0.25) ) );
   }
-  else if (Y <= HEATMAP_SCALE_LEVEL2) // 500-1000 green to yellow
+  else if (Y <= HEATMAP_SCALE_LEVEL2) // 500-1000 grey to yellow
   {
-    outColor = mix( vec3(0.25,0.75,low), vec3(1,1,low), vec3(fit(Y, HEATMAP_SCALE_LEVEL1, HEATMAP_SCALE_LEVEL2)) );
+    outColor = mix( vec3(currentGreyscale), vec3(hi,hi,low), vec3( fit(Y, HEATMAP_SCALE_LEVEL1, HEATMAP_SCALE_LEVEL2, 0.25, 1.0) ) );
   }
-  else  // 1000 - 4000 orange to red
+  else  // 1000 - 10000 yellow to red
   {
-    outColor = mix( vec3(1.0,0.75,low), vec3(1,low,low), vec3(fit(Y, HEATMAP_SCALE_LEVEL2, HEATMAP_SCALE_LEVEL3)) );
+    outColor = mix( vec3(hi,hi,low), vec3(hi,low,low), vec3( fit(Y, HEATMAP_SCALE_LEVEL2, HEATMAP_SCALE_LEVEL3, 0.25, 1.0) ) );
   }
 
   return outColor;
