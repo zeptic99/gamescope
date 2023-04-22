@@ -60,8 +60,14 @@ void rcasComposite(uvec2 pos)
             FsrRcasF(outputValue.r, outputValue.g, outputValue.b, rcasPos, u_c1.xxxx);
 
             uint colorspace = get_layer_colorspace(0);
+            if (colorspace == colorspace_linear)
+            {
+                // We don't use an sRGB view for FSR due to the spaces RCAS works in.
+                colorspace = colorspace_sRGB;
+            }
+
             outputValue.rgb = colorspace_plane_degamma_tf(outputValue.rgb, colorspace);
-            outputValue.rgb = apply_layer_color_mgmt(outputValue.rgb, 0);
+            outputValue.rgb = apply_layer_color_mgmt(outputValue.rgb, colorspace);
             outputValue *= u_opacity[0];
         }
     }
