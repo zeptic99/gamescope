@@ -56,8 +56,12 @@ vec3 apply_layer_color_mgmt(vec3 color, uint colorspace) {
         //
         // We also need to do degamma here for non-linear views to blend in linear space.
         // ie. PQ -> PQ would need us to manually do bilinear here.
-        color = perform_1dlut(color, s_shaperLut[plane_eotf]);
-        color = perform_3dlut(color, s_lut3D[plane_eotf]);
+        bool lut3d_enabled = textureQueryLevels(s_shaperLut[plane_eotf]) != 0;
+        if (lut3d_enabled)
+        {
+            color = perform_1dlut(color, s_shaperLut[plane_eotf]);
+            color = perform_3dlut(color, s_lut3D[plane_eotf]);
+        }
         color = colorspace_blend_tf(color, c_output_eotf);
     }
 

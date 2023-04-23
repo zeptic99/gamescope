@@ -2280,8 +2280,10 @@ paint_all(bool async)
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
-		frameInfo.shaperLut[i] = g_ColorMgmtLuts[i].vk_lut1d;
-		frameInfo.lut3D[i] = g_ColorMgmtLuts[i].vk_lut3d;
+		if (!g_ColorMgmtLuts[i].lut1d.empty())
+			frameInfo.shaperLut[i] = g_ColorMgmtLuts[i].vk_lut1d;
+		if (!g_ColorMgmtLuts[i].lut3d.empty())
+			frameInfo.lut3D[i] = g_ColorMgmtLuts[i].vk_lut3d;
 	}
 
 	if ( !BIsNested() && g_bOutputHDREnabled )
