@@ -3925,7 +3925,7 @@ get_win_pid(xwayland_ctx_t *ctx, Window id)
 static void
 add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 {
-	steamcompmgr_win_t				*new_win = new steamcompmgr_win_t;
+	steamcompmgr_win_t				*new_win = new steamcompmgr_win_t{};
 	steamcompmgr_win_t				**p;
 
 	if (!new_win)
