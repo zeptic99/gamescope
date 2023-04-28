@@ -1,8 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
-#include <algorithm>
+#include <vector>
 
 #include <glm/vec2.hpp> // glm::vec2
 #include <glm/vec3.hpp> // glm::vec3
@@ -150,6 +151,14 @@ struct tonemapping_t
 	float g22_luminance = 1.f; // what luminance should be applied for g22 EOTF conversions?
 };
 
+struct lut3d_t
+{
+    int lutEdgeSize = 0;
+    std::vector<glm::vec3> data; // R changes fastest
+};
+
+bool LoadCubeLut( lut3d_t * lut3d, const char * filename );
+
 // Generate a color transform from the source colorspace, to the dest colorspace,
 // nLutSize1d is the number of color entries in the shaper lut
 // I.e., for a shaper lut with 256 input colors  nLutSize1d = 256, countof(pRgbxData1d) = 1024
@@ -157,13 +166,14 @@ struct tonemapping_t
 // I.e., for a 17x17x17 lut nLutEdgeSize3d = 17, countof(pRgbxData3d) = 19652
 //
 // If the white points differ, this performs an absolute colorimetric match
+// Look luts are optional, but if specified applied in the sourceEOTF space
 
 void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
 	uint16_t * pRgbxData3d, int nLutEdgeSize3d,
 	const displaycolorimetry_t & source, EOTF sourceEOTF,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
 	const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,
-	float flGain );
+	const lut3d_t * pLook, float flGain );
 
 int writeRawLut( const char * outputFilename, uint16_t * pData, size_t nSize );
 

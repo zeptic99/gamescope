@@ -109,6 +109,7 @@ static LogScope xwm_log("xwm");
 gamescope_color_mgmt_tracker_t g_ColorMgmt{};
 
 static gamescope_color_mgmt_luts g_ColorMgmtLutsOverride[ EOTF_Count ];
+static lut3d_t g_ColorMgmtLooks[ EOTF_Count ];
 gamescope_color_mgmt_luts g_ColorMgmtLuts[ EOTF_Count ];
 
 bool g_bForceHDRSupportDebug = false;
@@ -167,6 +168,7 @@ update_color_mgmt()
 
 			EOTF inputEOTF = static_cast<EOTF>( nInputEOTF );
 			float flGain = 1.f;
+			lut3d_t * pLook = g_ColorMgmtLooks[nInputEOTF].lutEdgeSize > 0 ? &g_ColorMgmtLooks[nInputEOTF] : nullptr;
 
 			if ( inputEOTF == EOTF_Gamma22 )
 			{
@@ -210,7 +212,7 @@ update_color_mgmt()
 
 			calcColorTransform( &lut1d[0], nLutSize1d, &lut3d[0], nLutEdgeSize3d, inputColorimetry, inputEOTF,
 				outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
-				colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, flGain );
+				colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
 
 			if ( !g_ColorMgmtLutsOverride[nInputEOTF].lut3d.empty() && !g_ColorMgmtLutsOverride[nInputEOTF].lut1d.empty() )
 			{
@@ -387,6 +389,20 @@ bool set_color_shaperlut_override(const char *path)
 
 	g_ColorMgmtLutsOverride[nLutIndex].lut1d = std::move(data);
 
+	return true;
+}
+
+bool set_color_look_pq(const char *path)
+{
+	LoadCubeLut( &g_ColorMgmtLooks[EOTF_PQ], path );
+	g_ColorMgmt.pending.externalDirtyCtr++;
+	return true;
+}
+
+bool set_color_look_g22(const char *path)
+{
+	LoadCubeLut( &g_ColorMgmtLooks[EOTF_Gamma22], path );
+	g_ColorMgmt.pending.externalDirtyCtr++;
 	return true;
 }
 
@@ -4974,6 +4990,18 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			g_flHDRItmTargetNits = 10000.f;
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeColorLookPQ )
+	{
+		std::string path = get_string_prop( ctx, ctx->root, ctx->atoms.gamescopeColorLookPQ );
+		if ( set_color_look_pq( path.c_str() ) )
+			hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeColorLookG22 )
+	{
+		std::string path = get_string_prop( ctx, ctx->root, ctx->atoms.gamescopeColorLookG22 );
+		if ( set_color_look_g22( path.c_str() ) )
+			hasRepaint = true;
+	}
 	if ( ev->atom == ctx->atoms.gamescopeInternalDisplayBrightness )
 	{
 		uint32_t val = get_prop( ctx, ctx->root, ctx->atoms.gamescopeInternalDisplayBrightness, 0 );
@@ -6193,6 +6221,8 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeHDRItmEnable = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ITM_ENABLE", false );
 	ctx->atoms.gamescopeHDRItmSDRNits = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ITM_SDR_NITS", false );
 	ctx->atoms.gamescopeHDRItmTargetNits = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ITM_TARGET_NITS", false );
+	ctx->atoms.gamescopeColorLookPQ = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_PQ", false );
+	ctx->atoms.gamescopeColorLookG22 = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_G22", false );
 
 	ctx->atoms.gamescopeForceWindowsFullscreen = XInternAtom( ctx->dpy, "GAMESCOPE_FORCE_WINDOWS_FULLSCREEN", false );
 

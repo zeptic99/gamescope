@@ -1,14 +1,17 @@
 #include "color_helpers.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
-#include <algorithm>
+#include <fstream>
+#include <string>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/gtx/matrix_operation.hpp>
 #include <glm/gtx/string_cast.hpp>
+
 
 glm::vec3 xyY_to_XYZ( const glm::vec2 & xy, float Y )
 {
@@ -128,6 +131,272 @@ colormapping_t lerp( const colormapping_t & a, const colormapping_t & b, float t
     result.blendAmountMin = flerp( a.blendAmountMin, b.blendAmountMin, t );
     result.blendAmountMax = flerp( a.blendAmountMax, b.blendAmountMax, t );
     return result;
+}
+
+bool LoadCubeLut( lut3d_t * lut3d, const char * filename )
+{
+    // R changes fastest
+    // ...
+    // LUT_3D_SIZE %d(lutEdgeSize)
+    // %f %f %f
+    // ...
+
+    lut3d->lutEdgeSize = 0;
+    lut3d->data.clear();
+
+    std::ifstream lutfile( filename );
+    if ( !lutfile.is_open() || lutfile.bad() )
+        return false;
+
+    std::string line;
+    while ( std::getline( lutfile, line ) )
+    {
+        if ( lut3d->lutEdgeSize )
+        {
+            glm::vec3 val;
+            if ( sscanf( line.c_str(), "%f %f %f", &val.r, &val.g, &val.b ) == 3 )
+            {
+                lut3d->data.push_back( val );
+            }
+        }
+        else if ( sscanf( line.c_str(), "LUT_3D_SIZE %d", &lut3d->lutEdgeSize ) == 1 )
+        {
+            if ( lut3d->lutEdgeSize < 2 || lut3d->lutEdgeSize > 128 ) // sanity check
+            {
+                return false;
+            }
+            lut3d->data.reserve( lut3d->lutEdgeSize * lut3d->lutEdgeSize * lut3d->lutEdgeSize );
+        }
+    }
+
+    int nExpectedElements = lut3d->lutEdgeSize * lut3d->lutEdgeSize * lut3d->lutEdgeSize;
+    bool bValid = ( nExpectedElements > 0 && ( nExpectedElements == (int) lut3d->data.size() ) );
+    if ( !bValid )
+    {
+        lut3d->lutEdgeSize = 0;
+        lut3d->data.clear();
+    }
+
+    return bValid;
+}
+
+int GetLut3DIndexRedFastRGB(int indexR, int indexG, int indexB, int dim)
+{
+    return (indexR + (int)dim * (indexG + (int)dim * indexB));
+}
+
+// Linear
+inline void lerp_rgb(float* out, const float* a, const float* b, const float* z)
+{
+    out[0] = (b[0] - a[0]) * z[0] + a[0];
+    out[1] = (b[1] - a[1]) * z[1] + a[1];
+    out[2] = (b[2] - a[2]) * z[2] + a[2];
+}
+
+// Bilinear
+inline void lerp_rgb(float* out, const float* a, const float* b, const float* c,
+                     const float* d, const float* y, const float* z)
+{
+    float v1[3];
+    float v2[3];
+    lerp_rgb(v1, a, b, z);
+    lerp_rgb(v2, c, d, z);
+    lerp_rgb(out, v1, v2, y);
+}
+
+// Trilinear
+inline void lerp_rgb(float* out, const float* a, const float* b, const float* c, const float* d,
+                     const float* e, const float* f, const float* g, const float* h,
+                     const float* x, const float* y, const float* z)
+{
+    float v1[3];
+    float v2[3];
+    lerp_rgb(v1, a,b,c,d,y,z);
+    lerp_rgb(v2, e,f,g,h,y,z);
+    lerp_rgb(out, v1, v2, x);
+}
+
+float ClampAndSanitize( float a, float min, float max )
+{
+    return std::isfinite( a ) ? std::min(std::max(min, a), max) : min;
+}
+
+// Adapted from:
+// https://github.com/AcademySoftwareFoundation/OpenColorIO/ops/lut3d/Lut3DOpCPU.cpp
+// License available in their repo and in our LICENSE file.
+
+glm::vec3 ApplyLut3D_Trilinear( const lut3d_t & lut3d, const glm::vec3 & input )
+{
+    const float dimMinusOne = float(lut3d.lutEdgeSize) - 1.f;
+
+    float idx[3];
+    idx[0] = input.r * dimMinusOne;
+    idx[1] = input.g * dimMinusOne;
+    idx[2] = input.b * dimMinusOne;
+
+    // NaNs become 0.
+    idx[0] = ClampAndSanitize(idx[0], 0.f, dimMinusOne);
+    idx[1] = ClampAndSanitize(idx[1], 0.f, dimMinusOne);
+    idx[2] = ClampAndSanitize(idx[2], 0.f, dimMinusOne);
+
+    int indexLow[3];
+    indexLow[0] = static_cast<int>(std::floor(idx[0]));
+    indexLow[1] = static_cast<int>(std::floor(idx[1]));
+    indexLow[2] = static_cast<int>(std::floor(idx[2]));
+
+    int indexHigh[3];
+    // When the idx is exactly equal to an index (e.g. 0,1,2...)
+    // then the computation of highIdx is wrong. However,
+    // the delta is then equal to zero (e.g. idx-lowIdx),
+    // so the highIdx has no impact.
+    indexHigh[0] = static_cast<int>(std::ceil(idx[0]));
+    indexHigh[1] = static_cast<int>(std::ceil(idx[1]));
+    indexHigh[2] = static_cast<int>(std::ceil(idx[2]));
+
+    float delta[3];
+    delta[0] = idx[0] - static_cast<float>(indexLow[0]);
+    delta[1] = idx[1] - static_cast<float>(indexLow[1]);
+    delta[2] = idx[2] - static_cast<float>(indexLow[2]);
+
+    // Compute index into LUT for surrounding corners
+    const int n000 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexLow[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n100 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexLow[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n010 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexHigh[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n001 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexLow[1], indexHigh[2], lut3d.lutEdgeSize);
+    const int n110 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexHigh[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n101 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexLow[1], indexHigh[2], lut3d.lutEdgeSize);
+    const int n011 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexHigh[1], indexHigh[2], lut3d.lutEdgeSize);
+    const int n111 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexHigh[1], indexHigh[2], lut3d.lutEdgeSize);
+
+    float x[3], y[3], z[3];
+    x[0] = delta[0]; x[1] = delta[0]; x[2] = delta[0];
+    y[0] = delta[1]; y[1] = delta[1]; y[2] = delta[1];
+    z[0] = delta[2]; z[1] = delta[2]; z[2] = delta[2];
+
+    glm::vec3 out;
+    lerp_rgb((float *) &out,
+        (float *) &lut3d.data[n000].r, (float *) &lut3d.data[n001].r,
+        (float *) &lut3d.data[n010].r, (float *) &lut3d.data[n011].r,
+        (float *) &lut3d.data[n100].r, (float *) &lut3d.data[n101].r,
+        (float *) &lut3d.data[n110].r, (float *) &lut3d.data[n111].r,
+        x, y, z);
+
+    return out;
+}
+
+glm::vec3 ApplyLut3D_Tetrahedral( const lut3d_t & lut3d, const glm::vec3 & input )
+{
+    const float dimMinusOne = float(lut3d.lutEdgeSize) - 1.f;
+
+    float idx[3];
+    idx[0] = input.r * dimMinusOne;
+    idx[1] = input.g * dimMinusOne;
+    idx[2] = input.b * dimMinusOne;
+
+    // NaNs become 0.
+    idx[0] = ClampAndSanitize(idx[0], 0.f, dimMinusOne);
+    idx[1] = ClampAndSanitize(idx[1], 0.f, dimMinusOne);
+    idx[2] = ClampAndSanitize(idx[2], 0.f, dimMinusOne);
+
+    int indexLow[3];
+    indexLow[0] = static_cast<int>(std::floor(idx[0]));
+    indexLow[1] = static_cast<int>(std::floor(idx[1]));
+    indexLow[2] = static_cast<int>(std::floor(idx[2]));
+
+    int indexHigh[3];
+    // When the idx is exactly equal to an index (e.g. 0,1,2...)
+    // then the computation of highIdx is wrong. However,
+    // the delta is then equal to zero (e.g. idx-lowIdx),
+    // so the highIdx has no impact.
+    indexHigh[0] = static_cast<int>(std::ceil(idx[0]));
+    indexHigh[1] = static_cast<int>(std::ceil(idx[1]));
+    indexHigh[2] = static_cast<int>(std::ceil(idx[2]));
+
+    float fx = idx[0] - static_cast<float>(indexLow[0]);
+    float fy = idx[1] - static_cast<float>(indexLow[1]);
+    float fz = idx[2] - static_cast<float>(indexLow[2]);
+
+    // Compute index into LUT for surrounding corners
+    const int n000 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexLow[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n100 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexLow[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n010 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexHigh[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n001 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexLow[1], indexHigh[2], lut3d.lutEdgeSize);
+    const int n110 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexHigh[1], indexLow[2], lut3d.lutEdgeSize);
+    const int n101 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexLow[1], indexHigh[2], lut3d.lutEdgeSize);
+    const int n011 =
+        GetLut3DIndexRedFastRGB(indexLow[0], indexHigh[1], indexHigh[2], lut3d.lutEdgeSize);
+    const int n111 =
+        GetLut3DIndexRedFastRGB(indexHigh[0], indexHigh[1], indexHigh[2], lut3d.lutEdgeSize);
+
+    glm::vec3 out;
+    if (fx > fy) {
+        if (fy > fz) {
+            out =
+                (1 - fx)  * lut3d.data[n000] +
+                (fx - fy) * lut3d.data[n100] +
+                (fy - fz) * lut3d.data[n110] +
+                (fz)      * lut3d.data[n111];
+        }
+        else if (fx > fz)
+        {
+            out =
+                (1 - fx)  * lut3d.data[n000] +
+                (fx - fz) * lut3d.data[n100] +
+                (fz - fy) * lut3d.data[n101] +
+                (fy)      * lut3d.data[n111];
+        }
+        else
+        {
+            out =
+                (1 - fz)  * lut3d.data[n000] +
+                (fz - fx) * lut3d.data[n001] +
+                (fx - fy) * lut3d.data[n101] +
+                (fy)      * lut3d.data[n111];
+        }
+    }
+    else
+    {
+        if (fz > fy)
+        {
+            out =
+                (1 - fz)  * lut3d.data[n000] +
+                (fz - fy) * lut3d.data[n001] +
+                (fy - fx) * lut3d.data[n011] +
+                (fx)      * lut3d.data[n111];
+        }
+        else if (fz > fx)
+        {
+            out =
+                (1 - fy)  * lut3d.data[n000] +
+                (fy - fz) * lut3d.data[n010] +
+                (fz - fx) * lut3d.data[n011] +
+                (fx)      * lut3d.data[n111];
+        }
+        else
+        {
+            out =
+                (1 - fy)  * lut3d.data[n000] +
+                (fy - fx) * lut3d.data[n010] +
+                (fx - fz) * lut3d.data[n110] +
+                (fz)      * lut3d.data[n111];
+        }
+    }
+
+    return out;
 }
 
 glm::vec3 hsv_to_rgb( const glm::vec3 & hsv )
@@ -262,7 +531,8 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
     uint16_t * pRgbxData3d, int nLutEdgeSize3d,
 	const displaycolorimetry_t & source, EOTF sourceEOTF,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
-    const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping, float flGain )
+    const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,
+    const lut3d_t * pLook, float flGain )
 {
     glm::mat3 xyz_from_dest = normalised_primary_matrix( dest.primaries, dest.white, 1.f );
     glm::mat3 dest_from_xyz = glm::inverse( xyz_from_dest );
@@ -308,6 +578,11 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
                 {
                     glm::vec3 shapedSourceColor = { nRed * flScale, nGreen * flScale, nBlue * flScale };
                     glm::vec3 sourceColorEOTFEncoded = applyShaper( shapedSourceColor, sourceEOTF, destEOTF, tonemapping, flGain, true );
+
+                    if ( pLook && !pLook->data.empty() )
+                    {
+                        sourceColorEOTFEncoded = ApplyLut3D_Tetrahedral( *pLook, sourceColorEOTFEncoded );
+                    }
 
                     // Convert to linearized display referred for source colorimetry
                     glm::vec3 sourceColorLinear = calcEOTFToLinear( sourceColorEOTFEncoded, sourceEOTF, tonemapping );
