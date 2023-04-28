@@ -1326,16 +1326,20 @@ void finish_drm(struct drm_t *drm)
 			add_plane_property(req, plane, "rotation", DRM_MODE_ROTATE_0);
 		if (plane->props.count("alpha") > 0)
 			add_plane_property(req, plane, "alpha", 0xFFFF);
-		if (plane->props.count("VALVE1_PLANE_HDR_MULT") > 0)
-			add_plane_property(req, plane, "VALVE1_PLANE_HDR_MULT", 0x100000000ULL);
 		if (plane->props.count("VALVE1_PLANE_DEGAMMA_TF") > 0)
 			add_plane_property(req, plane, "VALVE1_PLANE_DEGAMMA_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
+		if (plane->props.count("VALVE1_PLANE_HDR_MULT") > 0)
+			add_plane_property(req, plane, "VALVE1_PLANE_HDR_MULT", 0x100000000ULL);
+		if (plane->props.count("VALVE1_PLANE_SHAPER_TF") > 0)
+			add_plane_property(req, plane, "VALVE1_PLANE_SHAPER_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
 		if (plane->props.count("VALVE1_PLANE_SHAPER_LUT") > 0)
 			add_plane_property(req, plane, "VALVE1_PLANE_SHAPER_LUT", 0 );
 		if (plane->props.count("VALVE1_PLANE_LUT3D") > 0)
 			add_plane_property(req, plane, "VALVE1_PLANE_LUT3D", 0 );
-		if (plane->props.count("VALVE1_PLANE_SHAPER_TF") > 0)
-			add_plane_property(req, plane, "VALVE1_PLANE_SHAPER_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
+		if (plane->props.count("VALVE1_PLANE_BLEND_TF") > 0)
+			add_plane_property(req, plane, "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
+		if (plane->props.count("VALVE1_PLANE_BLEND_LUT") > 0)
+			add_plane_property(req, plane, "VALVE1_PLANE_BLEND_LUT", 0 );
 	}
 	// We can't do a non-blocking commit here or else risk EBUSY in case the
 	// previous page-flip is still in flight.
