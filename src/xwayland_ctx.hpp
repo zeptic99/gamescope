@@ -183,6 +183,7 @@ struct xwayland_ctx_t
 		Atom gamescopeSDRInputGain;
 		Atom gamescopeHDRItmEnable;
 		Atom gamescopeHDRItmSDRNits;
+		Atom gamescopeHDRItmTargetNits;
 		Atom gamescopeColorLookPQ;
 		Atom gamescopeColorLookG22;
 
