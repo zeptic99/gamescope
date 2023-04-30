@@ -6500,6 +6500,10 @@ steamcompmgr_main(int argc, char **argv)
 					g_bForceHDR10OutputDebug = true;
 				} else if (strcmp(opt_name, "hdr-itm-enable") == 0) {
 					g_bHDRItmEnable = true;
+				} else if (strcmp(opt_name, "sdr-gamut-wideness") == 0) {
+					g_ColorMgmt.pending.sdrGamutWideness = atof(optarg);
+				} else if (strcmp(opt_name, "hdr-sdr-content-nits") == 0) {
+					g_ColorMgmt.pending.flSDROnHDRBrightness = atof(optarg);
 				} else if (strcmp(opt_name, "hdr-itm-sdr-nits") == 0) {
 					g_flHDRItmSdrNits = atof(optarg);
 				} else if (strcmp(opt_name, "hdr-itm-target-nits") == 0) {

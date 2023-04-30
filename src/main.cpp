@@ -113,9 +113,9 @@ const struct option *gamescope_options = (struct option[]){
 	{ "force-windows-fullscreen", no_argument, nullptr, 0 },
 
 	{ "disable-color-management", no_argument, nullptr, 0 },
+	{ "sdr-gamut-wideness", required_argument, nullptr, 0 },
 	{ "hdr-enabled", no_argument, nullptr, 0 },
 	{ "hdr-sdr-content-nits", required_argument, nullptr, 0 },
-	{ "hdr-wide-gammut-for-sdr", no_argument, nullptr, 0 },
 	{ "hdr-itm-enable", no_argument, nullptr, 0 },
 	{ "hdr-itm-sdr-nits", required_argument, nullptr, 0 },
 	{ "hdr-itm-target-nits", required_argument, nullptr, 0 },
@@ -156,7 +156,7 @@ const char usage[] =
 	"  --cursor-scale-height          if specified, sets a base output height to linearly scale the cursor against.\n"
 	"  --hdr-enabled                  enable HDR output (needs Gamescope WSI layer enabled for support from clients)\n"
 	"                                 If this is not set, and there is a HDR client, it will be tonemapped SDR.\n"
-	"  --hdr-wide-gammut-for-sdr      treat SDR sRGB content as having Rec.2020 primaries. Makes colors more vivid at cost of 'correctness'.\n"
+	"  --sdr-gamut-wideness           Set the 'wideness' of the gamut for SDR comment. 0 - 1.\n"
 	"  --hdr-sdr-content-nits         set the luminance of SDR content in nits. Default: 400 nits.\n"
 	"  --hdr-itm-enable               enable SDR->HDR inverse tone mapping. only works for SDR input.\n"
 	"  --hdr-itm-sdr-nits             set the luminance of SDR content in nits used as the input for the inverse tone mapping process.\n"
