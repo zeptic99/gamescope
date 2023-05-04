@@ -8,6 +8,7 @@ protocols = [
 	'gamescope-input-method',
 	'gamescope-tearing-control-unstable-v1',
 	'xdg-shell',
+	'presentation-time',
 ]
 
 protocols_client_src = []
