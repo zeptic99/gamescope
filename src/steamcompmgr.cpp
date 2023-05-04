@@ -117,6 +117,8 @@ extern float g_flInternalDisplayBrightnessNits;
 extern float g_flHDRItmSdrNits;
 extern float g_flHDRItmTargetNits;
 
+extern std::atomic<uint64_t> g_lastVblank;
+
 static void
 update_color_mgmt()
 {
@@ -497,6 +499,11 @@ struct commit_t
 		}
 
 		wlserver_lock();
+		if (!presentation_feedbacks.empty())
+		{
+			wlserver_presentation_feedback_discard(surf, presentation_feedbacks);
+			// presentation_feedbacks cleared by wlserver_presentation_feedback_discard
+		}
 		wlr_buffer_unlock( buf );
 		wlserver_unlock();
     }
@@ -520,6 +527,9 @@ struct commit_t
 	bool done = false;
 	bool async = false;
 	std::optional<wlserver_vk_swapchain_feedback> feedback = std::nullopt;
+
+	struct wlr_surface *surf = nullptr;
+	std::vector<struct wl_resource*> presentation_feedbacks;
 };
 
 static std::vector<pollfd> pollfds;
@@ -1069,13 +1079,15 @@ destroy_buffer( struct wl_listener *listener, void * )
 }
 
 static std::shared_ptr<commit_t>
-import_commit ( struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback )
+import_commit ( struct wlr_surface *surf, struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback, std::vector<struct wl_resource*> presentation_feedbacks )
 {
 	std::shared_ptr<commit_t> commit = std::make_shared<commit_t>();
 	std::unique_lock<std::mutex> lock( wlr_buffer_map_lock );
 
+	commit->surf = surf;
 	commit->buf = buf;
 	commit->async = async;
+	commit->presentation_feedbacks = std::move(presentation_feedbacks);
 	if (swapchain_feedback)
 		commit->feedback = *swapchain_feedback;
 
@@ -1178,6 +1190,19 @@ get_window_last_done_commit( steamcompmgr_win_t *w, std::shared_ptr<commit_t> &c
 
 	if ( commit != w->commit_queue[ lastCommit ] )
 		commit = w->commit_queue[ lastCommit ];
+}
+
+static commit_t*
+get_window_last_done_commit_peek( steamcompmgr_win_t *w )
+{
+	int32_t lastCommit = window_last_done_commit_id( w );
+
+	if ( lastCommit == -1 )
+	{
+		return nullptr;
+	}
+
+	return w->commit_queue[ lastCommit ].get();
 }
 
 // For Steam, etc.
@@ -5483,6 +5508,41 @@ void handle_done_commits_xdg()
 	g_steamcompmgr_xdg_done_commits.listCommitsDone.clear();
 }
 
+void handle_presented_for_window( steamcompmgr_win_t* w )
+{
+	commit_t *lastCommit = get_window_last_done_commit_peek(w);
+	if (lastCommit && !lastCommit->presentation_feedbacks.empty())
+	{
+		wlserver_lock();
+
+		int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+
+		wlserver_presentation_feedback_presented(
+			lastCommit->surf,
+			lastCommit->presentation_feedbacks,
+			g_lastVblank.load(),
+			nRefresh);
+
+		wlserver_unlock();
+	}
+}
+
+void handle_presented_xwayland( xwayland_ctx_t *ctx )
+{
+	for ( steamcompmgr_win_t *w = ctx->list; w; w = w->xwayland().next )
+	{
+		handle_presented_for_window(w);
+	}
+}
+
+void handle_presented_xdg()
+{
+	for (const auto& xdg_win : g_steamcompmgr_xdg_wins)
+	{
+		handle_presented_for_window(xdg_win.get());
+	}
+}
+
 void nudge_steamcompmgr( void )
 {
 	if ( write( g_nudgePipe[ 1 ], "\n", 1 ) < 0 )
@@ -5530,7 +5590,7 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		return;
 	}
 
-	std::shared_ptr<commit_t> newCommit = import_commit( buf, reslistentry.async, std::move(reslistentry.feedback) );
+	std::shared_ptr<commit_t> newCommit = import_commit( reslistentry.surf, buf, reslistentry.async, std::move(reslistentry.feedback), std::move(reslistentry.presentation_feedbacks) );
 
 	int fence = -1;
 	if ( newCommit )
@@ -6808,6 +6868,37 @@ steamcompmgr_main(int argc, char **argv)
 			for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 				handle_done_commits_xwayland(server->ctx.get());
 		}
+
+		// Handle presentation-time stuff
+		//
+		// Notes:
+		//
+		// We send the presented event just after the latest latch time possible so PresentWait in Vulkan
+		// still returns pretty optimally. The extra 2ms or so can be "display latency"
+		// We still provide the predicted TTL refresh time in the presented event though.
+		//
+		// We ignore or lie most of the flags because they aren't particularly useful for a client
+		// to know anyway and it would delay us sending this at an optimal time.
+		// (particularly for DXGI frame latency handles under Proton.)
+		//
+		// The boat is still out as to whether we should do latest latch or pageflip/ttl for the event.
+		// For now, going to keep this, and if we change our minds later, it's no big deal.
+		//
+		// It's a little strange, but we return `presented` for any window not visible
+		// and `presented` for anything visible. It's a little disingenuous because we didn't
+		// actually show a window if it wasn't visible, but we could! And that is the first
+		// opportunity it had. It's confusing but we need this for forward progress.
+
+		if ( vblank )
+		{
+			gamescope_xwayland_server_t *server = NULL;
+			for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
+				handle_presented_xwayland( server->ctx.get() );
+
+			handle_presented_xdg();
+		}
+
+		//
 
 		{
 			gamescope_xwayland_server_t *server = NULL;

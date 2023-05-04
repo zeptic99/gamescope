@@ -39,6 +39,7 @@ struct ResListEntry_t {
 	struct wlr_buffer *buf;
 	bool async;
 	std::shared_ptr<wlserver_vk_swapchain_feedback> feedback;
+	std::vector<struct wl_resource*> presentation_feedbacks;
 };
 
 struct wlserver_content_override;
@@ -230,6 +231,9 @@ struct wlserver_wl_surface_info
 	uint32_t presentation_hint = 0;
 
 	std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback = {};
+
+	uint64_t sequence = 0;
+	std::vector<struct wl_resource*> pending_presentation_feedbacks;
 };
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
@@ -243,3 +247,6 @@ void wlserver_open_steam_menu( bool qam );
 
 uint32_t wlserver_make_new_xwayland_server();
 void wlserver_destroy_xwayland_server(gamescope_xwayland_server_t *server);
+
+void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks, uint64_t last_refresh_nsec, int refresh_rate );
+void wlserver_presentation_feedback_discard( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks );

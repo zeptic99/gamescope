@@ -39,6 +39,7 @@ extern "C" {
 #include "gamescope-xwayland-protocol.h"
 #include "gamescope-pipewire-protocol.h"
 #include "gamescope-tearing-control-unstable-v1-protocol.h"
+#include "presentation-time-protocol.h"
 
 #include "wlserver.hpp"
 #include "drm.hpp"
@@ -97,12 +98,16 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 	{
 		std::lock_guard<std::mutex> lock( wayland_commit_lock );
 
+		auto wl_surf = get_wl_surface_info( surf );
+
 		ResListEntry_t newEntry = {
 			.surf = surf,
 			.buf = buf,
 			.async = wlserver_surface_is_async(surf),
 			.feedback = wlserver_surface_swapchain_feedback(surf),
+			.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
 		};
+		wl_surf->pending_presentation_feedbacks.clear();
 		wayland_commit_queue.push_back( newEntry );
 	}
 
@@ -122,12 +127,16 @@ void wlserver_xdg_commit(struct wlr_surface *surf, struct wlr_buffer *buf)
 	{
 		std::lock_guard<std::mutex> lock( wlserver.xdg_commit_lock );
 
+		auto wl_surf = get_wl_surface_info( surf );
+
 		ResListEntry_t newEntry = {
 			.surf = surf,
 			.buf = buf,
 			.async = wlserver_surface_is_async(surf),
 			.feedback = wlserver_surface_swapchain_feedback(surf),
+			.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
 		};
+		wl_surf->pending_presentation_feedbacks.clear();
 		wlserver.xdg_commit_queue.push_back( newEntry );
 	}
 
@@ -462,6 +471,10 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 		}
 	}
 
+	for (auto& feedback : surf->pending_presentation_feedbacks)
+		wp_presentation_feedback_send_discarded(feedback);
+	surf->pending_presentation_feedbacks.clear();
+
 	surf->wlr->data = nullptr;
 	delete surf;
 }
@@ -761,6 +774,107 @@ static void create_gamescope_tearing( void )
 	wl_global_create( wlserver.display, &gamescope_tearing_control_v1_interface, version, NULL, gamescope_tearing_bind );
 }
 
+
+////////////////////////
+// presentation-time
+////////////////////////
+
+static void presentation_time_destroy( struct wl_client *client, struct wl_resource *resource )
+{
+	wl_resource_destroy( resource );
+}
+
+static void presentation_time_feedback( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t id )
+{
+	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
+
+	wlserver_wl_surface_info *wl_surface_info = get_wl_surface_info(surface);
+
+	struct wl_resource *presentation_feedback_resource
+		= wl_resource_create( client, &wp_presentation_feedback_interface, wl_resource_get_version( resource ), id );
+	wl_resource_set_implementation( presentation_feedback_resource, NULL, wl_surface_info, NULL );
+
+	wl_surface_info->pending_presentation_feedbacks.emplace_back(presentation_feedback_resource);
+}
+
+static const struct wp_presentation_interface presentation_time_impl = {
+	.destroy = presentation_time_destroy,
+	.feedback = presentation_time_feedback,
+};
+
+static void presentation_time_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
+{
+	struct wl_resource *resource = wl_resource_create( client, &wp_presentation_interface, version, id );
+	wl_resource_set_implementation( resource, &presentation_time_impl, NULL, NULL );
+
+	wp_presentation_send_clock_id( resource, CLOCK_MONOTONIC );
+}
+
+static void create_presentation_time( void )
+{
+	uint32_t version = 1;
+	wl_global_create( wlserver.display, &wp_presentation_interface, version, NULL, presentation_time_bind );
+}
+
+void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks, uint64_t last_refresh_nsec, int refresh_rate )
+{
+	wlserver_wl_surface_info *wl_surface_info = get_wl_surface_info(surface);
+
+	uint32_t flags = 0;
+
+	// Don't know when we want to send this.
+	// Not useful for an app to know.
+	flags |= WP_PRESENTATION_FEEDBACK_KIND_VSYNC;
+
+	// We set HW clock because it's based on the HW clock of the last page flip.
+	flags |= WP_PRESENTATION_FEEDBACK_KIND_HW_CLOCK;
+
+	// We don't set HW_COMPLETION because we actually kinda are using a timer here.
+	// We want to signal this event at latest latch time, but with the info of the refresh
+	// cadence we want to track.
+
+	// Probably. Not delaying sending this to find out.
+	// Not useful for an app to know.
+	flags |= WP_PRESENTATION_FEEDBACK_KIND_ZERO_COPY;
+
+	wl_surface_info->sequence++;
+
+	for (auto& feedback : presentation_feedbacks)
+	{
+		const uint64_t nsecInterval = 1'000'000'000ul / refresh_rate;
+
+		timespec last_refresh_ts;
+		last_refresh_ts.tv_sec = time_t(last_refresh_nsec / 1'000'000'000ul);
+		last_refresh_ts.tv_nsec = long(last_refresh_nsec % 1'000'000'000ul);
+
+		wp_presentation_feedback_send_presented(
+			feedback,
+			last_refresh_ts.tv_sec >> 32,
+			last_refresh_ts.tv_sec & 0xffffffff,
+			last_refresh_ts.tv_nsec,
+			uint32_t(nsecInterval),
+			wl_surface_info->sequence >> 32,
+			wl_surface_info->sequence & 0xffffffff,
+			flags);
+	}
+
+	presentation_feedbacks.clear();
+}
+
+void wlserver_presentation_feedback_discard( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks )
+{
+	wlserver_wl_surface_info *wl_surface_info = get_wl_surface_info(surface);
+
+	wl_surface_info->sequence++;
+
+	for (auto& feedback : presentation_feedbacks)
+	{
+		wp_presentation_feedback_send_discarded(feedback);
+	}
+	presentation_feedbacks.clear();
+}
+
+///////////////////////
 
 
 
@@ -1120,6 +1234,8 @@ bool wlserver_init( void ) {
 #endif
 
 	create_gamescope_tearing();
+
+	create_presentation_time();
 
 	wlserver.xdg_shell = wlr_xdg_shell_create(wlserver.display, 3);
 	if (!wlserver.xdg_shell)
