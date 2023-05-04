@@ -6775,6 +6775,34 @@ steamcompmgr_main(int argc, char **argv)
 #endif
 		}
 
+		// TODO: Look into making this _RAW
+		// wlroots, seems to just use normal MONOTONIC
+		// all over so this may be problematic to just change.
+		struct timespec now;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+
+		// Ask for a new surface every vblank
+		if ( vblank == true )
+		{
+			static int vblank_idx = 0;
+			{
+				gamescope_xwayland_server_t *server = NULL;
+				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
+				{
+					for (steamcompmgr_win_t *w = server->ctx->list; w; w = w->xwayland().next)
+					{
+						steamcompmgr_send_done( w, vblank_idx, now );
+					}
+				}
+
+				for ( const auto& xdg_win : g_steamcompmgr_xdg_wins )
+				{
+					steamcompmgr_send_done( xdg_win.get(), vblank_idx, now );
+				}
+			}
+			vblank_idx++;
+		}
+
 		{
 			gamescope_xwayland_server_t *server = NULL;
 			for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
@@ -6918,12 +6946,6 @@ steamcompmgr_main(int argc, char **argv)
 
 		update_vrr_atoms(root_ctx, false, &flush_root);
 
-		// TODO: Look into making this _RAW
-		// wlroots, seems to just use normal MONOTONIC
-		// all over so this may be problematic to just change.
-		struct timespec now;
-		clock_gettime(CLOCK_MONOTONIC, &now);
-
 		if (global_focus.cursor)
 		{
 			global_focus.cursor->updatePosition();
@@ -6938,28 +6960,6 @@ steamcompmgr_main(int argc, char **argv)
 		if (flush_root)
 		{
 			XFlush(root_ctx->dpy);
-		}
-
-		// Ask for a new surface every vblank
-		if ( vblank == true )
-		{
-			static int vblank_idx = 0;
-			{
-				gamescope_xwayland_server_t *server = NULL;
-				for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
-				{
-					for (steamcompmgr_win_t *w = server->ctx->list; w; w = w->xwayland().next)
-					{
-						steamcompmgr_send_done( w, vblank_idx, now );
-					}
-				}
-
-				for ( const auto& xdg_win : g_steamcompmgr_xdg_wins )
-				{
-					steamcompmgr_send_done( xdg_win.get(), vblank_idx, now );
-				}
-			}
-			vblank_idx++;
 		}
 
 		vulkan_garbage_collect();
