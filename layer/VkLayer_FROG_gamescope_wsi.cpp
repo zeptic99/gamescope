@@ -114,6 +114,8 @@ namespace GamescopeWSILayer {
       createInfo.enabledExtensionCount   = uint32_t(enabledExts.size());
       createInfo.ppEnabledExtensionNames = enabledExts.data();
 
+      setenv("vk_khr_present_wait", "true", 0);
+
       VkResult result = pfnCreateInstanceProc(&createInfo, pAllocator, pInstance);
       if (result != VK_SUCCESS)
         return result;
