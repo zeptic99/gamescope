@@ -4487,7 +4487,7 @@ steamcompmgr_send_done( steamcompmgr_win_t *w, uint64_t vblank_idx, struct times
 {
 	wlr_surface *main_surface = w->main_surface();
 	wlr_surface *current_surface = w->current_surface();
-	bool bSendCallback = main_surface != nullptr;
+	bool bSendCallback = current_surface != nullptr;
 
 	int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 	int nTargetFPS = g_nSteamCompMgrTargetFPS;
