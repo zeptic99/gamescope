@@ -611,7 +611,7 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
                     destColorLinear = glm::mix( destColorLinear, sourceColorLinear, amount );
 
                     // Apply night mode
-                    destColorLinear = vNightModeMultLinear * destColorLinear * glm::vec3( flGain );
+                    destColorLinear = vNightModeMultLinear * destColorLinear * flGain;
 
                     // Apply dest EOTF
                     glm::vec3 destColorEOTFEncoded = calcLinearToEOTF( destColorLinear, destEOTF, tonemapping );

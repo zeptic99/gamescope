@@ -164,92 +164,78 @@ update_color_mgmt()
 
 		for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
 		{
-			std::vector<uint16_t> lut3d;
-			uint32_t nLutEdgeSize3d = 17;
-			lut3d.resize( nLutEdgeSize3d*nLutEdgeSize3d*nLutEdgeSize3d*4 );
-
-			std::vector<uint16_t> lut1d;
-			uint32_t nLutSize1d = 4096;
-			lut1d.resize( nLutSize1d*4 );
-
 			if (!g_ColorMgmtLuts[nInputEOTF].vk_lut1d)
-				g_ColorMgmtLuts[nInputEOTF].vk_lut1d = vulkan_create_1d_lut(4096);
+				g_ColorMgmtLuts[nInputEOTF].vk_lut1d = vulkan_create_1d_lut(nLutSize1d);
 
 			if (!g_ColorMgmtLuts[nInputEOTF].vk_lut3d)
-				g_ColorMgmtLuts[nInputEOTF].vk_lut3d = vulkan_create_3d_lut(17, 17, 17);
+				g_ColorMgmtLuts[nInputEOTF].vk_lut3d = vulkan_create_3d_lut(nLutEdgeSize3d, nLutEdgeSize3d, nLutEdgeSize3d);
 
-			displaycolorimetry_t inputColorimetry{};
-			colormapping_t colorMapping{};
-
-			tonemapping_t tonemapping{};
-			tonemapping.bUseShaper = true;
-
-			EOTF inputEOTF = static_cast<EOTF>( nInputEOTF );
-			float flGain = 1.f;
-			lut3d_t * pLook = g_ColorMgmtLooks[nInputEOTF].lutEdgeSize > 0 ? &g_ColorMgmtLooks[nInputEOTF] : nullptr;
-
-			if ( inputEOTF == EOTF_Gamma22 )
+			if ( g_ColorMgmtLutsOverride[nInputEOTF].HasLuts() )
 			{
-				flGain = g_ColorMgmt.pending.flSDRInputGain;
-				if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 )
-				{
-					// G22 -> G22. Does not matter what the g22 mult is
-					tonemapping.g22_luminance = 1.f;
-					// xwm_log.infof("G22 -> G22");
-				}
-				else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
-				{
-					// G22 -> PQ. SDR content going on an HDR output
-					tonemapping.g22_luminance = g_ColorMgmt.pending.flSDROnHDRBrightness;
-					// xwm_log.infof("G22 -> PQ");
-				}
-
-				// The final display colorimetry is used to build the output mapping, as we want a gamut-aware handling
-				// for sdrGamutWideness indepdendent of the output encoding (for SDR data), and when mapping SDR -> PQ output
-				// we only want to utilize a portion of the gamut the actual display can reproduce
-				buildSDRColorimetry( &inputColorimetry, &colorMapping, g_ColorMgmt.pending.sdrGamutWideness, displayColorimetry );
-			}
-			else if ( inputEOTF == EOTF_PQ )
-			{
-				flGain = g_ColorMgmt.pending.flHDRInputGain;
-				if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 )
-				{
-					// PQ -> G22  Leverage the display's native brightness
-					tonemapping.g22_luminance = g_ColorMgmt.pending.flInternalDisplayBrightness;
-					// xwm_log.infof("PQ -> 2.2  -   tonemapping.g22_luminance %f", tonemapping.g22_luminance );
-				}
-				else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
-				{
-					// PQ -> PQ. Better not matter what the g22 mult is
-					tonemapping.g22_luminance = 1.f;
-					// xwm_log.infof("PQ -> PQ");
-				}
-
-				buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
-			}
-
-			calcColorTransform( &lut1d[0], nLutSize1d, &lut3d[0], nLutEdgeSize3d, inputColorimetry, inputEOTF,
-				outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
-				colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
-			
-
-			if ( !g_ColorMgmtLutsOverride[nInputEOTF].lut3d.empty() && !g_ColorMgmtLutsOverride[nInputEOTF].lut1d.empty() )
-			{
-				g_ColorMgmtLuts[nInputEOTF].lut1d = g_ColorMgmtLutsOverride[nInputEOTF].lut1d;
-				g_ColorMgmtLuts[nInputEOTF].lut3d = g_ColorMgmtLutsOverride[nInputEOTF].lut3d;
-			}
-			else if ( !lut3d.empty() && !lut1d.empty() )
-			{
-				g_ColorMgmtLuts[nInputEOTF].lut3d = std::move(lut3d);
-				g_ColorMgmtLuts[nInputEOTF].lut1d = std::move(lut1d);
+				memcpy(g_ColorMgmtLuts[nInputEOTF].lut1d, g_ColorMgmtLutsOverride[nInputEOTF].lut1d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut1d));
+				memcpy(g_ColorMgmtLuts[nInputEOTF].lut3d, g_ColorMgmtLutsOverride[nInputEOTF].lut3d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut3d));
 			}
 			else
 			{
-				g_ColorMgmtLuts[nInputEOTF].reset();
+				displaycolorimetry_t inputColorimetry{};
+				colormapping_t colorMapping{};
+
+				tonemapping_t tonemapping{};
+				tonemapping.bUseShaper = true;
+
+				EOTF inputEOTF = static_cast<EOTF>( nInputEOTF );
+				float flGain = 1.f;
+				lut3d_t * pLook = g_ColorMgmtLooks[nInputEOTF].lutEdgeSize > 0 ? &g_ColorMgmtLooks[nInputEOTF] : nullptr;
+
+				if ( inputEOTF == EOTF_Gamma22 )
+				{
+					flGain = g_ColorMgmt.pending.flSDRInputGain;
+					if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 )
+					{
+						// G22 -> G22. Does not matter what the g22 mult is
+						tonemapping.g22_luminance = 1.f;
+						// xwm_log.infof("G22 -> G22");
+					}
+					else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
+					{
+						// G22 -> PQ. SDR content going on an HDR output
+						tonemapping.g22_luminance = g_ColorMgmt.pending.flSDROnHDRBrightness;
+						// xwm_log.infof("G22 -> PQ");
+					}
+
+					// The final display colorimetry is used to build the output mapping, as we want a gamut-aware handling
+					// for sdrGamutWideness indepdendent of the output encoding (for SDR data), and when mapping SDR -> PQ output
+					// we only want to utilize a portion of the gamut the actual display can reproduce
+					buildSDRColorimetry( &inputColorimetry, &colorMapping, g_ColorMgmt.pending.sdrGamutWideness, displayColorimetry );
+				}
+				else if ( inputEOTF == EOTF_PQ )
+				{
+					flGain = g_ColorMgmt.pending.flHDRInputGain;
+					if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 )
+					{
+						// PQ -> G22  Leverage the display's native brightness
+						tonemapping.g22_luminance = g_ColorMgmt.pending.flInternalDisplayBrightness;
+						// xwm_log.infof("PQ -> 2.2  -   tonemapping.g22_luminance %f", tonemapping.g22_luminance );
+					}
+					else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
+					{
+						// PQ -> PQ. Better not matter what the g22 mult is
+						tonemapping.g22_luminance = 1.f;
+						// xwm_log.infof("PQ -> PQ");
+					}
+
+					buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
+				}
+
+				calcColorTransform( g_ColorMgmtLuts[nInputEOTF].lut1d, nLutSize1d, g_ColorMgmtLuts[nInputEOTF].lut3d, nLutEdgeSize3d, inputColorimetry, inputEOTF,
+					outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
+					colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
 			}
 
-			if (!g_ColorMgmtLuts[nInputEOTF].lut3d.empty() && !g_ColorMgmtLuts[nInputEOTF].lut1d.empty())
-				vulkan_update_luts(g_ColorMgmtLuts[nInputEOTF].vk_lut1d, g_ColorMgmtLuts[nInputEOTF].vk_lut3d, g_ColorMgmtLuts[nInputEOTF].lut1d.data(), g_ColorMgmtLuts[nInputEOTF].lut3d.data());
+			g_ColorMgmtLuts[nInputEOTF].bHasLut1D = true;
+			g_ColorMgmtLuts[nInputEOTF].bHasLut3D = true;
+
+			vulkan_update_luts(g_ColorMgmtLuts[nInputEOTF].vk_lut1d, g_ColorMgmtLuts[nInputEOTF].vk_lut3d, g_ColorMgmtLuts[nInputEOTF].lut1d, g_ColorMgmtLuts[nInputEOTF].lut3d);
 		}
 	}
 	else
@@ -378,8 +364,8 @@ bool set_color_mgmt_enabled( bool bEnabled )
 bool set_color_3dlut_override(const char *path)
 {
 	int nLutIndex = EOTF_Gamma22;
-	g_ColorMgmtLutsOverride[nLutIndex].lut3d.clear();
 	g_ColorMgmt.pending.externalDirtyCtr++;
+	g_ColorMgmtLutsOverride[nLutIndex].bHasLut3D = false;
 
 	FILE *f = fopen(path, "rb");
 	if (!f) {
@@ -396,10 +382,8 @@ bool set_color_3dlut_override(const char *path)
 		return true;
 	}
 
-	auto data = std::vector<uint16_t>(elems);
-	fread(data.data(), elems, sizeof(uint16_t), f);
-
-	g_ColorMgmtLutsOverride[nLutIndex].lut3d = std::move(data);
+	fread(g_ColorMgmtLutsOverride[nLutIndex].lut3d, elems, sizeof(uint16_t), f);
+	g_ColorMgmtLutsOverride[nLutIndex].bHasLut3D = true;
 
 	return true;
 }
@@ -407,8 +391,8 @@ bool set_color_3dlut_override(const char *path)
 bool set_color_shaperlut_override(const char *path)
 {
 	int nLutIndex = EOTF_Gamma22;
-	g_ColorMgmtLutsOverride[nLutIndex].lut1d.clear();
 	g_ColorMgmt.pending.externalDirtyCtr++;
+	g_ColorMgmtLutsOverride[nLutIndex].bHasLut1D = false;
 
 	FILE *f = fopen(path, "rb");
 	if (!f) {
@@ -425,10 +409,8 @@ bool set_color_shaperlut_override(const char *path)
 		return true;
 	}
 
-	auto data = std::vector<uint16_t>(elems);
-	fread(data.data(), elems, sizeof(uint16_t), f);
-
-	g_ColorMgmtLutsOverride[nLutIndex].lut1d = std::move(data);
+	fread(g_ColorMgmtLutsOverride[nLutIndex].lut1d, elems, sizeof(uint16_t), f);
+	g_ColorMgmtLutsOverride[nLutIndex].bHasLut1D = true;
 
 	return true;
 }
@@ -2360,10 +2342,11 @@ paint_all(bool async)
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
-		if (!g_ColorMgmtLuts[i].lut1d.empty())
+		if (g_ColorMgmtLuts[i].HasLuts())
+		{
 			frameInfo.shaperLut[i] = g_ColorMgmtLuts[i].vk_lut1d;
-		if (!g_ColorMgmtLuts[i].lut3d.empty())
 			frameInfo.lut3D[i] = g_ColorMgmtLuts[i].vk_lut3d;
+		}
 	}
 
 	if ( !BIsNested() && g_bOutputHDREnabled )

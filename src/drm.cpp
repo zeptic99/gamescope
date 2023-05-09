@@ -2590,18 +2590,18 @@ bool drm_update_color_mgmt(struct drm_t *drm)
 
 	for ( uint32_t i = 0; i < EOTF_Count; i++ )
 	{
-		if ( g_ColorMgmtLuts[i].lut1d.empty() || g_ColorMgmtLuts[i].lut3d.empty() )
+		if ( !g_ColorMgmtLuts[i].HasLuts() )
 			continue;
 
 		uint32_t shaper_blob_id = 0;
-		if (drmModeCreatePropertyBlob(drm->fd, g_ColorMgmtLuts[i].lut1d.data(), sizeof(uint16_t) * g_ColorMgmtLuts[i].lut1d.size(), &shaper_blob_id) != 0) {
+		if (drmModeCreatePropertyBlob(drm->fd, g_ColorMgmtLuts[i].lut1d, sizeof(g_ColorMgmtLuts[i].lut1d), &shaper_blob_id) != 0) {
 			drm_log.errorf_errno("Unable to create SHAPERLUT property blob");
 			return false;
 		}
 		drm->pending.shaperlut_id[ i ] = shaper_blob_id;
 
 		uint32_t lut3d_blob_id = 0;
-		if (drmModeCreatePropertyBlob(drm->fd, g_ColorMgmtLuts[i].lut3d.data(), sizeof(uint16_t) * g_ColorMgmtLuts[i].lut3d.size(), &lut3d_blob_id) != 0) {
+		if (drmModeCreatePropertyBlob(drm->fd, g_ColorMgmtLuts[i].lut3d, sizeof(g_ColorMgmtLuts[i].lut3d), &lut3d_blob_id) != 0) {
 			drm_log.errorf_errno("Unable to create LUT3D property blob");
 			return false;
 		}
