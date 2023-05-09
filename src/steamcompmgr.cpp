@@ -119,6 +119,14 @@ extern float g_flHDRItmTargetNits;
 
 extern std::atomic<uint64_t> g_lastVblank;
 
+uint64_t timespec_to_nanos(struct timespec& spec)
+{
+	return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
+}
+
+//#define COLOR_MGMT_MICROBENCH
+// sudo cpupower frequency-set --governor performance
+
 static void
 update_color_mgmt()
 {
@@ -137,9 +145,13 @@ update_color_mgmt()
 		g_ColorMgmt.pending.outputEncodingEOTF = EOTF_Gamma22;
 	}
 
+#ifdef COLOR_MGMT_MICROBENCH
+	struct timespec t0, t1;
+#else
 	// check if any part of our color mgmt stack is dirty
 	if ( g_ColorMgmt.pending == g_ColorMgmt.current && g_ColorMgmt.serial != 0 )
 		return;
+#endif
 
 	if (g_ColorMgmt.pending.enabled)
 	{
@@ -212,9 +224,25 @@ update_color_mgmt()
 				buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
 			}
 
+#ifdef COLOR_MGMT_MICROBENCH
+			const int nProfileEOTF = 1;
+
+			if ( nInputEOTF == nProfileEOTF )
+			{
+				clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
+			}
+#endif
+
 			calcColorTransform( &lut1d[0], nLutSize1d, &lut3d[0], nLutEdgeSize3d, inputColorimetry, inputEOTF,
 				outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
 				colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
+
+#ifdef COLOR_MGMT_MICROBENCH
+			if ( nInputEOTF == nProfileEOTF )
+			{
+				clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
+			}
+#endif
 
 			if ( !g_ColorMgmtLutsOverride[nInputEOTF].lut3d.empty() && !g_ColorMgmtLutsOverride[nInputEOTF].lut1d.empty() )
 			{
@@ -240,6 +268,24 @@ update_color_mgmt()
 		for ( uint32_t i = 0; i < EOTF_Count; i++ )
 			g_ColorMgmtLuts[i].reset();
 	}
+
+#ifdef COLOR_MGMT_MICROBENCH
+	double delta = (timespec_to_nanos(t1) - timespec_to_nanos(t0)) / 1000000.0;
+
+	static uint32_t iter = 0;
+	static const uint32_t iter_count = 120;
+	static double accum = 0;
+
+	accum += delta;
+
+	if (iter++ == iter_count)
+	{
+		printf("update_color_mgmt: %.3fms\n", accum / iter_count);
+
+		iter = 0;
+		accum = 0;
+	}
+#endif
 
 	static uint32_t s_NextColorMgmtSerial = 0;
 
@@ -928,7 +974,7 @@ uint64_t get_time_in_nanos()
 	timespec ts;
 	// Kernel reports page flips with CLOCK_MONOTONIC.
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return ts.tv_sec * 1'000'000'000ul + ts.tv_nsec;
+	return timespec_to_nanos(ts);
 }
 
 void sleep_for_nanos(uint64_t nanos)
