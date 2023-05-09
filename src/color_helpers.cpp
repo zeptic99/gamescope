@@ -574,24 +574,24 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
         glm::vec3 nightModeMultHSV( nightmode.hue, clamp01( nightmode.saturation * nightmode.amount ), 1.f );
         glm::vec3 vNightModeMultLinear = glm::pow( hsv_to_rgb( nightModeMultHSV ), glm::vec3( 2.2f ) );
 
-        glm::vec3 shapedSourceColor;
-        glm::vec3 sourceColorEOTFEncoded;
+        float sourceColorEOTFEncodedEdges[nLutEdgeSize3d];
+
+        // Precalculate source color EOTF encoded per-edge.
+        for ( int nIndex = 0; nIndex < nLutEdgeSize3d; ++nIndex )
+        {
+            float flShapedSource = nIndex * flScale;
+            float flSourceColorEOTFEncoded = applyShaper( flShapedSource, sourceEOTF, destEOTF, tonemapping, flGain, true );
+
+            sourceColorEOTFEncodedEdges[nIndex] = flSourceColorEOTFEncoded;
+        }
 
         for ( int nBlue=0; nBlue<nLutEdgeSize3d; ++nBlue )
         {
-            shapedSourceColor.b = nBlue * flScale;
-            sourceColorEOTFEncoded.b = applyShaper( shapedSourceColor.b, sourceEOTF, destEOTF, tonemapping, flGain, true );
-
             for ( int nGreen=0; nGreen<nLutEdgeSize3d; ++nGreen )
             {
-                shapedSourceColor.g = nGreen * flScale;
-                sourceColorEOTFEncoded.g = applyShaper( shapedSourceColor.g, sourceEOTF, destEOTF, tonemapping, flGain, true );
-
                 for ( int nRed=0; nRed<nLutEdgeSize3d; ++nRed )
                 {
-                    shapedSourceColor.r = nRed * flScale;
-                    sourceColorEOTFEncoded.r = applyShaper( shapedSourceColor.r, sourceEOTF, destEOTF, tonemapping, flGain, true );
-
+                    glm::vec3 sourceColorEOTFEncoded = glm::vec3(sourceColorEOTFEncodedEdges[nRed], sourceColorEOTFEncodedEdges[nGreen], sourceColorEOTFEncodedEdges[nBlue]);
                     if ( pLook && !pLook->data.empty() )
                     {
                         sourceColorEOTFEncoded = ApplyLut3D_Tetrahedral( *pLook, sourceColorEOTFEncoded );
