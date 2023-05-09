@@ -160,12 +160,23 @@ struct lut1d_t
     std::vector<float> dataG;
     std::vector<float> dataB;
 
+	// Some LUTs start with a flat section...
+	// Where does the non-flat part start?
+	// (impacts the inverse computation)
+	mutable int startIndexR = -1;
+	mutable int startIndexG = -1;
+	mutable int startIndexB = -1;
+	void finalize();
+
 	void resize( int lutSize_ )
 	{
 		lutSize = lutSize_;
 		dataR.resize( lutSize_ );
 		dataG.resize( lutSize_ );
 		dataB.resize( lutSize_ );
+		startIndexR = -1;
+		startIndexG = -1;
+		startIndexB = -1;
 	}
 };
 
@@ -198,8 +209,6 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
 	const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,
 	const lut3d_t * pLook, float flGain );
-
-int writeRawLut( const char * outputFilename, uint16_t * pData, size_t nSize );
 
 // Build colorimetry and a gamut mapping for the given SDR configuration
 void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *pMapping,

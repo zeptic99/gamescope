@@ -501,6 +501,43 @@ inline float FindLutInv(const float * start,
     return (totalInds + delta) * scale;
 }
 
+int FindNonFlatStartIndex( const std::vector<float> & data )
+{
+    if ( !data.empty() )
+    {
+        for ( size_t nIndex = 1; nIndex < data.size(); ++nIndex )
+        {
+            if ( data[nIndex] != data[0] )
+            {
+                return nIndex - 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+void lut1d_t::finalize()
+{
+    startIndexR = FindNonFlatStartIndex( dataR );
+    startIndexG = FindNonFlatStartIndex( dataG );
+    startIndexB = FindNonFlatStartIndex( dataB );
+}
+
+inline glm::vec3 ApplyLut1D_Inverse_Linear( const lut1d_t & lut, const glm::vec3 & input )
+{
+    // Disallow inverse if not finalized
+    if ( lut.startIndexR < 0 )
+    {
+        return glm::vec3( -1.f );
+    }
+
+    return glm::vec3(
+        FindLutInv( lut.dataR.data() + lut.startIndexR, lut.startIndexR, lut.dataR.data() + lut.dataR.size() - 1, 1.f / ( lut.dataR.size() - 1.f ), input.r ),
+        FindLutInv( lut.dataG.data() + lut.startIndexG, lut.startIndexG, lut.dataG.data() + lut.dataG.size() - 1, 1.f / ( lut.dataG.size() - 1.f ), input.g ),
+        FindLutInv( lut.dataB.data() + lut.startIndexB, lut.startIndexB, lut.dataB.data() + lut.dataB.size() - 1, 1.f / ( lut.dataB.size() - 1.f ), input.b ) );
+}
+
 inline glm::vec3 hsv_to_rgb( const glm::vec3 & hsv )
 {
     if ( fabsf( hsv.y ) < std::numeric_limits<float>::min() )
@@ -616,18 +653,11 @@ inline T calcLinearToEOTF( const T & input, EOTF eotf, const tonemapping_t & ton
 // TODO: use tone-mapping for white, black, contrast ratio
 
 template <typename T>
-inline T applyShaper( const T & input, EOTF source, EOTF dest, const tonemapping_t & tonemapping, float flGain, bool bInvert )
+inline T applyShaper( const T & input, EOTF source, EOTF dest, const tonemapping_t & tonemapping, float flGain )
 {
-    if ( source == dest || !tonemapping.bUseShaper )
+    if ( ( source == dest && flGain == 1.f ) || !tonemapping.bUseShaper )
     {
         return input;
-    }
-
-    if ( bInvert )
-    {
-        // (once we do tone mapping this gets more complicated
-        std::swap( source, dest );
-        flGain = 1.f / flGain;
     }
 
     return calcLinearToEOTF( flGain * calcEOTFToLinear( input, source, tonemapping ), dest, tonemapping );
@@ -659,11 +689,13 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
         for ( int nVal=0; nVal<nLutSize1d; ++nVal )
         {
             glm::vec3 sourceColorEOTFEncoded = { nVal * flScale, nVal * flScale, nVal * flScale };
-            glm::vec3 shapedSourceColor = applyShaper( sourceColorEOTFEncoded, sourceEOTF, destEOTF, tonemapping, flGain, false );
+            glm::vec3 shapedSourceColor = applyShaper( sourceColorEOTFEncoded, sourceEOTF, destEOTF, tonemapping, flGain );
             pShaper->dataR[nVal] = shapedSourceColor.r;
             pShaper->dataG[nVal] = shapedSourceColor.g;
             pShaper->dataB[nVal] = shapedSourceColor.b;
         }
+
+        pShaper->finalize();
     }
 
     if ( pLut3d )
@@ -683,10 +715,11 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
         // Precalculate source color EOTF encoded per-edge.
         for ( int nIndex = 0; nIndex < nLutEdgeSize3d; ++nIndex )
         {
-            float flShapedSource = nIndex * flScale;
-            float flSourceColorEOTFEncoded = applyShaper( flShapedSource, sourceEOTF, destEOTF, tonemapping, flGain, true );
-
-            vSourceColorEOTFEncodedEdge[nIndex] = glm::vec3( flSourceColorEOTFEncoded );
+            vSourceColorEOTFEncodedEdge[nIndex] = glm::vec3( nIndex * flScale );
+            if ( pShaper )
+            {
+                vSourceColorEOTFEncodedEdge[nIndex] = ApplyLut1D_Inverse_Linear( *pShaper, vSourceColorEOTFEncodedEdge[nIndex] );
+            }
         }
 
         for ( int nBlue=0; nBlue<nLutEdgeSize3d; ++nBlue )
@@ -818,21 +851,6 @@ bool approxEqual( const glm::vec3 & a, const glm::vec3 & b, float flTolerance = 
     return ( v.x < flTolerance && v.y < flTolerance && v.z < flTolerance );
 }
 
-int writeRawLut( const char * outputFilename, uint16_t * pData, size_t nSize )
-{
-    FILE *file = fopen( outputFilename, "wb" );
-    if ( !file )
-    {
-        return 1;
-    }
-    for ( size_t i=0; i<nSize; ++i )
-    {
-        fwrite( pData + i, sizeof( uint16_t ), 1, file );
-    }
-    fclose( file );
-    return 0;
-}
-
 int color_tests()
 {
 #if 0
@@ -904,5 +922,65 @@ int color_tests()
     }
 #endif
 
+#if 0
+    // Generate a 1d lut
+    {
+        int nLutsize = 9;
+        lut1d_t lut;
+        lut.resize( nLutsize );
+        float flScale = 1.f / ( (float) nLutsize - 1.f );
+        for ( int i = 0; i<nLutsize; ++i )
+        {
+            float f = flScale * (float) i;
+
+            lut.dataR[i] = f * f;
+            lut.dataG[i] = f * f;
+            lut.dataB[i] = f * f;
+        }
+        lut.finalize();
+
+        glm::vec3 rgb1 = ApplyLut1D_Linear( lut, glm::vec3( -1.f, 0.5f, 2.f ) );
+        printf("%s\n", glm::to_string(rgb1).c_str() );
+
+        glm::vec3 rgb2 = ApplyLut1D_Inverse_Linear( lut, rgb1 );
+        printf("%s\n", glm::to_string(rgb2).c_str() );
+    }
+#endif
+
+#if 0
+    // Generate a 1d lut with a flat spot
+    {
+        int nLutsize = 9;
+        lut1d_t lut;
+        lut.resize( nLutsize );
+        float flScale = 1.f / ( (float) nLutsize - 1.f );
+        printf("LUT\n");
+        for ( int i = 0; i<nLutsize; ++i )
+        {
+            float f = std::max( 0.25f, flScale * (float) i );
+            lut.dataR[i] = f * f;
+            lut.dataG[i] = f * f;
+            lut.dataB[i] = f * f;
+            printf("%f %d %f\n", f, i, lut.dataG[i] );
+        }
+        lut.finalize();
+
+        printf("\n");
+        nLutsize = 21;
+        flScale = 1.f / ( (float) nLutsize - 1.f );
+        for (int i=0; i<21; ++i)
+        {
+            float f = std::max( 0.25f, flScale * (float) i );
+            glm::vec3 rgb1 = ApplyLut1D_Linear( lut, glm::vec3( f, f, f ) );
+            glm::vec3 rgb2 = ApplyLut1D_Inverse_Linear( lut, rgb1 );
+            printf("%f %f %f\n", f, rgb1.g, rgb2.g );
+        }
+        /*
+        printf("%s\n", glm::to_string(rgb1).c_str() );
+        glm::vec3 rgb2 = ApplyLut1D_Inverse_Linear( lut, rgb1 );
+        printf("%s\n", glm::to_string(rgb2).c_str() );
+        */
+    }
+#endif
    return 0;
 }
