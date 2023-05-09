@@ -36,11 +36,11 @@ static void BenchmarkCalcColorTransform(EOTF inputEOTF, benchmark::State &state)
         calcColorTransform( &lut1d_float, nLutSize1d, &lut3d_float, nLutEdgeSize3d, inputColorimetry, inputEOTF,
             outputEncodingColorimetry, EOTF_Gamma22,
             colorMapping, nightmode, tonemapping, nullptr, flGain );
-        for ( size_t i=0, end = lut1d_float.data.size(); i<end; ++i )
+        for ( size_t i=0, end = lut1d_float.dataR.size(); i<end; ++i )
         {
-            lut1d[4*i+0] = drm_quantize_lut_value( lut1d_float.data[i].r );
-            lut1d[4*i+1] = drm_quantize_lut_value( lut1d_float.data[i].g );
-            lut1d[4*i+2] = drm_quantize_lut_value( lut1d_float.data[i].b );
+            lut1d[4*i+0] = drm_quantize_lut_value( lut1d_float.dataR[i] );
+            lut1d[4*i+1] = drm_quantize_lut_value( lut1d_float.dataG[i] );
+            lut1d[4*i+2] = drm_quantize_lut_value( lut1d_float.dataB[i] );
             lut1d[4*i+3] = 0;
         }
         for ( size_t i=0, end = lut3d_float.data.size(); i<end; ++i )

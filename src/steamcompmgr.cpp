@@ -235,11 +235,11 @@ update_color_mgmt()
 					colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
 
 				// Create quantized output luts
-				for ( size_t i=0, end = g_tmpLut1d.data.size(); i<end; ++i )
+				for ( size_t i=0, end = g_tmpLut1d.dataR.size(); i<end; ++i )
 				{
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+0] = drm_quantize_lut_value( g_tmpLut1d.data[i].r );
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+1] = drm_quantize_lut_value( g_tmpLut1d.data[i].g );
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+2] = drm_quantize_lut_value( g_tmpLut1d.data[i].b );
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+0] = drm_quantize_lut_value( g_tmpLut1d.dataR[i] );
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+1] = drm_quantize_lut_value( g_tmpLut1d.dataG[i] );
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+2] = drm_quantize_lut_value( g_tmpLut1d.dataB[i] );
 					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+3] = 0;
 				}
 

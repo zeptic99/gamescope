@@ -399,6 +399,108 @@ inline glm::vec3 ApplyLut3D_Tetrahedral( const lut3d_t & lut3d, const glm::vec3 
     return out;
 }
 
+
+inline glm::vec3 ApplyLut1D_Linear( const lut1d_t & lut, const glm::vec3 & input )
+{
+    const float dimMinusOne = float(lut.lutSize) - 1.f;
+    float idx[3];
+    idx[0] = input.r * dimMinusOne;
+    idx[1] = input.g * dimMinusOne;
+    idx[2] = input.b * dimMinusOne;
+
+    // NaNs become 0.
+    idx[0] = ClampAndSanitize(idx[0], 0.f, dimMinusOne);
+    idx[1] = ClampAndSanitize(idx[1], 0.f, dimMinusOne);
+    idx[2] = ClampAndSanitize(idx[2], 0.f, dimMinusOne);
+
+    int indexLow[3];
+    indexLow[0] = static_cast<int>(std::floor(idx[0]));
+    indexLow[1] = static_cast<int>(std::floor(idx[1]));
+    indexLow[2] = static_cast<int>(std::floor(idx[2]));
+
+    int indexHigh[3];
+
+    // When the idx is exactly equal to an index (e.g. 0,1,2...)
+    // then the computation of highIdx is wrong. However,
+    // the delta is then equal to zero (e.g. idx-lowIdx),
+    // so the highIdx has no impact.
+    indexHigh[0] = static_cast<int>(std::ceil(idx[0]));
+    indexHigh[1] = static_cast<int>(std::ceil(idx[1]));
+    indexHigh[2] = static_cast<int>(std::ceil(idx[2]));
+
+    float delta[3];
+    delta[0] = idx[0] - static_cast<float>(indexLow[0]);
+    delta[1] = idx[1] - static_cast<float>(indexLow[1]);
+    delta[2] = idx[2] - static_cast<float>(indexLow[2]);
+
+    float vLow[3] = { lut.dataR[indexLow[0]], lut.dataG[indexLow[1]], lut.dataB[indexLow[2]] };
+    float vHigh[3] = { lut.dataR[indexHigh[0]], lut.dataG[indexHigh[1]], lut.dataB[indexHigh[2]] };
+
+    glm::vec3 out;
+    lerp_rgb( (float *) &out, vLow, vHigh, delta );
+    return out;
+}
+
+// Calculate the inverse of a value resulting from linear interpolation
+// in a 1d LUT.
+// start:       Pointer to the first effective LUT entry (end of flat spot).
+// startOffset: Distance between first LUT entry and start.
+// end:         Pointer to the last effective LUT entry (start of flat spot).
+// scale:       From LUT index units to outDepth units.
+// val:         The value to invert.
+// Return the result that would produce val if used
+// in a forward linear interpolation in the LUT.
+inline float FindLutInv(const float * start,
+                 const float   startOffset,
+                 const float * end,
+                 const float   scale,
+                 const float   val)
+{
+    // Note that the LUT data pointed to by start/end must be in increasing order,
+    // regardless of whether the original LUT was increasing or decreasing because
+    // this function uses std::lower_bound().
+
+    // Clamp the value to the range of the LUT.
+    const float cv = std::min( std::max( val, *start ), *end );
+
+    // std::lower_bound()
+    // "Returns an iterator pointing to the first element in the range [first,last)
+    // which does not compare less than val (but could be equal)."
+    // (NB: This is correct using either end or end+1 since lower_bound will return a
+    //  value one greater than the second argument if no values in the array are >= cv.)
+    // http://www.sgi.com/tech/stl/lower_bound.html
+    const float* lowbound = std::lower_bound(start, end, cv);
+
+    // lower_bound() returns first entry >= val so decrement it unless val == *start.
+    if (lowbound > start) {
+        --lowbound;
+    }
+
+    const float* highbound = lowbound;
+    if (highbound < end) {
+        ++highbound;
+    }
+
+    // Delta is the fractional distance of val between the adjacent LUT entries.
+    float delta = 0.f;
+    if (*highbound > *lowbound) {   // (handle flat spots by leaving delta = 0)
+        delta = (cv - *lowbound) / (*highbound - *lowbound);
+    }
+
+    // Inds is the index difference from the effective start to lowbound.
+    const float inds = (float)( lowbound - start );
+
+    // Correct for the fact that start is not the beginning of the LUT if it
+    // starts with a flat spot.
+    // (NB: It may seem like lower_bound would automatically find the end of the
+    //  flat spot, so start could always simply be the start of the LUT, however
+    //  this fails when val equals the flat spot value.)
+    const float totalInds = inds + startOffset;
+
+    // Scale converts from units of [0,dim] to [0,outDepth].
+    return (totalInds + delta) * scale;
+}
+
 inline glm::vec3 hsv_to_rgb( const glm::vec3 & hsv )
 {
     if ( fabsf( hsv.y ) < std::numeric_limits<float>::min() )
@@ -552,18 +654,21 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
     if ( pShaper )
     {
         float flScale = 1.f / ( (float) nLutSize1d - 1.f );
-        pShaper->data.resize( nLutSize1d );
+        pShaper->resize( nLutSize1d );
 
         for ( int nVal=0; nVal<nLutSize1d; ++nVal )
         {
             glm::vec3 sourceColorEOTFEncoded = { nVal * flScale, nVal * flScale, nVal * flScale };
-            pShaper->data[nVal] = applyShaper( sourceColorEOTFEncoded, sourceEOTF, destEOTF, tonemapping, flGain, false );
+            glm::vec3 shapedSourceColor = applyShaper( sourceColorEOTFEncoded, sourceEOTF, destEOTF, tonemapping, flGain, false );
+            pShaper->dataR[nVal] = shapedSourceColor.r;
+            pShaper->dataG[nVal] = shapedSourceColor.g;
+            pShaper->dataB[nVal] = shapedSourceColor.b;
         }
     }
 
     if ( pLut3d )
     {
-        pLut3d->data.resize( nLutEdgeSize3d * nLutEdgeSize3d * nLutEdgeSize3d );
+        pLut3d->resize( nLutEdgeSize3d );
 
         float flScale = 1.f / ( (float) nLutEdgeSize3d - 1.f );
 
@@ -573,7 +678,7 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
         glm::vec3 nightModeMultHSV( nightmode.hue, clamp01( nightmode.saturation * nightmode.amount ), 1.f );
         glm::vec3 vNightModeMultLinear = glm::pow( hsv_to_rgb( nightModeMultHSV ), glm::vec3( 2.2f ) );
 
-        float sourceColorEOTFEncodedEdges[nLutEdgeSize3d];
+        glm::vec3 vSourceColorEOTFEncodedEdge[nLutEdgeSize3d];
 
         // Precalculate source color EOTF encoded per-edge.
         for ( int nIndex = 0; nIndex < nLutEdgeSize3d; ++nIndex )
@@ -581,7 +686,7 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
             float flShapedSource = nIndex * flScale;
             float flSourceColorEOTFEncoded = applyShaper( flShapedSource, sourceEOTF, destEOTF, tonemapping, flGain, true );
 
-            sourceColorEOTFEncodedEdges[nIndex] = flSourceColorEOTFEncoded;
+            vSourceColorEOTFEncodedEdge[nIndex] = glm::vec3( flSourceColorEOTFEncoded );
         }
 
         for ( int nBlue=0; nBlue<nLutEdgeSize3d; ++nBlue )
@@ -590,7 +695,8 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
             {
                 for ( int nRed=0; nRed<nLutEdgeSize3d; ++nRed )
                 {
-                    glm::vec3 sourceColorEOTFEncoded = glm::vec3(sourceColorEOTFEncodedEdges[nRed], sourceColorEOTFEncodedEdges[nGreen], sourceColorEOTFEncodedEdges[nBlue]);
+                    glm::vec3 sourceColorEOTFEncoded = glm::vec3( vSourceColorEOTFEncodedEdge[nRed].r, vSourceColorEOTFEncodedEdge[nGreen].g, vSourceColorEOTFEncodedEdge[nBlue].b );
+
                     if ( pLook && !pLook->data.empty() )
                     {
                         sourceColorEOTFEncoded = ApplyLut3D_Tetrahedral( *pLook, sourceColorEOTFEncoded );

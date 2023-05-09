@@ -155,13 +155,30 @@ struct tonemapping_t
 
 struct lut1d_t
 {
-    std::vector<glm::vec3> data;
+	int lutSize = 0;
+    std::vector<float> dataR;
+    std::vector<float> dataG;
+    std::vector<float> dataB;
+
+	void resize( int lutSize_ )
+	{
+		lutSize = lutSize_;
+		dataR.resize( lutSize_ );
+		dataG.resize( lutSize_ );
+		dataB.resize( lutSize_ );
+	}
 };
 
 struct lut3d_t
 {
     int lutEdgeSize = 0;
     std::vector<glm::vec3> data; // R changes fastest
+
+	void resize( int lutEdgeSize_ )
+	{
+		lutEdgeSize = lutEdgeSize_;
+		data.resize( lutEdgeSize_ * lutEdgeSize_ * lutEdgeSize_ );
+	}
 };
 
 bool LoadCubeLut( lut3d_t * lut3d, const char * filename );
