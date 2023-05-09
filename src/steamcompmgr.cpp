@@ -153,6 +153,10 @@ update_color_mgmt()
 		return;
 #endif
 
+#ifdef COLOR_MGMT_MICROBENCH
+	clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
+#endif
+
 	if (g_ColorMgmt.pending.enabled)
 	{
 		const displaycolorimetry_t& displayColorimetry = g_ColorMgmt.pending.displayColorimetry;
@@ -224,25 +228,10 @@ update_color_mgmt()
 				buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
 			}
 
-#ifdef COLOR_MGMT_MICROBENCH
-			const int nProfileEOTF = 1;
-
-			if ( nInputEOTF == nProfileEOTF )
-			{
-				clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
-			}
-#endif
-
 			calcColorTransform( &lut1d[0], nLutSize1d, &lut3d[0], nLutEdgeSize3d, inputColorimetry, inputEOTF,
 				outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
 				colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
-
-#ifdef COLOR_MGMT_MICROBENCH
-			if ( nInputEOTF == nProfileEOTF )
-			{
-				clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
-			}
-#endif
+			
 
 			if ( !g_ColorMgmtLutsOverride[nInputEOTF].lut3d.empty() && !g_ColorMgmtLutsOverride[nInputEOTF].lut1d.empty() )
 			{
@@ -268,6 +257,10 @@ update_color_mgmt()
 		for ( uint32_t i = 0; i < EOTF_Count; i++ )
 			g_ColorMgmtLuts[i].reset();
 	}
+
+#ifdef COLOR_MGMT_MICROBENCH
+	clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
+#endif
 
 #ifdef COLOR_MGMT_MICROBENCH
 	double delta = (timespec_to_nanos(t1) - timespec_to_nanos(t0)) / 1000000.0;
