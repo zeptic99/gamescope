@@ -216,7 +216,7 @@ inline void lerp_rgb(float* out, const float* a, const float* b, const float* c,
     lerp_rgb(out, v1, v2, x);
 }
 
-float ClampAndSanitize( float a, float min, float max )
+inline float ClampAndSanitize( float a, float min, float max )
 {
     return std::isfinite( a ) ? std::min(std::max(min, a), max) : min;
 }
@@ -225,7 +225,7 @@ float ClampAndSanitize( float a, float min, float max )
 // https://github.com/AcademySoftwareFoundation/OpenColorIO/ops/lut3d/Lut3DOpCPU.cpp
 // License available in their repo and in our LICENSE file.
 
-glm::vec3 ApplyLut3D_Trilinear( const lut3d_t & lut3d, const glm::vec3 & input )
+inline glm::vec3 ApplyLut3D_Trilinear( const lut3d_t & lut3d, const glm::vec3 & input )
 {
     const float dimMinusOne = float(lut3d.lutEdgeSize) - 1.f;
 
@@ -292,7 +292,7 @@ glm::vec3 ApplyLut3D_Trilinear( const lut3d_t & lut3d, const glm::vec3 & input )
     return out;
 }
 
-glm::vec3 ApplyLut3D_Tetrahedral( const lut3d_t & lut3d, const glm::vec3 & input )
+inline glm::vec3 ApplyLut3D_Tetrahedral( const lut3d_t & lut3d, const glm::vec3 & input )
 {
     const float dimMinusOne = float(lut3d.lutEdgeSize) - 1.f;
 
@@ -399,7 +399,7 @@ glm::vec3 ApplyLut3D_Tetrahedral( const lut3d_t & lut3d, const glm::vec3 & input
     return out;
 }
 
-glm::vec3 hsv_to_rgb( const glm::vec3 & hsv )
+inline glm::vec3 hsv_to_rgb( const glm::vec3 & hsv )
 {
     if ( fabsf( hsv.y ) < std::numeric_limits<float>::min() )
     {
@@ -430,7 +430,7 @@ glm::vec3 hsv_to_rgb( const glm::vec3 & hsv )
 }
 
 
-glm::vec3 rgb_to_hsv( const glm::vec3 & rgb )
+inline glm::vec3 rgb_to_hsv( const glm::vec3 & rgb )
 {
     float flMax = std::max( std::max( rgb.x, rgb.y ), rgb.z );
     float flMin = std::min( std::min( rgb.x, rgb.y ), rgb.z );
@@ -475,7 +475,7 @@ bool BOutOfGamut( const glm::vec3 & color )
     return ( color.x<0.f || color.x > 1.f || color.y<0.f || color.y > 1.f || color.z<0.f || color.z > 1.f );
 }
 
-glm::vec3 calcEOTFToLinear( const glm::vec3 & input, EOTF eotf, const tonemapping_t & tonemapping )
+inline glm::vec3 calcEOTFToLinear( const glm::vec3 & input, EOTF eotf, const tonemapping_t & tonemapping )
 {
     if ( eotf == EOTF_Gamma22 )
     {
@@ -489,7 +489,7 @@ glm::vec3 calcEOTFToLinear( const glm::vec3 & input, EOTF eotf, const tonemappin
     return glm::vec3(0);
 }
 
-glm::vec3 calcLinearToEOTF( const glm::vec3 & input, EOTF eotf, const tonemapping_t & tonemapping )
+inline glm::vec3 calcLinearToEOTF( const glm::vec3 & input, EOTF eotf, const tonemapping_t & tonemapping )
 {
     if ( eotf == EOTF_Gamma22 )
     {
@@ -510,7 +510,7 @@ glm::vec3 calcLinearToEOTF( const glm::vec3 & input, EOTF eotf, const tonemappin
 
 // input is from 0->1
 // TODO: use tone-mapping for white, black, contrast ratio
-glm::vec3 applyShaper( const glm::vec3 & input, EOTF source, EOTF dest, const tonemapping_t & tonemapping, float flGain, bool bInvert )
+inline glm::vec3 applyShaper( const glm::vec3 & input, EOTF source, EOTF dest, const tonemapping_t & tonemapping, float flGain, bool bInvert )
 {
     if ( source == dest || !tonemapping.bUseShaper )
     {
