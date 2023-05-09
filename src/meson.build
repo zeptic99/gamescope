@@ -123,4 +123,4 @@ endif
 
 
 benchmark_dep = dependency('benchmark')
-executable('gamescope_color_microbench', ['color_bench.cpp', 'color_helpers.cpp'], dependencies:[benchmark_dep])
+executable('gamescope_color_microbench', ['color_bench.cpp', 'color_helpers.cpp'], dependencies:[benchmark_dep, glm_dep])
