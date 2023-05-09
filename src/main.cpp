@@ -631,7 +631,6 @@ int main(int argc, char **argv)
 			return 1;
 		}
 	}
-	else
 #endif
 
 	if ( !initOutput( g_nPreferredOutputWidth, g_nPreferredOutputHeight, g_nNestedRefresh ) )
