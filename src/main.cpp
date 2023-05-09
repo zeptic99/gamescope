@@ -640,7 +640,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( BIsNested() )
+	if ( BIsNested() && !BIsVRSession() )
 	{
 		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &surface ) )
 		{
