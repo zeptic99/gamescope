@@ -138,10 +138,10 @@ struct colormapping_t
 	bool operator == (const colormapping_t&) const = default;
 	bool operator != (const colormapping_t&) const = default;
 
-    float blendEnableMinSat;
-    float blendEnableMaxSat;
-    float blendAmountMin;
-    float blendAmountMax;
+	float blendEnableMinSat;
+	float blendEnableMaxSat;
+	float blendAmountMin;
+	float blendAmountMax;
 };
 
 displaycolorimetry_t lerp( const displaycolorimetry_t & a, const displaycolorimetry_t & b, float t );
@@ -156,17 +156,18 @@ struct tonemapping_t
 struct lut1d_t
 {
 	int lutSize = 0;
-    std::vector<float> dataR;
-    std::vector<float> dataG;
-    std::vector<float> dataB;
+	std::vector<float> dataR;
+	std::vector<float> dataG;
+	std::vector<float> dataB;
 
 	// Some LUTs start with a flat section...
 	// Where does the non-flat part start?
 	// (impacts the inverse computation)
-	mutable int startIndexR = -1;
-	mutable int startIndexG = -1;
-	mutable int startIndexB = -1;
-	void finalize();
+	int startIndexR = -1;
+	int startIndexG = -1;
+	int startIndexB = -1;
+
+	void finalize(); // calculates start indicies
 
 	void resize( int lutSize_ )
 	{
@@ -182,8 +183,8 @@ struct lut1d_t
 
 struct lut3d_t
 {
-    int lutEdgeSize = 0;
-    std::vector<glm::vec3> data; // R changes fastest
+	int lutEdgeSize = 0;
+	std::vector<glm::vec3> data; // R changes fastest
 
 	void resize( int lutEdgeSize_ )
 	{
