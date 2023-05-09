@@ -475,42 +475,46 @@ bool BOutOfGamut( const glm::vec3 & color )
     return ( color.x<0.f || color.x > 1.f || color.y<0.f || color.y > 1.f || color.z<0.f || color.z > 1.f );
 }
 
-inline glm::vec3 calcEOTFToLinear( const glm::vec3 & input, EOTF eotf, const tonemapping_t & tonemapping )
+template <typename T>
+inline T calcEOTFToLinear( const T & input, EOTF eotf, const tonemapping_t & tonemapping )
 {
     if ( eotf == EOTF_Gamma22 )
     {
-        return glm::pow( input, glm::vec3( 2.2f ) ) * tonemapping.g22_luminance;
+        return glm::pow( input, T( 2.2f ) ) * tonemapping.g22_luminance;
     }
     else if ( eotf == EOTF_PQ )
     {
         return pq_to_nits( input );
     }
 
-    return glm::vec3(0);
+    return T(0);
 }
 
-inline glm::vec3 calcLinearToEOTF( const glm::vec3 & input, EOTF eotf, const tonemapping_t & tonemapping )
+template <typename T>
+inline T calcLinearToEOTF( const T & input, EOTF eotf, const tonemapping_t & tonemapping )
 {
     if ( eotf == EOTF_Gamma22 )
     {
-        glm::vec3 val = input;
+        T val = input;
         if ( tonemapping.g22_luminance > 0.f )
         {
-            val = glm::clamp( input / tonemapping.g22_luminance, glm::vec3( 0.f ), glm::vec3( 1.f ) );
+            val = glm::clamp( input / tonemapping.g22_luminance, T( 0.f ), T( 1.f ) );
         }
-        return glm::pow( val, glm::vec3( 1.f/2.2f ) );
+        return glm::pow( val, T( 1.f/2.2f ) );
     }
     else if ( eotf == EOTF_PQ )
     {
-        return glm::vec3( nits_to_pq(input) );
+        return T( nits_to_pq(input) );
     }
 
-    return glm::vec3(0);
+    return T(0);
 }
 
 // input is from 0->1
 // TODO: use tone-mapping for white, black, contrast ratio
-inline glm::vec3 applyShaper( const glm::vec3 & input, EOTF source, EOTF dest, const tonemapping_t & tonemapping, float flGain, bool bInvert )
+
+template <typename T>
+inline T applyShaper( const T & input, EOTF source, EOTF dest, const tonemapping_t & tonemapping, float flGain, bool bInvert )
 {
     if ( source == dest || !tonemapping.bUseShaper )
     {
@@ -570,14 +574,23 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
         glm::vec3 nightModeMultHSV( nightmode.hue, clamp01( nightmode.saturation * nightmode.amount ), 1.f );
         glm::vec3 vNightModeMultLinear = glm::pow( hsv_to_rgb( nightModeMultHSV ), glm::vec3( 2.2f ) );
 
+        glm::vec3 shapedSourceColor;
+        glm::vec3 sourceColorEOTFEncoded;
+
         for ( int nBlue=0; nBlue<nLutEdgeSize3d; ++nBlue )
         {
+            shapedSourceColor.b = nBlue * flScale;
+            sourceColorEOTFEncoded.b = applyShaper( shapedSourceColor.b, sourceEOTF, destEOTF, tonemapping, flGain, true );
+
             for ( int nGreen=0; nGreen<nLutEdgeSize3d; ++nGreen )
             {
+                shapedSourceColor.g = nGreen * flScale;
+                sourceColorEOTFEncoded.g = applyShaper( shapedSourceColor.g, sourceEOTF, destEOTF, tonemapping, flGain, true );
+
                 for ( int nRed=0; nRed<nLutEdgeSize3d; ++nRed )
                 {
-                    glm::vec3 shapedSourceColor = { nRed * flScale, nGreen * flScale, nBlue * flScale };
-                    glm::vec3 sourceColorEOTFEncoded = applyShaper( shapedSourceColor, sourceEOTF, destEOTF, tonemapping, flGain, true );
+                    shapedSourceColor.r = nRed * flScale;
+                    sourceColorEOTFEncoded.r = applyShaper( shapedSourceColor.r, sourceEOTF, destEOTF, tonemapping, flGain, true );
 
                     if ( pLook && !pLook->data.empty() )
                     {
