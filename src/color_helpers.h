@@ -12,7 +12,7 @@
 // Color utils
 inline int quantize( float fVal, float fMaxVal )
 {
-    return std::max( 0.f, std::min( fMaxVal, roundf( fVal * fMaxVal ) ) );
+    return std::max( 0.f, std::min( fMaxVal, rintf( fVal * fMaxVal ) ) );
 }
 
 inline uint16_t drm_quantize_lut_value( float flValue )
