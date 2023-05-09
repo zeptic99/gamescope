@@ -8,6 +8,9 @@ const uint32_t nLutEdgeSize3d = 17;
 uint16_t lut1d[nLutSize1d*4];
 uint16_t lut3d[nLutEdgeSize3d*nLutEdgeSize3d*nLutEdgeSize3d*4];
 
+lut1d_t lut1d_float;
+lut3d_t lut3d_float;
+
 static void BenchmarkCalcColorTransform(EOTF inputEOTF, benchmark::State &state)
 {
     const primaries_t primaries = { { 0.602f, 0.355f }, { 0.340f, 0.574f }, { 0.164f, 0.121f } };
@@ -30,9 +33,23 @@ static void BenchmarkCalcColorTransform(EOTF inputEOTF, benchmark::State &state)
     float flGain = 1.0f;
 
     for (auto _ : state) {
-        calcColorTransform( &lut1d[0], nLutSize1d, &lut3d[0], nLutEdgeSize3d, inputColorimetry, inputEOTF,
+        calcColorTransform( &lut1d_float, nLutSize1d, &lut3d_float, nLutEdgeSize3d, inputColorimetry, inputEOTF,
             outputEncodingColorimetry, EOTF_Gamma22,
             colorMapping, nightmode, tonemapping, nullptr, flGain );
+        for ( size_t i=0, end = lut1d_float.data.size(); i<end; ++i )
+        {
+            lut1d[4*i+0] = drm_quantize_lut_value( lut1d_float.data[i].r );
+            lut1d[4*i+1] = drm_quantize_lut_value( lut1d_float.data[i].g );
+            lut1d[4*i+2] = drm_quantize_lut_value( lut1d_float.data[i].b );
+            lut1d[4*i+3] = 0;
+        }
+        for ( size_t i=0, end = lut3d_float.data.size(); i<end; ++i )
+        {
+            lut3d[4*i+0] = drm_quantize_lut_value( lut3d_float.data[i].r );
+            lut3d[4*i+1] = drm_quantize_lut_value( lut3d_float.data[i].g );
+            lut3d[4*i+2] = drm_quantize_lut_value( lut3d_float.data[i].b );
+            lut3d[4*i+3] = 0;
+        }
     }
 }
 

@@ -531,8 +531,8 @@ inline T applyShaper( const T & input, EOTF source, EOTF dest, const tonemapping
     return calcLinearToEOTF( flGain * calcEOTFToLinear( input, source, tonemapping ), dest, tonemapping );
 }
 
-void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
-    uint16_t * pRgbxData3d, int nLutEdgeSize3d,
+void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
+	lut3d_t * pLut3d, int nLutEdgeSize3d,
 	const displaycolorimetry_t & source, EOTF sourceEOTF,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
     const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,
@@ -549,23 +549,22 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
     // The 3d lut should be considered a 'matched' pair where the transform is only complete
     // when applying both.  I.e., you can put ANY transform in here, and it should work.
 
-    if ( pRgbxData1d )
+    if ( pShaper )
     {
         float flScale = 1.f / ( (float) nLutSize1d - 1.f );
+        pShaper->data.resize( nLutSize1d );
 
         for ( int nVal=0; nVal<nLutSize1d; ++nVal )
         {
             glm::vec3 sourceColorEOTFEncoded = { nVal * flScale, nVal * flScale, nVal * flScale };
-            glm::vec3 shapedSourceColor = applyShaper( sourceColorEOTFEncoded, sourceEOTF, destEOTF, tonemapping, flGain, false );
-            pRgbxData1d[nVal * 4 + 0] = drm_quantize_lut_value( shapedSourceColor.x );
-            pRgbxData1d[nVal * 4 + 1] = drm_quantize_lut_value( shapedSourceColor.y );
-            pRgbxData1d[nVal * 4 + 2] = drm_quantize_lut_value( shapedSourceColor.z );
-            pRgbxData1d[nVal * 4 + 3] = 0;
+            pShaper->data[nVal] = applyShaper( sourceColorEOTFEncoded, sourceEOTF, destEOTF, tonemapping, flGain, false );
         }
     }
 
-    if ( pRgbxData3d )
+    if ( pLut3d )
     {
+        pLut3d->data.resize( nLutEdgeSize3d * nLutEdgeSize3d * nLutEdgeSize3d );
+
         float flScale = 1.f / ( (float) nLutEdgeSize3d - 1.f );
 
         // Precalc night mode scalars
@@ -617,11 +616,7 @@ void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
                     glm::vec3 destColorEOTFEncoded = calcLinearToEOTF( destColorLinear, destEOTF, tonemapping );
 
                     // Write LUT
-                    int nLutIndex = nBlue * nLutEdgeSize3d * nLutEdgeSize3d + nGreen * nLutEdgeSize3d + nRed;
-                    pRgbxData3d[nLutIndex * 4 + 0] = drm_quantize_lut_value( destColorEOTFEncoded.x );
-                    pRgbxData3d[nLutIndex * 4 + 1] = drm_quantize_lut_value( destColorEOTFEncoded.y );
-                    pRgbxData3d[nLutIndex * 4 + 2] = drm_quantize_lut_value( destColorEOTFEncoded.z );
-                    pRgbxData3d[nLutIndex * 4 + 3] = 0;
+                    pLut3d->data[GetLut3DIndexRedFastRGB( nRed, nGreen, nBlue, nLutEdgeSize3d )] = destColorEOTFEncoded;
                 }
             }
         }

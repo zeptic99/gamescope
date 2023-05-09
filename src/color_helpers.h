@@ -153,6 +153,11 @@ struct tonemapping_t
 	float g22_luminance = 1.f; // what luminance should be applied for g22 EOTF conversions?
 };
 
+struct lut1d_t
+{
+    std::vector<glm::vec3> data;
+};
+
 struct lut3d_t
 {
     int lutEdgeSize = 0;
@@ -170,8 +175,8 @@ bool LoadCubeLut( lut3d_t * lut3d, const char * filename );
 // If the white points differ, this performs an absolute colorimetric match
 // Look luts are optional, but if specified applied in the sourceEOTF space
 
-void calcColorTransform( uint16_t * pRgbxData1d, int nLutSize1d,
-	uint16_t * pRgbxData3d, int nLutEdgeSize3d,
+void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
+	lut3d_t * pLut3d, int nLutEdgeSize3d,
 	const displaycolorimetry_t & source, EOTF sourceEOTF,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
 	const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,

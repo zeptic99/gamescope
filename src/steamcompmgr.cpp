@@ -112,6 +112,9 @@ static gamescope_color_mgmt_luts g_ColorMgmtLutsOverride[ EOTF_Count ];
 static lut3d_t g_ColorMgmtLooks[ EOTF_Count ];
 gamescope_color_mgmt_luts g_ColorMgmtLuts[ EOTF_Count ];
 
+static lut1d_t g_tmpLut1d;
+static lut3d_t g_tmpLut3d;
+
 bool g_bForceHDRSupportDebug = false;
 extern float g_flInternalDisplayBrightnessNits;
 extern float g_flHDRItmSdrNits;
@@ -165,10 +168,10 @@ update_color_mgmt()
 		for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
 		{
 			if (!g_ColorMgmtLuts[nInputEOTF].vk_lut1d)
-				g_ColorMgmtLuts[nInputEOTF].vk_lut1d = vulkan_create_1d_lut(nLutSize1d);
+				g_ColorMgmtLuts[nInputEOTF].vk_lut1d = vulkan_create_1d_lut(s_nLutSize1d);
 
 			if (!g_ColorMgmtLuts[nInputEOTF].vk_lut3d)
-				g_ColorMgmtLuts[nInputEOTF].vk_lut3d = vulkan_create_3d_lut(nLutEdgeSize3d, nLutEdgeSize3d, nLutEdgeSize3d);
+				g_ColorMgmtLuts[nInputEOTF].vk_lut3d = vulkan_create_3d_lut(s_nLutEdgeSize3d, s_nLutEdgeSize3d, s_nLutEdgeSize3d);
 
 			if ( g_ColorMgmtLutsOverride[nInputEOTF].HasLuts() )
 			{
@@ -227,9 +230,26 @@ update_color_mgmt()
 					buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
 				}
 
-				calcColorTransform( g_ColorMgmtLuts[nInputEOTF].lut1d, nLutSize1d, g_ColorMgmtLuts[nInputEOTF].lut3d, nLutEdgeSize3d, inputColorimetry, inputEOTF,
+				calcColorTransform( &g_tmpLut1d, s_nLutSize1d, &g_tmpLut3d, s_nLutEdgeSize3d, inputColorimetry, inputEOTF,
 					outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
 					colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
+
+				// Create quantized output luts
+				for ( size_t i=0, end = g_tmpLut1d.data.size(); i<end; ++i )
+				{
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+0] = drm_quantize_lut_value( g_tmpLut1d.data[i].r );
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+1] = drm_quantize_lut_value( g_tmpLut1d.data[i].g );
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+2] = drm_quantize_lut_value( g_tmpLut1d.data[i].b );
+					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+3] = 0;
+				}
+
+				for ( size_t i=0, end = g_tmpLut3d.data.size(); i<end; ++i )
+				{
+					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+0] = drm_quantize_lut_value( g_tmpLut3d.data[i].r );
+					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+1] = drm_quantize_lut_value( g_tmpLut3d.data[i].g );
+					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+2] = drm_quantize_lut_value( g_tmpLut3d.data[i].b );
+					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+3] = 0;
+				}
 			}
 
 			g_ColorMgmtLuts[nInputEOTF].bHasLut1D = true;

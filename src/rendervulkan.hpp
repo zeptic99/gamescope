@@ -379,15 +379,15 @@ struct gamescope_color_mgmt_t
 	bool operator != (const gamescope_color_mgmt_t&) const = default;
 };
 
-static constexpr uint32_t nLutEdgeSize3d = 17;
-static constexpr uint32_t nLutSize1d = 4096;
+static constexpr uint32_t s_nLutEdgeSize3d = 17;
+static constexpr uint32_t s_nLutSize1d = 4096;
 
 struct gamescope_color_mgmt_luts
 {
 	bool bHasLut3D = false;
 	bool bHasLut1D = false;
-	uint16_t lut3d[nLutEdgeSize3d*nLutEdgeSize3d*nLutEdgeSize3d*4];
-	uint16_t lut1d[nLutSize1d*4];
+	uint16_t lut3d[s_nLutEdgeSize3d*s_nLutEdgeSize3d*s_nLutEdgeSize3d*4];
+	uint16_t lut1d[s_nLutSize1d*4];
 
 	std::shared_ptr<CVulkanTexture> vk_lut3d;
 	std::shared_ptr<CVulkanTexture> vk_lut1d;
