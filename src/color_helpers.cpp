@@ -483,7 +483,7 @@ glm::vec3 calcEOTFToLinear( const glm::vec3 & input, EOTF eotf, const tonemappin
     }
     else if ( eotf == EOTF_PQ )
     {
-        return glm::vec3( pq_to_nits( input.r ),  pq_to_nits( input.g ), pq_to_nits( input.b ) );
+        return pq_to_nits( input );
     }
 
     return glm::vec3(0);
@@ -502,7 +502,7 @@ glm::vec3 calcLinearToEOTF( const glm::vec3 & input, EOTF eotf, const tonemappin
     }
     else if ( eotf == EOTF_PQ )
     {
-        return glm::vec3( nits_to_pq( input.r ), nits_to_pq( input.g ), nits_to_pq( input.b ) );
+        return glm::vec3( nits_to_pq(input) );
     }
 
     return glm::vec3(0);
