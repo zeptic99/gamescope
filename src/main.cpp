@@ -72,6 +72,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "generate-drm-mode", required_argument, nullptr, 0 },
 	{ "immediate-flips", no_argument, nullptr, 0 },
 	{ "adaptive-sync", no_argument, nullptr, 0 },
+	{ "framerate-limit", required_argument, nullptr, 0 },
 
 	// openvr options
 #if HAVE_OPENVR
@@ -163,6 +164,7 @@ const char usage[] =
 	"                                 Default: 100 nits, Max: 1000 nits\n"
 	"  --hdr-itm-target-nits          set the target luminace of the inverse tone mapping process.\n"
 	"                                 Default: 1000 nits, Max: 10000 nits\n"
+	"  --framerate-limit              Set a simple framerate limit. Used as a divisor of the refresh rate, rounds down eg 60 / 59 -> 60fps, 60 / 25 -> 30fps. Default: 0, disabled.\n"
 	"\n"
 	"Nested mode options:\n"
 	"  -o, --nested-unfocused-refresh game refresh rate when unfocused\n"

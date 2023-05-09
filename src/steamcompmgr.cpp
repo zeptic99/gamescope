@@ -6610,6 +6610,8 @@ steamcompmgr_main(int argc, char **argv)
 					g_flHDRItmSdrNits = atof(optarg);
 				} else if (strcmp(opt_name, "hdr-itm-target-nits") == 0) {
 					g_flHDRItmTargetNits = atof(optarg);
+				} else if (strcmp(opt_name, "framerate-limit") == 0) {
+					g_nSteamCompMgrTargetFPS = atoi(optarg);
 				}
 				break;
 			case '?':
