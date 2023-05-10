@@ -1385,6 +1385,9 @@ void wlserver_keyboardfocus( struct wlr_surface *surface )
 {
 	assert( wlserver_is_lock_held() );
 
+	assert( wlserver.wlr.virtual_keyboard_device != nullptr );
+	wlr_seat_set_keyboard( wlserver.wlr.seat, wlserver.wlr.virtual_keyboard_device );
+
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard( wlserver.wlr.seat );
 	if ( keyboard == nullptr )
 		wlr_seat_keyboard_notify_enter( wlserver.wlr.seat, surface, nullptr, 0, nullptr);
