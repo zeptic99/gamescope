@@ -76,6 +76,53 @@ inline T nits_to_pq( const T& nits )
     return n;
 }
 
+inline float eetf_2390_spline( float value, float ks, float maxLum )
+{
+    float t = ( value - ks ) / ( 1.f - ks ); // TODO : guard against ks == 1.f?
+    float t_sq = t*t;
+    float t_cub = t_sq*t;
+    float v1 = ( 2.f * t_cub - 3.f * t_sq + 1.f ) * ks;
+    float v2 = ( t_cub - 2.f * t_sq + t ) * ( 1.f - ks );
+    float v3 = (-2.f * t_cub + 3.f * t_sq ) * maxLum;
+    return v1 + v2 + v3;
+}
+
+// Apply an HDR tonemapping according to eetf 2390 (R-REP-BT.2390-8-2020-PDF-E.pdf)
+// sourceXXX == "Mastering Display" == Lw, Lb (in the paper)
+// targetXXX == "Target Display" == Lmin, Lmax (in the paper)
+// Be warned... PQ in, PQ out, for ALL params [0,1]
+// This does not imply this function has anything to do with PQ
+// (it's quite sensible to apply it to linear values created in other ways... you just have to
+// PQ all params first, and undo the output)
+// Values outside of 0-1 are not defined
+
+inline float eetf_2390( float valuePQ, float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ )
+{
+    // normalize PQ based on the mastering (source) display (E1)
+	const float sourcePQScale = sourceWhitePQ - sourceBlackPQ;
+	const float invSourcePQScale = 1.f / sourcePQScale;
+
+    float minLum = ( targetBlackPQ - sourceBlackPQ ) * invSourcePQScale; // TODO: Pull into precomputation?
+    float maxLum = ( targetWhitePQ - sourceBlackPQ ) * invSourcePQScale; // TODO: Pull into precomputation?
+    float e1 = ( valuePQ - sourceBlackPQ ) * invSourcePQScale;
+
+    // Knee
+    float ks = 1.5 * maxLum - 0.5; // TODO: Pull into precomputation?
+    float b = minLum;
+
+    // Apply high end rolloff
+    float e2 = e1 < ks ? e1 : eetf_2390_spline( e1, ks, maxLum );
+
+    // Apply low end pedestal
+    float one_min_e2 = 1.f - e2;
+    float one_min_e2_sq = one_min_e2 * one_min_e2;
+    float e3 = e2 + b * one_min_e2_sq * one_min_e2_sq;
+
+    // Re-apply mastering (source) transform
+    return e3 * sourcePQScale + sourceBlackPQ;
+}
+
+
 inline float flerp( float a, float b, float t )
 {
     return a + t * (b - a);
