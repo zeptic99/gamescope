@@ -76,17 +76,6 @@ inline T nits_to_pq( const T& nits )
     return n;
 }
 
-inline float eetf_2390_spline( float value, float ks, float maxLum )
-{
-    float t = ( value - ks ) / ( 1.f - ks ); // TODO : guard against ks == 1.f?
-    float t_sq = t*t;
-    float t_cub = t_sq*t;
-    float v1 = ( 2.f * t_cub - 3.f * t_sq + 1.f ) * ks;
-    float v2 = ( t_cub - 2.f * t_sq + t ) * ( 1.f - ks );
-    float v3 = (-2.f * t_cub + 3.f * t_sq ) * maxLum;
-    return v1 + v2 + v3;
-}
-
 // Apply an HDR tonemapping according to eetf 2390 (R-REP-BT.2390-8-2020-PDF-E.pdf)
 // sourceXXX == "Mastering Display" == Lw, Lb (in the paper)
 // targetXXX == "Target Display" == Lmin, Lmax (in the paper)
@@ -96,32 +85,90 @@ inline float eetf_2390_spline( float value, float ks, float maxLum )
 // PQ all params first, and undo the output)
 // Values outside of 0-1 are not defined
 
-inline float eetf_2390( float valuePQ, float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ )
+struct eetf_2390_t
 {
-    // normalize PQ based on the mastering (source) display (E1)
-	const float sourcePQScale = sourceWhitePQ - sourceBlackPQ;
-	const float invSourcePQScale = 1.f / sourcePQScale;
+	void init_nits( float sourceBlackNits, float sourceWhiteNits, float targetBlackNits, float targetWhiteNits )
+	{
+		init_pq(
+			nits_to_pq( sourceBlackNits ),
+			nits_to_pq( sourceWhiteNits ),
+			nits_to_pq( targetBlackNits ),
+			nits_to_pq( targetWhiteNits ) );
+	}
 
-    float minLum = ( targetBlackPQ - sourceBlackPQ ) * invSourcePQScale; // TODO: Pull into precomputation?
-    float maxLum = ( targetWhitePQ - sourceBlackPQ ) * invSourcePQScale; // TODO: Pull into precomputation?
-    float e1 = ( valuePQ - sourceBlackPQ ) * invSourcePQScale;
+	void init_pq( float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ )
+	{
+		m_sourceBlackPQ = sourceBlackPQ;
+		m_sourcePQScale = sourceWhitePQ - sourceBlackPQ;
+		m_invSourcePQScale = m_sourcePQScale > 0.f ? 1.f / m_sourcePQScale : 0.f;
+    	m_minLumPQ = ( targetBlackPQ - sourceBlackPQ ) * m_invSourcePQScale;
+    	m_maxLumPQ = ( targetWhitePQ - sourceBlackPQ ) * m_invSourcePQScale;
+		m_ks = 1.5 * m_maxLumPQ - 0.5;  // TODO : return false if ks == 1.f?
+	}
 
-    // Knee
-    float ks = 1.5 * maxLum - 0.5; // TODO: Pull into precomputation?
-    float b = minLum;
+	// "Max RGB" approach, as defined in "Color Volume and Hue-Preservation in HDR Tone Mapping"
+	// Digital Object Identifier 10.5594/JMI.2020.2984046
+	// Date of publication: 4 May 2020
+	inline glm::vec3 apply_max_rgb( const glm::vec3 & inputNits )
+	{
+		float input_scalar_nits = std::max( inputNits.r, std::max( inputNits.g, inputNits.b ) );
+		float output_scalar_nits = pq_to_nits( apply_pq( nits_to_pq( input_scalar_nits ) ) );
+		float gain = input_scalar_nits > 0.f ? output_scalar_nits / input_scalar_nits : 0.f;
+		return inputNits * gain;
+	}
 
-    // Apply high end rolloff
-    float e2 = e1 < ks ? e1 : eetf_2390_spline( e1, ks, maxLum );
+	inline glm::vec3 apply_luma_rgb( const glm::vec3 & inputNits )
+	{
+		float input_scalar_nits = 0.2627f * inputNits.r + 0.6780f * inputNits.g + 0.0593f * inputNits.b;
+		float output_scalar_nits = pq_to_nits( apply_pq( nits_to_pq( input_scalar_nits ) ) );
+		float gain = input_scalar_nits > 0.f ? output_scalar_nits / input_scalar_nits : 0.f;
+		return inputNits * gain;
+	}
 
-    // Apply low end pedestal
-    float one_min_e2 = 1.f - e2;
-    float one_min_e2_sq = one_min_e2 * one_min_e2;
-    float e3 = e2 + b * one_min_e2_sq * one_min_e2_sq;
+	inline glm::vec3 apply_independent_rgb( const glm::vec3 & inputNits )
+	{
+		glm::vec3 inputPQ = nits_to_pq( inputNits );
+		glm::vec3 outputPQ = { apply_pq( inputPQ.r ), apply_pq( inputPQ.g ), apply_pq( inputPQ.b ) };
+		return pq_to_nits( outputPQ );
+	}
 
-    // Re-apply mastering (source) transform
-    return e3 * sourcePQScale + sourceBlackPQ;
-}
+	float m_sourceBlackPQ = 0.f;
+	float m_sourcePQScale = 0.f;
+	float m_invSourcePQScale = 0.f;
+	float m_minLumPQ = 0.f;
+	float m_maxLumPQ = 0.f;
+	float m_ks = 0.f;
 
+	// Raw PQ transfer function
+	inline float apply_pq( float valuePQ )
+	{
+		// normalize PQ based on the mastering (source) display (E1)
+		float e1 = ( valuePQ - m_sourceBlackPQ ) * m_invSourcePQScale;
+
+		// Apply high end rolloff
+		float e2 = e1 < m_ks ? e1 : _eetf_2390_spline( e1, m_ks, m_maxLumPQ );
+
+		// Apply low end pedestal
+		float one_min_e2 = 1.f - e2;
+		float one_min_e2_sq = one_min_e2 * one_min_e2;
+		float e3 = e2 + m_minLumPQ * one_min_e2_sq * one_min_e2_sq;
+
+		// Re-apply mastering (source) transform
+		return e3 * m_sourcePQScale + m_sourceBlackPQ;
+	}
+
+	private:
+	inline float _eetf_2390_spline( float value, float ks, float maxLum )
+	{
+		float t = ( value - ks ) / ( 1.f - ks ); // TODO : guard against ks == 1.f?
+		float t_sq = t*t;
+		float t_cub = t_sq*t;
+		float v1 = ( 2.f * t_cub - 3.f * t_sq + 1.f ) * ks;
+		float v2 = ( t_cub - 2.f * t_sq + t ) * ( 1.f - ks );
+		float v3 = (-2.f * t_cub + 3.f * t_sq ) * maxLum;
+		return v1 + v2 + v3;
+	}
+};
 
 inline float flerp( float a, float b, float t )
 {
@@ -336,5 +383,3 @@ static constexpr displaycolorimetry_t displaycolorimetry_2020
 	.primaries = { { 0.708f, 0.292f }, { 0.170f, 0.797f }, { 0.131f, 0.046f } },
 	.white = { 0.3127f, 0.3290f },  // D65
 };
-
-int color_tests();
