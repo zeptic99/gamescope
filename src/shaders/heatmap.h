@@ -183,7 +183,7 @@ vec3 hdr_heatmap_hard(float Y) {
   {
     outColor = mix( vec3(currentGreyscale), vec3(low,hi,low), vec3( fit(Y, HEATMAP_SCALE_LEVEL0, HEATMAP_SCALE_LEVEL1, 0.0, 0.25) ) );
   }
-  else if (Y <= HEATMAP_SCALE_LEVEL2) // 500-1000 grey to yellow
+  else if (Y <= HEATMAP_SCALE_LEVEL2) // 500-1000 green to yellow
   {
     outColor = mix( vec3(currentGreyscale), vec3(hi,hi,low), vec3( fit(Y, HEATMAP_SCALE_LEVEL1, HEATMAP_SCALE_LEVEL2, 0.25, 1.0) ) );
   }
