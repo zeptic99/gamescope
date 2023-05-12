@@ -664,6 +664,10 @@ namespace GamescopeWSILayer {
           nits_to_u16_dark(metadata.minLuminance),
           nits_to_u16(metadata.maxContentLightLevel),
           nits_to_u16(metadata.maxFrameAverageLightLevel));
+
+          fprintf( stderr, "[Gamescope WSI] VkHdrMetadataEXT: mastering luminance min %f nits, max %f nits\n", metadata.minLuminance, metadata.maxLuminance );
+          fprintf( stderr, "[Gamescope WSI] VkHdrMetadataEXT: maxContentLightLevel %f nits\n", metadata.maxContentLightLevel );
+          fprintf( stderr, "[Gamescope WSI] VkHdrMetadataEXT: maxFrameAverageLightLevel %f nits\n", metadata.maxFrameAverageLightLevel );
       }
     }
 
