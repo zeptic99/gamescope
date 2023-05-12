@@ -375,6 +375,8 @@ struct gamescope_color_mgmt_t
 	displaycolorimetry_t outputEncodingColorimetry;
 	EOTF outputEncodingEOTF;
 
+	std::shared_ptr<wlserver_hdr_metadata> appHDRMetadata = nullptr;
+
 	bool operator == (const gamescope_color_mgmt_t&) const = default;
 	bool operator != (const gamescope_color_mgmt_t&) const = default;
 };

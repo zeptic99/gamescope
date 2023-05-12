@@ -660,7 +660,13 @@ inline T applyShaper( const T & input, EOTF source, EOTF dest, const tonemapping
         return input;
     }
 
-    return calcLinearToEOTF( flGain * calcEOTFToLinear( input, source, tonemapping ), dest, tonemapping );
+    T flLinear = flGain * calcEOTFToLinear( input, source, tonemapping );
+    if ( tonemapping.bUseEEtf2390 )
+    {
+        flLinear = tonemapping.eetf2390.apply( flLinear );
+    }
+
+    return calcLinearToEOTF( flLinear, dest, tonemapping );
 }
 
 void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
@@ -750,6 +756,12 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
 
                     // Apply night mode
                     destColorLinear = vNightModeMultLinear * destColorLinear * flGain;
+
+                    // Apply tonemapping
+                    if ( tonemapping.bUseEEtf2390 )
+                    {
+                        destColorLinear = tonemapping.eetf2390.apply( destColorLinear );
+                    }
 
                     // Apply dest EOTF
                     glm::vec3 destColorEOTFEncoded = calcLinearToEOTF( destColorLinear, destEOTF, tonemapping );

@@ -87,17 +87,26 @@ inline T nits_to_pq( const T& nits )
 
 struct eetf_2390_t
 {
-	void init_nits( float sourceBlackNits, float sourceWhiteNits, float targetBlackNits, float targetWhiteNits )
+	enum RGBMode
+	{
+		RGBMode_Max,
+		RGBMode_Luma,
+		RGBMode_Independent,
+	};
+
+	void init_nits( float sourceBlackNits, float sourceWhiteNits, float targetBlackNits, float targetWhiteNits, RGBMode eMode )
 	{
 		init_pq(
 			nits_to_pq( sourceBlackNits ),
 			nits_to_pq( sourceWhiteNits ),
 			nits_to_pq( targetBlackNits ),
-			nits_to_pq( targetWhiteNits ) );
+			nits_to_pq( targetWhiteNits ),
+			eMode );
 	}
 
-	void init_pq( float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ )
+	void init_pq( float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ, RGBMode eMode )
 	{
+		m_eMode = eMode;
 		m_sourceBlackPQ = sourceBlackPQ;
 		m_sourcePQScale = sourceWhitePQ - sourceBlackPQ;
 		m_invSourcePQScale = m_sourcePQScale > 0.f ? 1.f / m_sourcePQScale : 0.f;
@@ -106,41 +115,26 @@ struct eetf_2390_t
 		m_ks = 1.5 * m_maxLumPQ - 0.5;  // TODO : return false if ks == 1.f?
 	}
 
-	// "Max RGB" approach, as defined in "Color Volume and Hue-Preservation in HDR Tone Mapping"
-	// Digital Object Identifier 10.5594/JMI.2020.2984046
-	// Date of publication: 4 May 2020
-	inline glm::vec3 apply_max_rgb( const glm::vec3 & inputNits )
+	inline glm::vec3 apply( const glm::vec3 & inputNits ) const
 	{
-		float input_scalar_nits = std::max( inputNits.r, std::max( inputNits.g, inputNits.b ) );
-		float output_scalar_nits = pq_to_nits( apply_pq( nits_to_pq( input_scalar_nits ) ) );
-		float gain = input_scalar_nits > 0.f ? output_scalar_nits / input_scalar_nits : 0.f;
-		return inputNits * gain;
+		switch ( m_eMode )
+		{
+			case RGBMode_Luma:
+				return apply_luma_rgb( inputNits );
+			case RGBMode_Independent:
+				return apply_independent_rgb( inputNits );
+			default:
+				return apply_max_rgb( inputNits );
+		}
 	}
 
-	inline glm::vec3 apply_luma_rgb( const glm::vec3 & inputNits )
+	inline float apply( float inputNits ) const
 	{
-		float input_scalar_nits = 0.2627f * inputNits.r + 0.6780f * inputNits.g + 0.0593f * inputNits.b;
-		float output_scalar_nits = pq_to_nits( apply_pq( nits_to_pq( input_scalar_nits ) ) );
-		float gain = input_scalar_nits > 0.f ? output_scalar_nits / input_scalar_nits : 0.f;
-		return inputNits * gain;
+		return pq_to_nits( apply_pq( nits_to_pq( inputNits ) ) );
 	}
-
-	inline glm::vec3 apply_independent_rgb( const glm::vec3 & inputNits )
-	{
-		glm::vec3 inputPQ = nits_to_pq( inputNits );
-		glm::vec3 outputPQ = { apply_pq( inputPQ.r ), apply_pq( inputPQ.g ), apply_pq( inputPQ.b ) };
-		return pq_to_nits( outputPQ );
-	}
-
-	float m_sourceBlackPQ = 0.f;
-	float m_sourcePQScale = 0.f;
-	float m_invSourcePQScale = 0.f;
-	float m_minLumPQ = 0.f;
-	float m_maxLumPQ = 0.f;
-	float m_ks = 0.f;
 
 	// Raw PQ transfer function
-	inline float apply_pq( float valuePQ )
+	inline float apply_pq( float valuePQ ) const
 	{
 		// normalize PQ based on the mastering (source) display (E1)
 		float e1 = ( valuePQ - m_sourceBlackPQ ) * m_invSourcePQScale;
@@ -158,7 +152,41 @@ struct eetf_2390_t
 	}
 
 	private:
-	inline float _eetf_2390_spline( float value, float ks, float maxLum )
+	RGBMode m_eMode = RGBMode_Max;
+	float m_sourceBlackPQ = 0.f;
+	float m_sourcePQScale = 0.f;
+	float m_invSourcePQScale = 0.f;
+	float m_minLumPQ = 0.f;
+	float m_maxLumPQ = 0.f;
+	float m_ks = 0.f;
+
+	// "Max RGB" approach, as defined in "Color Volume and Hue-Preservation in HDR Tone Mapping"
+	// Digital Object Identifier 10.5594/JMI.2020.2984046
+	// Date of publication: 4 May 2020
+	inline glm::vec3 apply_max_rgb( const glm::vec3 & inputNits ) const
+	{
+		float input_scalar_nits = std::max( inputNits.r, std::max( inputNits.g, inputNits.b ) );
+		float output_scalar_nits = pq_to_nits( apply_pq( nits_to_pq( input_scalar_nits ) ) );
+		float gain = input_scalar_nits > 0.f ? output_scalar_nits / input_scalar_nits : 0.f;
+		return inputNits * gain;
+	}
+
+	inline glm::vec3 apply_luma_rgb( const glm::vec3 & inputNits ) const
+	{
+		float input_scalar_nits = 0.2627f * inputNits.r + 0.6780f * inputNits.g + 0.0593f * inputNits.b;
+		float output_scalar_nits = pq_to_nits( apply_pq( nits_to_pq( input_scalar_nits ) ) );
+		float gain = input_scalar_nits > 0.f ? output_scalar_nits / input_scalar_nits : 0.f;
+		return inputNits * gain;
+	}
+
+	inline glm::vec3 apply_independent_rgb( const glm::vec3 & inputNits ) const
+	{
+		glm::vec3 inputPQ = nits_to_pq( inputNits );
+		glm::vec3 outputPQ = { apply_pq( inputPQ.r ), apply_pq( inputPQ.g ), apply_pq( inputPQ.b ) };
+		return pq_to_nits( outputPQ );
+	}
+
+	inline float _eetf_2390_spline( float value, float ks, float maxLum ) const
 	{
 		float t = ( value - ks ) / ( 1.f - ks ); // TODO : guard against ks == 1.f?
 		float t_sq = t*t;
@@ -245,6 +273,8 @@ struct tonemapping_t
 {
 	bool bUseShaper = true;
 	float g22_luminance = 1.f; // what luminance should be applied for g22 EOTF conversions?
+	bool bUseEEtf2390 = false;
+	eetf_2390_t eetf2390;
 };
 
 struct lut1d_t

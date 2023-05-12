@@ -121,6 +121,7 @@ extern float g_flHDRItmSdrNits;
 extern float g_flHDRItmTargetNits;
 
 extern std::atomic<uint64_t> g_lastVblank;
+static uint32_t g_uTonemapDebug = 5;
 
 uint64_t timespec_to_nanos(struct timespec& spec)
 {
@@ -218,6 +219,33 @@ update_color_mgmt()
 					{
 						// PQ -> G22  Leverage the display's native brightness
 						tonemapping.g22_luminance = g_ColorMgmt.pending.flInternalDisplayBrightness;
+
+						if ( g_uTonemapDebug == 1 )
+						{
+							tonemapping.bUseEEtf2390 = true;
+							tonemapping.eetf2390.init_nits( 0.001f, 5000.f, 0.01f, 1000.f, eetf_2390_t::RGBMode_Max );
+						}
+						else if ( g_uTonemapDebug == 2 )
+						{
+							tonemapping.bUseEEtf2390 = true;
+							tonemapping.eetf2390.init_nits( 0.001f, 2000.f, 0.01f, 1000.f, eetf_2390_t::RGBMode_Luma );
+						}
+						else if ( g_uTonemapDebug == 3 )
+						{
+							tonemapping.bUseEEtf2390 = true;
+							tonemapping.eetf2390.init_nits( 0.001f, 5000.f, 0.1f, 1000.f, eetf_2390_t::RGBMode_Luma );
+						}
+						else if ( g_uTonemapDebug == 4 )
+						{
+							tonemapping.bUseEEtf2390 = true;
+							tonemapping.eetf2390.init_nits( 0.0f, 5000.f, 0.1f, 1000.f, eetf_2390_t::RGBMode_Luma );
+						}
+						else if ( g_uTonemapDebug == 5 )
+						{
+							tonemapping.bUseEEtf2390 = true;
+							tonemapping.eetf2390.init_nits( 0.001f, 5000.f, 0.5f, 1000.f, eetf_2390_t::RGBMode_Luma );
+						}
+
 						// xwm_log.infof("PQ -> 2.2  -   tonemapping.g22_luminance %f", tonemapping.g22_luminance );
 					}
 					else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
@@ -5131,6 +5159,12 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if ( set_color_nightmode( nightmode ) )
 			hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeTonemapDebug )
+	{
+		g_uTonemapDebug = get_prop( ctx, ctx->root, ctx->atoms.gamescopeTonemapDebug, 0 );
+		g_ColorMgmt.pending.externalDirtyCtr++;
+		hasRepaint = true;
+	}
 	if ( ev->atom == ctx->atoms.gamescopeColorManagementDisable )
 	{
 		uint32_t val = get_prop(ctx, ctx->root, ctx->atoms.gamescopeColorManagementDisable, 0);
@@ -6325,6 +6359,7 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeHDRItmTargetNits = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ITM_TARGET_NITS", false );
 	ctx->atoms.gamescopeColorLookPQ = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_PQ", false );
 	ctx->atoms.gamescopeColorLookG22 = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_G22", false );
+	ctx->atoms.gamescopeTonemapDebug = XInternAtom( ctx->dpy, "GAMESCOPE_TONEMAP_DEBUG", false );
 
 	ctx->atoms.gamescopeForceWindowsFullscreen = XInternAtom( ctx->dpy, "GAMESCOPE_FORCE_WINDOWS_FULLSCREEN", false );
 
@@ -6964,7 +6999,6 @@ steamcompmgr_main(int argc, char **argv)
 			bool app_wants_hdr = ColorspaceIsHDR( current_app_colorspace );
 
 			static bool s_bAppWantsHDRCached = false;
-			static std::shared_ptr<wlserver_hdr_metadata> s_AppHDRMetadata = nullptr;
 
 			if ( app_wants_hdr != s_bAppWantsHDRCached )
 			{
@@ -6977,9 +7011,9 @@ steamcompmgr_main(int argc, char **argv)
 				flush_root = true;
 			}
 
-			if ( app_hdr_metadata != s_AppHDRMetadata )
+			if ( app_hdr_metadata != g_ColorMgmt.pending.appHDRMetadata )
 			{
-				if (app_hdr_metadata)
+				if ( app_hdr_metadata )
 				{
 					std::vector<uint32_t> app_hdr_metadata_blob;
 					app_hdr_metadata_blob.resize((sizeof(hdr_metadata_infoframe) + (sizeof(uint32_t) - 1)) / sizeof(uint32_t));
@@ -6994,7 +7028,7 @@ steamcompmgr_main(int argc, char **argv)
 					XDeleteProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeColorAppHDRMetadataFeedback);
 				}
 
-				s_AppHDRMetadata = app_hdr_metadata;
+				g_ColorMgmt.pending.appHDRMetadata = app_hdr_metadata;
 				flush_root = true;
 			}
 		}
