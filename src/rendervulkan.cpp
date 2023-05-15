@@ -106,7 +106,6 @@ struct VulkanOutput_t
 	std::vector<std::shared_ptr<CVulkanTexture>> outputImages;
 
 	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
-	VkFormat outputFormatHDR = VK_FORMAT_UNDEFINED;
 
 	std::array<std::shared_ptr<CVulkanTexture>, 8> pScreenshotImages;
 
@@ -2983,7 +2982,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	pOutput->outputImages[0] = nullptr;
 	pOutput->outputImages[1] = nullptr;
 
-	VkFormat format = g_bOutputHDREnabled ? pOutput->outputFormatHDR : pOutput->outputFormat;
+	VkFormat format = pOutput->outputFormat;
 
 	pOutput->outputImages[0] = std::make_shared<CVulkanTexture>();
 	bool bSuccess = pOutput->outputImages[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(format), outputImageflags );
@@ -3028,7 +3027,7 @@ bool vulkan_make_output( VkSurfaceKHR surface )
 	
 	if ( BIsVRSession() )
 	{
-		pOutput->outputFormat = VK_FORMAT_B8G8R8A8_UNORM;
+		pOutput->outputFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 		vulkan_make_output_images( pOutput );
 	}
 	else if ( BIsNested() == true )
@@ -3088,7 +3087,6 @@ bool vulkan_make_output( VkSurfaceKHR surface )
 	else
 	{
 		pOutput->outputFormat = DRMFormatToVulkan( g_nDRMFormat, false );
-		pOutput->outputFormatHDR = DRMFormatToVulkan( g_nDRMFormatHDR, false );
 		
 		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{

@@ -6881,7 +6881,6 @@ steamcompmgr_main(int argc, char **argv)
 						drm_set_hdr_state(&g_DRM, g_bOutputHDREnabled);
 					}
 				}
-				vulkan_remake_output_images();
 			}
 
 
