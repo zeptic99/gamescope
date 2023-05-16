@@ -3027,8 +3027,7 @@ bool vulkan_make_output( VkSurfaceKHR surface )
 	
 	if ( BIsVRSession() )
 	{
-		//pOutput->outputFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-		pOutput->outputFormat = VK_FORMAT_B8G8R8A8_UNORM;
+		pOutput->outputFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 		vulkan_make_output_images( pOutput );
 	}
 	else if ( BIsNested() == true )
