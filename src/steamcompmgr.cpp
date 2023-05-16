@@ -477,6 +477,8 @@ bool set_color_look_g22(const char *path)
 	return true;
 }
 
+bool g_bColorSliderInUse = false;
+
 //
 //
 //
@@ -2387,6 +2389,7 @@ paint_all(bool async)
 	bNeedsComposite |= frameInfo.blurLayer0;
 	bNeedsComposite |= bNeedsNearest;
 	bNeedsComposite |= bDrewCursor;
+	bNeedsComposite |= g_bColorSliderInUse;
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
@@ -5189,6 +5192,11 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if ( set_color_mgmt_enabled( !val ) )
 			hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeColorSliderInUse )
+	{
+		uint32_t val = get_prop(ctx, ctx->root, ctx->atoms.gamescopeColorSliderInUse, 0);
+		g_bColorSliderInUse = !!val;
+	}
 	if (ev->atom == ctx->atoms.gamescopeCreateXWaylandServer)
 	{
 		uint32_t identifier = get_prop(ctx, ctx->root, ctx->atoms.gamescopeCreateXWaylandServer, 0);
@@ -6394,6 +6402,7 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeColorManagementDisable = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_MANAGEMENT_DISABLE", false );
 	ctx->atoms.gamescopeColorAppWantsHDRFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_APP_WANTS_HDR_FEEDBACK", false );
 	ctx->atoms.gamescopeColorAppHDRMetadataFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_APP_HDR_METADATA_FEEDBACK", false );
+	ctx->atoms.gamescopeColorSliderInUse = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_SLIDER_IN_USE", false );
 
 	ctx->atoms.gamescopeCreateXWaylandServer = XInternAtom( ctx->dpy, "GAMESCOPE_CREATE_XWAYLAND_SERVER", false );
 	ctx->atoms.gamescopeCreateXWaylandServerFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_CREATE_XWAYLAND_SERVER_FEEDBACK", false );

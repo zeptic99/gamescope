@@ -198,6 +198,7 @@ struct xwayland_ctx_t
 		Atom gamescopeColorManagementDisable;
 		Atom gamescopeColorAppWantsHDRFeedback;
 		Atom gamescopeColorAppHDRMetadataFeedback;
+		Atom gamescopeColorSliderInUse;
 
 		Atom gamescopeCreateXWaylandServer;
 		Atom gamescopeCreateXWaylandServerFeedback;
