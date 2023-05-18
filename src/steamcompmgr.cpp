@@ -121,7 +121,7 @@ extern float g_flHDRItmSdrNits;
 extern float g_flHDRItmTargetNits;
 
 extern std::atomic<uint64_t> g_lastVblank;
-static uint32_t g_uTonemapDebug = 5;
+static uint32_t g_uTonemapDebug = 0;
 
 uint64_t timespec_to_nanos(struct timespec& spec)
 {
