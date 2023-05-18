@@ -493,6 +493,21 @@ static inline uint8_t get_bit_range(uint8_t val, size_t high, size_t low)
 	return (uint8_t) (val >> low) & bitmask;
 }
 
+static inline void set_bit_range(uint8_t *val, size_t high, size_t low, uint8_t bits)
+{
+	size_t n;
+	uint8_t bitmask;
+
+	assert(high <= 7 && high >= low);
+
+	n = high - low + 1;
+	bitmask = (uint8_t) ((1 << n) - 1);
+	assert((bits & ~bitmask) == 0);
+
+	*val |= (uint8_t)(bits << low);
+}
+
+
 static inline void patch_edid_checksum(uint8_t* block)
 {
 	uint8_t sum = 0;
@@ -519,6 +534,14 @@ static bool validate_block_checksum(const uint8_t* data)
 const char *drm_get_patched_edid_path()
 {
 	return getenv("GAMESCOPE_PATCHED_EDID_FILE");
+}
+
+static uint8_t encode_max_luminance(float nits)
+{
+	if (nits == 0.0f)
+		return 0;
+
+	return ceilf((logf(nits / 50.0f) / logf(2.0f)) * 32.0f);
 }
 
 static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm_t *drm, struct connector *conn )
@@ -549,8 +572,124 @@ static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm
 		patch_edid_checksum(&edid[0]);
 	}
 
+	// If we are debugging HDR support lazily on a regular Deck,
+	// just hotpatch the edid for the game so we get values we want as if we had
+	// an external display attached.
+	// (Allows for debugging undocked fallback without undocking/redocking)
+	if ( g_bForceHDRSupportDebug && !conn->metadata.supportsST2084 )
+	{
+		const uint8_t new_hdr_static_metadata_block[]
+		{
+			(1 << HDMI_EOTF_SDR) | (1 << HDMI_EOTF_TRADITIONAL_HDR) | (1 << HDMI_EOTF_ST2084), /* supported eotfs */
+			1, /* type 1 */
+			encode_max_luminance(g_ColorMgmt.pending.flInternalDisplayBrightness), /* desired content max peak luminance */
+			encode_max_luminance(g_ColorMgmt.pending.flInternalDisplayBrightness), /* desired content max frame avg luminance */
+			0, /* desired content min luminance -- 0 is technically "undefined" */
+		};
+
+		int ext_count = int(edid.size() / EDID_BLOCK_SIZE) - 1;
+		assert(ext_count == edid[0x7E]);
+		bool has_cta_block = false;
+		bool has_hdr_metadata_block = false;
+
+		for (int i = 0; i < ext_count; i++)
+		{
+			uint8_t *ext_data = &edid[EDID_BLOCK_SIZE + i * EDID_BLOCK_SIZE];
+			uint8_t tag = ext_data[0];
+			if (tag == DI_EDID_EXT_CEA)
+			{
+				has_cta_block = true;
+				uint8_t dtd_start = ext_data[2];
+				uint8_t flags = ext_data[3];
+				if (dtd_start == 0)
+				{
+					drm_log.infof("[josh edid] Hmmmm.... dtd start is 0. Interesting... Not going further! :-(");
+					continue;
+				}
+				if (flags != 0)
+				{
+					drm_log.infof("[josh edid] Hmmmm.... non-zero CTA flags. Interesting... Not going further! :-(");
+					continue;
+				}
+
+				const int CTA_HEADER_SIZE = 4;
+				int j = CTA_HEADER_SIZE;
+				while (j < dtd_start)
+				{
+					uint8_t data_block_header = ext_data[j];
+					uint8_t data_block_tag = get_bit_range(data_block_header, 7, 5);
+					uint8_t data_block_size = get_bit_range(data_block_header, 4, 0);
+
+					if (j + 1 + data_block_size > dtd_start)
+					{
+						drm_log.infof("[josh edid] Hmmmm.... CTA malformatted. Interesting... Not going further! :-(");
+						break;
+					}
+
+					uint8_t *data_block = &ext_data[j + 1];
+					if (data_block_tag == 7) // extended
+					{
+						uint8_t extended_tag = data_block[0];
+						uint8_t *extended_block = &data_block[1];
+						uint8_t extended_block_size = data_block_size - 1;
+
+						if (extended_tag == 6) // hdr static
+						{
+							if (extended_block_size >= sizeof(new_hdr_static_metadata_block))
+							{
+								drm_log.infof("[josh edid] Patching existing HDR Metadata with our own!");
+								memcpy(extended_block, new_hdr_static_metadata_block, sizeof(new_hdr_static_metadata_block));
+								has_hdr_metadata_block = true;
+							}
+						}
+					}
+
+					j += 1 + data_block_size; // account for header size.
+				}
+
+				if (!has_hdr_metadata_block)
+				{
+					const int hdr_metadata_block_size_plus_headers = sizeof(new_hdr_static_metadata_block) + 2; // +1 for header, +1 for extended header -> +2
+					drm_log.infof("[josh edid] No HDR metadata block to patch... Trying to insert one.");
+
+					// Assert that the end of the data blocks == dtd_start
+					if (dtd_start != j)
+					{
+						drm_log.infof("[josh edid] dtd_start != end of blocks. Giving up patching. I'm too scared to attempt it.");
+					}
+
+					// Move back the dtd to make way for our block at the end.
+					uint8_t *dtd = &ext_data[dtd_start];
+					memmove(dtd + hdr_metadata_block_size_plus_headers, dtd, hdr_metadata_block_size_plus_headers);
+					dtd_start += hdr_metadata_block_size_plus_headers;
+
+					// Data block is where the dtd was.
+					uint8_t *data_block = dtd;
+
+					// header
+					data_block[0] = 0;
+					set_bit_range(&data_block[0], 7, 5, 7); // extended tag
+					set_bit_range(&data_block[0], 4, 0, sizeof(new_hdr_static_metadata_block) + 1); // size (+1 for extended header, does not include normal header)
+
+					// extended header
+					data_block[1] = 6; // hdr metadata extended tag
+					memcpy(&data_block[2], new_hdr_static_metadata_block, sizeof(new_hdr_static_metadata_block));
+				}
+
+				patch_edid_checksum(ext_data);
+				bool sum_valid = validate_block_checksum(ext_data);
+				drm_log.infof("[josh edid] CTA Checksum valid? %s", sum_valid ? "Y" : "N");
+			}
+		}
+
+		if (!has_cta_block)
+		{
+			drm_log.infof("[josh edid] Couldn't patch for HDR metadata as we had no CTA block! Womp womp =c");
+		}
+	}
+
 	bool sum_valid = validate_block_checksum(&edid[0]);
-	drm_log.infof("[josh edid] Checksum valid? %s", sum_valid ? "Y" : "N");
+	drm_log.infof("[josh edid] BASE Checksum valid? %s", sum_valid ? "Y" : "N");
 
 	// Write it out then flip it over atomically.
 

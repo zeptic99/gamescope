@@ -5051,6 +5051,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDRSupport )
 	{
 		g_bForceHDRSupportDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugForceHDRSupport, 0 );
+		drm_update_patched_edid(&g_DRM);
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDebugHDRHeatmap )
@@ -5122,7 +5123,10 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		uint32_t val = get_prop( ctx, ctx->root, ctx->atoms.gamescopeInternalDisplayBrightness, 0 );
 		if ( set_internal_display_brightness( bit_cast<float>(val) ) )
+		{
+			drm_update_patched_edid(&g_DRM);
 			hasRepaint = true;
+		}
 	}
 	if ( ev->atom == ctx->atoms.gamescopeHDRInputGain )
 	{

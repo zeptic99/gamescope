@@ -37,6 +37,7 @@ static const uint32_t g_zposOverlay = 3;
 static const uint32_t g_zposCursor = 4;
 
 extern bool g_bHDRItmEnable;
+extern bool g_bForceHDRSupportDebug;
 
 extern EStreamColorspace g_ForcedNV12ColorSpace;
 
