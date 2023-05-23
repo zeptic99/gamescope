@@ -876,6 +876,13 @@ bool CVulkanDevice::createDevice()
 	};
 
 	VkResult res = vk.CreateDevice(physDev(), &deviceCreateInfo, nullptr, &m_device);
+	if ( res == VK_ERROR_NOT_PERMITTED_KHR && g_bNiceCap )
+	{
+		fprintf(stderr, "vkCreateDevice failed with a high-priority queue. Falling back to regular priority.\n");
+		queueCreateInfo.pNext = nullptr;
+		res = vk.CreateDevice(physDev(), &deviceCreateInfo, nullptr, &m_device);
+	}
+
 	if ( res != VK_SUCCESS )
 	{
 		vk_errorf( res, "vkCreateDevice failed" );
