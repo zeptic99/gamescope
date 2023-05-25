@@ -76,6 +76,26 @@ inline T nits_to_pq( const T& nits )
     return n;
 }
 
+struct tonemap_info_t
+{
+	bool operator == (const tonemap_info_t&) const = default;
+	bool operator != (const tonemap_info_t&) const = default;
+
+	float flBlackPointNits = 0.f;
+	float flWhitePointNits = 0.f;
+
+	bool BIsValid() const
+	{
+		return ( flWhitePointNits > flBlackPointNits );
+	}
+
+	void reset()
+	{
+		flBlackPointNits = 0.f;
+		flWhitePointNits = 0.f;
+	}
+};
+
 // Apply an HDR tonemapping according to eetf 2390 (R-REP-BT.2390-8-2020-PDF-E.pdf)
 // sourceXXX == "Mastering Display" == Lw, Lb (in the paper)
 // targetXXX == "Target Display" == Lmin, Lmax (in the paper)
@@ -87,45 +107,23 @@ inline T nits_to_pq( const T& nits )
 
 struct eetf_2390_t
 {
-	enum RGBMode
-	{
-		RGBMode_Max,
-		RGBMode_Luma,
-		RGBMode_Independent,
-	};
-
-	void init_nits( float sourceBlackNits, float sourceWhiteNits, float targetBlackNits, float targetWhiteNits, RGBMode eMode )
+	void init( const tonemap_info_t & source, const tonemap_info_t & target )
 	{
 		init_pq(
-			nits_to_pq( sourceBlackNits ),
-			nits_to_pq( sourceWhiteNits ),
-			nits_to_pq( targetBlackNits ),
-			nits_to_pq( targetWhiteNits ),
-			eMode );
+			nits_to_pq( source.flBlackPointNits ),
+			nits_to_pq( source.flWhitePointNits ),
+			nits_to_pq( target.flBlackPointNits ),
+			nits_to_pq( target.flWhitePointNits ) );
 	}
 
-	void init_pq( float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ, RGBMode eMode )
+	void init_pq( float sourceBlackPQ, float sourceWhitePQ, float targetBlackPQ, float targetWhitePQ )
 	{
-		m_eMode = eMode;
 		m_sourceBlackPQ = sourceBlackPQ;
 		m_sourcePQScale = sourceWhitePQ - sourceBlackPQ;
 		m_invSourcePQScale = m_sourcePQScale > 0.f ? 1.f / m_sourcePQScale : 0.f;
     	m_minLumPQ = ( targetBlackPQ - sourceBlackPQ ) * m_invSourcePQScale;
     	m_maxLumPQ = ( targetWhitePQ - sourceBlackPQ ) * m_invSourcePQScale;
 		m_ks = 1.5 * m_maxLumPQ - 0.5;  // TODO : return false if ks == 1.f?
-	}
-
-	inline glm::vec3 apply( const glm::vec3 & inputNits ) const
-	{
-		switch ( m_eMode )
-		{
-			case RGBMode_Luma:
-				return apply_luma_rgb( inputNits );
-			case RGBMode_Independent:
-				return apply_independent_rgb( inputNits );
-			default:
-				return apply_max_rgb( inputNits );
-		}
 	}
 
 	inline float apply( float inputNits ) const
@@ -150,15 +148,6 @@ struct eetf_2390_t
 		// Re-apply mastering (source) transform
 		return e3 * m_sourcePQScale + m_sourceBlackPQ;
 	}
-
-	private:
-	RGBMode m_eMode = RGBMode_Max;
-	float m_sourceBlackPQ = 0.f;
-	float m_sourcePQScale = 0.f;
-	float m_invSourcePQScale = 0.f;
-	float m_minLumPQ = 0.f;
-	float m_maxLumPQ = 0.f;
-	float m_ks = 0.f;
 
 	// "Max RGB" approach, as defined in "Color Volume and Hue-Preservation in HDR Tone Mapping"
 	// Digital Object Identifier 10.5594/JMI.2020.2984046
@@ -185,6 +174,14 @@ struct eetf_2390_t
 		glm::vec3 outputPQ = { apply_pq( inputPQ.r ), apply_pq( inputPQ.g ), apply_pq( inputPQ.b ) };
 		return pq_to_nits( outputPQ );
 	}
+
+	private:
+	float m_sourceBlackPQ = 0.f;
+	float m_sourcePQScale = 0.f;
+	float m_invSourcePQScale = 0.f;
+	float m_minLumPQ = 0.f;
+	float m_maxLumPQ = 0.f;
+	float m_ks = 0.f;
 
 	inline float _eetf_2390_spline( float value, float ks, float maxLum ) const
 	{
@@ -269,12 +266,37 @@ struct colormapping_t
 displaycolorimetry_t lerp( const displaycolorimetry_t & a, const displaycolorimetry_t & b, float t );
 colormapping_t lerp( const colormapping_t & a, const colormapping_t & b, float t );
 
+// These values are directly exposed to steam
+// Values must be stable over time
+enum ETonemapOperator
+{
+	ETonemapOperator_None = 0,
+	ETonemapOperator_EETF2390_Luma = 1,
+	ETonemapOperator_EETF2390_Independent = 2,
+	ETonemapOperator_EETF2390_MaxChan = 3,
+};
+
 struct tonemapping_t
 {
 	bool bUseShaper = true;
 	float g22_luminance = 1.f; // what luminance should be applied for g22 EOTF conversions?
-	bool bUseEEtf2390 = false;
+	ETonemapOperator eOperator = ETonemapOperator_None;
 	eetf_2390_t eetf2390;
+
+	inline glm::vec3 apply( const glm::vec3 & inputNits ) const
+	{
+		switch ( eOperator )
+		{
+			case ETonemapOperator_EETF2390_Luma:
+				return eetf2390.apply_luma_rgb( inputNits );
+			case ETonemapOperator_EETF2390_Independent:
+				return eetf2390.apply_independent_rgb( inputNits );
+			case ETonemapOperator_EETF2390_MaxChan:
+				return eetf2390.apply_max_rgb( inputNits );
+			default:
+				return inputNits;
+		}
+	}
 };
 
 struct lut1d_t

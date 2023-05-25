@@ -365,6 +365,11 @@ struct gamescope_color_mgmt_t
 	float flHDRInputGain = 1.f;
 	float flSDRInputGain = 1.f;
 
+	// HDR Display Metadata Override & Tonemapping
+	ETonemapOperator hdrTonemapOperator = ETonemapOperator_None;
+	tonemap_info_t hdrTonemapDisplayMetadata = { 0 };
+	tonemap_info_t hdrTonemapSourceMetadata = { 0 };
+
 	// the native colorimetry capabilities of the display
 	displaycolorimetry_t displayColorimetry;
 	EOTF displayEOTF;

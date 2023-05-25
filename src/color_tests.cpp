@@ -209,7 +209,7 @@ void test_eetf2390_mono()
     printf("\n");
 
     eetf_2390_t eetf;
-    eetf.init_pq( sourceBlackPQ, sourceWhitePQ, destBlackPQ, destWhitePQ, eetf_2390_t::RGBMode_Max );
+    eetf.init_pq( sourceBlackPQ, sourceWhitePQ, destBlackPQ, destWhitePQ );
 
     for ( size_t nLevel=0; nLevel < 12; ++nLevel )
     {

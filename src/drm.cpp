@@ -562,7 +562,7 @@ static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm
 			{
 				uint32_t horiz = (get_bit_range(byte_desc_data[4], 7, 4) << 8) | byte_desc_data[2];
 				uint32_t vert  = (get_bit_range(byte_desc_data[7], 7, 4) << 8) | byte_desc_data[5];
-				drm_log.infof("[josh edid] Patching %ux%u -> %ux%u", horiz, vert, vert, horiz);
+				drm_log.infof("[patched edid] Patching %ux%u -> %ux%u", horiz, vert, vert, horiz);
 				std::swap(byte_desc_data[4], byte_desc_data[7]);
 				std::swap(byte_desc_data[2], byte_desc_data[5]);
 				break;
@@ -578,12 +578,17 @@ static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm
 	// (Allows for debugging undocked fallback without undocking/redocking)
 	if ( g_bForceHDRSupportDebug && !conn->metadata.supportsST2084 )
 	{
+		// TODO: Allow for override of min luminance
+		float flMaxPeakLuminance = g_ColorMgmt.pending.hdrTonemapDisplayMetadata.BIsValid() ? 
+			g_ColorMgmt.pending.hdrTonemapDisplayMetadata.flWhitePointNits :
+			g_ColorMgmt.pending.flInternalDisplayBrightness;
+		drm_log.infof("[edid] Patching HDR static metadata. max peak luminance/max frame avg luminance = %f nits", flMaxPeakLuminance );
 		const uint8_t new_hdr_static_metadata_block[]
 		{
 			(1 << HDMI_EOTF_SDR) | (1 << HDMI_EOTF_TRADITIONAL_HDR) | (1 << HDMI_EOTF_ST2084), /* supported eotfs */
 			1, /* type 1 */
-			encode_max_luminance(g_ColorMgmt.pending.flInternalDisplayBrightness), /* desired content max peak luminance */
-			encode_max_luminance(g_ColorMgmt.pending.flInternalDisplayBrightness), /* desired content max frame avg luminance */
+			encode_max_luminance(flMaxPeakLuminance), /* desired content max peak luminance */
+			encode_max_luminance(flMaxPeakLuminance), /* desired content max frame avg luminance */
 			0, /* desired content min luminance -- 0 is technically "undefined" */
 		};
 

@@ -121,7 +121,6 @@ extern float g_flHDRItmSdrNits;
 extern float g_flHDRItmTargetNits;
 
 extern std::atomic<uint64_t> g_lastVblank;
-static uint32_t g_uTonemapDebug = 0;
 
 uint64_t timespec_to_nanos(struct timespec& spec)
 {
@@ -220,37 +219,37 @@ update_color_mgmt()
 						// PQ -> G22  Leverage the display's native brightness
 						tonemapping.g22_luminance = g_ColorMgmt.pending.flInternalDisplayBrightness;
 
-						if ( g_uTonemapDebug == 1 )
-						{
-							tonemapping.bUseEEtf2390 = true;
-							tonemapping.eetf2390.init_nits( 0.001f, 5000.f, 0.01f, 1000.f, eetf_2390_t::RGBMode_Max );
-						}
-						else if ( g_uTonemapDebug == 2 )
-						{
-							tonemapping.bUseEEtf2390 = true;
-							tonemapping.eetf2390.init_nits( 0.001f, 2000.f, 0.01f, 1000.f, eetf_2390_t::RGBMode_Luma );
-						}
-						else if ( g_uTonemapDebug == 3 )
-						{
-							tonemapping.bUseEEtf2390 = true;
-							tonemapping.eetf2390.init_nits( 0.001f, 5000.f, 0.1f, 1000.f, eetf_2390_t::RGBMode_Luma );
-						}
-						else if ( g_uTonemapDebug == 4 )
-						{
-							tonemapping.bUseEEtf2390 = true;
-							tonemapping.eetf2390.init_nits( 0.0f, 5000.f, 0.1f, 1000.f, eetf_2390_t::RGBMode_Luma );
-						}
-						else if ( g_uTonemapDebug == 5 )
-						{
-							tonemapping.bUseEEtf2390 = true;
-							tonemapping.eetf2390.init_nits( 0.001f, 5000.f, 0.5f, 1000.f, eetf_2390_t::RGBMode_Luma );
-						}
+						// Determine the tonemapping parameters
+						// Use the external atoms if provided
+						tonemap_info_t source = g_ColorMgmt.pending.hdrTonemapSourceMetadata;
+						tonemap_info_t dest = g_ColorMgmt.pending.hdrTonemapDisplayMetadata;
+						// Otherwise, rely on the Vulkan source info and the EDID
+						// TODO: If source is invalid, use the provided metadata.
+						// TODO: If hdrTonemapDisplayMetadata is invalid, use the one provided by the display
 
-						// xwm_log.infof("PQ -> 2.2  -   tonemapping.g22_luminance %f", tonemapping.g22_luminance );
+						// Adjust the source brightness range by the requested HDR input gain
+						dest.flBlackPointNits /= flGain;
+						dest.flWhitePointNits /= flGain;
+
+						if ( source.BIsValid() && dest.BIsValid() )
+						{
+							tonemapping.eOperator = g_ColorMgmt.pending.hdrTonemapOperator;
+							tonemapping.eetf2390.init( source, g_ColorMgmt.pending.hdrTonemapDisplayMetadata );
+						}
+						else
+						{
+							tonemapping.eOperator = ETonemapOperator_None;
+						}
+						/*
+						xwm_log.infof("PQ -> 2.2  -   g22_luminance %f gain %f", tonemapping.g22_luminance, flGain );
+						xwm_log.infof("source %f %f", source.flBlackPointNits, source.flWhitePointNits );
+						xwm_log.infof("dest %f %f", dest.flBlackPointNits, dest.flWhitePointNits );
+						xwm_log.infof("operator %d", (int) tonemapping.eOperator );*/
 					}
 					else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
 					{
-						// PQ -> PQ. Better not matter what the g22 mult is
+						// PQ -> PQ passthrough (though this does apply gain)
+						// TODO: should we manipulate the output static metadata to reflect the gain factor?
 						tonemapping.g22_luminance = 1.f;
 						// xwm_log.infof("PQ -> PQ");
 					}
@@ -5067,17 +5066,43 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_Hard;
 		hasRepaint = true;
 	}
-	if ( ev->atom == ctx->atoms.gamescopeHDROnSDRTonemapOperator )
-	{
-		uint32_t tonemapOperator = get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDROnSDRTonemapOperator, 0 );
 
-		// For now, we only have two, so this is a flag.
-		bool reinhard = tonemapOperator == 1;
-		g_uCompositeDebug &= ~CompositeDebugFlag::Tonemap_Reinhard;
-		if (reinhard)
-			g_uCompositeDebug |= CompositeDebugFlag::Tonemap_Reinhard;
+	if ( ev->atom == ctx->atoms.gamescopeHDRTonemapOperator )
+	{
+		g_ColorMgmt.pending.hdrTonemapOperator = (ETonemapOperator) get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDRTonemapOperator, 0 );
 		hasRepaint = true;
 	}
+
+	if ( ev->atom == ctx->atoms.gamescopeHDRTonemapDisplayMetadata )
+	{
+		std::vector< uint32_t > user_vec;
+		if ( get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDRTonemapDisplayMetadata, user_vec ) && user_vec.size() >= 2 )
+		{
+			g_ColorMgmt.pending.hdrTonemapDisplayMetadata.flBlackPointNits = bit_cast<float>( user_vec[0] );
+			g_ColorMgmt.pending.hdrTonemapDisplayMetadata.flWhitePointNits = bit_cast<float>( user_vec[1] );
+		}
+		else
+		{
+			g_ColorMgmt.pending.hdrTonemapDisplayMetadata.reset();
+		}
+		hasRepaint = true;
+	}
+
+	if ( ev->atom == ctx->atoms.gamescopeHDRTonemapSourceMetadata )
+	{
+		std::vector< uint32_t > user_vec;
+		if ( get_prop( ctx, ctx->root, ctx->atoms.gamescopeHDRTonemapSourceMetadata, user_vec ) && user_vec.size() >= 2 )
+		{
+			g_ColorMgmt.pending.hdrTonemapSourceMetadata.flBlackPointNits = bit_cast<float>( user_vec[0] );
+			g_ColorMgmt.pending.hdrTonemapSourceMetadata.flWhitePointNits = bit_cast<float>( user_vec[1] );
+		}
+		else
+		{
+			g_ColorMgmt.pending.hdrTonemapSourceMetadata.reset();
+		}
+		hasRepaint = true;
+	}
+
 	if ( ev->atom == ctx->atoms.gamescopeSDROnHDRContentBrightness )
 	{
 		uint32_t val = get_prop( ctx, ctx->root, ctx->atoms.gamescopeSDROnHDRContentBrightness, 0 );
@@ -5183,12 +5208,6 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 
 		if ( set_color_nightmode( nightmode ) )
 			hasRepaint = true;
-	}
-	if ( ev->atom == ctx->atoms.gamescopeTonemapDebug )
-	{
-		g_uTonemapDebug = get_prop( ctx, ctx->root, ctx->atoms.gamescopeTonemapDebug, 0 );
-		g_ColorMgmt.pending.externalDirtyCtr++;
-		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeColorManagementDisable )
 	{
@@ -6384,7 +6403,6 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeDebugForceHDR10Output = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR10_PQ_OUTPUT", false );
 	ctx->atoms.gamescopeDebugForceHDRSupport = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_FORCE_HDR_SUPPORT", false );
 	ctx->atoms.gamescopeDebugHDRHeatmap = XInternAtom( ctx->dpy, "GAMESCOPE_DEBUG_HDR_HEATMAP", false );
-	ctx->atoms.gamescopeHDROnSDRTonemapOperator = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ON_SDR_TONEMAP_OPERATOR", false );
 	ctx->atoms.gamescopeHDROutputFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_OUTPUT_FEEDBACK", false );
 	ctx->atoms.gamescopeSDROnHDRContentBrightness = XInternAtom( ctx->dpy, "GAMESCOPE_SDR_ON_HDR_CONTENT_BRIGHTNESS", false );
 	ctx->atoms.gamescopeInternalDisplayBrightness = XInternAtom( ctx->dpy, "GAMESCOPE_INTERNAL_DISPLAY_BRIGHTNESS", false );
@@ -6395,7 +6413,9 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeHDRItmTargetNits = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ITM_TARGET_NITS", false );
 	ctx->atoms.gamescopeColorLookPQ = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_PQ", false );
 	ctx->atoms.gamescopeColorLookG22 = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_G22", false );
-	ctx->atoms.gamescopeTonemapDebug = XInternAtom( ctx->dpy, "GAMESCOPE_TONEMAP_DEBUG", false );
+	ctx->atoms.gamescopeHDRTonemapDisplayMetadata = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_TONEMAP_DISPLAY_METADATA", false );
+	ctx->atoms.gamescopeHDRTonemapSourceMetadata = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_TONEMAP_SOURCE_METADATA", false );
+	ctx->atoms.gamescopeHDRTonemapOperator = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_TONEMAP_OPERATOR", false );
 
 	ctx->atoms.gamescopeForceWindowsFullscreen = XInternAtom( ctx->dpy, "GAMESCOPE_FORCE_WINDOWS_FULLSCREEN", false );
 

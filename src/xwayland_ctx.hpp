@@ -175,7 +175,6 @@ struct xwayland_ctx_t
 		Atom gamescopeDebugForceHDRSupport;
 		Atom gamescopeDebugHDRHeatmap;
 		Atom gamescopeDebugHDRHeatmap_MSWCG;
-		Atom gamescopeHDROnSDRTonemapOperator;
 		Atom gamescopeHDROutputFeedback;
 		Atom gamescopeSDROnHDRContentBrightness;
 		Atom gamescopeInternalDisplayBrightness;
@@ -186,7 +185,9 @@ struct xwayland_ctx_t
 		Atom gamescopeHDRItmTargetNits;
 		Atom gamescopeColorLookPQ;
 		Atom gamescopeColorLookG22;
-		Atom gamescopeTonemapDebug;
+		Atom gamescopeHDRTonemapDisplayMetadata;
+		Atom gamescopeHDRTonemapSourceMetadata;
+		Atom gamescopeHDRTonemapOperator;
 
 		Atom gamescopeForceWindowsFullscreen;
 
