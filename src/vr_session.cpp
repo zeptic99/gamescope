@@ -31,6 +31,8 @@ struct OpenVRSession
     float flPhysicalWidth = 2.0f;
     float flPhysicalCurvature = 0.0f;
     float flPhysicalPreCurvePitch = 0.0f;
+    float flScrollSpeed = 8.0f;
+    float flScrollAccum[2] = { 0.0f, 0.0f };
     vr::VROverlayHandle_t hOverlay = vr::k_ulOverlayHandleInvalid;
     vr::VROverlayHandle_t hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
     struct wlserver_input_method *pIME = nullptr;
@@ -91,6 +93,8 @@ bool vr_init(int argc, char **argv)
 				    GetVR().flPhysicalCurvature = atof( optarg );
                 } else if (strcmp(opt_name, "vr-overlay-physical-pre-curve-pitch") == 0) {
 				    GetVR().flPhysicalPreCurvePitch = atof( optarg );
+                } else if (strcmp(opt_name, "vr-scroll-speed") == 0) {
+				    GetVR().flScrollSpeed = atof( optarg );
                 }
 				break;
 			case '?':
@@ -144,6 +148,7 @@ bool vrsession_init()
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_EnableControlBarKeyboard,	GetVR().bEnableControlBarKeyboard );
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_EnableControlBarClose,	GetVR().bEnableControlBarClose );
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_WantsModalBehavior,	    GetVR().bModal );
+    vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_SendVRSmoothScrollEvents, true );
     vrsession_update_touch_mode();
 
     vr::VROverlay()->SetOverlayWidthInMeters( GetVR().hOverlay,  GetVR().flPhysicalWidth );
@@ -311,6 +316,22 @@ static void vrsession_input_thread()
                         wlserver_touchdown( x, y, 0, timestamp );
                     else
                         wlserver_touchup( 0, timestamp );
+                    wlserver_unlock();
+                    break;
+                }
+
+                case vr::VREvent_ScrollSmooth:
+                {
+                    wlserver_lock();
+
+                    GetVR().flScrollAccum[0] += -vrEvent.data.scroll.xdelta * GetVR().flScrollSpeed;
+                    GetVR().flScrollAccum[1] += -vrEvent.data.scroll.ydelta * GetVR().flScrollSpeed;
+
+                    float dx, dy;
+                    GetVR().flScrollAccum[0] = modf( GetVR().flScrollAccum[0], &dx );
+                    GetVR().flScrollAccum[1] = modf( GetVR().flScrollAccum[1], &dy );
+
+                    wlserver_mousewheel( dx, dy, timestamp );
                     wlserver_unlock();
                     break;
                 }
