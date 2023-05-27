@@ -1550,9 +1550,11 @@ static void apply_touchscreen_orientation(double *x, double *y )
 	*y = ty;
 }
 
+bool g_bTrackpadTouchExternalDisplay = false;
+
 int get_effective_touch_mode()
 {
-	if (!BIsNested())
+	if (!BIsNested() && g_bTrackpadTouchExternalDisplay)
 	{
 		drm_screen_type screenType = drm_get_screen_type(&g_DRM);
 		if ( screenType == DRM_SCREEN_TYPE_EXTERNAL && g_nTouchClickMode == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
