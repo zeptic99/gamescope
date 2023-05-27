@@ -1518,7 +1518,8 @@ static void apply_touchscreen_orientation(double *x, double *y )
 	double tx = 0;
 	double ty = 0;
 
-	switch ( g_drmEffectiveOrientation )
+	// Use internal screen always for orientation purposes.
+	switch ( g_drmEffectiveOrientation[DRM_SCREEN_TYPE_INTERNAL] )
 	{
 		default:
 		case DRM_MODE_ROTATE_0:

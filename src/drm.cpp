@@ -54,7 +54,7 @@ bool g_bSupportsAsyncFlips = false;
 
 enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
-std::atomic<uint64_t> g_drmEffectiveOrientation(DRM_MODE_ROTATE_0);
+std::atomic<uint64_t> g_drmEffectiveOrientation[DRM_SCREEN_TYPE_COUNT]{ {DRM_MODE_ROTATE_0}, {DRM_MODE_ROTATE_0} };
 
 bool g_bForceDisableColorMgmt = false;
 
@@ -1797,22 +1797,22 @@ static void update_drm_effective_orientation(struct drm_t *drm, struct connector
 	drm_screen_type screenType = drm_get_screen_type(drm);
 	if ( screenType == DRM_SCREEN_TYPE_EXTERNAL )
 	{
-		g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+		g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_0;
 		return;
 	}
 	switch ( g_drmModeOrientation )
 	{
 		case PANEL_ORIENTATION_0:
-			g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+			g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_0;
 			break;
 		case PANEL_ORIENTATION_90:
-			g_drmEffectiveOrientation = DRM_MODE_ROTATE_90;
+			g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_90;
 			break;
 		case PANEL_ORIENTATION_180:
-			g_drmEffectiveOrientation = DRM_MODE_ROTATE_180;
+			g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_180;
 			break;
 		case PANEL_ORIENTATION_270:
-			g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
+			g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_270;
 			break;
 		case PANEL_ORIENTATION_AUTO:
 			if (conn && conn->props.count("panel orientation") > 0)
@@ -1821,25 +1821,25 @@ static void update_drm_effective_orientation(struct drm_t *drm, struct connector
 
 				if (strcmp(orientation, "Normal") == 0)
 				{
-					g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+					g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_0;
 				}
 				else if (strcmp(orientation, "Left Side Up") == 0)
 				{
-					g_drmEffectiveOrientation = DRM_MODE_ROTATE_90;
+					g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_90;
 				}
 				else if (strcmp(orientation, "Upside Down") == 0)
 				{
-					g_drmEffectiveOrientation = DRM_MODE_ROTATE_180;
+					g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_180;
 				}
 				else if (strcmp(orientation, "Right Side Up") == 0)
 				{
-					g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
+					g_drmEffectiveOrientation[screenType] = DRM_MODE_ROTATE_270;
 				}
 			}
 			else
 			{
 				// Auto-detect portait mode
-				g_drmEffectiveOrientation = mode->hdisplay < mode->vdisplay ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
+				g_drmEffectiveOrientation[screenType] = mode->hdisplay < mode->vdisplay ? DRM_MODE_ROTATE_270 : DRM_MODE_ROTATE_0;
 			}
 			break;
 	}
@@ -1850,6 +1850,8 @@ static int
 drm_prepare_basic( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 {
 	// Discard cases where our non-liftoff path is known to fail
+
+	drm_screen_type screenType = drm_get_screen_type(drm);
 
 	// It only supports one layer
 	if ( frameInfo->layerCount > 1 )
@@ -1869,7 +1871,7 @@ drm_prepare_basic( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 	drm->fbids_in_req.push_back( fb_id );
 
-	add_plane_property(req, drm->primary, "rotation", g_drmEffectiveOrientation);
+	add_plane_property(req, drm->primary, "rotation", g_drmEffectiveOrientation[screenType] );
 
 	add_plane_property(req, drm->primary, "FB_ID", fb_id);
 	add_plane_property(req, drm->primary, "CRTC_ID", drm->crtc->id);
@@ -2149,6 +2151,7 @@ bool g_bSinglePlaneOptimizations = true;
 static int
 drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, bool needs_modeset )
 {
+	drm_screen_type screenType = drm_get_screen_type(drm);
 	auto entry = FrameInfoToLiftoffStateCacheEntry( drm, frameInfo );
 
 	// If we are modesetting, reset the state cache, we might
@@ -2186,7 +2189,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_W", entry.layerState[i].srcW );
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_H", entry.layerState[i].srcH );
 
-			liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", g_drmEffectiveOrientation );
+			liftoff_layer_set_property( drm->lo_layers[ i ], "rotation", g_drmEffectiveOrientation[screenType] );
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_X", entry.layerState[i].crtcX);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "CRTC_Y", entry.layerState[i].crtcY);
@@ -2793,7 +2796,8 @@ static void drm_unset_mode( struct drm_t *drm )
 	if (g_nOutputRefresh == 0)
 		g_nOutputRefresh = 60;
 
-	g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+	g_drmEffectiveOrientation[DRM_SCREEN_TYPE_INTERNAL] = DRM_MODE_ROTATE_0;
+	g_drmEffectiveOrientation[DRM_SCREEN_TYPE_EXTERNAL] = DRM_MODE_ROTATE_0;
 	g_bRotated = false;
 }
 
@@ -2806,6 +2810,8 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	if (drmModeCreatePropertyBlob(drm->fd, mode, sizeof(*mode), &mode_id) != 0)
 		return false;
 
+	drm_screen_type screenType = drm_get_screen_type(drm);
+
 	drm_log.infof("selecting mode %dx%d@%uHz", mode->hdisplay, mode->vdisplay, mode->vrefresh);
 
 	drm->pending.mode_id = mode_id;
@@ -2815,7 +2821,7 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 
 	update_drm_effective_orientation(drm, drm->connector, mode);
 
-	switch ( g_drmEffectiveOrientation )
+	switch ( g_drmEffectiveOrientation[screenType] )
 	{
 	case DRM_MODE_ROTATE_0:
 	case DRM_MODE_ROTATE_180:

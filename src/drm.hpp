@@ -293,7 +293,7 @@ enum g_panel_orientation {
 extern enum drm_mode_generation g_drmModeGeneration;
 extern enum g_panel_orientation g_drmModeOrientation;
 
-extern std::atomic<uint64_t> g_drmEffectiveOrientation; // DRM_MODE_ROTATE_*
+extern std::atomic<uint64_t> g_drmEffectiveOrientation[DRM_SCREEN_TYPE_COUNT]; // DRM_MODE_ROTATE_*
 
 extern bool g_bForceDisableColorMgmt;
 
