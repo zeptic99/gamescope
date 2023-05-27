@@ -3652,7 +3652,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 			// For ycbcr, we operate on 2 pixels at a time, so use the half-extent.
 			const int dispatchSize = ycbcr ? pixelsPerGroup * 2 : pixelsPerGroup;
 
-			cmdBuffer->dispatch(div_roundup(pScreenshotTexture->width(), dispatchSize), div_roundup(pScreenshotTexture->height(), 1));
+			cmdBuffer->dispatch(div_roundup(pScreenshotTexture->width(), dispatchSize), div_roundup(pScreenshotTexture->height(), dispatchSize));
 		}
 	}
 
