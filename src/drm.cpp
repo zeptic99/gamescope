@@ -1890,8 +1890,11 @@ static void update_drm_effective_orientations(struct drm_t *drm, struct connecto
 			}
 		}
 
-		const drmModeModeInfo *default_internal_mode = find_mode(internal_conn->connector, 0, 0, 0);
-		update_drm_effective_orientation(drm, internal_conn, default_internal_mode);
+		if (internal_conn)
+		{
+			const drmModeModeInfo *default_internal_mode = find_mode(internal_conn->connector, 0, 0, 0);
+			update_drm_effective_orientation(drm, internal_conn, default_internal_mode);
+		}
 	}
 }
 
