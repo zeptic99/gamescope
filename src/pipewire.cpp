@@ -358,7 +358,7 @@ static void stream_handle_param_changed(void *data, uint32_t id, const struct sp
 	const struct spa_pod *buffers_param =
 		(const struct spa_pod *) spa_pod_builder_add_object(&builder,
 		SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
-		SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(buffers, 1, 32),
+		SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(buffers, 1, 8),
 		SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
 		SPA_PARAM_BUFFERS_size, SPA_POD_Int(shm_size),
 		SPA_PARAM_BUFFERS_stride, SPA_POD_Int(state->shm_stride),
