@@ -1,5 +1,6 @@
 #include "vr_session.hpp"
 #include "main.hpp"
+#include "openvr.h"
 #include "rendervulkan.hpp"
 #include "steamcompmgr.hpp"
 #include "wlserver.hpp"
@@ -149,6 +150,7 @@ bool vrsession_init()
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_EnableControlBarClose,	GetVR().bEnableControlBarClose );
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_WantsModalBehavior,	    GetVR().bModal );
     vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_SendVRSmoothScrollEvents, true );
+    vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_VisibleInDashboard,       false );
     vrsession_update_touch_mode();
 
     vr::VROverlay()->SetOverlayWidthInMeters( GetVR().hOverlay,  GetVR().flPhysicalWidth );
@@ -181,6 +183,11 @@ std::atomic<bool> g_bOverlayVisible = { false };
 bool vrsession_visible()
 {
     return g_bOverlayVisible.load();
+}
+
+void vrsession_set_dashboard_visible( bool bVisible )
+{
+    vr::VROverlay()->SetOverlayFlag( GetVR().hOverlay, vr::VROverlayFlags_VisibleInDashboard, bVisible );
 }
 
 void vrsession_wait_until_visible()

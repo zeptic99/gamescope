@@ -27,3 +27,5 @@ void vrsession_title( const char *title, std::shared_ptr<std::vector<uint32_t>> 
 bool vrsession_ime_init();
 
 void vrsession_steam_mode( bool bSteamMode );
+
+void vrsession_set_dashboard_visible( bool bVisible );

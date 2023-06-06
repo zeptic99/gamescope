@@ -3653,7 +3653,19 @@ determine_and_apply_focus()
 		}
 	}
 
-	sdlwindow_visible( global_focus.focusWindow != nullptr );
+#if HAVE_OPENVR
+	if ( BIsVRSession() )
+	{
+		vrsession_set_dashboard_visible( global_focus.focusWindow != nullptr );
+	}
+	else
+#endif
+	{
+		if ( !BIsVRSession() && BIsNested() )
+		{
+			sdlwindow_visible( global_focus.focusWindow != nullptr );
+		}
+	}
 
 	// Some games such as Disgaea PC (405900) don't take controller input until
 	// the window is first clicked on despite it having focus.
