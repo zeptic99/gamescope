@@ -3339,7 +3339,7 @@ struct BlitPushData_t
 
 	explicit BlitPushData_t(float blit_scale) {
 		scale[0] = { blit_scale, blit_scale };
-		offset[0] = { 0.0f, 0.0f };
+		offset[0] = { 0.5f, 0.5f };
 		opacity[0] = 1.0f;
 		borderMask = 0;
 		frameId = s_frameId;
