@@ -3475,7 +3475,29 @@ void bind_all_layers(CVulkanCmdBuffer* cmdBuffer, const struct FrameInfo_t *fram
 	}
 }
 
-bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture )
+bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture )
+{
+	auto cmdBuffer = g_device.commandBuffer();
+
+	for (uint32_t i = 0; i < EOTF_Count; i++)
+		cmdBuffer->bindColorMgmtLuts(i, frameInfo->shaperLut[i], frameInfo->lut3D[i]);
+
+	cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, frameInfo->layerCount, frameInfo->ycbcrMask(), 0u, frameInfo->colorspaceMask(), EOTF_Gamma22 ));
+	bind_all_layers(cmdBuffer.get(), frameInfo);
+	cmdBuffer->bindTarget(pScreenshotTexture);
+	cmdBuffer->pushConstants<BlitPushData_t>(frameInfo);
+
+	const int pixelsPerGroup = 8;
+
+	cmdBuffer->dispatch(div_roundup(currentOutputWidth, pixelsPerGroup), div_roundup(currentOutputHeight, pixelsPerGroup));
+
+	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
+	g_device.wait(sequence);
+
+	return true;
+}
+
+bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture )
 {
 	auto compositeImage = g_output.outputImages[ g_output.nOutImage ];
 
@@ -3613,21 +3635,21 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 		cmdBuffer->dispatch(div_roundup(currentOutputWidth, pixelsPerGroup), div_roundup(currentOutputHeight, pixelsPerGroup));
 	}
 
-	if ( pScreenshotTexture != nullptr )
+	if ( pPipewireTexture != nullptr )
 	{
-		if (compositeImage->format() == pScreenshotTexture->format() &&
-			compositeImage->width() == pScreenshotTexture->width() &&
-		    compositeImage->height() == pScreenshotTexture->height()) {
-			cmdBuffer->copyImage(compositeImage, pScreenshotTexture);
+		if (compositeImage->format() == pPipewireTexture->format() &&
+			compositeImage->width() == pPipewireTexture->width() &&
+		    compositeImage->height() == pPipewireTexture->height()) {
+			cmdBuffer->copyImage(compositeImage, pPipewireTexture);
 		} else {
-			const bool ycbcr = pScreenshotTexture->isYcbcr();
+			const bool ycbcr = pPipewireTexture->isYcbcr();
 
-			float scale = (float)compositeImage->width() / pScreenshotTexture->width();
+			float scale = (float)compositeImage->width() / pPipewireTexture->width();
 			if ( ycbcr )
 			{
 				CaptureConvertBlitData_t constants( scale, colorspace_to_conversion_from_srgb_matrix( compositeImage->streamColorspace() ) );
-				constants.halfExtent[0] = pScreenshotTexture->width() / 2.0f;
-				constants.halfExtent[1] = pScreenshotTexture->height() / 2.0f;
+				constants.halfExtent[0] = pPipewireTexture->width() / 2.0f;
+				constants.halfExtent[1] = pPipewireTexture->height() / 2.0f;
 				cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);
 			}
 			else
@@ -3648,14 +3670,14 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 			{
 				cmdBuffer->bindTexture(i, nullptr);
 			}
-			cmdBuffer->bindTarget(pScreenshotTexture);
+			cmdBuffer->bindTarget(pPipewireTexture);
 
 			const int pixelsPerGroup = 8;
 
 			// For ycbcr, we operate on 2 pixels at a time, so use the half-extent.
 			const int dispatchSize = ycbcr ? pixelsPerGroup * 2 : pixelsPerGroup;
 
-			cmdBuffer->dispatch(div_roundup(pScreenshotTexture->width(), dispatchSize), div_roundup(pScreenshotTexture->height(), dispatchSize));
+			cmdBuffer->dispatch(div_roundup(pPipewireTexture->width(), dispatchSize), div_roundup(pPipewireTexture->height(), dispatchSize));
 		}
 	}
 

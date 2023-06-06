@@ -110,7 +110,11 @@ gamescope_color_mgmt_tracker_t g_ColorMgmt{};
 
 static gamescope_color_mgmt_luts g_ColorMgmtLutsOverride[ EOTF_Count ];
 static lut3d_t g_ColorMgmtLooks[ EOTF_Count ];
+
+
 gamescope_color_mgmt_luts g_ColorMgmtLuts[ EOTF_Count ];
+
+gamescope_color_mgmt_luts g_ScreenshotColorMgmtLuts[ EOTF_Count ];
 
 static lut1d_t g_tmpLut1d;
 static lut3d_t g_tmpLut3d;
@@ -127,8 +131,144 @@ uint64_t timespec_to_nanos(struct timespec& spec)
 	return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
 }
 
+static const gamescope_color_mgmt_t k_ScreenshotColorMgmt =
+{
+	.enabled = true,
+	.displayColorimetry = displaycolorimetry_709,
+	.displayEOTF = EOTF_Gamma22,
+	.outputEncodingColorimetry = displaycolorimetry_709,
+	.outputEncodingEOTF = EOTF_Gamma22,
+};
+
 //#define COLOR_MGMT_MICROBENCH
 // sudo cpupower frequency-set --governor performance
+
+static void
+create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_color_mgmt_luts outColorMgmtLuts[ EOTF_Count ])
+{
+	const displaycolorimetry_t& displayColorimetry = newColorMgmt.displayColorimetry;
+	const displaycolorimetry_t& outputEncodingColorimetry = newColorMgmt.outputEncodingColorimetry;
+
+	for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
+	{
+		if (!outColorMgmtLuts[nInputEOTF].vk_lut1d)
+			outColorMgmtLuts[nInputEOTF].vk_lut1d = vulkan_create_1d_lut(s_nLutSize1d);
+
+		if (!outColorMgmtLuts[nInputEOTF].vk_lut3d)
+			outColorMgmtLuts[nInputEOTF].vk_lut3d = vulkan_create_3d_lut(s_nLutEdgeSize3d, s_nLutEdgeSize3d, s_nLutEdgeSize3d);
+
+		if ( g_ColorMgmtLutsOverride[nInputEOTF].HasLuts() )
+		{
+			memcpy(g_ColorMgmtLuts[nInputEOTF].lut1d, g_ColorMgmtLutsOverride[nInputEOTF].lut1d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut1d));
+			memcpy(g_ColorMgmtLuts[nInputEOTF].lut3d, g_ColorMgmtLutsOverride[nInputEOTF].lut3d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut3d));
+		}
+		else
+		{
+			displaycolorimetry_t inputColorimetry{};
+			colormapping_t colorMapping{};
+
+			tonemapping_t tonemapping{};
+			tonemapping.bUseShaper = true;
+
+			EOTF inputEOTF = static_cast<EOTF>( nInputEOTF );
+			float flGain = 1.f;
+			lut3d_t * pLook = g_ColorMgmtLooks[nInputEOTF].lutEdgeSize > 0 ? &g_ColorMgmtLooks[nInputEOTF] : nullptr;
+
+			if ( inputEOTF == EOTF_Gamma22 )
+			{
+				flGain = newColorMgmt.flSDRInputGain;
+				if ( newColorMgmt.outputEncodingEOTF == EOTF_Gamma22 )
+				{
+					// G22 -> G22. Does not matter what the g22 mult is
+					tonemapping.g22_luminance = 1.f;
+					// xwm_log.infof("G22 -> G22");
+				}
+				else if ( newColorMgmt.outputEncodingEOTF == EOTF_PQ )
+				{
+					// G22 -> PQ. SDR content going on an HDR output
+					tonemapping.g22_luminance = newColorMgmt.flSDROnHDRBrightness;
+					// xwm_log.infof("G22 -> PQ");
+				}
+
+				// The final display colorimetry is used to build the output mapping, as we want a gamut-aware handling
+				// for sdrGamutWideness indepdendent of the output encoding (for SDR data), and when mapping SDR -> PQ output
+				// we only want to utilize a portion of the gamut the actual display can reproduce
+				buildSDRColorimetry( &inputColorimetry, &colorMapping, newColorMgmt.sdrGamutWideness, displayColorimetry );
+			}
+			else if ( inputEOTF == EOTF_PQ )
+			{
+				flGain = newColorMgmt.flHDRInputGain;
+				if ( newColorMgmt.outputEncodingEOTF == EOTF_Gamma22 )
+				{
+					// PQ -> G22  Leverage the display's native brightness
+					tonemapping.g22_luminance = newColorMgmt.flInternalDisplayBrightness;
+
+					// Determine the tonemapping parameters
+					// Use the external atoms if provided
+					tonemap_info_t source = newColorMgmt.hdrTonemapSourceMetadata;
+					tonemap_info_t dest = newColorMgmt.hdrTonemapDisplayMetadata;
+					// Otherwise, rely on the Vulkan source info and the EDID
+					// TODO: If source is invalid, use the provided metadata.
+					// TODO: If hdrTonemapDisplayMetadata is invalid, use the one provided by the display
+
+					// Adjust the source brightness range by the requested HDR input gain
+					dest.flBlackPointNits /= flGain;
+					dest.flWhitePointNits /= flGain;
+
+					if ( source.BIsValid() && dest.BIsValid() )
+					{
+						tonemapping.eOperator = newColorMgmt.hdrTonemapOperator;
+						tonemapping.eetf2390.init( source, newColorMgmt.hdrTonemapDisplayMetadata );
+					}
+					else
+					{
+						tonemapping.eOperator = ETonemapOperator_None;
+					}
+					/*
+					xwm_log.infof("PQ -> 2.2  -   g22_luminance %f gain %f", tonemapping.g22_luminance, flGain );
+					xwm_log.infof("source %f %f", source.flBlackPointNits, source.flWhitePointNits );
+					xwm_log.infof("dest %f %f", dest.flBlackPointNits, dest.flWhitePointNits );
+					xwm_log.infof("operator %d", (int) tonemapping.eOperator );*/
+				}
+				else if ( newColorMgmt.outputEncodingEOTF == EOTF_PQ )
+				{
+					// PQ -> PQ passthrough (though this does apply gain)
+					// TODO: should we manipulate the output static metadata to reflect the gain factor?
+					tonemapping.g22_luminance = 1.f;
+					// xwm_log.infof("PQ -> PQ");
+				}
+
+				buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
+			}
+
+			calcColorTransform( &g_tmpLut1d, s_nLutSize1d, &g_tmpLut3d, s_nLutEdgeSize3d, inputColorimetry, inputEOTF,
+				outputEncodingColorimetry, newColorMgmt.outputEncodingEOTF,
+				colorMapping, newColorMgmt.nightmode, tonemapping, pLook, flGain );
+
+			// Create quantized output luts
+			for ( size_t i=0, end = g_tmpLut1d.dataR.size(); i<end; ++i )
+			{
+				outColorMgmtLuts[nInputEOTF].lut1d[4*i+0] = drm_quantize_lut_value( g_tmpLut1d.dataR[i] );
+				outColorMgmtLuts[nInputEOTF].lut1d[4*i+1] = drm_quantize_lut_value( g_tmpLut1d.dataG[i] );
+				outColorMgmtLuts[nInputEOTF].lut1d[4*i+2] = drm_quantize_lut_value( g_tmpLut1d.dataB[i] );
+				outColorMgmtLuts[nInputEOTF].lut1d[4*i+3] = 0;
+			}
+
+			for ( size_t i=0, end = g_tmpLut3d.data.size(); i<end; ++i )
+			{
+				outColorMgmtLuts[nInputEOTF].lut3d[4*i+0] = drm_quantize_lut_value( g_tmpLut3d.data[i].r );
+				outColorMgmtLuts[nInputEOTF].lut3d[4*i+1] = drm_quantize_lut_value( g_tmpLut3d.data[i].g );
+				outColorMgmtLuts[nInputEOTF].lut3d[4*i+2] = drm_quantize_lut_value( g_tmpLut3d.data[i].b );
+				outColorMgmtLuts[nInputEOTF].lut3d[4*i+3] = 0;
+			}
+		}
+
+		outColorMgmtLuts[nInputEOTF].bHasLut1D = true;
+		outColorMgmtLuts[nInputEOTF].bHasLut3D = true;
+
+		vulkan_update_luts(outColorMgmtLuts[nInputEOTF].vk_lut1d, outColorMgmtLuts[nInputEOTF].vk_lut3d, outColorMgmtLuts[nInputEOTF].lut1d, outColorMgmtLuts[nInputEOTF].lut3d);
+	}
+}
 
 static void
 update_color_mgmt()
@@ -162,128 +302,7 @@ update_color_mgmt()
 
 	if (g_ColorMgmt.pending.enabled)
 	{
-		const displaycolorimetry_t& displayColorimetry = g_ColorMgmt.pending.displayColorimetry;
-		const displaycolorimetry_t& outputEncodingColorimetry = g_ColorMgmt.pending.outputEncodingColorimetry;
-
-		for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
-		{
-			if (!g_ColorMgmtLuts[nInputEOTF].vk_lut1d)
-				g_ColorMgmtLuts[nInputEOTF].vk_lut1d = vulkan_create_1d_lut(s_nLutSize1d);
-
-			if (!g_ColorMgmtLuts[nInputEOTF].vk_lut3d)
-				g_ColorMgmtLuts[nInputEOTF].vk_lut3d = vulkan_create_3d_lut(s_nLutEdgeSize3d, s_nLutEdgeSize3d, s_nLutEdgeSize3d);
-
-			if ( g_ColorMgmtLutsOverride[nInputEOTF].HasLuts() )
-			{
-				memcpy(g_ColorMgmtLuts[nInputEOTF].lut1d, g_ColorMgmtLutsOverride[nInputEOTF].lut1d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut1d));
-				memcpy(g_ColorMgmtLuts[nInputEOTF].lut3d, g_ColorMgmtLutsOverride[nInputEOTF].lut3d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut3d));
-			}
-			else
-			{
-				displaycolorimetry_t inputColorimetry{};
-				colormapping_t colorMapping{};
-
-				tonemapping_t tonemapping{};
-				tonemapping.bUseShaper = true;
-
-				EOTF inputEOTF = static_cast<EOTF>( nInputEOTF );
-				float flGain = 1.f;
-				lut3d_t * pLook = g_ColorMgmtLooks[nInputEOTF].lutEdgeSize > 0 ? &g_ColorMgmtLooks[nInputEOTF] : nullptr;
-
-				if ( inputEOTF == EOTF_Gamma22 )
-				{
-					flGain = g_ColorMgmt.pending.flSDRInputGain;
-					if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 )
-					{
-						// G22 -> G22. Does not matter what the g22 mult is
-						tonemapping.g22_luminance = 1.f;
-						// xwm_log.infof("G22 -> G22");
-					}
-					else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
-					{
-						// G22 -> PQ. SDR content going on an HDR output
-						tonemapping.g22_luminance = g_ColorMgmt.pending.flSDROnHDRBrightness;
-						// xwm_log.infof("G22 -> PQ");
-					}
-
-					// The final display colorimetry is used to build the output mapping, as we want a gamut-aware handling
-					// for sdrGamutWideness indepdendent of the output encoding (for SDR data), and when mapping SDR -> PQ output
-					// we only want to utilize a portion of the gamut the actual display can reproduce
-					buildSDRColorimetry( &inputColorimetry, &colorMapping, g_ColorMgmt.pending.sdrGamutWideness, displayColorimetry );
-				}
-				else if ( inputEOTF == EOTF_PQ )
-				{
-					flGain = g_ColorMgmt.pending.flHDRInputGain;
-					if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 )
-					{
-						// PQ -> G22  Leverage the display's native brightness
-						tonemapping.g22_luminance = g_ColorMgmt.pending.flInternalDisplayBrightness;
-
-						// Determine the tonemapping parameters
-						// Use the external atoms if provided
-						tonemap_info_t source = g_ColorMgmt.pending.hdrTonemapSourceMetadata;
-						tonemap_info_t dest = g_ColorMgmt.pending.hdrTonemapDisplayMetadata;
-						// Otherwise, rely on the Vulkan source info and the EDID
-						// TODO: If source is invalid, use the provided metadata.
-						// TODO: If hdrTonemapDisplayMetadata is invalid, use the one provided by the display
-
-						// Adjust the source brightness range by the requested HDR input gain
-						dest.flBlackPointNits /= flGain;
-						dest.flWhitePointNits /= flGain;
-
-						if ( source.BIsValid() && dest.BIsValid() )
-						{
-							tonemapping.eOperator = g_ColorMgmt.pending.hdrTonemapOperator;
-							tonemapping.eetf2390.init( source, g_ColorMgmt.pending.hdrTonemapDisplayMetadata );
-						}
-						else
-						{
-							tonemapping.eOperator = ETonemapOperator_None;
-						}
-						/*
-						xwm_log.infof("PQ -> 2.2  -   g22_luminance %f gain %f", tonemapping.g22_luminance, flGain );
-						xwm_log.infof("source %f %f", source.flBlackPointNits, source.flWhitePointNits );
-						xwm_log.infof("dest %f %f", dest.flBlackPointNits, dest.flWhitePointNits );
-						xwm_log.infof("operator %d", (int) tonemapping.eOperator );*/
-					}
-					else if ( g_ColorMgmt.pending.outputEncodingEOTF == EOTF_PQ )
-					{
-						// PQ -> PQ passthrough (though this does apply gain)
-						// TODO: should we manipulate the output static metadata to reflect the gain factor?
-						tonemapping.g22_luminance = 1.f;
-						// xwm_log.infof("PQ -> PQ");
-					}
-
-					buildPQColorimetry( &inputColorimetry, &colorMapping, displayColorimetry );
-				}
-
-				calcColorTransform( &g_tmpLut1d, s_nLutSize1d, &g_tmpLut3d, s_nLutEdgeSize3d, inputColorimetry, inputEOTF,
-					outputEncodingColorimetry, g_ColorMgmt.pending.outputEncodingEOTF,
-					colorMapping, g_ColorMgmt.pending.nightmode, tonemapping, pLook, flGain );
-
-				// Create quantized output luts
-				for ( size_t i=0, end = g_tmpLut1d.dataR.size(); i<end; ++i )
-				{
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+0] = drm_quantize_lut_value( g_tmpLut1d.dataR[i] );
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+1] = drm_quantize_lut_value( g_tmpLut1d.dataG[i] );
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+2] = drm_quantize_lut_value( g_tmpLut1d.dataB[i] );
-					g_ColorMgmtLuts[nInputEOTF].lut1d[4*i+3] = 0;
-				}
-
-				for ( size_t i=0, end = g_tmpLut3d.data.size(); i<end; ++i )
-				{
-					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+0] = drm_quantize_lut_value( g_tmpLut3d.data[i].r );
-					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+1] = drm_quantize_lut_value( g_tmpLut3d.data[i].g );
-					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+2] = drm_quantize_lut_value( g_tmpLut3d.data[i].b );
-					g_ColorMgmtLuts[nInputEOTF].lut3d[4*i+3] = 0;
-				}
-			}
-
-			g_ColorMgmtLuts[nInputEOTF].bHasLut1D = true;
-			g_ColorMgmtLuts[nInputEOTF].bHasLut3D = true;
-
-			vulkan_update_luts(g_ColorMgmtLuts[nInputEOTF].vk_lut1d, g_ColorMgmtLuts[nInputEOTF].vk_lut3d, g_ColorMgmtLuts[nInputEOTF].lut1d, g_ColorMgmtLuts[nInputEOTF].lut3d);
-		}
+		create_color_mgmt_luts(g_ColorMgmt.pending, g_ColorMgmtLuts);
 	}
 	else
 	{
@@ -317,6 +336,12 @@ update_color_mgmt()
 
 	g_ColorMgmt.serial = ++s_NextColorMgmtSerial;
 	g_ColorMgmt.current = g_ColorMgmt.pending;
+}
+
+static void
+update_screenshot_color_mgmt()
+{
+	create_color_mgmt_luts(k_ScreenshotColorMgmt, g_ScreenshotColorMgmtLuts);
 }
 
 bool set_color_sdr_gamut_wideness( float flVal )
@@ -2360,8 +2385,6 @@ paint_all(bool async)
 	pw_buffer = dequeue_pipewire_buffer();
 #endif
 
-	bool bCapture = takeScreenshot || pw_buffer != nullptr;
-
 	int nDynamicRefresh = g_nDynamicRefreshRate[drm_get_screen_type( &g_DRM )];
 
 	int nTargetRefresh = nDynamicRefresh && steamcompmgr_window_should_limit_fps( global_focus.focusWindow )// && !global_focus.overlayWindow
@@ -2381,7 +2404,7 @@ paint_all(bool async)
 
 	bool bNeedsComposite = BIsNested();
 	bNeedsComposite |= alwaysComposite;
-	bNeedsComposite |= bCapture;
+	bNeedsComposite |= pw_buffer != nullptr;
 	bNeedsComposite |= bWasFirstFrame;
 	bNeedsComposite |= frameInfo.useFSRLayer0;
 	bNeedsComposite |= frameInfo.useNISLayer0;
@@ -2421,25 +2444,14 @@ paint_all(bool async)
 
 	if ( bDoComposite == true )
 	{
-		std::shared_ptr<CVulkanTexture> pCaptureTexture = nullptr;
+		std::shared_ptr<CVulkanTexture> pPipewireTexture = nullptr;
 #if HAVE_PIPEWIRE
 		if ( pw_buffer != nullptr )
 		{
-			pCaptureTexture = pw_buffer->texture;
+			pPipewireTexture = pw_buffer->texture;
 		}
 #endif
-		constexpr bool bHackForceNV12DumpScreenshot = false;
-
-		uint32_t drmCaptureFormat = bHackForceNV12DumpScreenshot
-			? DRM_FORMAT_NV12
-			: DRM_FORMAT_XRGB8888;
-
-		if ( bCapture && pCaptureTexture == nullptr )
-		{
-			pCaptureTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat);
-		}
-
-		bool bResult = vulkan_composite( &frameInfo, pCaptureTexture );
+		bool bResult = vulkan_composite( &frameInfo, pPipewireTexture );
 
 		if ( bResult != true )
 		{
@@ -2465,10 +2477,11 @@ paint_all(bool async)
 		}
 		else
 		{
-			frameInfo = {};
-			frameInfo.applyOutputColorMgmt = false;
-			frameInfo.layerCount = 1;
-			FrameInfo_t::Layer_t *layer = &frameInfo.layers[ 0 ];
+			struct FrameInfo_t compositeFrameInfo = {};
+			compositeFrameInfo = {};
+			compositeFrameInfo.applyOutputColorMgmt = false;
+			compositeFrameInfo.layerCount = 1;
+			FrameInfo_t::Layer_t *layer = &compositeFrameInfo.layers[ 0 ];
 			layer->scale.x = 1.0;
 			layer->scale.y = 1.0;
 			layer->opacity = 1.0;
@@ -2480,7 +2493,7 @@ paint_all(bool async)
 			layer->linearFilter = false;
 			layer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
-			int ret = drm_prepare( &g_DRM, async, &frameInfo );
+			int ret = drm_prepare( &g_DRM, async, &compositeFrameInfo );
 
 			// Happens when we're VT-switched away
 			if ( ret == -EACCES )
@@ -2499,7 +2512,7 @@ paint_all(bool async)
 				drm_rollback( &g_DRM );
 
 				// Try once again to in case we need to fall back to another mode.
-				ret = drm_prepare( &g_DRM, async, &frameInfo );
+				ret = drm_prepare( &g_DRM, async, &compositeFrameInfo );
 
 				// Happens when we're VT-switched away
 				if ( ret == -EACCES )
@@ -2521,96 +2534,7 @@ paint_all(bool async)
 				}
 			}
 
-			drm_commit( &g_DRM, &frameInfo );
-		}
-
-		if ( takeScreenshot )
-		{
-			assert( pCaptureTexture != nullptr );
-
-			std::thread screenshotThread = std::thread([=] {
-				pthread_setname_np( pthread_self(), "gamescope-scrsh" );
-
-				const uint8_t *mappedData = pCaptureTexture->mappedData();
-
-				if (pCaptureTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
-				{
-					// Make our own copy of the image to remove the alpha channel.
-					auto imageData = std::vector<uint8_t>(currentOutputWidth * currentOutputHeight * 4);
-					const uint32_t comp = 4;
-					const uint32_t pitch = currentOutputWidth * comp;
-					for (uint32_t y = 0; y < currentOutputHeight; y++)
-					{
-						for (uint32_t x = 0; x < currentOutputWidth; x++)
-						{
-							// BGR...
-							imageData[y * pitch + x * comp + 0] = mappedData[y * pCaptureTexture->rowPitch() + x * comp + 2];
-							imageData[y * pitch + x * comp + 1] = mappedData[y * pCaptureTexture->rowPitch() + x * comp + 1];
-							imageData[y * pitch + x * comp + 2] = mappedData[y * pCaptureTexture->rowPitch() + x * comp + 0];
-							imageData[y * pitch + x * comp + 3] = 255;
-						}
-					}
-
-					char pTimeBuffer[1024] = "/tmp/gamescope.png";
-
-					if ( !propertyRequestedScreenshot )
-					{
-						time_t currentTime = time(0);
-						struct tm *localTime = localtime( &currentTime );
-						strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.png", localTime );
-					}
-
-					if ( stbi_write_png(pTimeBuffer, currentOutputWidth, currentOutputHeight, 4, imageData.data(), pitch) )
-					{
-						xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
-					}
-					else
-					{
-						xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
-					}
-				}
-				else if (pCaptureTexture->format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM)
-				{
-					char pTimeBuffer[1024] = "/tmp/gamescope.raw";
-
-					if ( !propertyRequestedScreenshot )
-					{
-						time_t currentTime = time(0);
-						struct tm *localTime = localtime( &currentTime );
-						strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.raw", localTime );
-					}
-
-					FILE *file = fopen(pTimeBuffer, "wb");
-					if (file)
-					{
-						fwrite(mappedData, 1, pCaptureTexture->totalSize(), file );
-						fclose(file);
-
-						char cmd[4096];
-						sprintf(cmd, "ffmpeg -f rawvideo -pixel_format nv12 -video_size %dx%d -i %s %s_encoded.png", pCaptureTexture->width(), pCaptureTexture->height(), pTimeBuffer, pTimeBuffer);
-
-						int ret = system(cmd);
-
-						/* Above call may fail, ffmpeg returns 0 on success */
-						if (ret) {
-							xwm_log.infof("Ffmpeg call return status %i", ret);
-							xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
-						} else {
-							xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
-						}
-					}
-					else
-					{
-						xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
-					}
-				}
-
-				XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeScreenShotAtom );
-			});
-
-			screenshotThread.detach();
-
-			takeScreenshot = false;
+			drm_commit( &g_DRM, &compositeFrameInfo );
 		}
 
 #if HAVE_PIPEWIRE
@@ -2627,6 +2551,126 @@ paint_all(bool async)
 		assert( BIsNested() == false );
 
 		drm_commit( &g_DRM, &frameInfo );
+	}
+
+	if ( takeScreenshot )
+	{
+		constexpr bool bHackForceNV12DumpScreenshot = false;
+
+		uint32_t drmCaptureFormat = bHackForceNV12DumpScreenshot
+			? DRM_FORMAT_NV12
+			: DRM_FORMAT_XRGB8888;
+
+		std::shared_ptr<CVulkanTexture> pScreenshotTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat);
+
+		assert( pScreenshotTexture != nullptr );
+
+		// Basically no color mgmt applied for screenshots. (aside from being able to handle HDR content with LUTs)
+		for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
+		{
+			frameInfo.lut3D[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut3d;
+			frameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
+		}
+		// Remove everything but base planes from the screenshot.
+		for (int i = 0; i < frameInfo.layerCount; i++)
+		{
+			if (frameInfo.layers[i].zpos >= (int)g_zposExternalOverlay)
+			{
+				frameInfo.layerCount = i;
+				break;
+			}
+		}
+
+		bool bResult = vulkan_screenshot( &frameInfo, pScreenshotTexture );
+		if ( bResult != true )
+		{
+			xwm_log.errorf("vulkan_screenshot failed");
+			return;
+		}
+
+		std::thread screenshotThread = std::thread([=] {
+			pthread_setname_np( pthread_self(), "gamescope-scrsh" );
+
+			const uint8_t *mappedData = pScreenshotTexture->mappedData();
+
+			if (pScreenshotTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
+			{
+				// Make our own copy of the image to remove the alpha channel.
+				auto imageData = std::vector<uint8_t>(currentOutputWidth * currentOutputHeight * 4);
+				const uint32_t comp = 4;
+				const uint32_t pitch = currentOutputWidth * comp;
+				for (uint32_t y = 0; y < currentOutputHeight; y++)
+				{
+					for (uint32_t x = 0; x < currentOutputWidth; x++)
+					{
+						// BGR...
+						imageData[y * pitch + x * comp + 0] = mappedData[y * pScreenshotTexture->rowPitch() + x * comp + 2];
+						imageData[y * pitch + x * comp + 1] = mappedData[y * pScreenshotTexture->rowPitch() + x * comp + 1];
+						imageData[y * pitch + x * comp + 2] = mappedData[y * pScreenshotTexture->rowPitch() + x * comp + 0];
+						imageData[y * pitch + x * comp + 3] = 255;
+					}
+				}
+
+				char pTimeBuffer[1024] = "/tmp/gamescope.png";
+
+				if ( !propertyRequestedScreenshot )
+				{
+					time_t currentTime = time(0);
+					struct tm *localTime = localtime( &currentTime );
+					strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.png", localTime );
+				}
+
+				if ( stbi_write_png(pTimeBuffer, currentOutputWidth, currentOutputHeight, 4, imageData.data(), pitch) )
+				{
+					xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
+				}
+				else
+				{
+					xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
+				}
+			}
+			else if (pScreenshotTexture->format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM)
+			{
+				char pTimeBuffer[1024] = "/tmp/gamescope.raw";
+
+				if ( !propertyRequestedScreenshot )
+				{
+					time_t currentTime = time(0);
+					struct tm *localTime = localtime( &currentTime );
+					strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.raw", localTime );
+				}
+
+				FILE *file = fopen(pTimeBuffer, "wb");
+				if (file)
+				{
+					fwrite(mappedData, 1, pScreenshotTexture->totalSize(), file );
+					fclose(file);
+
+					char cmd[4096];
+					sprintf(cmd, "ffmpeg -f rawvideo -pixel_format nv12 -video_size %dx%d -i %s %s_encoded.png", pScreenshotTexture->width(), pScreenshotTexture->height(), pTimeBuffer, pTimeBuffer);
+
+					int ret = system(cmd);
+
+					/* Above call may fail, ffmpeg returns 0 on success */
+					if (ret) {
+						xwm_log.infof("Ffmpeg call return status %i", ret);
+						xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
+					} else {
+						xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
+					}
+				}
+				else
+				{
+					xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
+				}
+			}
+
+			XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeScreenShotAtom );
+		});
+
+		screenshotThread.detach();
+
+		takeScreenshot = false;
 	}
 
 	gpuvis_trace_end_ctx_printf( paintID, "paint_all" );
@@ -6824,6 +6868,8 @@ steamcompmgr_main(int argc, char **argv)
 		drm_update_patched_edid(&g_DRM);
 		update_edid_prop();
 	}
+
+	update_screenshot_color_mgmt();
 
 	for (;;)
 	{
