@@ -3277,10 +3277,10 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 			CVulkanTexture::createFlags screenshotImageFlags;
 			screenshotImageFlags.bMappable = true;
 			screenshotImageFlags.bTransferDst = true;
+			screenshotImageFlags.bStorage = true;
 			if (exportable || drmFormat == DRM_FORMAT_NV12) {
 				screenshotImageFlags.bExportable = true;
 				screenshotImageFlags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
-				screenshotImageFlags.bStorage = true;
 			}
 
 			bool bSuccess = pScreenshotImage->BInit( width, height, 1u, drmFormat, screenshotImageFlags );
