@@ -105,6 +105,7 @@ struct plane {
 	drmModePlane *plane;
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
+	bool has_color_mgmt;
 };
 
 struct crtc {
@@ -117,8 +118,6 @@ struct crtc {
 	bool has_ctm;
 	bool has_vrr_enabled;
 	bool has_valve1_regamma_tf;
-	uint32_t lut3d_size;
-	uint32_t shaperlut_size;
 
 	struct {
 		bool active;
