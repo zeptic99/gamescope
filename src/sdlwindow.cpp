@@ -442,7 +442,7 @@ bool sdlwindow_init( void )
 
 void sdlwindow_title( std::shared_ptr<std::string> title, std::shared_ptr<std::vector<uint32_t>> icon )
 {
-	if ( !BIsNested() )
+	if ( !BIsSDLSession() )
 		return;
 
 	{
@@ -471,7 +471,7 @@ void sdlwindow_title( std::shared_ptr<std::string> title, std::shared_ptr<std::v
 
 void sdlwindow_visible( bool bVisible )
 {
-	if ( !BIsNested() )
+	if ( !BIsSDLSession() )
 		return;
 
 	SDL_Event event;
@@ -482,7 +482,7 @@ void sdlwindow_visible( bool bVisible )
 
 void sdlwindow_grab( bool bGrab )
 {
-	if ( !BIsNested() )
+	if ( !BIsSDLSession() )
 		return;
 
 	if ( g_bForceRelativeMouse )
@@ -503,7 +503,7 @@ void sdlwindow_grab( bool bGrab )
 
 void sdlwindow_cursor(std::shared_ptr<std::vector<uint32_t>> pixels, uint32_t width, uint32_t height, uint32_t xhot, uint32_t yhot)
 {
-	if ( !BIsNested() )
+	if ( !BIsSDLSession() )
 		return;
 
 	if ( g_bForceRelativeMouse )

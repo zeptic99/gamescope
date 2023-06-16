@@ -2325,7 +2325,7 @@ paint_all(bool async)
 		global_focus.cursor->undirty();
 	}
 
-	bool bForceHideCursor = BIsNested() && !BIsVRSession() && !bSteamCompMgrGrab;
+	bool bForceHideCursor = BIsSDLSession() && !bSteamCompMgrGrab;
 
 	bool bDrewCursor = false;
 
@@ -2466,7 +2466,7 @@ paint_all(bool async)
 			{
 				vulkan_present_to_openvr();
 			}
-			else
+			else if ( BIsSDLSession() )
 #endif
 			{
 				vulkan_present_to_window();
@@ -3647,7 +3647,7 @@ determine_and_apply_focus()
 		}
 #endif
 
-		if ( !BIsVRSession() && BIsNested() )
+		if ( BIsSDLSession() )
 		{
 			sdlwindow_title( global_focus.focusWindow->title, global_focus.focusWindow->icon );
 		}
@@ -3661,7 +3661,7 @@ determine_and_apply_focus()
 	else
 #endif
 	{
-		if ( !BIsVRSession() && BIsNested() )
+		if ( BIsSDLSession() )
 		{
 			sdlwindow_visible( global_focus.focusWindow != nullptr );
 		}
@@ -6992,7 +6992,7 @@ steamcompmgr_main(int argc, char **argv)
 				wlserver_unlock();
 			}
 
-			if ( BIsNested() == true && BIsVRSession() == false )
+			if ( BIsSDLSession() )
 			{
 				vulkan_remake_swapchain();
 
@@ -7001,7 +7001,7 @@ steamcompmgr_main(int argc, char **argv)
 			}
 			else
 			{
-				if ( !BIsVRSession() )
+				if ( !BIsNested() )
 				{
 					if (g_bOutputHDREnabled != currentHDROutput)
 					{

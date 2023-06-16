@@ -55,6 +55,8 @@ const struct option *gamescope_options = (struct option[]){
 	{ "prefer-vk-device", required_argument, 0 },
 	{ "expose-wayland", no_argument, 0 },
 
+	{ "headless", no_argument, 0 },
+
 	// nested mode options
 	{ "nested-unfocused-refresh", required_argument, nullptr, 'o' },
 	{ "borderless", no_argument, nullptr, 'b' },
@@ -143,6 +145,7 @@ const char usage[] =
 	"                                     nis => NVIDIA Image Scaling v1.0.3\n"
 	"  --sharpness, --fsr-sharpness   upscaler sharpness from 0 (max) to 20 (min)\n"
 	"  --expose-wayland               support wayland clients using xdg-shell\n"
+	"  --headless                     use headless backend (no window, no DRM output)\n"
 	"  --cursor                       path to default cursor image\n"
 	"  -R, --ready-fd                 notify FD when ready\n"
 	"  --rt                           Use realtime scheduling\n"
@@ -239,6 +242,7 @@ bool g_bFullscreen = false;
 bool g_bForceRelativeMouse = false;
 
 bool g_bIsNested = false;
+bool g_bHeadless = false;
 
 bool g_bGrabbed = false;
 
@@ -273,6 +277,11 @@ bool BIsNested()
 	return g_bIsNested;
 }
 
+bool BIsHeadless()
+{
+	return g_bHeadless;
+}
+
 #if HAVE_OPENVR
 bool g_bUseOpenVR = false;
 bool BIsVRSession( void )
@@ -285,6 +294,12 @@ bool BIsVRSession( void )
 	return false;
 }
 #endif
+
+bool BIsSDLSession( void )
+{
+	return g_bIsNested && !g_bHeadless && !BIsVRSession();
+}
+
 
 static bool initOutput(int preferredWidth, int preferredHeight, int preferredRefresh);
 static void steamCompMgrThreadRun(int argc, char **argv);
@@ -549,6 +564,9 @@ int main(int argc, char **argv)
 					s_bInitialWantsVRREnabled = true;
 				} else if (strcmp(opt_name, "expose-wayland") == 0) {
 					bExposeWayland = true;
+				} else if (strcmp(opt_name, "headless") == 0) {
+					g_bHeadless = true;
+					g_bIsNested = true;
 				}
 #if HAVE_OPENVR
 				else if (strcmp(opt_name, "openvr") == 0) {
@@ -633,7 +651,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( BIsNested() )
+	if ( BIsSDLSession() )
 	{
 		if ( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_EVENTS ) != 0 )
 		{
@@ -667,7 +685,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ( BIsNested() && !BIsVRSession() )
+	if ( BIsSDLSession() )
 	{
 		if ( !SDL_Vulkan_CreateSurface( g_SDLWindow, instance, &surface ) )
 		{
@@ -798,7 +816,7 @@ static void steamCompMgrThreadRun(int argc, char **argv)
 
 static bool initOutput( int preferredWidth, int preferredHeight, int preferredRefresh )
 {
-	if ( g_bIsNested == true )
+	if ( BIsNested() )
 	{
 		g_nOutputWidth = preferredWidth;
 		g_nOutputHeight = preferredHeight;
@@ -818,15 +836,19 @@ static bool initOutput( int preferredWidth, int preferredHeight, int preferredRe
 		if ( g_nOutputRefresh == 0 )
 			g_nOutputRefresh = 60;
 
-#if HAVE_OPENVR
 		if ( BIsVRSession() )
 		{
+#if HAVE_OPENVR
 			return vrsession_init();
-		}
-		else
 #endif
+		}
+		else if ( BIsSDLSession() )
 		{
 			return sdlwindow_init();
+		}
+		else
+		{
+			return true;
 		}
 	}
 	else

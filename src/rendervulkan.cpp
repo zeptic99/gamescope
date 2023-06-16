@@ -3032,12 +3032,12 @@ bool vulkan_make_output( VkSurfaceKHR surface )
 
 	VkResult result;
 	
-	if ( BIsVRSession() )
+	if ( BIsVRSession() || BIsHeadless() )
 	{
 		pOutput->outputFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 		vulkan_make_output_images( pOutput );
 	}
-	else if ( BIsNested() == true )
+	else if ( BIsSDLSession() )
 	{
 		assert(surface);
 		pOutput->surface = surface;
@@ -3165,7 +3165,7 @@ VkInstance vulkan_create_instance( void )
 		vrsession_append_instance_exts( sdlExtensions );
 #endif
 	}
-	else if ( BIsNested() )
+	else if ( BIsSDLSession() )
 	{
 		if ( SDL_Vulkan_LoadLibrary( nullptr ) != 0 )
 		{
@@ -3684,7 +3684,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
 	g_device.wait(sequence);
 
-	if ( BIsNested() == false || BIsVRSession() == true )
+	if ( !BIsSDLSession() )
 	{
 		g_output.nOutImage = !g_output.nOutImage;
 	}
