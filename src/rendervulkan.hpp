@@ -240,7 +240,7 @@ struct FrameInfo_t
 	std::shared_ptr<CVulkanTexture> shaperLut[EOTF_Count];
 	std::shared_ptr<CVulkanTexture> lut3D[EOTF_Count];
 
-	bool applyOutputColorMgmt;
+	bool applyOutputColorMgmt; // drm only
 
 	int layerCount;
 	struct Layer_t
@@ -256,7 +256,8 @@ struct FrameInfo_t
 
 		bool blackBorder;
 		bool linearFilter;
-		bool applyColorMgmt;
+		bool applyColorMgmt; // drm only
+		bool allowBlending;  // drm only
 
 		GamescopeAppTextureColorspace colorspace;
 
@@ -315,6 +316,7 @@ namespace CompositeDebugFlag
 	static constexpr uint32_t Heatmap = 1u << 2;
 	static constexpr uint32_t Heatmap_MSWCG = 1u << 3;
 	static constexpr uint32_t Heatmap_Hard = 1u << 4;
+	static constexpr uint32_t Markers_Partial = 1u << 5;
 	static constexpr uint32_t Tonemap_Reinhard = 1u << 7;
 };
 
@@ -327,8 +329,8 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_dmabuf( struct wlr_dm
 std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_bits( uint32_t width, uint32_t height, uint32_t contentWidth, uint32_t contentHeight, uint32_t drmFormat, CVulkanTexture::createFlags texCreateFlags, void *bits );
 std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struct wlr_buffer *buf );
 
-bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture );
-std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( void );
+bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture, bool partial );
+std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial );
 std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
 
 void vulkan_present_to_window( void );

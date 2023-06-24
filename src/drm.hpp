@@ -269,6 +269,7 @@ struct drm_t {
 extern struct drm_t g_DRM;
 
 extern uint32_t g_nDRMFormat;
+extern uint32_t g_nDRMFormatOverlay;
 
 extern bool g_bUseLayers;
 extern bool g_bRotated;

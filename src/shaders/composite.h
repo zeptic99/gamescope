@@ -14,6 +14,9 @@ void compositing_debug(uvec2 coord) {
 
     if (pos.x >= 40 && pos.x < 120 && pos.y >= 40 && pos.y < 120) {
         vec4 value = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        if (checkDebugFlag(compositedebug_Markers_Partial)) {
+            value = vec4(0.0f, 1.0f, 1.0f, 1.0f);
+        }
         if (pos.x >= 48 && pos.x < 112 && pos.y >= 48 && pos.y < 112) {
             uint random = pseudo_random(u_frameId.x + (pos.x & ~0x7) + (pos.y & ~0x7) * 50);
             vec4 time = round(unpackUnorm4x8(random)).xyzw;

@@ -26,6 +26,7 @@ const uint compositedebug_PlaneBorders = 1u << 1;
 const uint compositedebug_Heatmap = 1u << 2;
 const uint compositedebug_Heatmap_MSWCG = 1u << 3; // If compositedebug_Heatmap is set, use the MS WCG heatmap instead of Lilium
 const uint compositedebug_Heatmap_Hard = 1u << 4; // If compositedebug_Heatmap is set, use a heatmap with specialized hard flagging
+const uint compositedebug_Markers_Partial = 1u << 5; // If compositedebug_Heatmap is set, use a heatmap with specialized hard flagging
 //const uint compositedebug_Tonemap_Reinhard = 1u << 7; // Use Reinhard tonemapping instead of Uncharted.
 
 bool checkDebugFlag(uint flag) {

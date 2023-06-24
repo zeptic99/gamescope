@@ -103,9 +103,13 @@ struct VulkanOutput_t
 	VkFence acquireFence;
 
 	uint32_t nOutImage; // swapchain index in nested mode, or ping/pong between two RTs
+	uint32_t nOutImagePartial;
+	uint32_t nOutPresentImagePartial;
 	std::vector<std::shared_ptr<CVulkanTexture>> outputImages;
+	std::vector<std::shared_ptr<CVulkanTexture>> outputImagesPartialOverlay;
 
 	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
+	VkFormat outputFormatOverlay = VK_FORMAT_UNDEFINED;
 
 	std::array<std::shared_ptr<CVulkanTexture>, 8> pScreenshotImages;
 
@@ -2861,7 +2865,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_debug_white_texture()
 void vulkan_present_to_openvr( void )
 {
 	//static auto texture = vulkan_create_debug_white_texture();
-	auto texture = vulkan_get_last_output_image();
+	auto texture = vulkan_get_last_output_image( false );
 
 	vr::VRVulkanTextureData_t data =
 	{
@@ -2985,9 +2989,13 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	outputImageflags.bSwapchain = BIsVRSession();
 
 	pOutput->outputImages.resize(2);
+	pOutput->outputImagesPartialOverlay.resize(3);
 
 	pOutput->outputImages[0] = nullptr;
 	pOutput->outputImages[1] = nullptr;
+	pOutput->outputImagesPartialOverlay[0] = nullptr;
+	pOutput->outputImagesPartialOverlay[1] = nullptr;
+	pOutput->outputImagesPartialOverlay[2] = nullptr;
 
 	VkFormat format = pOutput->outputFormat;
 
@@ -3007,6 +3015,35 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 		return false;
 	}
 
+	if ( pOutput->outputFormatOverlay != VK_FORMAT_UNDEFINED )
+	{
+		VkFormat partialFormat = pOutput->outputFormatOverlay;
+
+		pOutput->outputImagesPartialOverlay[0] = std::make_shared<CVulkanTexture>();
+		bool bSuccess = pOutput->outputImagesPartialOverlay[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags );
+		if ( bSuccess != true )
+		{
+			vk_log.errorf( "failed to allocate buffer for KMS" );
+			return false;
+		}
+
+		pOutput->outputImagesPartialOverlay[1] = std::make_shared<CVulkanTexture>();
+		bSuccess = pOutput->outputImagesPartialOverlay[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags );
+		if ( bSuccess != true )
+		{
+			vk_log.errorf( "failed to allocate buffer for KMS" );
+			return false;
+		}
+
+		pOutput->outputImagesPartialOverlay[2] = std::make_shared<CVulkanTexture>();
+		bSuccess = pOutput->outputImagesPartialOverlay[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags );
+		if ( bSuccess != true )
+		{
+			vk_log.errorf( "failed to allocate buffer for KMS" );
+			return false;
+		}
+	}
+
 	return true;
 }
 
@@ -3016,6 +3053,8 @@ bool vulkan_remake_output_images()
 	g_device.waitIdle();
 
 	pOutput->nOutImage = 0;
+	pOutput->nOutImagePartial = 0;
+	pOutput->nOutPresentImagePartial = 2;
 
 	// Delete screenshot image to be remade if needed
 	for (auto& pScreenshotImage : pOutput->pScreenshotImages)
@@ -3094,10 +3133,17 @@ bool vulkan_make_output( VkSurfaceKHR surface )
 	else
 	{
 		pOutput->outputFormat = DRMFormatToVulkan( g_nDRMFormat, false );
+		pOutput->outputFormatOverlay = DRMFormatToVulkan( g_nDRMFormatOverlay, false );
 		
 		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{
 			vk_log.errorf( "failed to find Vulkan format suitable for KMS" );
+			return false;
+		}
+
+		if ( pOutput->outputFormatOverlay == VK_FORMAT_UNDEFINED )
+		{
+			vk_log.errorf( "failed to find Vulkan format suitable for KMS partial overlays" );
 			return false;
 		}
 
@@ -3497,9 +3543,23 @@ bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVu
 	return true;
 }
 
-bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture )
+std::unique_ptr<std::thread> partial_wait_thread;
+
+bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture, bool partial )
 {
-	auto compositeImage = g_output.outputImages[ g_output.nOutImage ];
+	if ( partial_wait_thread )
+	{
+		partial_wait_thread->join();
+		partial_wait_thread = nullptr;
+	}
+
+	if ( partial )
+	{
+		g_output.nOutPresentImagePartial = g_output.nOutImagePartial;
+		g_output.nOutImagePartial = ( g_output.nOutImagePartial + 1 ) % 3;
+	}
+
+	auto compositeImage = partial ? g_output.outputImagesPartialOverlay[ g_output.nOutImagePartial ] : g_output.outputImages[ g_output.nOutImage ];
 
 	auto cmdBuffer = g_device.commandBuffer();
 
@@ -3682,18 +3742,36 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 	}
 
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
-	g_device.wait(sequence);
 
-	if ( !BIsSDLSession() )
+	if ( partial )
 	{
-		g_output.nOutImage = !g_output.nOutImage;
+		partial_wait_thread = std::make_unique<std::thread>([sequence]
+		{
+			g_device.wait(sequence);
+		});
+	}
+	else
+	{
+		g_device.wait(sequence);
+
+		if ( !BIsSDLSession() )
+		{
+			g_output.nOutImage = !g_output.nOutImage;
+		}
 	}
 
 	return true;
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( void )
+std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial )
 {
+	if ( partial )
+	{
+		uint32_t nOutImage =  g_output.nOutPresentImagePartial;
+		//vk_log.infof( "Partial overlay frame: %d", nOutImage );
+		return g_output.outputImagesPartialOverlay[ nOutImage ];
+	}
+
 	return g_output.outputImages[ !g_output.nOutImage ];
 }
 

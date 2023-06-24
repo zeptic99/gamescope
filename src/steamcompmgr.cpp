@@ -1858,6 +1858,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 
 	layer->zpos = g_zposCursor; // cursor, on top of both bottom layers
 	layer->applyColorMgmt = false;
+	layer->allowBlending = true;
 
 	layer->tex = m_texture;
 	layer->fbid = BIsNested() ? 0 : m_texture->fbid();
@@ -2093,6 +2094,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	layer->blackBorder = flags & PaintWindowFlag::DrawBorders;
 
 	layer->applyColorMgmt = true;
+	layer->allowBlending = true;
 	layer->zpos = g_zposBase;
 
 	if ( w != scaleW )
@@ -2401,17 +2403,18 @@ paint_all(bool async)
 
 	bool bNeedsNearest = g_upscaleFilter == GamescopeUpscaleFilter::NEAREST && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
 
+	bool bWantsPartialComposite = frameInfo.layerCount >= 3;
 
-	bool bNeedsComposite = BIsNested();
-	bNeedsComposite |= alwaysComposite;
-	bNeedsComposite |= pw_buffer != nullptr;
-	bNeedsComposite |= bWasFirstFrame;
-	bNeedsComposite |= frameInfo.useFSRLayer0;
-	bNeedsComposite |= frameInfo.useNISLayer0;
-	bNeedsComposite |= frameInfo.blurLayer0;
-	bNeedsComposite |= bNeedsNearest;
-	bNeedsComposite |= bDrewCursor;
-	bNeedsComposite |= g_bColorSliderInUse;
+	bool bNeedsFullComposite = BIsNested();
+	bNeedsFullComposite |= alwaysComposite;
+	bNeedsFullComposite |= pw_buffer != nullptr;
+	bNeedsFullComposite |= bWasFirstFrame;
+	bNeedsFullComposite |= frameInfo.useFSRLayer0;
+	bNeedsFullComposite |= frameInfo.useNISLayer0;
+	bNeedsFullComposite |= frameInfo.blurLayer0;
+	bNeedsFullComposite |= bNeedsNearest;
+	bNeedsFullComposite |= bDrewCursor;
+	bNeedsFullComposite |= g_bColorSliderInUse;
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
@@ -2424,17 +2427,25 @@ paint_all(bool async)
 
 	if ( !BIsNested() && g_bOutputHDREnabled )
 	{
-		bNeedsComposite |= g_bHDRItmEnable;
+		bNeedsFullComposite |= g_bHDRItmEnable;
 		if ( !drm_supports_color_mgmt(&g_DRM) )
-			bNeedsComposite |= ( frameInfo.layerCount > 1 || frameInfo.layers[0].colorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ );
+			bNeedsFullComposite |= ( frameInfo.layerCount > 1 || frameInfo.layers[0].colorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ );
 	}
-	bNeedsComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
+	bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
 
-	if ( !bNeedsComposite )
+	static bool g_bWasPartialComposite = false;
+	static int g_nLastSingleOverlayZPos = 0;
+
+	if ( !bNeedsFullComposite && !bWantsPartialComposite )
 	{
 		int ret = drm_prepare( &g_DRM, async, &frameInfo );
 		if ( ret == 0 )
+		{
 			bDoComposite = false;
+			g_bWasPartialComposite = false;
+			if ( frameInfo.layerCount == 2 )
+				g_nLastSingleOverlayZPos = frameInfo.layers[1].zpos;
+		}
 		else if ( ret == -EACCES )
 			return;
 	}
@@ -2451,7 +2462,65 @@ paint_all(bool async)
 			pPipewireTexture = pw_buffer->texture;
 		}
 #endif
-		bool bResult = vulkan_composite( &frameInfo, pPipewireTexture );
+
+		struct FrameInfo_t compositeFrameInfo = frameInfo;
+
+		if ( compositeFrameInfo.layerCount == 1 )
+		{
+			// If we failed to flip a single plane then
+			// we definitely need to composite for some reason...
+			bNeedsFullComposite = true;
+		}
+
+		if ( !bNeedsFullComposite )
+		{
+			// If we want to partial composite, fallback to full
+			// composite if we have mismatching colorspaces in our overlays.
+			// This is 2, and we do i-1 so 1...layerCount. So AFTER we have removed baseplane.
+			// Overlays only.
+			//
+			// Josh:
+			// We could handle mismatching colorspaces for partial composition
+			// but I want to keep overlay -> partial composition promotion as simple
+			// as possible, using the same 3D + SHAPER LUTs + BLEND in DRM
+			// as changing them is incredibly expensive!! It takes forever.
+			// We can't just point it to random BDA or whatever, it has to be uploaded slowly
+			// thru registers which is SUPER SLOW.
+			// This avoids stutter.
+			for ( int i = 2; i < compositeFrameInfo.layerCount; i++ )
+			{
+				if ( frameInfo.layers[i - 1].colorspace != frameInfo.layers[i].colorspace )
+				{
+					bNeedsFullComposite = true;
+					break;
+				}
+			}
+		}
+
+		// If doing a partial composition then remove the baseplane
+		// from our frameinfo to composite.
+		if ( !bNeedsFullComposite )
+		{
+			for ( int i = 1; i < compositeFrameInfo.layerCount; i++ )
+				compositeFrameInfo.layers[i - 1] = compositeFrameInfo.layers[i];
+			compositeFrameInfo.layerCount -= 1;
+
+			// When doing partial composition, apply the shaper + 3D LUT stuff
+			// at scanout.
+			for ( uint32_t nEOTF = 0; nEOTF < EOTF_Count; nEOTF++ ) {
+				compositeFrameInfo.shaperLut[ nEOTF ] = nullptr;
+				compositeFrameInfo.lut3D[ nEOTF ] = nullptr;
+			}
+
+			// If using composite debug markers, make sure we mark them as partial
+			// so we know!
+			if ( g_uCompositeDebug & CompositeDebugFlag::Markers )
+				g_uCompositeDebug |= CompositeDebugFlag::Markers_Partial;
+		}
+
+		bool bResult = vulkan_composite( &compositeFrameInfo, pPipewireTexture, !bNeedsFullComposite );
+
+		g_uCompositeDebug &= ~CompositeDebugFlag::Markers_Partial;
 
 		if ( bResult != true )
 		{
@@ -2477,23 +2546,89 @@ paint_all(bool async)
 		}
 		else
 		{
-			struct FrameInfo_t compositeFrameInfo = {};
-			compositeFrameInfo = {};
-			compositeFrameInfo.applyOutputColorMgmt = false;
-			compositeFrameInfo.layerCount = 1;
-			FrameInfo_t::Layer_t *layer = &compositeFrameInfo.layers[ 0 ];
-			layer->scale.x = 1.0;
-			layer->scale.y = 1.0;
-			layer->opacity = 1.0;
+			struct FrameInfo_t presentCompFrameInfo = {};
 
-			layer->tex = vulkan_get_last_output_image();
-			layer->fbid = layer->tex->fbid();
-			layer->applyColorMgmt = false;
+			if ( bNeedsFullComposite )
+			{
+				presentCompFrameInfo.applyOutputColorMxgmt = false;
+				presentCompFrameInfo.layerCount = 1;
 
-			layer->linearFilter = false;
-			layer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+				FrameInfo_t::Layer_t *baseLayer = &presentCompFrameInfo.layers[ 0 ];
+				baseLayer->scale.x = 1.0;
+				baseLayer->scale.y = 1.0;
+				baseLayer->opacity = 1.0;
+				baseLayer->zpos = g_zposBase;
 
-			int ret = drm_prepare( &g_DRM, async, &compositeFrameInfo );
+				baseLayer->tex = vulkan_get_last_output_image( false );
+				baseLayer->fbid = baseLayer->tex->fbid();
+				baseLayer->applyColorMgmt = false;
+				baseLayer->allowBlending = false;
+
+				baseLayer->linearFilter = false;
+				baseLayer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+
+				g_bWasPartialComposite = false;
+			}
+			else
+			{
+				if ( g_bWasPartialComposite )
+				{
+					presentCompFrameInfo.applyOutputColorMgmt = true;
+					presentCompFrameInfo.layerCount = 2;
+
+					presentCompFrameInfo.layers[ 0 ] = frameInfo.layers[ 0 ];
+					presentCompFrameInfo.layers[ 0 ].zpos = g_zposBase;
+
+					FrameInfo_t::Layer_t *overlayLayer = &presentCompFrameInfo.layers[ 1 ];
+					overlayLayer->scale.x = 1.0;
+					overlayLayer->scale.y = 1.0;
+					overlayLayer->opacity = 1.0;
+					overlayLayer->zpos = g_zposOverlay;
+
+					overlayLayer->tex = vulkan_get_last_output_image( true );
+					overlayLayer->fbid = overlayLayer->tex->fbid();
+					overlayLayer->applyColorMgmt = true;
+					overlayLayer->allowBlending = true;
+
+					overlayLayer->linearFilter = false;
+					// Partial composition stuff has the same colorspace.
+					// So read that from the composite frame info
+					overlayLayer->colorspace = compositeFrameInfo.layers[0].colorspace;
+				}
+				else
+				{
+					// Use whatever overlay we had last while waiting for the
+					// partial composition to have anything queued.
+					presentCompFrameInfo.applyOutputColorMgmt = true;
+					presentCompFrameInfo.layerCount = 1;
+
+					presentCompFrameInfo.layers[ 0 ] = frameInfo.layers[ 0 ];
+					presentCompFrameInfo.layers[ 0 ].zpos = g_zposBase;
+
+					FrameInfo_t::Layer_t *lastPresentedOverlayLayer = nullptr;
+					for (int i = 0; i < frameInfo.layerCount; i++)
+					{
+						if (frameInfo.layers[i].zpos == g_nLastSingleOverlayZPos)
+						{
+							lastPresentedOverlayLayer = &frameInfo.layers[i];
+							break;
+						}
+					}
+
+					if (lastPresentedOverlayLayer)
+					{
+						FrameInfo_t::Layer_t *overlayLayer = &presentCompFrameInfo.layers[ 1 ];
+						*overlayLayer = *lastPresentedOverlayLayer;
+						overlayLayer->zpos = g_zposOverlay;
+
+						presentCompFrameInfo.layerCount = 2;
+					}
+				}
+
+				g_bWasPartialComposite = true;
+			}
+
+			int ret = drm_prepare( &g_DRM, async, &presentCompFrameInfo );
 
 			// Happens when we're VT-switched away
 			if ( ret == -EACCES )

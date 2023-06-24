@@ -41,6 +41,7 @@ extern "C" {
 struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
+uint32_t g_nDRMFormatOverlay = DRM_FORMAT_INVALID; // for partial composition, we may have more limited formats than base planes + alpha.
 bool g_bRotated = false;
 bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
@@ -1357,6 +1358,12 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_
 		}
 	}
 
+	// ARGB8888 is the Xformat and AFormat here in this function as we want transparent overlay
+	g_nDRMFormatOverlay = pick_plane_format(&drm->primary_formats, DRM_FORMAT_ARGB8888, DRM_FORMAT_ARGB8888);
+	if ( g_nDRMFormatOverlay == DRM_FORMAT_INVALID ) {
+		drm_log.errorf("Overlay plane doesn't support any formats >= 8888");
+	}
+
 	drm->kms_in_fence_fd = -1;
 
 	std::thread flip_handler_thread( flip_handler_thread_run );
@@ -2284,11 +2291,6 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_SHAPER_TF", 0 );
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_LUT3D", 0 );
 					}
-
-					if (!g_bDisableBlendTF && !bSinglePlane)
-						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
-					else
-						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", 0 );
 				}
 			}
 			else
@@ -2299,6 +2301,23 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_SHAPER_LUT", 0 );
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_SHAPER_TF", 0 );
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_LUT3D", 0 );
+				}
+			}
+
+			if ( frameInfo->layers[i].allowBlending )
+			{
+				if ( drm_supports_color_mgmt( drm ) )
+				{
+					if (!g_bDisableBlendTF && !bSinglePlane)
+						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
+					else
+						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", 0 );
+				}
+			}
+			else
+			{
+				if ( drm_supports_color_mgmt( drm ) )
+				{
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
 				}
 			}
