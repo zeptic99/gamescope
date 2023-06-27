@@ -105,8 +105,6 @@ struct VulkanOutput_t
 	VkFence acquireFence;
 
 	uint32_t nOutImage; // swapchain index in nested mode, or ping/pong between two RTs
-	uint32_t nOutImagePartial;
-	uint32_t nOutPresentImagePartial;
 	std::vector<std::shared_ptr<CVulkanTexture>> outputImages;
 	std::vector<std::shared_ptr<CVulkanTexture>> outputImagesPartialOverlay;
 
@@ -2891,7 +2889,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_debug_white_texture()
 void vulkan_present_to_openvr( void )
 {
 	//static auto texture = vulkan_create_debug_white_texture();
-	auto texture = vulkan_get_last_output_image( false );
+	auto texture = vulkan_get_last_output_image( false, false );
 
 	vr::VRVulkanTextureData_t data =
 	{
@@ -3088,8 +3086,6 @@ bool vulkan_remake_output_images()
 	g_device.waitIdle();
 
 	pOutput->nOutImage = 0;
-	pOutput->nOutImagePartial = 0;
-	pOutput->nOutPresentImagePartial = 2;
 
 	// Delete screenshot image to be remade if needed
 	for (auto& pScreenshotImage : pOutput->pScreenshotImages)
@@ -3578,42 +3574,21 @@ bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVu
 	return true;
 }
 
-std::unique_ptr<std::thread> partial_wait_thread;
-uint64_t partial_sequence = 0;
+std::unique_ptr<std::thread> defer_wait_thread;
+uint64_t defer_sequence = 0;
 
-bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture, bool partial )
+bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture, bool partial, bool defer )
 {
-	if ( partial_wait_thread )
+	if ( defer_wait_thread )
 	{
-		partial_wait_thread->join();
-		partial_wait_thread = nullptr;
+		defer_wait_thread->join();
+		defer_wait_thread = nullptr;
 
-		g_device.resetCmdBuffers(partial_sequence);
-		partial_sequence = 0;
+		g_device.resetCmdBuffers(defer_sequence);
+		defer_sequence = 0;
 	}
 
-	if ( partial )
-	{
-		if ( !g_bWasPartialComposite )
-		{
-			g_output.nOutPresentImagePartial = g_output.nOutImage;
-			g_output.nOutImagePartial        = g_output.nOutImage;
-		}
-		else
-		{
-			g_output.nOutPresentImagePartial = g_output.nOutImagePartial;
-		}
-		g_output.nOutImagePartial = ( g_output.nOutImagePartial + 1 ) % 3;
-	}
-	else
-	{
-		if (g_bWasPartialComposite)
-		{
-			g_output.nOutImage = ( g_output.nOutImagePartial + 1 ) % 3;
-		}
-	}
-
-	auto compositeImage = partial ? g_output.outputImagesPartialOverlay[ g_output.nOutImagePartial ] : g_output.outputImages[ g_output.nOutImage ];
+	auto compositeImage = partial ? g_output.outputImagesPartialOverlay[ g_output.nOutImage ] : g_output.outputImages[ g_output.nOutImage ];
 
 	auto cmdBuffer = g_device.commandBuffer();
 
@@ -3797,36 +3772,52 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
 
-	if ( partial )
+	if ( defer )
 	{
-		partial_wait_thread = std::make_unique<std::thread>([sequence]
+		defer_wait_thread = std::make_unique<std::thread>([sequence]
 		{
 			g_device.wait(sequence, false);
 		});
+		defer_sequence = sequence;
 	}
 	else
 	{
 		g_device.wait(sequence);
+	}
 
-		if ( !BIsSDLSession() )
-		{
-			g_output.nOutImage = !g_output.nOutImage;
-		}
+	if ( !BIsSDLSession() )
+	{
+		g_output.nOutImage = ( g_output.nOutImage + 1 ) % 3;
 	}
 
 	return true;
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial )
+std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial, bool defer )
 {
+	// Get previous image ( +2 )
+	// 1 2 3
+	//   |
+	// |
+	uint32_t nRegularImage = ( g_output.nOutImage + 2 ) % 3;
+
+	// Get previous previous image ( +1 )
+	// 1 2 3
+	//   |
+	//     |
+	uint32_t nDeferredImage = ( g_output.nOutImage + 1 ) % 3;
+
+	uint32_t nOutImage = defer ? nDeferredImage : nRegularImage;
+
 	if ( partial )
 	{
-		uint32_t nOutImage =  g_output.nOutPresentImagePartial;
-		//vk_log.infof( "Partial overlay frame: %d", nOutImage );
+
+		//vk_log.infof( "Partial overlay frame: %d", nDeferredImage );
 		return g_output.outputImagesPartialOverlay[ nOutImage ];
 	}
 
-	return g_output.outputImages[ !g_output.nOutImage ];
+
+	return g_output.outputImages[ nOutImage ];
 }
 
 bool vulkan_primary_dev_id(dev_t *id)

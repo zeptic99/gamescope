@@ -2435,6 +2435,7 @@ paint_all(bool async)
 	bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
 
 	static int g_nLastSingleOverlayZPos = 0;
+	static bool g_bWasCompositing = false;
 
 	if ( !bNeedsFullComposite && !bWantsPartialComposite )
 	{
@@ -2443,6 +2444,7 @@ paint_all(bool async)
 		{
 			bDoComposite = false;
 			g_bWasPartialComposite = false;
+			g_bWasCompositing = false;
 			if ( frameInfo.layerCount == 2 )
 				g_nLastSingleOverlayZPos = frameInfo.layers[1].zpos;
 		}
@@ -2497,6 +2499,13 @@ paint_all(bool async)
 			}
 		}
 
+		// If we ever promoted from partial -> full, for the first frame
+		// do NOT defer this partial composition.
+		// We were already stalling for the full composition before, so it's not an issue
+		// for latency, we just need to make sure we get 1 partial frame that isn't deferred
+		// in time so we don't lose layers.
+		bool bDefer = !bNeedsFullComposite && ( !g_bWasCompositing || g_bWasPartialComposite );
+
 		// If doing a partial composition then remove the baseplane
 		// from our frameinfo to composite.
 		if ( !bNeedsFullComposite )
@@ -2511,14 +2520,16 @@ paint_all(bool async)
 				compositeFrameInfo.shaperLut[ nEOTF ] = nullptr;
 				compositeFrameInfo.lut3D[ nEOTF ] = nullptr;
 			}
-
-			// If using composite debug markers, make sure we mark them as partial
-			// so we know!
-			if ( g_uCompositeDebug & CompositeDebugFlag::Markers )
-				g_uCompositeDebug |= CompositeDebugFlag::Markers_Partial;
 		}
 
-		bool bResult = vulkan_composite( &compositeFrameInfo, pPipewireTexture, !bNeedsFullComposite );
+		// If using composite debug markers, make sure we mark them as partial
+		// so we know!
+		if ( bDefer && !!( g_uCompositeDebug & CompositeDebugFlag::Markers ) )
+			g_uCompositeDebug |= CompositeDebugFlag::Markers_Partial;
+
+		bool bResult = vulkan_composite( &compositeFrameInfo, pPipewireTexture, !bNeedsFullComposite, bDefer );
+
+		g_bWasCompositing = true;
 
 		g_uCompositeDebug &= ~CompositeDebugFlag::Markers_Partial;
 
@@ -2559,7 +2570,7 @@ paint_all(bool async)
 				baseLayer->opacity = 1.0;
 				baseLayer->zpos = g_zposBase;
 
-				baseLayer->tex = vulkan_get_last_output_image( false );
+				baseLayer->tex = vulkan_get_last_output_image( false, false );
 				baseLayer->fbid = baseLayer->tex->fbid();
 				baseLayer->applyColorMgmt = false;
 				baseLayer->allowBlending = false;
@@ -2571,7 +2582,7 @@ paint_all(bool async)
 			}
 			else
 			{
-				if ( g_bWasPartialComposite )
+				if ( g_bWasPartialComposite || !bDefer )
 				{
 					presentCompFrameInfo.applyOutputColorMgmt = true;
 					presentCompFrameInfo.layerCount = 2;
@@ -2585,7 +2596,7 @@ paint_all(bool async)
 					overlayLayer->opacity = 1.0;
 					overlayLayer->zpos = g_zposOverlay;
 
-					overlayLayer->tex = vulkan_get_last_output_image( true );
+					overlayLayer->tex = vulkan_get_last_output_image( true, bDefer );
 					overlayLayer->fbid = overlayLayer->tex->fbid();
 					overlayLayer->applyColorMgmt = true;
 					overlayLayer->allowBlending = true;
