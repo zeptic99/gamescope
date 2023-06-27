@@ -507,7 +507,7 @@ public:
 	int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeBits );
 	std::unique_ptr<CVulkanCmdBuffer> commandBuffer();
 	uint64_t submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuf);
-	void wait(uint64_t sequence);
+	void wait(uint64_t sequence, bool reset = true);
 	void waitIdle();
 	void garbageCollect();
 	inline VkDescriptorSet descriptorSet()
@@ -540,6 +540,7 @@ public:
 	} vk;
 	#undef VK_FUNC
 
+	void resetCmdBuffers(uint64_t sequence);
 
 private:
 	bool selectPhysDev(VkSurfaceKHR surface);
@@ -550,7 +551,6 @@ private:
 	bool createScratchResources();
 	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, uint32_t composite_debug, uint32_t colorspace_mask, uint32_t output_eotf, bool itm_enable);
 	void compileAllPipelines();
-	void resetCmdBuffers(uint64_t sequence);
 
 	VkDevice m_device = nullptr;
 	VkPhysicalDevice m_physDev = nullptr;
@@ -1502,7 +1502,7 @@ void CVulkanDevice::garbageCollect( void )
 	resetCmdBuffers(currentSeqNo);
 }
 
-void CVulkanDevice::wait(uint64_t sequence)
+void CVulkanDevice::wait(uint64_t sequence, bool reset)
 {
 	VkSemaphoreWaitInfo waitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1514,7 +1514,9 @@ void CVulkanDevice::wait(uint64_t sequence)
 	VkResult res = vk.WaitSemaphores(device(), &waitInfo, ~0ull);
 	if (res != VK_SUCCESS)
 		assert( 0 );
-	resetCmdBuffers(sequence);
+
+	if (reset)
+		resetCmdBuffers(sequence);
 }
 
 void CVulkanDevice::waitIdle()
@@ -3577,6 +3579,7 @@ bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVu
 }
 
 std::unique_ptr<std::thread> partial_wait_thread;
+uint64_t partial_sequence = 0;
 
 bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture, bool partial )
 {
@@ -3584,6 +3587,9 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 	{
 		partial_wait_thread->join();
 		partial_wait_thread = nullptr;
+
+		g_device.resetCmdBuffers(partial_sequence);
+		partial_sequence = 0;
 	}
 
 	if ( partial )
@@ -3795,7 +3801,7 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 	{
 		partial_wait_thread = std::make_unique<std::thread>([sequence]
 		{
-			g_device.wait(sequence);
+			g_device.wait(sequence, false);
 		});
 	}
 	else
