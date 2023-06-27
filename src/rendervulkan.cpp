@@ -1,5 +1,6 @@
 // Initialize Vulkan and composite stuff with a compute queue
 
+#include <cassert>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -2000,7 +2001,7 @@ static VkImageViewType VulkanImageTypeToViewType(VkImageType type)
 	}
 }
 
-bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uint32_t drmFormat, createFlags flags, wlr_dmabuf_attributes *pDMA /* = nullptr */,  uint32_t contentWidth /* = 0 */, uint32_t contentHeight /* =  0 */)
+bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uint32_t drmFormat, createFlags flags, wlr_dmabuf_attributes *pDMA /* = nullptr */,  uint32_t contentWidth /* = 0 */, uint32_t contentHeight /* =  0 */, CVulkanTexture *pExistingImageToReuseMemory )
 {
 	VkResult res = VK_ERROR_INITIALIZATION_FAILED;
 
@@ -2229,12 +2230,6 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 	
 	VkMemoryRequirements memRequirements;
 	g_device.vk.GetImageMemoryRequirements(g_device.device(), m_vkImage, &memRequirements);
-	
-	// Possible pNexts
-	wsi_memory_allocate_info wsiAllocInfo = {};
-	VkImportMemoryFdInfoKHR importMemoryInfo = {};
-	VkExportMemoryAllocateInfo memory_export_info = {};
-	VkMemoryDedicatedAllocateInfo memory_dedicated_info = {};
 
 	VkMemoryAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -2244,63 +2239,84 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 
 	m_size = allocInfo.allocationSize;
 
-	if ( flags.bExportable == true || pDMA != nullptr )
-	{
-		memory_dedicated_info = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
-			.pNext = std::exchange(allocInfo.pNext, &memory_dedicated_info),
-			.image = m_vkImage,
-		};
-	}
-	
-	if ( flags.bExportable == true && pDMA == nullptr )
-	{
-		// We'll export it to DRM
-		memory_export_info = {
-			.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-			.pNext = std::exchange(allocInfo.pNext, &memory_export_info),
-			.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-		};
-	}
-	
-	if ( pDMA != nullptr )
-	{
-		// TODO: multi-planar DISTINCT DMA-BUFs support (see vkBindImageMemory2
-		// and VkBindImagePlaneMemoryInfo)
-		assert( allDMABUFsEqual( pDMA ) );
+	VkDeviceMemory memoryHandle = VK_NULL_HANDLE;
 
-		// Importing memory from a FD transfers ownership of the FD
-		int fd = dup( pDMA->fd[0] );
-		if ( fd < 0 )
+	if ( pExistingImageToReuseMemory == nullptr )
+	{
+		// Possible pNexts
+		wsi_memory_allocate_info wsiAllocInfo = {};
+		VkImportMemoryFdInfoKHR importMemoryInfo = {};
+		VkExportMemoryAllocateInfo memory_export_info = {};
+		VkMemoryDedicatedAllocateInfo memory_dedicated_info = {};
+
+		if ( flags.bExportable == true || pDMA != nullptr )
 		{
-			vk_log.errorf_errno( "dup failed" );
+			memory_dedicated_info = {
+				.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+				.pNext = std::exchange(allocInfo.pNext, &memory_dedicated_info),
+				.image = m_vkImage,
+			};
+		}
+		
+		if ( flags.bExportable == true && pDMA == nullptr )
+		{
+			// We'll export it to DRM
+			memory_export_info = {
+				.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+				.pNext = std::exchange(allocInfo.pNext, &memory_export_info),
+				.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+			};
+		}
+		
+		if ( pDMA != nullptr )
+		{
+			// TODO: multi-planar DISTINCT DMA-BUFs support (see vkBindImageMemory2
+			// and VkBindImagePlaneMemoryInfo)
+			assert( allDMABUFsEqual( pDMA ) );
+
+			// Importing memory from a FD transfers ownership of the FD
+			int fd = dup( pDMA->fd[0] );
+			if ( fd < 0 )
+			{
+				vk_log.errorf_errno( "dup failed" );
+				return false;
+			}
+
+			// We're importing WSI buffers from GL or Vulkan, set implicit_sync
+			wsiAllocInfo = {
+					.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA,
+					.pNext = std::exchange(allocInfo.pNext, &wsiAllocInfo),
+					.implicit_sync = true,
+			};
+
+			// Memory already provided by pDMA
+			importMemoryInfo = {
+					.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+					.pNext = std::exchange(allocInfo.pNext, &importMemoryInfo),
+					.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+					.fd = fd,
+			};
+		}
+		
+		res = g_device.vk.AllocateMemory( g_device.device(), &allocInfo, nullptr, &memoryHandle );
+		if ( res != VK_SUCCESS )
+		{
+			vk_errorf( res, "vkAllocateMemory failed" );
 			return false;
 		}
 
-		// We're importing WSI buffers from GL or Vulkan, set implicit_sync
-		wsiAllocInfo = {
-				.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA,
-				.pNext = std::exchange(allocInfo.pNext, &wsiAllocInfo),
-				.implicit_sync = true,
-		};
-
-		// Memory already provided by pDMA
-		importMemoryInfo = {
-				.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
-				.pNext = std::exchange(allocInfo.pNext, &importMemoryInfo),
-				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-				.fd = fd,
-		};
+		m_vkImageMemory = memoryHandle;
 	}
-	
-	res = g_device.vk.AllocateMemory( g_device.device(), &allocInfo, nullptr, &m_vkImageMemory );
-	if ( res != VK_SUCCESS )
+	else
 	{
-		vk_errorf( res, "vkAllocateMemory failed" );
-		return false;
+		vk_log.infof("%d vs %d!", (int)pExistingImageToReuseMemory->m_size, (int)m_size);
+		assert(pExistingImageToReuseMemory->m_size >= m_size);
+
+		memoryHandle = pExistingImageToReuseMemory->m_vkImageMemory;
+		m_vkImageMemory = VK_NULL_HANDLE;
 	}
 	
-	res = g_device.vk.BindImageMemory( g_device.device(), m_vkImage, m_vkImageMemory, 0 );
+	res = g_device.vk.BindImageMemory( g_device.device(), m_vkImage, memoryHandle, 0 );
 	if ( res != VK_SUCCESS )
 	{
 		vk_errorf( res, "vkBindImageMemory failed" );
@@ -2357,7 +2373,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 		// TODO: disjoint planes support
 		const VkMemoryGetFdInfoKHR memory_get_fd_info = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
-			.memory = m_vkImageMemory,
+			.memory = memoryHandle,
 			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
 		};
 		res = g_device.vk.GetMemoryFdKHR(g_device.device(), &memory_get_fd_info, &dmabuf.fd[0]);
@@ -2518,14 +2534,21 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 
 	if ( flags.bMappable )
 	{
-		void *pData = nullptr;
-		res = g_device.vk.MapMemory( g_device.device(), m_vkImageMemory, 0, VK_WHOLE_SIZE, 0, &pData );
-		if ( res != VK_SUCCESS )
+		if (pExistingImageToReuseMemory)
 		{
-			vk_errorf( res, "vkMapMemory failed" );
-			return false;
+			m_pMappedData = pExistingImageToReuseMemory->m_pMappedData;
 		}
-		m_pMappedData = (uint8_t*)pData;
+		else
+		{
+			void *pData = nullptr;
+			res = g_device.vk.MapMemory( g_device.device(), memoryHandle, 0, VK_WHOLE_SIZE, 0, &pData );
+			if ( res != VK_SUCCESS )
+			{
+				vk_errorf( res, "vkMapMemory failed" );
+				return false;
+			}
+			m_pMappedData = (uint8_t*)pData;
+		}
 	}
 	
 	m_bInitialized = true;
@@ -2596,7 +2619,7 @@ CVulkanTexture::~CVulkanTexture( void )
 {
 	wlr_dmabuf_attributes_finish( &m_dmabuf );
 
-	if ( m_pMappedData != nullptr )
+	if ( m_pMappedData != nullptr && m_vkImageMemory )
 	{
 		g_device.vk.UnmapMemory( g_device.device(), m_vkImageMemory );
 		m_pMappedData = nullptr;
@@ -2988,11 +3011,12 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	outputImageflags.bSampled = true; // for pipewire blits
 	outputImageflags.bSwapchain = BIsVRSession();
 
-	pOutput->outputImages.resize(2);
+	pOutput->outputImages.resize(3); // extra image for partial composition.
 	pOutput->outputImagesPartialOverlay.resize(3);
 
 	pOutput->outputImages[0] = nullptr;
 	pOutput->outputImages[1] = nullptr;
+	pOutput->outputImages[2] = nullptr;
 	pOutput->outputImagesPartialOverlay[0] = nullptr;
 	pOutput->outputImagesPartialOverlay[1] = nullptr;
 	pOutput->outputImagesPartialOverlay[2] = nullptr;
@@ -3015,12 +3039,20 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 		return false;
 	}
 
+	pOutput->outputImages[2] = std::make_shared<CVulkanTexture>();
+	bSuccess = pOutput->outputImages[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(format), outputImageflags );
+	if ( bSuccess != true )
+	{
+		vk_log.errorf( "failed to allocate buffer for KMS" );
+		return false;
+	}
+
 	if ( pOutput->outputFormatOverlay != VK_FORMAT_UNDEFINED )
 	{
 		VkFormat partialFormat = pOutput->outputFormatOverlay;
 
 		pOutput->outputImagesPartialOverlay[0] = std::make_shared<CVulkanTexture>();
-		bool bSuccess = pOutput->outputImagesPartialOverlay[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags );
+		bool bSuccess = pOutput->outputImagesPartialOverlay[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags, nullptr, 0, 0, pOutput->outputImages[0].get() );
 		if ( bSuccess != true )
 		{
 			vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3028,7 +3060,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 		}
 
 		pOutput->outputImagesPartialOverlay[1] = std::make_shared<CVulkanTexture>();
-		bSuccess = pOutput->outputImagesPartialOverlay[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags );
+		bSuccess = pOutput->outputImagesPartialOverlay[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags, nullptr, 0, 0, pOutput->outputImages[1].get() );
 		if ( bSuccess != true )
 		{
 			vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3036,7 +3068,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 		}
 
 		pOutput->outputImagesPartialOverlay[2] = std::make_shared<CVulkanTexture>();
-		bSuccess = pOutput->outputImagesPartialOverlay[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags );
+		bSuccess = pOutput->outputImagesPartialOverlay[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags, nullptr, 0, 0, pOutput->outputImages[2].get() );
 		if ( bSuccess != true )
 		{
 			vk_log.errorf( "failed to allocate buffer for KMS" );

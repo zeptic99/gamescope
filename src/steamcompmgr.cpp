@@ -2550,7 +2550,7 @@ paint_all(bool async)
 
 			if ( bNeedsFullComposite )
 			{
-				presentCompFrameInfo.applyOutputColorMxgmt = false;
+				presentCompFrameInfo.applyOutputColorMgmt = false;
 				presentCompFrameInfo.layerCount = 1;
 
 				FrameInfo_t::Layer_t *baseLayer = &presentCompFrameInfo.layers[ 0 ];
