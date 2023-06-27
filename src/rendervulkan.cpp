@@ -42,6 +42,7 @@
 #include "shaders/ffx_fsr1.h"
 #include "shaders/descriptor_set_constants.h"
 
+extern bool g_bWasPartialComposite;
 
 static constexpr mat3x4 g_rgb2yuv_srgb_to_bt601_limited = {{
   { 0.257f, 0.504f, 0.098f, 0.0625f },
@@ -3587,8 +3588,23 @@ bool vulkan_composite( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVul
 
 	if ( partial )
 	{
-		g_output.nOutPresentImagePartial = g_output.nOutImagePartial;
+		if ( !g_bWasPartialComposite )
+		{
+			g_output.nOutPresentImagePartial = g_output.nOutImage;
+			g_output.nOutImagePartial        = g_output.nOutImage;
+		}
+		else
+		{
+			g_output.nOutPresentImagePartial = g_output.nOutImagePartial;
+		}
 		g_output.nOutImagePartial = ( g_output.nOutImagePartial + 1 ) % 3;
+	}
+	else
+	{
+		if (g_bWasPartialComposite)
+		{
+			g_output.nOutImage = ( g_output.nOutImagePartial + 1 ) % 3;
+		}
 	}
 
 	auto compositeImage = partial ? g_output.outputImagesPartialOverlay[ g_output.nOutImagePartial ] : g_output.outputImages[ g_output.nOutImage ];

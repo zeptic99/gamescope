@@ -101,6 +101,7 @@
 
 static LogScope xwm_log("xwm");
 
+bool g_bWasPartialComposite = false;
 
 ///
 // Color Mgmt
@@ -2433,7 +2434,6 @@ paint_all(bool async)
 	}
 	bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
 
-	static bool g_bWasPartialComposite = false;
 	static int g_nLastSingleOverlayZPos = 0;
 
 	if ( !bNeedsFullComposite && !bWantsPartialComposite )
