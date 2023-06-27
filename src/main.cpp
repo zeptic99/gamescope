@@ -840,6 +840,8 @@ static bool initOutput( int preferredWidth, int preferredHeight, int preferredRe
 		{
 #if HAVE_OPENVR
 			return vrsession_init();
+#else
+			return false;
 #endif
 		}
 		else if ( BIsSDLSession() )
