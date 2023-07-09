@@ -2457,6 +2457,13 @@ paint_all(bool async)
 
 	if ( bDoComposite == true )
 	{
+		// Disable partial composition for now until we get
+		// composite priorities working in libliftoff + also
+		// use the proper libliftoff composite plane system.
+		static constexpr bool kDisablePartialComposition = true;
+		if ( kDisablePartialComposition )
+			bNeedsFullComposite = true;
+
 		std::shared_ptr<CVulkanTexture> pPipewireTexture = nullptr;
 #if HAVE_PIPEWIRE
 		if ( pw_buffer != nullptr )
