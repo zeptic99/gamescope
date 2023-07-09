@@ -1359,9 +1359,16 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_
 	}
 
 	// ARGB8888 is the Xformat and AFormat here in this function as we want transparent overlay
-	g_nDRMFormatOverlay = pick_plane_format(&drm->primary_formats, DRM_FORMAT_ARGB8888, DRM_FORMAT_ARGB8888);
+	g_nDRMFormatOverlay = pick_plane_format(&drm->primary_formats, DRM_FORMAT_ARGB2101010, DRM_FORMAT_ARGB2101010);
 	if ( g_nDRMFormatOverlay == DRM_FORMAT_INVALID ) {
-		drm_log.errorf("Overlay plane doesn't support any formats >= 8888");
+		g_nDRMFormatOverlay = pick_plane_format(&drm->primary_formats, DRM_FORMAT_ABGR2101010, DRM_FORMAT_ABGR2101010);
+		if ( g_nDRMFormatOverlay == DRM_FORMAT_INVALID ) {
+			g_nDRMFormatOverlay = pick_plane_format(&drm->primary_formats, DRM_FORMAT_ARGB8888, DRM_FORMAT_ARGB8888);
+			if ( g_nDRMFormatOverlay == DRM_FORMAT_INVALID ) {
+				drm_log.errorf("Overlay plane doesn't support any formats >= 8888");
+				return false;
+			}
+		}
 	}
 
 	drm->kms_in_fence_fd = -1;
