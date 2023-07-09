@@ -129,7 +129,7 @@ struct connector_metadata_t {
    std::shared_ptr<wlserver_hdr_metadata> hdr10_metadata_blob;
    bool supportsST2084 = false;
 
-   displaycolorimetry_t colorimetry = {};
+   displaycolorimetry_t colorimetry = displaycolorimetry_709;
    EOTF eotf = EOTF_Gamma22;
 };
 
