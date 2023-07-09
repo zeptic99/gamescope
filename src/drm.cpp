@@ -756,6 +756,7 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 
 	struct di_info *info = di_info_parse_edid(blob->data, blob->length);
 	if (!info) {
+		drmModeFreePropertyBlob(blob);
 		drm_log.errorf("Failed to parse edid");
 		return;
 	}
