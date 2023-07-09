@@ -2404,7 +2404,12 @@ paint_all(bool async)
 
 	bool bNeedsNearest = g_upscaleFilter == GamescopeUpscaleFilter::NEAREST && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
 
-	bool bWantsPartialComposite = frameInfo.layerCount >= 3;
+	// Disable partial composition for now until we get
+	// composite priorities working in libliftoff + also
+	// use the proper libliftoff composite plane system.
+	static constexpr bool kDisablePartialComposition = true;
+
+	bool bWantsPartialComposite = frameInfo.layerCount >= 3 && !kDisablePartialComposition;
 
 	bool bNeedsFullComposite = BIsNested();
 	bNeedsFullComposite |= alwaysComposite;
@@ -2457,10 +2462,6 @@ paint_all(bool async)
 
 	if ( bDoComposite == true )
 	{
-		// Disable partial composition for now until we get
-		// composite priorities working in libliftoff + also
-		// use the proper libliftoff composite plane system.
-		static constexpr bool kDisablePartialComposition = true;
 		if ( kDisablePartialComposition )
 			bNeedsFullComposite = true;
 
