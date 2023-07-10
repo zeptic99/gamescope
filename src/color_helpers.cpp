@@ -779,6 +779,10 @@ void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *p
 {
     if ( BIsWideGamut( nativeDisplayOutput) )
     {
+        // If not set, make it native.
+        if (flSDRGamutWideness < 0 )
+            flSDRGamutWideness = 1.0f;
+
         // 0.0: 709
         // 1.0: Native
         colormapping_t noRemap;
@@ -791,6 +795,10 @@ void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *p
     }
     else
     {
+        // If not set, make it native.
+        if (flSDRGamutWideness < 0 )
+            flSDRGamutWideness = 0.0f;
+
         // 0.0: Native
         // 0.5: Generic wide gamut display w/smooth mapping
         // 1.0: Generic wide gamut display w/harsh mapping
