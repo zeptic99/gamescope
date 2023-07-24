@@ -933,7 +933,7 @@ retry:
 	nudge_steamcompmgr();
 
 	if ( entry.mangoapp_nudge )
-		mangoapp_update( frametime, frametime, uint64_t(~0ull) );	
+		mangoapp_update( frametime, uint64_t(~0ull), uint64_t(~0ull) );	
 
 	goto retry;
 }
