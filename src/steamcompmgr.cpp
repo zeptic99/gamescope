@@ -4102,6 +4102,11 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 	w->xwayland().damage_sequence = 0;
 	w->xwayland().map_sequence = sequence;
 
+	if ( w == ctx->focus.inputFocusWindow || w->xwayland().id == ctx->currentKeyboardFocusWindow )
+	{
+		XSetInputFocus(ctx->dpy, w->xwayland().id, RevertToNone, CurrentTime);
+	}
+
 	focusDirty = true;
 }
 
