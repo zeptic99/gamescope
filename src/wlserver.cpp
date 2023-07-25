@@ -1789,10 +1789,23 @@ void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gam
 
 void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *surf, uint32_t id )
 {
-	if ( surf->wl_id != 0 )
+	if (surf->wl_id)
 	{
-		wl_log.errorf( "surf->wl_id already set, was %u, set %u", surf->wl_id, id );
-		return;
+		struct wl_resource *old_resource = wl_client_get_object( xwayland_server->client, surf->wl_id );
+		if (!old_resource)
+		{
+			wl_log.errorf("wlserver_x11_surface_info had bad wl_id? Oh no! %d", surf->wl_id);
+			return;
+		}
+		wlr_surface *old_wlr_surf = wlr_surface_from_resource( old_resource );
+		if (!old_wlr_surf)
+		{
+			wl_log.errorf("wlserver_x11_surface_info wl_id's was not a wlr_surf?! Oh no! %d", surf->wl_id);
+			return;
+		}
+
+		wlserver_wl_surface_info *old_surface_info = get_wl_surface_info(old_wlr_surf);
+		old_surface_info->x11_surface = nullptr;
 	}
 
 	surf->wl_id = id;
