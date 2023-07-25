@@ -383,12 +383,30 @@ drm_hdr_parse_edid(drm_t *drm, struct connector *connector, const struct di_edid
 		infoframe->white_point.y = color_xy_to_u16(chroma->white_y);
 	}
 
+	/* Some sane defaults for SDR for displays with missing data... */
+	infoframe->max_display_mastering_luminance = nits_to_u16(1000.0f);
+	infoframe->min_display_mastering_luminance = nits_to_u16_dark(0.0f);
+	infoframe->max_cll = nits_to_u16(400.0f);
+	infoframe->max_fall = nits_to_u16(400.0f);
+
 	if (hdr_static_metadata) {
-		infoframe->max_display_mastering_luminance = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
-		infoframe->min_display_mastering_luminance = nits_to_u16_dark(hdr_static_metadata->desired_content_min_luminance);
-		/* To be filled in by the app based on the scene, default to desired_content_max_luminance. */
-		infoframe->max_cll = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
-		infoframe->max_fall = nits_to_u16(hdr_static_metadata->desired_content_max_frame_avg_luminance);
+		if (hdr_static_metadata->desired_content_max_luminance)
+			infoframe->max_display_mastering_luminance = nits_to_u16(hdr_static_metadata->desired_content_max_luminance);
+		if (hdr_static_metadata->desired_content_min_luminance)
+			infoframe->min_display_mastering_luminance = nits_to_u16_dark(hdr_static_metadata->desired_content_min_luminance);
+		/* To be filled in by the app based on the scene, default to desired_content_max_luminance.
+		 *
+		 * Using display's max_fall for the default metadata max_cll to avoid displays
+		 * overcompensating with tonemapping for SDR content.
+		 */
+		float default_max_fall = hdr_static_metadata->desired_content_max_frame_avg_luminance
+			? hdr_static_metadata->desired_content_max_frame_avg_luminance
+			: hdr_static_metadata->desired_content_max_luminance;
+
+		if (default_max_fall) {
+			infoframe->max_cll = nits_to_u16(default_max_fall);
+			infoframe->max_fall = nits_to_u16(default_max_fall);
+		}
 	}
 
 	metadata->supportsST2084 =
