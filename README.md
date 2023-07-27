@@ -69,3 +69,7 @@ See `gamescope --help` for a full list of options.
 * `-S stretch`: use stretch scaling, the game will fill the window. (e.g. 4:3 to 16:9)
 * `-b`: create a border-less window.
 * `-f`: create a full-screen window.
+
+## Status of Gamescope Packages
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/gamescope.svg)](https://repology.org/project/gamescope/versions)
