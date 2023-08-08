@@ -13,6 +13,9 @@
 #include <unordered_map>
 #include <optional>
 
+// For limiter file.
+#include <fcntl.h>
+
 using namespace std::literals;
 
 namespace GamescopeWSILayer {
@@ -20,6 +23,35 @@ namespace GamescopeWSILayer {
   static bool contains(const std::vector<const char *> vec, std::string_view lookupValue) {
     return std::find_if(vec.begin(), vec.end(),
       [=](const char* value) { return value == lookupValue; }) != vec.end();
+  }
+
+  // TODO: Maybe move to Wayland event or something.
+  // This just utilizes the same code as the Mesa path used
+  // for without the layer or GL though. Need to keep it around anyway.
+  static std::mutex gamescopeSwapchainLimiterFDMutex;
+  static uint32_t gamescopeFrameLimiterOverride() {
+    const char *path = getenv("GAMESCOPE_LIMITER_FILE");
+    if (!path)
+        return 0;
+
+    int fd = -1;
+    {
+      std::unique_lock lock(gamescopeSwapchainLimiterFDMutex);
+
+      static int s_limiterFD = -1;
+
+      if (s_limiterFD < 0)
+        s_limiterFD = open(path, O_RDONLY);
+
+      fd = s_limiterFD;
+    }
+
+    if (fd < 0)
+        return 0;
+
+    uint32_t overrideValue = 0;
+    pread(fd, &overrideValue, sizeof(overrideValue), 0);
+    return overrideValue;
   }
 
   struct GamescopeInstanceData {
@@ -85,6 +117,8 @@ namespace GamescopeWSILayer {
   struct GamescopeSwapchainData {
     VkSurfaceKHR surface; // Always the Gamescope Surface surface -- so the Wayland one.
     bool isBypassingXWayland;
+    VkPresentModeKHR presentMode;
+    VkPresentModeKHR originalPresentMode;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeSwapchain, VkSwapchainKHR);
 
@@ -512,6 +546,13 @@ namespace GamescopeWSILayer {
 
       VkSwapchainCreateInfoKHR swapchainInfo = *pCreateInfo;
 
+      const VkPresentModeKHR originalPresentMode = swapchainInfo.presentMode;
+      const uint32_t limiterOverride = gamescopeFrameLimiterOverride();
+      if (limiterOverride == 1) {
+        fprintf(stderr, "[Gamescope WSI] Overriding present mode to FIFO from frame limiter override.\n");
+        swapchainInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+      }
+
       const bool canBypass = gamescopeSurface->canBypassXWayland();
       // If we can't flip, fallback to the regular XCB surface on the XCB window.
       if (!canBypass)
@@ -562,6 +603,8 @@ namespace GamescopeWSILayer {
           GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
             .surface             = pCreateInfo->surface, // Always the Wayland side surface.
             .isBypassingXWayland = canBypass,
+            .presentMode         = swapchainInfo.presentMode, // The new present mode.
+            .originalPresentMode = originalPresentMode,
           });
 
           auto gamescopeInstance = GamescopeInstance::get(gamescopeSurface->instance);
@@ -591,11 +634,23 @@ namespace GamescopeWSILayer {
       const vkroots::VkDeviceDispatch* pDispatch,
             VkQueue                    queue,
       const VkPresentInfoKHR*          pPresentInfo) {
+      const uint32_t limiterOverride = gamescopeFrameLimiterOverride();
+
+      // TODO: Handle pPresentInfo->pResults.
+      assert(!pPresentInfo->pResults);
+
       bool forceSuboptimal = false;
 
       for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
         VkSwapchainKHR swapchain = pPresentInfo->pSwapchains[i];
         if (auto gamescopeSwapchain = GamescopeSwapchain::get(swapchain)) {
+
+          if ((limiterOverride == 1 && gamescopeSwapchain->presentMode != VK_PRESENT_MODE_FIFO_KHR) ||
+              (limiterOverride != 1 && gamescopeSwapchain->presentMode != gamescopeSwapchain->originalPresentMode)) {
+              fprintf(stderr, "[Gamescope WSI] Forcing swapchain recreation as frame limiter changed.\n");
+              return VK_ERROR_OUT_OF_DATE_KHR;
+          }
+
           auto gamescopeSurface = GamescopeSurface::get(gamescopeSwapchain->surface);
           if (!gamescopeSurface) {
             fprintf(stderr, "[Gamescope WSI] QueuePresentKHR: Surface for swapchain %u was already destroyed. (App use after free).\n", i);
