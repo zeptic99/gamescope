@@ -780,7 +780,12 @@ GPUVIS_EXTERN const char *gpuvis_get_tracefs_filename( char *buf, size_t buflen,
 
     if ( tracefs_dir[ 0 ] )
     {
+        // truncation is ok here
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
         snprintf( buf, buflen, "%s/%s", tracefs_dir, file );
+#pragma GCC diagnostic pop
+
         buf[ buflen - 1 ] = 0;
 
         return buf;
