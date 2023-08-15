@@ -454,7 +454,7 @@ drm_hdr_parse_edid(drm_t *drm, struct connector *connector, const struct di_edid
 			// Hardcode Steam Deck display info to support
 			// BIOSes with missing info for this in EDID.
 			drm_log.infof("[colorimetry]: using default steamdeck colorimetry");
-			metadata->colorimetry = displaycolorimetry_steamdeck;
+			metadata->colorimetry = displaycolorimetry_steamdeck_measured;
 			metadata->eotf = EOTF_Gamma22;
 		}
 	}

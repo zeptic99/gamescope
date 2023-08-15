@@ -1,6 +1,9 @@
 #include "color_helpers.h"
 #include <cstdio>
 
+#include <glm/ext.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 /*
 const uint32_t nLutSize1d = 4096;
 const uint32_t nLutEdgeSize3d = 17;
@@ -76,13 +79,19 @@ int color_tests()
 #endif
 
 
-#if 0
+#if 1
     {
         // chromatic adapatation
         glm::vec3 d50XYZ = glm::vec3(0.96422f, 1.00000f, 0.82521f );
         glm::vec3 d65XYZ = glm::vec3(0.95047f, 1.00000f, 1.08883f );
         printf("d50XYZ %s\n", glm::to_string(d50XYZ).c_str() );
         printf("d65XYZ %s\n", glm::to_string(d65XYZ).c_str() );
+
+        glm::mat3x3 d65FromF50_reference_bradford( 0.9555766, -0.0282895, 0.0122982,
+            -0.0230393, 1.0099416, -0.0204830,
+            0.0631636, 0.0210077,  1.3299098 );
+        printf("d65FromF50_reference_bradford %s\n", glm::to_string(d65FromF50_reference_bradford).c_str() );
+        
         {
             
             glm::mat3x3 d65From50 = chromatic_adaptation_matrix( d50XYZ, d65XYZ, k_EChromaticAdapatationMethod_Bradford );
@@ -91,12 +100,12 @@ int color_tests()
             printf("bradford d65_2 %s\n", glm::to_string(d65_2).c_str() );
         }
         {
-            
             glm::mat3x3 d65From50 = chromatic_adaptation_matrix( d50XYZ, d65XYZ, k_EChromaticAdapatationMethod_XYZ );
             printf("xyzscaling d65From50 %s\n", glm::to_string(d65From50).c_str() );
             glm::vec3 d65_2 = d65From50 * d50XYZ;
             printf("xyzscaling d65_2 %s\n", glm::to_string(d65_2).c_str() );
         }
+
     }
 #endif
 
@@ -224,6 +233,7 @@ void test_eetf2390_mono()
 int main(int argc, char* argv[])
 {
     printf("color_tests\n");
-    test_eetf2390_mono();
+    // test_eetf2390_mono();
+    color_tests();
     return 0;
 }

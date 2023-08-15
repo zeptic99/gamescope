@@ -244,6 +244,7 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
 
 			calcColorTransform( &g_tmpLut1d, s_nLutSize1d, &g_tmpLut3d, s_nLutEdgeSize3d, inputColorimetry, inputEOTF,
 				outputEncodingColorimetry, newColorMgmt.outputEncodingEOTF,
+				newColorMgmt.outputVirtualWhite, k_EChromaticAdapatationMethod_XYZ,
 				colorMapping, newColorMgmt.nightmode, tonemapping, pLook, flGain );
 
 			// Create quantized output luts
@@ -4823,6 +4824,11 @@ steamcompmgr_latch_frame_done( steamcompmgr_win_t *w, uint64_t vblank_idx )
 	}
 }
 
+static inline float santitize_float( float f )
+{
+	return ( std::isfinite( f ) ? f : 0.f );
+}
+
 static void
 handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 {
@@ -5358,6 +5364,21 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		std::string path = get_string_prop( ctx, ctx->root, ctx->atoms.gamescopeColorLookG22 );
 		if ( set_color_look_g22( path.c_str() ) )
 			hasRepaint = true;
+	}
+	if ( ev->atom == ctx->atoms.gamescopeColorOutputVirtualWhite )
+	{
+		std::vector< uint32_t > user_vec;
+		if ( get_prop( ctx, ctx->root, ctx->atoms.gamescopeColorOutputVirtualWhite, user_vec ) && user_vec.size() >= 2 )
+		{
+			g_ColorMgmt.pending.outputVirtualWhite.x = santitize_float( bit_cast<float>( user_vec[0] ) );
+			g_ColorMgmt.pending.outputVirtualWhite.y = santitize_float( bit_cast<float>( user_vec[1] ) );
+		}
+		else
+		{
+			g_ColorMgmt.pending.outputVirtualWhite.x = 0.f;
+			g_ColorMgmt.pending.outputVirtualWhite.y = 0.f;
+		}
+		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeInternalDisplayBrightness )
 	{
@@ -6628,6 +6649,7 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeHDRItmTargetNits = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_ITM_TARGET_NITS", false );
 	ctx->atoms.gamescopeColorLookPQ = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_PQ", false );
 	ctx->atoms.gamescopeColorLookG22 = XInternAtom( ctx->dpy, "GAMESCOPE_COLOR_LOOK_G22", false );
+	ctx->atoms.gamescopeColorOutputVirtualWhite = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_VIRTUAL_WHITE", false );
 	ctx->atoms.gamescopeHDRTonemapDisplayMetadata = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_TONEMAP_DISPLAY_METADATA", false );
 	ctx->atoms.gamescopeHDRTonemapSourceMetadata = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_TONEMAP_SOURCE_METADATA", false );
 	ctx->atoms.gamescopeHDRTonemapOperator = XInternAtom( ctx->dpy, "GAMESCOPE_HDR_TONEMAP_OPERATOR", false );

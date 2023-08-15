@@ -75,18 +75,13 @@ glm::mat3 normalised_primary_matrix( const primaries_t & rgbPrimaries, const glm
     return matPrimaries * whiteScale;
 }
 
-enum EChromaticAdaptationMethod
-{
-    k_EChromaticAdapatationMethod_XYZ,
-    k_EChromaticAdapatationMethod_Bradford,
-};
-
-glm::mat3 chromatic_adaptation_matrix( const glm::vec3 & sourceWhite, const glm::vec3 & destWhite, EChromaticAdaptationMethod eMethod )
+glm::mat3 chromatic_adaptation_matrix( const glm::vec3 & sourceWhiteXYZ, const glm::vec3 & destWhiteXYZ,
+    EChromaticAdaptationMethod eMethod )
 {
     static const glm::mat3 k_matBradford( 0.8951f,-0.7502f, 0.0389f, 0.2664f,1.7135f,  -0.0685f, -0.1614f,  0.0367f, 1.0296f );
     glm::mat3 matAdaptation = eMethod == k_EChromaticAdapatationMethod_XYZ ? glm::diagonal3x3( glm::vec3(1,1,1) ) : k_matBradford;
-    glm::vec3 coneResponseDest = matAdaptation * destWhite;
-    glm::vec3 coneResponseSource = matAdaptation * sourceWhite;
+    glm::vec3 coneResponseDest = matAdaptation * destWhiteXYZ;
+    glm::vec3 coneResponseSource = matAdaptation * sourceWhiteXYZ;
     glm::vec3 scale = glm::vec3( coneResponseDest.x / coneResponseSource.x, coneResponseDest.y / coneResponseSource.y, coneResponseDest.z / coneResponseSource.z );
     return glm::inverse( matAdaptation ) * glm::diagonal3x3( scale ) * matAdaptation;
 }
@@ -670,14 +665,10 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
 	lut3d_t * pLut3d, int nLutEdgeSize3d,
 	const displaycolorimetry_t & source, EOTF sourceEOTF,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
+    const glm::vec2 & destVirtualWhite, EChromaticAdaptationMethod eMethod,
     const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,
     const lut3d_t * pLook, float flGain )
 {
-    glm::mat3 xyz_from_dest = normalised_primary_matrix( dest.primaries, dest.white, 1.f );
-    glm::mat3 dest_from_xyz = glm::inverse( xyz_from_dest );
-    glm::mat3 xyz_from_source = normalised_primary_matrix( source.primaries, source.white, 1.f );
-    glm::mat3 dest_from_source = dest_from_xyz * xyz_from_source; // Absolute colorimetric mapping
-
     // Generate shaper lut
     // Note: while this is typically a 1D approximation of our end to end transform,
     // it need not be! Conceptually this is just to determine the interpolation properties...
@@ -703,28 +694,54 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
 
     if ( pLut3d )
     {
-        pLut3d->resize( nLutEdgeSize3d );
+        glm::mat3 xyz_from_dest = normalised_primary_matrix( dest.primaries, dest.white, 1.f );
+        glm::mat3 dest_from_xyz = glm::inverse( xyz_from_dest );
 
-        float flScale = 1.f / ( (float) nLutEdgeSize3d - 1.f );
+        glm::mat3 xyz_from_source = normalised_primary_matrix( source.primaries, source.white, 1.f );
+        glm::mat3 dest_from_source = dest_from_xyz * xyz_from_source; // XYZ scaling for white point adjustment
 
-        // Precalc night mode scalars
+        // Precalc night mode scalars & digital gain
         // amount and saturation are overdetermined but we separate the two as they conceptually represent
         // different quantities, and this preserves forwards algorithmic compatibility
         glm::vec3 nightModeMultHSV( nightmode.hue, clamp01( nightmode.saturation * nightmode.amount ), 1.f );
-        glm::vec3 vNightModeMultLinear = glm::pow( hsv_to_rgb( nightModeMultHSV ), glm::vec3( 2.2f ) );
+        glm::vec3 vMultLinear = glm::pow( hsv_to_rgb( nightModeMultHSV ), glm::vec3( 2.2f ) );
+        vMultLinear = vMultLinear * flGain;
 
-        glm::vec3 vSourceColorEOTFEncodedEdge[nLutEdgeSize3d];
+        // Calculate the virtual white point adaptation
+        glm::mat3x3 whitePointDestAdaptation = glm::mat3x3( 1.f ); // identity
+        if ( destVirtualWhite.x != 0.f && destVirtualWhite.y != 0.f )
+        {
+            // if source white is within tiny tolerance of sourceWhitePointOverride
+            // don't do the override? (aka two quantizations of d65)
+            glm::mat3x3 virtualWhiteXYZFromPhysicalWhiteXYZ = chromatic_adaptation_matrix(
+                 xy_to_xyz( dest.white ), xy_to_xyz( destVirtualWhite ), k_EChromaticAdapatationMethod_Bradford );
+            whitePointDestAdaptation = dest_from_xyz * virtualWhiteXYZFromPhysicalWhiteXYZ * xyz_from_dest;
+
+            bool bLimitGain = true;
+            if ( bLimitGain )
+            {
+                glm::vec3 white = whitePointDestAdaptation * glm::vec3(1.f, 1.f, 1.f );
+                float whiteMax = std::max( white.r, std::max( white.g, white.b ) );
+                float normScale = 1.f / whiteMax;
+                fprintf( stderr, "normScale %f\n", normScale );
+                whitePointDestAdaptation = whitePointDestAdaptation * glm::diagonal3x3( glm::vec3( normScale ) );
+            }
+        }
 
         // Precalculate source color EOTF encoded per-edge.
+        glm::vec3 vSourceColorEOTFEncodedEdge[nLutEdgeSize3d];
+        float flEdgeScale = 1.f / ( (float) nLutEdgeSize3d - 1.f );
         for ( int nIndex = 0; nIndex < nLutEdgeSize3d; ++nIndex )
         {
-            vSourceColorEOTFEncodedEdge[nIndex] = glm::vec3( nIndex * flScale );
+            vSourceColorEOTFEncodedEdge[nIndex] = glm::vec3( nIndex * flEdgeScale );
             if ( pShaper )
             {
                 vSourceColorEOTFEncodedEdge[nIndex] = ApplyLut1D_Inverse_Linear( *pShaper, vSourceColorEOTFEncodedEdge[nIndex] );
             }
         }
 
+        pLut3d->resize( nLutEdgeSize3d );
+    
         for ( int nBlue=0; nBlue<nLutEdgeSize3d; ++nBlue )
         {
             for ( int nGreen=0; nGreen<nLutEdgeSize3d; ++nGreen )
@@ -751,8 +768,11 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
                     float amount = cfit( colorSaturation, mapping.blendEnableMinSat, mapping.blendEnableMaxSat, mapping.blendAmountMin, mapping.blendAmountMax );
                     destColorLinear = glm::mix( destColorLinear, sourceColorLinear, amount );
 
-                    // Apply night mode
-                    destColorLinear = vNightModeMultLinear * destColorLinear * flGain;
+                    // Apply linear Mult
+                    destColorLinear = vMultLinear * destColorLinear;
+
+                    // Apply destination virtual white point mapping
+                    destColorLinear = whitePointDestAdaptation * destColorLinear;
 
                     // Apply tonemapping
                     destColorLinear = tonemapping.apply( destColorLinear );
@@ -783,6 +803,9 @@ void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *p
         if (flSDRGamutWideness < 0 )
             flSDRGamutWideness = 1.0f;
 
+        displaycolorimetry_t r709NativeWhite = displaycolorimetry_709;
+        r709NativeWhite.white = nativeDisplayOutput.white;
+
         // 0.0: 709
         // 1.0: Native
         colormapping_t noRemap;
@@ -791,7 +814,7 @@ void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *p
         noRemap.blendAmountMin = 0.0f;
         noRemap.blendAmountMax = 0.0f;
         *pMapping = noRemap;
-        *pColorimetry = lerp( displaycolorimetry_709, nativeDisplayOutput, flSDRGamutWideness );
+        *pColorimetry = lerp( r709NativeWhite, nativeDisplayOutput, flSDRGamutWideness );
     }
     else
     {
@@ -820,16 +843,19 @@ void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *p
         partialRemap.blendAmountMin = 0.0f;
         partialRemap.blendAmountMax = 0.25;
 
+        displaycolorimetry_t wideGamutNativeWhite = displaycolorimetry_widegamutgeneric;
+        wideGamutNativeWhite.white = nativeDisplayOutput.white;
+
         if ( flSDRGamutWideness < 0.5f )
         {
             float t = cfit( flSDRGamutWideness, 0.f, 0.5f, 0.0f, 1.0f );
-            *pColorimetry = lerp( nativeDisplayOutput, displaycolorimetry_widegamutgeneric, t );
+            *pColorimetry = lerp( nativeDisplayOutput, wideGamutNativeWhite, t );
             *pMapping = smoothRemap;
         }
         else
         {
             float t = cfit( flSDRGamutWideness, 0.5f, 1.0f, 0.0f, 1.0f );
-            *pColorimetry = displaycolorimetry_widegamutgeneric;
+            *pColorimetry = wideGamutNativeWhite;
             *pMapping = lerp( smoothRemap, partialRemap, t );
         }
     }

@@ -299,6 +299,16 @@ struct tonemapping_t
 	}
 };
 
+
+enum EChromaticAdaptationMethod
+{
+    k_EChromaticAdapatationMethod_XYZ,
+    k_EChromaticAdapatationMethod_Bradford,
+};
+
+glm::mat3 chromatic_adaptation_matrix( const glm::vec3 & sourceWhiteXYZ, const glm::vec3 & destWhiteXYZ,
+	EChromaticAdaptationMethod eMethod );
+
 struct lut1d_t
 {
 	int lutSize = 0;
@@ -354,10 +364,13 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
 	lut3d_t * pLut3d, int nLutEdgeSize3d,
 	const displaycolorimetry_t & source, EOTF sourceEOTF,
 	const displaycolorimetry_t & dest,  EOTF destEOTF,
+	const glm::vec2 & destVirtualWhite, EChromaticAdaptationMethod eMethod,
 	const colormapping_t & mapping, const nightmode_t & nightmode, const tonemapping_t & tonemapping,
 	const lut3d_t * pLook, float flGain );
 
 // Build colorimetry and a gamut mapping for the given SDR configuration
+// Note: the output colorimetry will use the native display's white point
+// Only the color gamut will change
 void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *pMapping,
 	float flSDRGamutWideness, const displaycolorimetry_t & nativeDisplayOutput );
 
@@ -411,10 +424,16 @@ nits_to_u16_dark(float nits)
 	return (uint16_t)round(nits * 10000.0f);
 }
 
-static constexpr displaycolorimetry_t displaycolorimetry_steamdeck
+static constexpr displaycolorimetry_t displaycolorimetry_steamdeck_spec
 {
 	.primaries = { { 0.602f, 0.355f }, { 0.340f, 0.574f }, { 0.164f, 0.121f } },
 	.white = { 0.3070f, 0.3220f },  // not D65
+};
+
+static constexpr displaycolorimetry_t displaycolorimetry_steamdeck_measured
+{
+	.primaries = { { 0.603f, 0.349f }, { 0.335f, 0.571f }, { 0.163f, 0.115f } },
+	.white = { 0.296f, 0.307f }, // not D65
 };
 
 static constexpr displaycolorimetry_t displaycolorimetry_709

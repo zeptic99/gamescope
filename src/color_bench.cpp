@@ -15,6 +15,7 @@ static void BenchmarkCalcColorTransform(EOTF inputEOTF, benchmark::State &state)
 {
     const primaries_t primaries = { { 0.602f, 0.355f }, { 0.340f, 0.574f }, { 0.164f, 0.121f } };
     const glm::vec2 white = { 0.3070f, 0.3220f };
+    const glm::vec2 destVirtualWhite = { 0.f, 0.f };
 
     displaycolorimetry_t inputColorimetry{};
     inputColorimetry.primaries = primaries;
@@ -35,6 +36,7 @@ static void BenchmarkCalcColorTransform(EOTF inputEOTF, benchmark::State &state)
     for (auto _ : state) {
         calcColorTransform( &lut1d_float, nLutSize1d, &lut3d_float, nLutEdgeSize3d, inputColorimetry, inputEOTF,
             outputEncodingColorimetry, EOTF_Gamma22,
+            destVirtualWhite, k_EChromaticAdapatationMethod_XYZ,
             colorMapping, nightmode, tonemapping, nullptr, flGain );
         for ( size_t i=0, end = lut1d_float.dataR.size(); i<end; ++i )
         {

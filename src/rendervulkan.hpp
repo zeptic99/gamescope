@@ -384,6 +384,9 @@ struct gamescope_color_mgmt_t
 	displaycolorimetry_t outputEncodingColorimetry;
 	EOTF outputEncodingEOTF;
 
+	// If non-zero, use this as the emulated "virtual" white point for the output
+	glm::vec2 outputVirtualWhite = { 0.f, 0.f };
+
 	std::shared_ptr<wlserver_hdr_metadata> appHDRMetadata = nullptr;
 
 	bool operator == (const gamescope_color_mgmt_t&) const = default;

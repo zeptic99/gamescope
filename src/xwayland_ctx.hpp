@@ -185,6 +185,7 @@ struct xwayland_ctx_t
 		Atom gamescopeHDRItmTargetNits;
 		Atom gamescopeColorLookPQ;
 		Atom gamescopeColorLookG22;
+		Atom gamescopeColorOutputVirtualWhite;
 		Atom gamescopeHDRTonemapDisplayMetadata;
 		Atom gamescopeHDRTonemapSourceMetadata;
 		Atom gamescopeHDRTonemapOperator;
