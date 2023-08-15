@@ -714,7 +714,7 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
             // if source white is within tiny tolerance of sourceWhitePointOverride
             // don't do the override? (aka two quantizations of d65)
             glm::mat3x3 virtualWhiteXYZFromPhysicalWhiteXYZ = chromatic_adaptation_matrix(
-                 xy_to_xyz( dest.white ), xy_to_xyz( destVirtualWhite ), k_EChromaticAdapatationMethod_Bradford );
+                 xy_to_xyz( dest.white ), xy_to_xyz( destVirtualWhite ), eMethod );
             whitePointDestAdaptation = dest_from_xyz * virtualWhiteXYZFromPhysicalWhiteXYZ * xyz_from_dest;
 
             // Consider lerp-ing the gain limiting between 0-1? That would allow partial clipping

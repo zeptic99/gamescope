@@ -299,11 +299,11 @@ struct tonemapping_t
 	}
 };
 
-
+// Exposed in external atoms.  Dont change the values
 enum EChromaticAdaptationMethod
 {
-    k_EChromaticAdapatationMethod_XYZ,
-    k_EChromaticAdapatationMethod_Bradford,
+    k_EChromaticAdapatationMethod_XYZ = 0,
+    k_EChromaticAdapatationMethod_Bradford = 1,
 };
 
 glm::mat3 chromatic_adaptation_matrix( const glm::vec3 & sourceWhiteXYZ, const glm::vec3 & destWhiteXYZ,

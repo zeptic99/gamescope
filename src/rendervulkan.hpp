@@ -386,6 +386,7 @@ struct gamescope_color_mgmt_t
 
 	// If non-zero, use this as the emulated "virtual" white point for the output
 	glm::vec2 outputVirtualWhite = { 0.f, 0.f };
+	EChromaticAdaptationMethod chromaticAdaptationMode = k_EChromaticAdapatationMethod_Bradford;
 
 	std::shared_ptr<wlserver_hdr_metadata> appHDRMetadata = nullptr;
 
