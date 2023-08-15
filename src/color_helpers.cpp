@@ -717,13 +717,14 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
                  xy_to_xyz( dest.white ), xy_to_xyz( destVirtualWhite ), k_EChromaticAdapatationMethod_Bradford );
             whitePointDestAdaptation = dest_from_xyz * virtualWhiteXYZFromPhysicalWhiteXYZ * xyz_from_dest;
 
-            bool bLimitGain = true;
-            if ( bLimitGain )
+            // Consider lerp-ing the gain limiting between 0-1? That would allow partial clipping
+            // so that contrast ratios wouldnt be sacrified too bad with alternate white points
+            static const bool k_bLimitGain = true;
+            if ( k_bLimitGain )
             {
                 glm::vec3 white = whitePointDestAdaptation * glm::vec3(1.f, 1.f, 1.f );
                 float whiteMax = std::max( white.r, std::max( white.g, white.b ) );
                 float normScale = 1.f / whiteMax;
-                fprintf( stderr, "normScale %f\n", normScale );
                 whitePointDestAdaptation = whitePointDestAdaptation * glm::diagonal3x3( glm::vec3( normScale ) );
             }
         }
