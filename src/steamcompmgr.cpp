@@ -2422,6 +2422,7 @@ paint_all(bool async)
 	bNeedsFullComposite |= bNeedsNearest;
 	bNeedsFullComposite |= bDrewCursor;
 	bNeedsFullComposite |= g_bColorSliderInUse;
+	bNeedsFullComposite |= fadingOut;
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
