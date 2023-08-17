@@ -637,19 +637,24 @@ namespace GamescopeWSILayer {
       const VkPresentInfoKHR*          pPresentInfo) {
       const uint32_t limiterOverride = gamescopeFrameLimiterOverride();
 
-      // TODO: Handle pPresentInfo->pResults.
-      assert(!pPresentInfo->pResults);
-
-      bool forceSuboptimal = false;
+      VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
 
       for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
         VkSwapchainKHR swapchain = pPresentInfo->pSwapchains[i];
+
+        auto UpdateSwapchainResult = [&](VkResult newResult) {
+          if (pPresentInfo->pResults && pPresentInfo->pResults[i] >= VK_SUCCESS)
+            pPresentInfo->pResults[i] = newResult;
+          if (result >= VK_SUCCESS)
+            result = newResult;
+        };
+
         if (auto gamescopeSwapchain = GamescopeSwapchain::get(swapchain)) {
 
           if ((limiterOverride == 1 && gamescopeSwapchain->presentMode != VK_PRESENT_MODE_FIFO_KHR) ||
               (limiterOverride != 1 && gamescopeSwapchain->presentMode != gamescopeSwapchain->originalPresentMode)) {
               fprintf(stderr, "[Gamescope WSI] Forcing swapchain recreation as frame limiter changed.\n");
-              return VK_ERROR_OUT_OF_DATE_KHR;
+              UpdateSwapchainResult(VK_ERROR_OUT_OF_DATE_KHR);
           }
 
           auto gamescopeSurface = GamescopeSurface::get(gamescopeSwapchain->surface);
@@ -660,21 +665,12 @@ namespace GamescopeWSILayer {
           }
 
           const bool canBypass = gamescopeSurface->canBypassXWayland();
-
-          if (gamescopeSwapchain->isBypassingXWayland && !canBypass)
-            return VK_ERROR_OUT_OF_DATE_KHR;
-
-          if (canBypass && !gamescopeSwapchain->isBypassingXWayland)
-            forceSuboptimal = true;
+          if (canBypass != gamescopeSwapchain->isBypassingXWayland)
+            UpdateSwapchainResult(canBypass ? VK_SUBOPTIMAL_KHR : VK_ERROR_OUT_OF_DATE_KHR);
         }
       }
 
-      VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
-
-      if (result != VK_SUCCESS)
-        return result;
-
-      return forceSuboptimal ? VK_SUBOPTIMAL_KHR : VK_SUCCESS;
+      return result;
     }
 
     static void SetHdrMetadataEXT(
