@@ -5280,6 +5280,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		uint32_t heatmap = get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
 		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap;
 		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_MSWCG;
+		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_Hard;
 		if (heatmap != 0)
 			g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
 		if (heatmap == 2)
