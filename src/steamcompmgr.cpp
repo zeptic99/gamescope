@@ -1866,7 +1866,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 
 	layer->zpos = g_zposCursor; // cursor, on top of both bottom layers
 	layer->applyColorMgmt = false;
-	layer->allowBlending = true;
+	layer->allowBlending = g_ColorMgmt.pending.enabled;
 
 	layer->tex = m_texture;
 	layer->fbid = BIsNested() ? 0 : m_texture->fbid();
@@ -2101,8 +2101,8 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 
 	layer->blackBorder = flags & PaintWindowFlag::DrawBorders;
 
-	layer->applyColorMgmt = true;
-	layer->allowBlending = true;
+	layer->applyColorMgmt = g_ColorMgmt.pending.enabled;
+	layer->allowBlending = g_ColorMgmt.pending.enabled;
 	layer->zpos = g_zposBase;
 
 	if ( w != scaleW )
@@ -2206,7 +2206,7 @@ paint_all(bool async)
 	}
 
 	struct FrameInfo_t frameInfo = {};
-	frameInfo.applyOutputColorMgmt = true;
+	frameInfo.applyOutputColorMgmt = g_ColorMgmt.pending.enabled;
 
 	// If the window we'd paint as the base layer is the streaming client,
 	// find the video underlay and put it up first in the scenegraph
@@ -2600,7 +2600,7 @@ paint_all(bool async)
 			{
 				if ( g_bWasPartialComposite || !bDefer )
 				{
-					presentCompFrameInfo.applyOutputColorMgmt = true;
+					presentCompFrameInfo.applyOutputColorMgmt = g_ColorMgmt.pending.enabled;
 					presentCompFrameInfo.layerCount = 2;
 
 					presentCompFrameInfo.layers[ 0 ] = frameInfo.layers[ 0 ];
@@ -2614,8 +2614,8 @@ paint_all(bool async)
 
 					overlayLayer->tex = vulkan_get_last_output_image( true, bDefer );
 					overlayLayer->fbid = overlayLayer->tex->fbid();
-					overlayLayer->applyColorMgmt = true;
-					overlayLayer->allowBlending = true;
+					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
+					overlayLayer->allowBlending = g_ColorMgmt.pending.enabled;
 
 					overlayLayer->linearFilter = false;
 					// Partial composition stuff has the same colorspace.
@@ -2626,7 +2626,7 @@ paint_all(bool async)
 				{
 					// Use whatever overlay we had last while waiting for the
 					// partial composition to have anything queued.
-					presentCompFrameInfo.applyOutputColorMgmt = true;
+					presentCompFrameInfo.applyOutputColorMgmt = g_ColorMgmt.pending.enabled;
 					presentCompFrameInfo.layerCount = 1;
 
 					presentCompFrameInfo.layers[ 0 ] = frameInfo.layers[ 0 ];
