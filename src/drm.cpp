@@ -574,6 +574,10 @@ static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm
 
 	if ( g_bRotated )
 	{
+		// Patch width, height.
+		drm_log.infof("[patched edid] Patching dims %ux%u -> %ux%u", edid[0x15], edid[0x16], edid[0x16], edid[0x15]);
+		std::swap(edid[0x15], edid[0x16]);
+
 		for (uint32_t i = 0; i < EDID_BYTE_DESCRIPTOR_COUNT; i++)
 		{
 			uint8_t *byte_desc_data = &edid[0x36 + i * EDID_BYTE_DESCRIPTOR_SIZE];
@@ -581,7 +585,7 @@ static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm
 			{
 				uint32_t horiz = (get_bit_range(byte_desc_data[4], 7, 4) << 8) | byte_desc_data[2];
 				uint32_t vert  = (get_bit_range(byte_desc_data[7], 7, 4) << 8) | byte_desc_data[5];
-				drm_log.infof("[patched edid] Patching %ux%u -> %ux%u", horiz, vert, vert, horiz);
+				drm_log.infof("[patched edid] Patching res %ux%u -> %ux%u", horiz, vert, vert, horiz);
 				std::swap(byte_desc_data[4], byte_desc_data[7]);
 				std::swap(byte_desc_data[2], byte_desc_data[5]);
 				break;
