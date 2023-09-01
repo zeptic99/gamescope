@@ -168,4 +168,12 @@ struct steamcompmgr_win_t {
 
 		return main_surface();
 	}
+
+	wlr_surface *override_surface() const
+	{
+		if (type == steamcompmgr_win_type_t::XWAYLAND)
+			return xwayland().surface.override_surface;
+		else
+			return nullptr;
+	}
 };

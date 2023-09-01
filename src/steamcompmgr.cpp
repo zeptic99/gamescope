@@ -6096,7 +6096,7 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 	}
 
 	// If we have an override surface, make sure this commit is for the current surface.
-	bool for_current_surface = !w->override_surface || w->current_surface() == reslistentry.surf;
+	bool for_current_surface = !w->override_surface() || w->current_surface() == reslistentry.surf;
 	if (!for_current_surface)
 	{
 		wlserver_lock();
