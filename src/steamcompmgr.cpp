@@ -6095,6 +6095,18 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		return;
 	}
 
+	// If we have an override surface, make sure this commit is for the current surface.
+	bool for_current_surface = !w->override_surface || w->current_surface() == reslistentry.surf;
+	if (!for_current_surface)
+	{
+		wlserver_lock();
+		wlr_buffer_unlock( buf );
+		wlserver_unlock();
+
+		// Don't mark as recieve done commit, it was for the wrong surface.
+		return;
+	}
+
 	bool already_exists = false;
 	for ( const auto& existing_commit : w->commit_queue )
 	{
