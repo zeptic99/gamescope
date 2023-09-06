@@ -2464,6 +2464,8 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 	return ret;
 }
 
+bool g_bForceAsyncFlips = false;
+
 /* Prepares an atomic commit for the provided scene-graph. Returns 0 on success,
  * negative errno on failure or if the scene-graph can't be presented directly. */
 int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameInfo )
@@ -2546,7 +2548,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	if ( drm->crtc != nullptr )
 		flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
-	if ( async )
+	if ( async || g_bForceAsyncFlips )
 		flags |= DRM_MODE_PAGE_FLIP_ASYNC;
 
 	if ( needs_modeset ) {
