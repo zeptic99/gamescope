@@ -8,6 +8,9 @@
 #include <map>
 #include <unordered_map>
 #include <array>
+#include <bitset>
+
+#include "shaders/descriptor_set_constants.h"
 
 class CVulkanCmdBuffer;
 
@@ -743,4 +746,75 @@ private:
 	std::atomic<uint64_t> m_submissionSeqNo = { 0 };
 	std::vector<std::unique_ptr<CVulkanCmdBuffer>> m_unusedCmdBufs;
 	std::map<uint64_t, std::unique_ptr<CVulkanCmdBuffer>> m_pendingCmdBufs;
+};
+
+struct TextureState
+{
+	bool discarded : 1;
+	bool dirty : 1;
+	bool needsPresentLayout : 1;
+	bool needsExport : 1;
+	bool needsImport : 1;
+
+	TextureState()
+	{
+		discarded = false;
+		dirty = false;
+		needsPresentLayout = false;
+		needsExport = false;
+		needsImport = false;
+	}
+};
+
+class CVulkanCmdBuffer
+{
+public:
+	CVulkanCmdBuffer(CVulkanDevice *parent, VkCommandBuffer cmdBuffer);
+	~CVulkanCmdBuffer();
+	CVulkanCmdBuffer(const CVulkanCmdBuffer& other) = delete;
+	CVulkanCmdBuffer(CVulkanCmdBuffer&& other) = delete;
+	CVulkanCmdBuffer& operator=(const CVulkanCmdBuffer& other) = delete;
+	CVulkanCmdBuffer& operator=(CVulkanCmdBuffer&& other) = delete;
+
+	inline VkCommandBuffer rawBuffer() {return m_cmdBuffer;}
+	void reset();
+	void begin();
+	void end();
+	void bindTexture(uint32_t slot, std::shared_ptr<CVulkanTexture> texture);
+	void bindColorMgmtLuts(uint32_t slot, const std::shared_ptr<CVulkanTexture>& lut1d, const std::shared_ptr<CVulkanTexture>& lut3d);
+	void setTextureStorage(bool storage);
+	void setTextureSrgb(uint32_t slot, bool srgb);
+	void setSamplerNearest(uint32_t slot, bool nearest);
+	void setSamplerUnnormalized(uint32_t slot, bool unnormalized);
+	void bindTarget(std::shared_ptr<CVulkanTexture> target);
+	void clearState();
+	template<class PushData, class... Args>
+	void pushConstants(Args&&... args);
+	void bindPipeline(VkPipeline pipeline);
+	void dispatch(uint32_t x, uint32_t y = 1, uint32_t z = 1);
+	void copyImage(std::shared_ptr<CVulkanTexture> src, std::shared_ptr<CVulkanTexture> dst);
+	void copyBufferToImage(VkBuffer buffer, VkDeviceSize offset, uint32_t stride, std::shared_ptr<CVulkanTexture> dst);
+
+
+private:
+	void prepareSrcImage(CVulkanTexture *image);
+	void prepareDestImage(CVulkanTexture *image);
+	void markDirty(CVulkanTexture *image);
+	void insertBarrier(bool flush = false);
+
+	VkCommandBuffer m_cmdBuffer;
+	CVulkanDevice *m_device;
+
+	// Per Use State
+	std::unordered_map<CVulkanTexture *, std::shared_ptr<CVulkanTexture>> m_textureRefs;
+	std::unordered_map<CVulkanTexture *, TextureState> m_textureState;
+
+	// Draw State
+	std::array<CVulkanTexture *, VKR_SAMPLER_SLOTS> m_boundTextures;
+	std::bitset<VKR_SAMPLER_SLOTS> m_useSrgb;
+	std::array<SamplerState, VKR_SAMPLER_SLOTS> m_samplerState;
+	CVulkanTexture *m_target;
+
+	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_shaperLut;
+	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_lut3D;
 };
