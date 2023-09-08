@@ -81,6 +81,21 @@ liftoff_dep = dependency(
   default_options: ['default_library=static'],
 )
 
+reshade_src = [
+  'reshade/source/effect_codegen_spirv.cpp',
+  'reshade/source/effect_expression.cpp',
+  'reshade/source/effect_lexer.cpp',
+  'reshade/source/effect_parser_exp.cpp',
+  'reshade/source/effect_parser_stmt.cpp',
+  'reshade/source/effect_preprocessor.cpp',
+  'reshade/source/effect_symbol_table.cpp',
+]
+
+reshade_include = include_directories([
+  'reshade/source',
+  'reshade/include',
+  '../thirdparty/SPIRV-Headers/include/spirv/unified1'
+])
 
 src = [
   'steamcompmgr.cpp',
@@ -110,7 +125,8 @@ endif
 
   executable(
     'gamescope',
-    src,
+    src, reshade_src,
+    include_directories : [reshade_include],
     dependencies: [
       dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
       dep_xxf86vm, dep_xres, glm_dep, drm_dep, wayland_server,
