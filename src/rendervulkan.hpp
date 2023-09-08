@@ -5,6 +5,11 @@
 #include <atomic>
 #include <stdint.h>
 #include <memory>
+#include <map>
+#include <unordered_map>
+#include <array>
+
+class CVulkanCmdBuffer;
 
 // 1: Fade Plane (Fade outs between switching focus)
 // 2: Video Underlay (The actual video)
@@ -428,3 +433,308 @@ struct gamescope_color_mgmt_tracker_t
 
 extern gamescope_color_mgmt_tracker_t g_ColorMgmt;
 extern gamescope_color_mgmt_luts g_ColorMgmtLuts[ EOTF_Count ];
+
+struct VulkanOutput_t
+{
+	VkSurfaceKHR surface;
+	VkSurfaceCapabilitiesKHR surfaceCaps;
+	std::vector< VkSurfaceFormatKHR > surfaceFormats;
+	std::vector< VkPresentModeKHR > presentModes;
+
+
+	VkSwapchainKHR swapChain;
+	VkFence acquireFence;
+
+	uint32_t nOutImage; // swapchain index in nested mode, or ping/pong between two RTs
+	std::vector<std::shared_ptr<CVulkanTexture>> outputImages;
+	std::vector<std::shared_ptr<CVulkanTexture>> outputImagesPartialOverlay;
+
+	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
+	VkFormat outputFormatOverlay = VK_FORMAT_UNDEFINED;
+
+	std::array<std::shared_ptr<CVulkanTexture>, 8> pScreenshotImages;
+
+	// NIS and FSR
+	std::shared_ptr<CVulkanTexture> tmpOutput;
+
+	// NIS
+	std::shared_ptr<CVulkanTexture> nisScalerImage;
+	std::shared_ptr<CVulkanTexture> nisUsmImage;
+};
+
+
+enum ShaderType {
+	SHADER_TYPE_BLIT = 0,
+	SHADER_TYPE_BLUR,
+	SHADER_TYPE_BLUR_COND,
+	SHADER_TYPE_BLUR_FIRST_PASS,
+	SHADER_TYPE_EASU,
+	SHADER_TYPE_RCAS,
+	SHADER_TYPE_NIS,
+	SHADER_TYPE_RGB_TO_NV12,
+
+	SHADER_TYPE_COUNT
+};
+
+extern VulkanOutput_t g_output;
+
+struct SamplerState
+{
+	bool bNearest : 1;
+	bool bUnnormalized : 1;
+
+	SamplerState( void )
+	{
+		bNearest = false;
+		bUnnormalized = false;
+	}
+
+	bool operator==( const SamplerState& other ) const
+	{
+		return this->bNearest == other.bNearest
+			&& this->bUnnormalized == other.bUnnormalized;
+	}
+};
+
+namespace std
+{
+	template <>
+	struct hash<SamplerState>
+	{
+		size_t operator()( const SamplerState& k ) const
+		{
+			return k.bNearest | (k.bUnnormalized << 1);
+		}
+	};
+}
+
+struct PipelineInfo_t
+{
+	ShaderType shaderType;
+
+	uint32_t layerCount;
+	uint32_t ycbcrMask;
+	uint32_t blurLayerCount;
+
+	uint32_t compositeDebug;
+
+	uint32_t colorspaceMask;
+	uint32_t outputEOTF;
+	bool itmEnable;
+
+	bool operator==(const PipelineInfo_t& o) const {
+		return
+		shaderType == o.shaderType &&
+		layerCount == o.layerCount &&
+		ycbcrMask == o.ycbcrMask &&
+		blurLayerCount == o.blurLayerCount &&
+		compositeDebug == o.compositeDebug &&
+		colorspaceMask == o.colorspaceMask &&
+		outputEOTF == o.outputEOTF &&
+		itmEnable == o.itmEnable;
+	}
+};
+
+
+static inline uint32_t hash_combine(uint32_t old_hash, uint32_t new_hash) {
+    return old_hash ^ (new_hash + 0x9e3779b9 + (old_hash << 6) + (old_hash >> 2));
+}
+
+namespace std
+{
+	template <>
+	struct hash<PipelineInfo_t>
+	{
+		size_t operator()( const PipelineInfo_t& k ) const
+		{
+			uint32_t hash = k.shaderType;
+			hash = hash_combine(hash, k.layerCount);
+			hash = hash_combine(hash, k.ycbcrMask);
+			hash = hash_combine(hash, k.blurLayerCount);
+			hash = hash_combine(hash, k.compositeDebug);
+			hash = hash_combine(hash, k.colorspaceMask);
+			hash = hash_combine(hash, k.outputEOTF);
+			hash = hash_combine(hash, k.itmEnable);
+			return hash;
+		}
+	};
+}
+
+static inline uint32_t div_roundup(uint32_t x, uint32_t y)
+{
+	return (x + (y - 1)) / y;
+}
+
+#define VULKAN_INSTANCE_FUNCTIONS \
+	VK_FUNC(CreateDevice) \
+	VK_FUNC(EnumerateDeviceExtensionProperties) \
+	VK_FUNC(EnumeratePhysicalDevices) \
+	VK_FUNC(GetDeviceProcAddr) \
+	VK_FUNC(GetPhysicalDeviceFeatures2) \
+	VK_FUNC(GetPhysicalDeviceFormatProperties) \
+	VK_FUNC(GetPhysicalDeviceFormatProperties2) \
+	VK_FUNC(GetPhysicalDeviceImageFormatProperties2) \
+	VK_FUNC(GetPhysicalDeviceMemoryProperties) \
+	VK_FUNC(GetPhysicalDeviceQueueFamilyProperties) \
+	VK_FUNC(GetPhysicalDeviceProperties) \
+	VK_FUNC(GetPhysicalDeviceProperties2) \
+	VK_FUNC(GetPhysicalDeviceSurfaceCapabilitiesKHR) \
+	VK_FUNC(GetPhysicalDeviceSurfaceFormatsKHR) \
+	VK_FUNC(GetPhysicalDeviceSurfacePresentModesKHR) \
+	VK_FUNC(GetPhysicalDeviceSurfaceSupportKHR)
+
+#define VULKAN_DEVICE_FUNCTIONS \
+	VK_FUNC(AllocateCommandBuffers) \
+	VK_FUNC(AllocateDescriptorSets) \
+	VK_FUNC(AllocateMemory) \
+	VK_FUNC(AcquireNextImageKHR) \
+	VK_FUNC(BeginCommandBuffer) \
+	VK_FUNC(BindBufferMemory) \
+	VK_FUNC(BindImageMemory) \
+	VK_FUNC(CreateBuffer) \
+	VK_FUNC(CreateCommandPool) \
+	VK_FUNC(CreateComputePipelines) \
+	VK_FUNC(CreateDescriptorPool) \
+	VK_FUNC(CreateDescriptorSetLayout) \
+	VK_FUNC(CreateFence) \
+	VK_FUNC(CreateImage) \
+	VK_FUNC(CreateImageView) \
+	VK_FUNC(CreatePipelineLayout) \
+	VK_FUNC(CreateSampler) \
+	VK_FUNC(CreateSamplerYcbcrConversion) \
+	VK_FUNC(CreateSemaphore) \
+	VK_FUNC(CreateShaderModule) \
+	VK_FUNC(CreateSwapchainKHR) \
+	VK_FUNC(CmdBindDescriptorSets) \
+	VK_FUNC(CmdBindPipeline) \
+	VK_FUNC(CmdCopyBufferToImage) \
+	VK_FUNC(CmdCopyImage) \
+	VK_FUNC(CmdDispatch) \
+	VK_FUNC(CmdPipelineBarrier) \
+	VK_FUNC(CmdPushConstants) \
+	VK_FUNC(DestroyBuffer) \
+	VK_FUNC(DestroyImage) \
+	VK_FUNC(DestroyImageView) \
+	VK_FUNC(DestroyPipeline) \
+	VK_FUNC(DestroySwapchainKHR) \
+	VK_FUNC(EndCommandBuffer) \
+	VK_FUNC(FreeCommandBuffers) \
+	VK_FUNC(FreeMemory) \
+	VK_FUNC(GetBufferMemoryRequirements) \
+	VK_FUNC(GetDeviceQueue) \
+	VK_FUNC(GetImageDrmFormatModifierPropertiesEXT) \
+	VK_FUNC(GetImageMemoryRequirements) \
+	VK_FUNC(GetImageSubresourceLayout) \
+	VK_FUNC(GetMemoryFdKHR) \
+	VK_FUNC(GetSemaphoreCounterValue) \
+	VK_FUNC(GetSwapchainImagesKHR) \
+	VK_FUNC(MapMemory) \
+	VK_FUNC(QueuePresentKHR) \
+	VK_FUNC(QueueSubmit) \
+	VK_FUNC(ResetCommandBuffer) \
+	VK_FUNC(ResetFences) \
+	VK_FUNC(UnmapMemory) \
+	VK_FUNC(UpdateDescriptorSets) \
+	VK_FUNC(WaitForFences) \
+	VK_FUNC(WaitSemaphores)
+
+class CVulkanDevice
+{
+public:
+	bool BInit(VkInstance instance, VkSurfaceKHR surface);
+
+	VkSampler sampler(SamplerState key);
+	VkPipeline pipeline(ShaderType type, uint32_t layerCount = 1, uint32_t ycbcrMask = 0, uint32_t blur_layers = 0, uint32_t colorspace_mask = 0, uint32_t output_eotf = EOTF_Gamma22, bool itm_enable = false);
+	int32_t findMemoryType( VkMemoryPropertyFlags properties, uint32_t requiredTypeBits );
+	std::unique_ptr<CVulkanCmdBuffer> commandBuffer();
+	uint64_t submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuf);
+	void wait(uint64_t sequence, bool reset = true);
+	void waitIdle();
+	void garbageCollect();
+	inline VkDescriptorSet descriptorSet()
+	{
+		VkDescriptorSet ret = m_descriptorSets[m_currentDescriptorSet];
+		m_currentDescriptorSet = (m_currentDescriptorSet + 1) % m_descriptorSets.size();
+		return ret;
+	}
+
+	inline VkDevice device() { return m_device; }
+	inline VkPhysicalDevice physDev() {return m_physDev; }
+	inline VkInstance instance() { return m_instance; }
+	inline VkQueue queue() {return m_queue;}
+	inline VkCommandPool commandPool() {return m_commandPool;}
+	inline uint32_t queueFamily() {return m_queueFamily;}
+	inline VkBuffer uploadBuffer() {return m_uploadBuffer;}
+	inline VkPipelineLayout pipelineLayout() {return m_pipelineLayout;}
+	inline void *uploadBufferData() {return m_uploadBufferData;}
+	inline int drmRenderFd() {return m_drmRendererFd;}
+	inline bool supportsModifiers() {return m_bSupportsModifiers;}
+	inline bool hasDrmPrimaryDevId() {return m_bHasDrmPrimaryDevId;}
+	inline dev_t primaryDevId() {return m_drmPrimaryDevId;}
+	inline bool supportsFp16() {return m_bSupportsFp16;}
+
+	#define VK_FUNC(x) PFN_vk##x x = nullptr;
+	struct
+	{
+		VULKAN_INSTANCE_FUNCTIONS
+		VULKAN_DEVICE_FUNCTIONS
+	} vk;
+	#undef VK_FUNC
+
+	void resetCmdBuffers(uint64_t sequence);
+
+private:
+	bool selectPhysDev(VkSurfaceKHR surface);
+	bool createDevice();
+	bool createLayouts();
+	bool createPools();
+	bool createShaders();
+	bool createScratchResources();
+	VkPipeline compilePipeline(uint32_t layerCount, uint32_t ycbcrMask, ShaderType type, uint32_t blur_layer_count, uint32_t composite_debug, uint32_t colorspace_mask, uint32_t output_eotf, bool itm_enable);
+	void compileAllPipelines();
+
+	VkDevice m_device = nullptr;
+	VkPhysicalDevice m_physDev = nullptr;
+	VkInstance m_instance = nullptr;
+	VkQueue m_queue = nullptr;
+	VkSamplerYcbcrConversion m_ycbcrConversion = VK_NULL_HANDLE;
+	VkSampler m_ycbcrSampler = VK_NULL_HANDLE;
+	VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
+	VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+	VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+	VkCommandPool m_commandPool = VK_NULL_HANDLE;
+
+	uint32_t m_queueFamily = -1;
+
+	int m_drmRendererFd = -1;
+	dev_t m_drmPrimaryDevId = 0;
+
+	bool m_bSupportsFp16 = false;
+	bool m_bHasDrmPrimaryDevId = false;
+	bool m_bSupportsModifiers = false;
+	bool m_bInitialized = false;
+
+
+	VkPhysicalDeviceMemoryProperties m_memoryProperties;
+
+	std::unordered_map< SamplerState, VkSampler > m_samplerCache;
+	std::array<VkShaderModule, SHADER_TYPE_COUNT> m_shaderModules;
+	std::unordered_map<PipelineInfo_t, VkPipeline> m_pipelineMap;
+	std::mutex m_pipelineMutex;
+
+	// currently just one set, no need to double buffer because we
+	// vkQueueWaitIdle after each submit.
+	// should be moved to the output if we are going to support multiple outputs
+	std::array<VkDescriptorSet, 3> m_descriptorSets;
+	uint32_t m_currentDescriptorSet = 0;
+
+	VkBuffer m_uploadBuffer;
+	VkDeviceMemory m_uploadBufferMemory;
+	void *m_uploadBufferData;
+
+
+	VkSemaphore m_scratchTimelineSemaphore;
+	std::atomic<uint64_t> m_submissionSeqNo = { 0 };
+	std::vector<std::unique_ptr<CVulkanCmdBuffer>> m_unusedCmdBufs;
+	std::map<uint64_t, std::unique_ptr<CVulkanCmdBuffer>> m_pendingCmdBufs;
+};
