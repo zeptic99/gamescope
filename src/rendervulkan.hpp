@@ -193,6 +193,8 @@ public:
 	CVulkanTexture( void );
 	~CVulkanTexture( void );
 
+	uint32_t queueFamily = VK_QUEUE_FAMILY_IGNORED;
+
 private:
 	bool m_bInitialized = false;
 	bool m_bExternal = false;

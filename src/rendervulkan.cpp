@@ -1564,6 +1564,9 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 		const VkAccessFlags write_bits = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
 		const VkAccessFlags read_bits = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
 
+		if (image->queueFamily == VK_QUEUE_FAMILY_IGNORED)
+			image->queueFamily = m_queueFamily;
+
 		VkImageMemoryBarrier memoryBarrier =
 		{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1571,7 +1574,7 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 			.dstAccessMask = flush ? 0u : read_bits | write_bits,
 			.oldLayout = (state.discarded || state.needsImport) ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL,
 			.newLayout = isPresent ? presentLayout : VK_IMAGE_LAYOUT_GENERAL,
-			.srcQueueFamilyIndex = isExport ? m_device->queueFamily() : state.needsImport ? externalQueue : VK_QUEUE_FAMILY_IGNORED,
+			.srcQueueFamilyIndex = isExport ? image->queueFamily : state.needsImport ? externalQueue : image->queueFamily,
 			.dstQueueFamilyIndex = isExport ? externalQueue : state.needsImport ? m_queueFamily : m_queueFamily,
 			.image = image->vkImage(),
 			.subresourceRange = subResRange
