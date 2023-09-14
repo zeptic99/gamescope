@@ -5,7 +5,7 @@
 
 namespace reshadefx
 {
-    class module;
+    struct module;
 }
 
 class ReshadeUniform;

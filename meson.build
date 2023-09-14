@@ -28,6 +28,8 @@ add_project_arguments(cppc.get_supported_arguments([
   '-Wno-unused-const-variable',
   '-Wno-volatile', # glm warning
   '-Wno-deprecated-volatile',
+  '-Wno-ignored-qualifiers', # reshade warning
+  '-Wno-missing-braces',
 ]), language: 'cpp')
 
 add_project_arguments(cppc.get_supported_arguments([

@@ -583,11 +583,12 @@ static VkFormat ConvertReshadeFormat(reshadefx::texture_format texFormat)
         case reshadefx::texture_format::rgba32f: return VK_FORMAT_R32G32B32A32_SFLOAT;
         case reshadefx::texture_format::rgb10a2: return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
         default:
-            reshade_log.errorf("Couldn't convert texture format: %d\n", texFormat);
+            reshade_log.errorf("Couldn't convert texture format: %d\n", static_cast<int>(texFormat));
             return VK_FORMAT_UNDEFINED;
     }
 }
 
+#if 0
 static VkCompareOp ConvertReshadeCompareOp(reshadefx::pass_stencil_func compareOp)
 {
     switch (compareOp)
@@ -619,6 +620,7 @@ static VkStencilOp ConvertReshadeStencilOp(reshadefx::pass_stencil_op stencilOp)
         default: return VK_STENCIL_OP_KEEP;
     }
 }
+#endif
 
 static VkBlendOp ConvertReshadeBlendOp(reshadefx::pass_blend_op blendOp)
 {
@@ -977,7 +979,7 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
                 uint8_t *pixels = data;
 
                 std::vector<uint8_t> resized_data;
-                if (w != texture->width() || h != texture->height())
+                if (w != (int)texture->width() || h != (int)texture->height())
                 {
                     resized_data.resize(texture->width() * texture->height() * 4);
                     stbir_resize_uint8(data, w, h, 0, resized_data.data(), texture->width(), texture->height(), 0, STBI_rgb_alpha);
@@ -1191,7 +1193,7 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
             .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext                  = nullptr,
             .flags                  = 0,
-            .setLayoutCount         = std::size(m_descriptorSetLayouts),
+            .setLayoutCount         = uint32_t(std::size(m_descriptorSetLayouts)),
             .pSetLayouts            = m_descriptorSetLayouts,
             .pushConstantRangeCount = 0,
             .pPushConstantRanges    = nullptr,
@@ -1208,9 +1210,9 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
     {
         VkDescriptorPoolSize descriptorPoolSizes[] =
         {
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         GAMESCOPE_RESHADE_DESCRIPTOR_SET_COUNT * 1u},
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, GAMESCOPE_RESHADE_DESCRIPTOR_SET_COUNT * m_module->samplers.size()},
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          GAMESCOPE_RESHADE_DESCRIPTOR_SET_COUNT * m_module->storages.size()},
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         uint32_t(GAMESCOPE_RESHADE_DESCRIPTOR_SET_COUNT * 1u) },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(GAMESCOPE_RESHADE_DESCRIPTOR_SET_COUNT * m_module->samplers.size()) },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          uint32_t(GAMESCOPE_RESHADE_DESCRIPTOR_SET_COUNT * m_module->storages.size()) },
         };
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo;
@@ -1669,7 +1671,7 @@ uint64_t ReshadeEffectPipeline::execute(std::shared_ptr<CVulkanTexture> inImage,
                 .sType                = VK_STRUCTURE_TYPE_RENDERING_INFO,
                 .renderArea           = { { 0, 0, }, { m_key.bufferWidth, m_key.bufferHeight }},
                 .layerCount           = 1,
-                .colorAttachmentCount = colorAttachmentInfos.size(),
+                .colorAttachmentCount = uint32_t(colorAttachmentInfos.size()),
                 .pColorAttachments    = colorAttachmentInfos.data(),
             };
 
