@@ -137,6 +137,7 @@ public:
 			bLinear = false;
 			bExportable = false;
 			bSwapchain = false;
+			bColorAttachment = false;
 			imageType = VK_IMAGE_TYPE_2D;
 		}
 
@@ -149,6 +150,7 @@ public:
 		bool bLinear : 1;
 		bool bExportable : 1;
 		bool bSwapchain : 1;
+		bool bColorAttachment : 1;
 		VkImageType imageType;
 	};
 

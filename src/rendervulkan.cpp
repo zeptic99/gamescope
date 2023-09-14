@@ -1690,6 +1690,11 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 		usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 	}
 
+	if ( flags.bColorAttachment == true )
+	{
+		usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	}
+
 	if ( flags.bFlippable == true )
 	{
 		flags.bExportable = true;
@@ -2136,7 +2141,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 		assert ( flags.bStorage == false );
 	}
 
-	if ( flags.bStorage || flags.bSampled )
+	if ( flags.bStorage || flags.bSampled || flags.bColorAttachment )
 	{
 		VkImageViewCreateInfo createInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
