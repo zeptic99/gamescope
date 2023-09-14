@@ -1129,7 +1129,7 @@ std::unique_ptr<CVulkanCmdBuffer> CVulkanDevice::commandBuffer()
 	return cmdBuffer;
 }
 
-uint64_t CVulkanDevice::submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuffer)
+uint64_t CVulkanDevice::submitInternal( CVulkanCmdBuffer* cmdBuffer )
 {
 	cmdBuffer->end();
 
@@ -1166,8 +1166,13 @@ uint64_t CVulkanDevice::submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuffer)
 		assert( 0 );
 	}
 
-	m_pendingCmdBufs.emplace(nextSeqNo, std::move(cmdBuffer));
+	return nextSeqNo;
+}
 
+uint64_t CVulkanDevice::submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuffer)
+{
+	uint64_t nextSeqNo = submitInternal(cmdBuffer.get());
+	m_pendingCmdBufs.emplace(nextSeqNo, std::move(cmdBuffer));
 	return nextSeqNo;
 }
 
