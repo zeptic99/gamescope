@@ -1104,7 +1104,7 @@ std::unique_ptr<CVulkanCmdBuffer> CVulkanDevice::commandBuffer()
 			return nullptr;
 		}
 
-		cmdBuffer = std::make_unique<CVulkanCmdBuffer>(this, rawCmdBuffer);
+		cmdBuffer = std::make_unique<CVulkanCmdBuffer>(this, rawCmdBuffer, queue(), queueFamily());
 	}
 	else
 	{
@@ -1146,7 +1146,7 @@ uint64_t CVulkanDevice::submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuffer)
 		.pSignalSemaphores = &m_scratchTimelineSemaphore,
 	};
 
-	VkResult res = vk.QueueSubmit( queue(), 1, &submitInfo, VK_NULL_HANDLE );
+	VkResult res = vk.QueueSubmit( cmdBuffer->queue(), 1, &submitInfo, VK_NULL_HANDLE );
 
 	if ( res != VK_SUCCESS )
 	{
@@ -1206,8 +1206,8 @@ void CVulkanDevice::resetCmdBuffers(uint64_t sequence)
 	m_pendingCmdBufs.erase(m_pendingCmdBufs.begin(), ++last);
 }
 
-CVulkanCmdBuffer::CVulkanCmdBuffer(CVulkanDevice *parent, VkCommandBuffer cmdBuffer)
-	: m_cmdBuffer(cmdBuffer), m_device(parent)
+CVulkanCmdBuffer::CVulkanCmdBuffer(CVulkanDevice *parent, VkCommandBuffer cmdBuffer, VkQueue queue, uint32_t queueFamily)
+	: m_cmdBuffer(cmdBuffer), m_device(parent), m_queue(queue), m_queueFamily(queueFamily)
 {
 }
 
@@ -1572,7 +1572,7 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 			.oldLayout = (state.discarded || state.needsImport) ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL,
 			.newLayout = isPresent ? presentLayout : VK_IMAGE_LAYOUT_GENERAL,
 			.srcQueueFamilyIndex = isExport ? m_device->queueFamily() : state.needsImport ? externalQueue : VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = isExport ? externalQueue : state.needsImport ? m_device->queueFamily() : VK_QUEUE_FAMILY_IGNORED,
+			.dstQueueFamilyIndex = isExport ? externalQueue : state.needsImport ? m_queueFamily : m_queueFamily,
 			.image = image->vkImage(),
 			.subresourceRange = subResRange
 		};

@@ -769,7 +769,7 @@ struct TextureState
 class CVulkanCmdBuffer
 {
 public:
-	CVulkanCmdBuffer(CVulkanDevice *parent, VkCommandBuffer cmdBuffer);
+	CVulkanCmdBuffer(CVulkanDevice *parent, VkCommandBuffer cmdBuffer, VkQueue queue, uint32_t queueFamily);
 	~CVulkanCmdBuffer();
 	CVulkanCmdBuffer(const CVulkanCmdBuffer& other) = delete;
 	CVulkanCmdBuffer(CVulkanCmdBuffer&& other) = delete;
@@ -802,8 +802,15 @@ private:
 	void markDirty(CVulkanTexture *image);
 	void insertBarrier(bool flush = false);
 
+	VkQueue queue() { return m_queue; }
+	uint32_t queueFamily() { return m_queueFamily; }
+
+private:
 	VkCommandBuffer m_cmdBuffer;
 	CVulkanDevice *m_device;
+
+	VkQueue m_queue;
+	uint32_t m_queueFamily;
 
 	// Per Use State
 	std::unordered_map<CVulkanTexture *, std::shared_ptr<CVulkanTexture>> m_textureRefs;
