@@ -591,19 +591,30 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(GetPhysicalDeviceSurfaceSupportKHR)
 
 #define VULKAN_DEVICE_FUNCTIONS \
+	VK_FUNC(AcquireNextImageKHR) \
 	VK_FUNC(AllocateCommandBuffers) \
 	VK_FUNC(AllocateDescriptorSets) \
 	VK_FUNC(AllocateMemory) \
-	VK_FUNC(AcquireNextImageKHR) \
 	VK_FUNC(BeginCommandBuffer) \
 	VK_FUNC(BindBufferMemory) \
 	VK_FUNC(BindImageMemory) \
+	VK_FUNC(CmdBeginRendering) \
+	VK_FUNC(CmdBindDescriptorSets) \
+	VK_FUNC(CmdBindPipeline) \
+	VK_FUNC(CmdCopyBufferToImage) \
+	VK_FUNC(CmdCopyImage) \
+	VK_FUNC(CmdDispatch) \
+	VK_FUNC(CmdDraw) \
+	VK_FUNC(CmdEndRendering) \
+	VK_FUNC(CmdPipelineBarrier) \
+	VK_FUNC(CmdPushConstants) \
 	VK_FUNC(CreateBuffer) \
 	VK_FUNC(CreateCommandPool) \
 	VK_FUNC(CreateComputePipelines) \
 	VK_FUNC(CreateDescriptorPool) \
 	VK_FUNC(CreateDescriptorSetLayout) \
 	VK_FUNC(CreateFence) \
+	VK_FUNC(CreateGraphicsPipelines) \
 	VK_FUNC(CreateImage) \
 	VK_FUNC(CreateImageView) \
 	VK_FUNC(CreatePipelineLayout) \
@@ -612,20 +623,18 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(CreateSemaphore) \
 	VK_FUNC(CreateShaderModule) \
 	VK_FUNC(CreateSwapchainKHR) \
-	VK_FUNC(CmdBindDescriptorSets) \
-	VK_FUNC(CmdBindPipeline) \
-	VK_FUNC(CmdCopyBufferToImage) \
-	VK_FUNC(CmdCopyImage) \
-	VK_FUNC(CmdDispatch) \
-	VK_FUNC(CmdPipelineBarrier) \
-	VK_FUNC(CmdPushConstants) \
 	VK_FUNC(DestroyBuffer) \
+	VK_FUNC(DestroyDescriptorPool) \
+	VK_FUNC(DestroyDescriptorSetLayout) \
 	VK_FUNC(DestroyImage) \
 	VK_FUNC(DestroyImageView) \
 	VK_FUNC(DestroyPipeline) \
+	VK_FUNC(DestroyPipelineLayout) \
+	VK_FUNC(DestroySampler) \
 	VK_FUNC(DestroySwapchainKHR) \
 	VK_FUNC(EndCommandBuffer) \
 	VK_FUNC(FreeCommandBuffers) \
+	VK_FUNC(FreeDescriptorSets) \
 	VK_FUNC(FreeMemory) \
 	VK_FUNC(GetBufferMemoryRequirements) \
 	VK_FUNC(GetDeviceQueue) \
