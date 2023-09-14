@@ -818,3 +818,8 @@ private:
 	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_shaperLut;
 	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_lut3D;
 };
+
+uint32_t VulkanFormatToDRM( VkFormat vkFormat );
+VkFormat DRMFormatToVulkan( uint32_t nDRMFormat, bool bSrgb );
+bool DRMFormatHasAlpha( uint32_t nDRMFormat );
+uint32_t DRMFormatGetBPP( uint32_t nDRMFormat );

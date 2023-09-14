@@ -178,7 +178,7 @@ struct {
 	{ DRM_FORMAT_INVALID, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, false, true },
 };
 
-static inline uint32_t VulkanFormatToDRM( VkFormat vkFormat )
+uint32_t VulkanFormatToDRM( VkFormat vkFormat )
 {
 	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
 	{
@@ -191,7 +191,7 @@ static inline uint32_t VulkanFormatToDRM( VkFormat vkFormat )
 	return DRM_FORMAT_INVALID;
 }
 
-static inline VkFormat DRMFormatToVulkan( uint32_t nDRMFormat, bool bSrgb )
+VkFormat DRMFormatToVulkan( uint32_t nDRMFormat, bool bSrgb )
 {
 	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
 	{
@@ -204,7 +204,7 @@ static inline VkFormat DRMFormatToVulkan( uint32_t nDRMFormat, bool bSrgb )
 	return VK_FORMAT_UNDEFINED;
 }
 
-static inline bool DRMFormatHasAlpha( uint32_t nDRMFormat )
+bool DRMFormatHasAlpha( uint32_t nDRMFormat )
 {
 	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
 	{
@@ -217,7 +217,7 @@ static inline bool DRMFormatHasAlpha( uint32_t nDRMFormat )
 	return false;
 }
 
-static inline uint32_t DRMFormatGetBPP( uint32_t nDRMFormat )
+uint32_t DRMFormatGetBPP( uint32_t nDRMFormat )
 {
 	for ( int i = 0; s_DRMVKFormatTable[i].vkFormat != VK_FORMAT_UNDEFINED; i++ )
 	{
