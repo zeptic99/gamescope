@@ -38,6 +38,7 @@ extern "C" {
 
 #include "gamescope-xwayland-protocol.h"
 #include "gamescope-pipewire-protocol.h"
+#include "gamescope-control-protocol.h"
 #include "gamescope-tearing-control-unstable-v1-protocol.h"
 #include "presentation-time-protocol.h"
 
@@ -734,7 +735,34 @@ static void create_gamescope_pipewire( void )
 }
 #endif
 
+//
 
+static void gamescope_control_handle_destroy( struct wl_client *client, struct wl_resource *resource )
+{
+	wl_resource_destroy( resource );
+}
+
+static const struct gamescope_control_interface gamescope_control_impl = {
+	.destroy = gamescope_control_handle_destroy,
+};
+
+static void gamescope_control_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
+{
+	struct wl_resource *resource = wl_resource_create( client, &gamescope_control_interface, version, id );
+	wl_resource_set_implementation( resource, &gamescope_control_impl, NULL, NULL );
+
+	// Send feature support
+	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_RESHADE_SHADERS, 1, 0 );
+	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_DONE, 0, 0 );
+}
+
+static void create_gamescope_control( void )
+{
+	uint32_t version = 1;
+	wl_global_create( wlserver.display, &gamescope_control_interface, version, NULL, gamescope_control_bind );
+}
+
+//
 
 static void gamescope_surface_tearing_set_presentation_hint( struct wl_client *client, struct wl_resource *resource, uint32_t hint )
 {
@@ -1242,6 +1270,8 @@ bool wlserver_init( void ) {
 #if HAVE_PIPEWIRE
 	create_gamescope_pipewire();
 #endif
+
+	create_gamescope_control();
 
 	create_gamescope_tearing();
 
