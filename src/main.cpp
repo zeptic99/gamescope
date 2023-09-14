@@ -126,6 +126,9 @@ const struct option *gamescope_options = (struct option[]){
 	{ "hdr-debug-force-output", no_argument, nullptr, 0 },
 	{ "hdr-debug-heatmap", no_argument, nullptr, 0 },
 
+	{ "reshade-effect", required_argument, nullptr, 0 },
+	{ "reshade-technique-idx", required_argument, nullptr, 0 },
+
 	{} // keep last
 };
 
@@ -215,6 +218,10 @@ const char usage[] =
 	"  --hdr-debug-force-support      forces support for HDR, etc even if the display doesn't support it. HDR clients will be outputted as SDR still in that case.\n"
 	"  --hdr-debug-force-output       forces support and output to HDR10 PQ even if the output does not support it (will look very wrong if it doesn't)\n"
 	"  --hdr-debug-heatmap            displays a heatmap-style debug view of HDR luminence across the scene in nits."
+	"\n"
+	"Reshade shader options:\n"
+	"  --reshade-effect               sets the name of a reshade shader to use in either /usr/share/gamescope/reshade/Shaders or ~/.local/share/gamescope/reshade/Shaders\n"
+	"  --reshade-technique-idx        sets technique idx to use from the reshade effect\n"
 	"\n"
 	"Keyboard shortcuts:\n"
 	"  Super + F                      toggle fullscreen\n"

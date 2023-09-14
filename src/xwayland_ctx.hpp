@@ -207,6 +207,9 @@ struct xwayland_ctx_t
 		Atom gamescopeCreateXWaylandServerFeedback;
 		Atom gamescopeDestroyXWaylandServer;
 
+		Atom gamescopeReshadeEffect;
+		Atom gamescopeReshadeTechniqueIdx;
+
 		Atom wineHwndStyle;
 		Atom wineHwndStyleEx;
 

@@ -133,6 +133,9 @@ extern std::atomic<uint64_t> g_lastVblank;
 std::string clipboard;
 std::string primarySelection;
 
+std::string g_reshade_effect{};
+uint32_t g_reshade_technique_idx = 0;
+
 uint64_t timespec_to_nanos(struct timespec& spec)
 {
 	return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
@@ -5703,6 +5706,16 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			focusDirty = true;
 		}
 	}
+	if (ev->atom == ctx->atoms.gamescopeReshadeTechniqueIdx)
+	{
+		uint32_t technique_idx = get_prop(ctx, ctx->root, ctx->atoms.gamescopeReshadeTechniqueIdx, 0);
+		g_reshade_technique_idx = technique_idx;
+	}
+	if (ev->atom == ctx->atoms.gamescopeReshadeEffect)
+	{
+		std::string path = get_string_prop( ctx, ctx->root, ctx->atoms.gamescopeReshadeEffect );
+		g_reshade_effect = path;
+	}
 	if (ev->atom == ctx->atoms.wineHwndStyle)
 	{
 		steamcompmgr_win_t * w = find_win(ctx, ev->window);
@@ -6863,6 +6876,9 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.gamescopeCreateXWaylandServerFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_CREATE_XWAYLAND_SERVER_FEEDBACK", false );
 	ctx->atoms.gamescopeDestroyXWaylandServer = XInternAtom( ctx->dpy, "GAMESCOPE_DESTROY_XWAYLAND_SERVER", false );
 
+	ctx->atoms.gamescopeReshadeEffect = XInternAtom( ctx->dpy, "GAMESCOPE_RESHADE_EFFECT", false );
+	ctx->atoms.gamescopeReshadeTechniqueIdx = XInternAtom( ctx->dpy, "GAMESCOPE_RESHADE_TECHNIQUE_IDX", false );
+
 	ctx->atoms.wineHwndStyle = XInternAtom( ctx->dpy, "_WINE_HWND_STYLE", false );
 	ctx->atoms.wineHwndStyleEx = XInternAtom( ctx->dpy, "_WINE_HWND_EXSTYLE", false );
 
@@ -7154,6 +7170,10 @@ steamcompmgr_main(int argc, char **argv)
 					g_flHDRItmTargetNits = atof(optarg);
 				} else if (strcmp(opt_name, "framerate-limit") == 0) {
 					g_nSteamCompMgrTargetFPS = atoi(optarg);
+				} else if (strcmp(opt_name, "reshade-effect") == 0) {
+					g_reshade_effect = optarg;
+				} else if (strcmp(opt_name, "reshade-technique-idx") == 0) {
+					g_reshade_technique_idx = atoi(optarg);
 				}
 				break;
 			case '?':

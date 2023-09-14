@@ -110,6 +110,7 @@ src = [
   'log.cpp',
   'ime.cpp',
   'mangoapp.cpp',
+  'reshade_effect_manager.cpp',
 ]
 
 src += spirv_shaders
