@@ -481,6 +481,7 @@ bool CVulkanDevice::createDevice()
 	enabledExtensions.push_back( VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME );
 
 	enabledExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
+	enabledExtensions.push_back( VK_KHR_MAINTENANCE_5_EXTENSION_NAME );
 
 	if ( BIsVRSession() )
 	{
@@ -489,8 +490,20 @@ bool CVulkanDevice::createDevice()
 #endif
 	}
 
+	VkPhysicalDeviceMaintenance5FeaturesKHR maintenance5 = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR,
+		.maintenance5 = VK_TRUE,
+	};
+
+	VkPhysicalDeviceVulkan13Features features13 = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.pNext = &maintenance5,
+		.dynamicRendering = VK_TRUE,
+	};
+
 	VkPhysicalDeviceFeatures2 features2 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		.pNext = &features13,
 		.features = {
 			.shaderInt16 = m_bSupportsFp16,
 		},
@@ -2937,7 +2950,7 @@ VkInstance vulkan_create_instance( void )
 		.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 		.pEngineName = "hopefully not just some code",
 		.engineVersion = VK_MAKE_VERSION(1, 0, 0),
-		.apiVersion = VK_API_VERSION_1_2,
+		.apiVersion = VK_API_VERSION_1_3,
 	};
 
 	const VkInstanceCreateInfo createInfo = {
