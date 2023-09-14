@@ -801,7 +801,6 @@ public:
 	void copyBufferToImage(VkBuffer buffer, VkDeviceSize offset, uint32_t stride, std::shared_ptr<CVulkanTexture> dst);
 
 
-private:
 	void prepareSrcImage(CVulkanTexture *image);
 	void prepareDestImage(CVulkanTexture *image);
 	void discardImage(CVulkanTexture *image);
