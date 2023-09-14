@@ -657,7 +657,7 @@ public:
 	uint64_t submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuf);
 	uint64_t submitInternal( CVulkanCmdBuffer* cmdBuf );
 	void wait(uint64_t sequence, bool reset = true);
-	void waitIdle();
+	void waitIdle(bool reset = true);
 	void garbageCollect();
 	inline VkDescriptorSet descriptorSet()
 	{

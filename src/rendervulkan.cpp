@@ -1202,9 +1202,9 @@ void CVulkanDevice::wait(uint64_t sequence, bool reset)
 		resetCmdBuffers(sequence);
 }
 
-void CVulkanDevice::waitIdle()
+void CVulkanDevice::waitIdle(bool reset)
 {
-	wait(m_submissionSeqNo);
+	wait(m_submissionSeqNo, reset);
 }
 
 void CVulkanDevice::resetCmdBuffers(uint64_t sequence)
