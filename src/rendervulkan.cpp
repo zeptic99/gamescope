@@ -2694,6 +2694,7 @@ bool vulkan_remake_swapchain( void )
 {
 	VulkanOutput_t *pOutput = &g_output;
 	g_device.waitIdle();
+	g_device.vk.QueueWaitIdle( g_device.queue() );
 
 	pOutput->outputImages.clear();
 

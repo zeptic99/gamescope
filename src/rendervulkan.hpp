@@ -647,6 +647,7 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(MapMemory) \
 	VK_FUNC(QueuePresentKHR) \
 	VK_FUNC(QueueSubmit) \
+	VK_FUNC(QueueWaitIdle) \
 	VK_FUNC(ResetCommandBuffer) \
 	VK_FUNC(ResetFences) \
 	VK_FUNC(UnmapMemory) \
