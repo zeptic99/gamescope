@@ -804,6 +804,7 @@ public:
 private:
 	void prepareSrcImage(CVulkanTexture *image);
 	void prepareDestImage(CVulkanTexture *image);
+	void discardImage(CVulkanTexture *image);
 	void markDirty(CVulkanTexture *image);
 	void insertBarrier(bool flush = false);
 

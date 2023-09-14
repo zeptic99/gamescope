@@ -1544,6 +1544,14 @@ void CVulkanCmdBuffer::prepareDestImage(CVulkanTexture *image)
 	result.first->second.needsPresentLayout = image->swapchainImage();
 }
 
+void CVulkanCmdBuffer::discardImage(CVulkanTexture *image)
+{
+	auto result = m_textureState.emplace(image, TextureState());
+	if (!result.second)
+		return;
+	result.first->second.discarded = true;
+}
+
 void CVulkanCmdBuffer::markDirty(CVulkanTexture *image)
 {
 	auto result = m_textureState.find(image);
