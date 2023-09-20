@@ -1,7 +1,7 @@
 {
     "file_format_version" : "1.0.0",
     "layer" : {
-      "name": "VK_LAYER_FROG_gamescope_wsi",
+      "name": "VK_LAYER_FROG_gamescope_wsi_@family@",
       "type": "GLOBAL",
       "api_version": "1.3.221",
       "library_path": "@lib_dir@/libVkLayer_FROG_gamescope_wsi_@family@.so",
