@@ -795,6 +795,7 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
 	pp.add_macro_definition("BUFFER_COLOR_SPACE", std::to_string(static_cast<uint32_t>(ConvertToReshadeColorSpace(key.bufferColorSpace))));
 	pp.add_macro_definition("BUFFER_COLOR_BIT_DEPTH", std::to_string(GetFormatBitDepth(key.bufferFormat)));
     pp.add_macro_definition("GAMESCOPE", "1");
+    pp.add_macro_definition("GAMESCOPE_SDR_ON_HDR_NITS", std::to_string(g_ColorMgmt.pending.outputEncodingEOTF == EOTF_Gamma22 ? g_ColorMgmt.pending.flInternalDisplayBrightness : g_ColorMgmt.pending.flSDROnHDRBrightness));
 
     std::string gamescope_reshade_share_path = "/share/gamescope/reshade";
 
