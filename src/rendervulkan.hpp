@@ -601,6 +601,7 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(CmdBeginRendering) \
 	VK_FUNC(CmdBindDescriptorSets) \
 	VK_FUNC(CmdBindPipeline) \
+	VK_FUNC(CmdClearColorImage) \
 	VK_FUNC(CmdCopyBufferToImage) \
 	VK_FUNC(CmdCopyImage) \
 	VK_FUNC(CmdDispatch) \

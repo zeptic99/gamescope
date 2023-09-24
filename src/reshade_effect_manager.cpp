@@ -1051,6 +1051,26 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
                 device->vk.FreeMemory(device->device(), scratchMemory, nullptr);
             }
         }
+        else if (texture)
+        {
+            m_cmdBuffer->reset();
+            m_cmdBuffer->begin();
+            VkClearColorValue clearColor{};
+            VkImageSubresourceRange range =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            };
+            m_cmdBuffer->prepareDestImage(texture.get());
+            m_cmdBuffer->insertBarrier();
+            device->vk.CmdClearColorImage(m_cmdBuffer->rawBuffer(), texture->vkImage(), VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
+            m_cmdBuffer->markDirty(texture.get());
+            device->submitInternal(&*m_cmdBuffer);
+            device->waitIdle(false);
+        }
 
         m_textures.emplace_back(std::move(texture));
     }
@@ -1291,22 +1311,26 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
         {
             std::vector<VkPipelineColorBlendAttachmentState> attachmentBlendStates;
             std::vector<VkFormat> colorFormats;
+            uint32_t maxRenderWidth = 0;
+            uint32_t maxRenderHeight = 0;
 
             for (int i = 0; i < 8; i++)
             {
                 std::shared_ptr<CVulkanTexture> rt;
-                if (pass.render_target_names[i].empty())
+                if (i == 0 && pass.render_target_names[0].empty())
                     rt = m_rt;
+                else if (pass.render_target_names[i].empty())
+                    break;
                 else
                     rt = findTexture(pass.render_target_names[i]);
 
-                VkFormat format = rt ? rt->format() : VK_FORMAT_UNDEFINED;
-
-                // Didn't find the texture.
-                if (format == VK_FORMAT_UNDEFINED)
+                if (rt == nullptr)
                     continue;
 
-                colorFormats.push_back(format);
+                maxRenderWidth = std::max<uint32_t>(maxRenderWidth, rt->width());
+                maxRenderHeight = std::max<uint32_t>(maxRenderHeight, rt->height());
+
+                colorFormats.push_back(rt->format());
 
                 VkPipelineColorBlendAttachmentState colorBlendAttachment;
                 colorBlendAttachment.blendEnable         = pass.blend_enable[i];
@@ -1332,8 +1356,8 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
 
             VkRect2D scissor;
             scissor.offset        = {0, 0};
-            scissor.extent.width  = pass.viewport_width ? pass.viewport_width : key.bufferWidth;
-            scissor.extent.height = pass.viewport_height ? pass.viewport_height : key.bufferHeight;
+            scissor.extent.width  = pass.viewport_width ? pass.viewport_width : maxRenderWidth;
+            scissor.extent.height = pass.viewport_height ? pass.viewport_height : maxRenderHeight;
 
             VkViewport viewport;
             viewport.x        = 0.0f;
@@ -1595,11 +1619,17 @@ uint64_t ReshadeEffectPipeline::execute(std::shared_ptr<CVulkanTexture> inImage,
     device->vk.CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, std::size(m_descriptorSets), m_descriptorSets, 0, nullptr);
     device->vk.CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipelineLayout, 0, std::size(m_descriptorSets), m_descriptorSets, 0, nullptr);
 
-    for (auto& tex : m_textures)
+    for (size_t i = 0; i < m_textures.size(); i++)
     {
-        if (tex != nullptr)
+        auto& tex = m_textures[i];
+        auto& texInfo = m_module->textures[i];
+
+        if (tex && (texInfo.storage_access || texInfo.render_target))
             m_cmdBuffer->discardImage(tex.get());
     }
+
+    if (m_rt)
+        m_cmdBuffer->discardImage(m_rt.get());
 
     std::shared_ptr<CVulkanTexture> lastRT;
 
@@ -1635,8 +1665,10 @@ uint64_t ReshadeEffectPipeline::execute(std::shared_ptr<CVulkanTexture> inImage,
         {
             for (int i = 0; i < 8; i++)
             {
-                if (pass.render_target_names[i].empty())
+                if (i == 0 && pass.render_target_names[0].empty())
                     rts[i] = m_rt;
+                else if (pass.render_target_names[i].empty())
+                    break;
                 else
                     rts[i] = findTexture(pass.render_target_names[i]);
             }
@@ -1650,10 +1682,15 @@ uint64_t ReshadeEffectPipeline::execute(std::shared_ptr<CVulkanTexture> inImage,
             device->vk.CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelines[passIdx]);
 
             std::vector<VkRenderingAttachmentInfo> colorAttachmentInfos;
+            uint32_t maxRenderWidth = 0;
+            uint32_t maxRenderHeight = 0;
             for (int i = 0; i < 8; i++)
             {
                 if (rts[i])
                 {
+                    maxRenderWidth = std::max<uint32_t>(maxRenderWidth, rts[i]->width());
+                    maxRenderHeight = std::max<uint32_t>(maxRenderHeight, rts[i]->height());
+
                     const VkRenderingAttachmentInfo colorAttachmentInfo
                     {
                         .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1669,7 +1706,7 @@ uint64_t ReshadeEffectPipeline::execute(std::shared_ptr<CVulkanTexture> inImage,
             const VkRenderingInfo renderInfo
             {
                 .sType                = VK_STRUCTURE_TYPE_RENDERING_INFO,
-                .renderArea           = { { 0, 0, }, { m_key.bufferWidth, m_key.bufferHeight }},
+                .renderArea           = { { 0, 0, }, { maxRenderWidth, maxRenderHeight }},
                 .layerCount           = 1,
                 .colorAttachmentCount = uint32_t(colorAttachmentInfos.size()),
                 .pColorAttachments    = colorAttachmentInfos.data(),
@@ -1690,6 +1727,7 @@ uint64_t ReshadeEffectPipeline::execute(std::shared_ptr<CVulkanTexture> inImage,
 
         // Insert a stupidly huge fat barrier.
         VkMemoryBarrier memBarrier = {};
+        memBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
         memBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
         memBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
         device->vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &memBarrier, 0, NULL, 0, NULL);
