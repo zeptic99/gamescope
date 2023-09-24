@@ -4,6 +4,7 @@
 #include "reshade_effect_manager.hpp"
 #include "log.hpp"
 
+#include "steamcompmgr.hpp"
 
 #include "effect_parser.hpp"
 #include "effect_codegen.hpp"
@@ -55,7 +56,7 @@ protected:
     void copy(void* mappedBuffer, const void* data, size_t size);
 
     template <typename T>
-    void copy(void* mappedBuffer, const T& thing);
+    void copy(void* mappedBuffer, const T* thing);
 
     reshadefx::uniform_info m_info;
 };
@@ -192,9 +193,82 @@ void ReshadeUniform::copy(void* mappedBuffer, const void* data, size_t size)
 }
 
 template <typename T>
-void ReshadeUniform::copy(void* mappedBuffer, const T& thing)
+void ReshadeUniform::copy(void* mappedBuffer, const T* thing)
 {
-    copy(mappedBuffer, (const void*)&thing, sizeof(T));
+    assert(m_info.type.array_length == 0 || m_info.type.array_length == 1);
+
+    uint32_t zero_data[16] = {};
+
+    switch (m_info.type.base)
+    {
+    case reshadefx::type::t_bool:
+        if (thing)
+        {
+            VkBool32 VkBool32_stuff[16];
+            for (uint32_t i = 0; i < m_info.type.components(); i++)
+                VkBool32_stuff[i] = !!thing[i];
+            copy(mappedBuffer, VkBool32_stuff, sizeof(VkBool32) * m_info.type.components());
+        }
+        else
+        {
+            if (m_info.has_initializer_value)
+                copy(mappedBuffer, (const void*)&m_info.initializer_value.as_uint[0], sizeof(VkBool32) * m_info.type.components() );
+            else
+                copy(mappedBuffer, (const void*)zero_data, sizeof(VkBool32) * m_info.type.components() );
+        }
+        break;
+    case reshadefx::type::t_int:
+        if (thing)
+        {
+            int32_t int32_t_stuff[16];
+            for (uint32_t i = 0; i < m_info.type.components(); i++)
+                int32_t_stuff[i] = thing[i];
+            copy(mappedBuffer, int32_t_stuff, sizeof(int32_t) * m_info.type.components());
+        }
+        else
+        {
+            if (m_info.has_initializer_value)
+                copy(mappedBuffer, (const void*)&m_info.initializer_value.as_int[0], sizeof(int32_t) * m_info.type.components() );
+            else
+                copy(mappedBuffer, (const void*)zero_data, sizeof(int32_t) * m_info.type.components() );
+        }
+        break;
+    case reshadefx::type::t_uint:
+        if (thing)
+        {
+            uint32_t uint32_t_stuff[16];
+            for (uint32_t i = 0; i < m_info.type.components(); i++)
+                uint32_t_stuff[i] = thing[i];
+            copy(mappedBuffer, uint32_t_stuff, sizeof(uint32_t) * m_info.type.components());
+        }
+        else
+        {
+            if (m_info.has_initializer_value)
+                copy(mappedBuffer, (const void*)&m_info.initializer_value.as_uint[0], sizeof(uint32_t) * m_info.type.components() );
+            else
+                copy(mappedBuffer, (const void*)zero_data, sizeof(uint32_t) * m_info.type.components() );
+        }
+        break;
+    case reshadefx::type::t_float:
+        if (thing)
+        {
+            float float_stuff[16];
+            for (uint32_t i = 0; i < m_info.type.components(); i++)
+                float_stuff[i] = thing[i];
+            copy(mappedBuffer, float_stuff, sizeof(float) * m_info.type.components());
+        }
+        else
+        {
+            if (m_info.has_initializer_value)
+                copy(mappedBuffer, (const void*)&m_info.initializer_value.as_float[0], sizeof(float) * m_info.type.components() );
+            else
+                copy(mappedBuffer, (const void*)zero_data, sizeof(float) * m_info.type.components() );
+        }
+        break;
+    default:
+        reshade_log.errorf("Unknown uniform type!");
+        break;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,7 +284,7 @@ void FrameTimeUniform::update(void* mappedBuffer)
     lastFrame                                             = currentFrame;
     float frametime                                       = duration.count();
 
-    copy(mappedBuffer, frametime);
+    copy(mappedBuffer, &frametime);
 }
 FrameTimeUniform::~FrameTimeUniform()
 {
@@ -223,7 +297,7 @@ FrameCountUniform::FrameCountUniform(reshadefx::uniform_info uniformInfo)
 }
 void FrameCountUniform::update(void* mappedBuffer)
 {
-    copy(mappedBuffer, count);
+    copy(mappedBuffer, &count);
     count++;
 }
 FrameCountUniform::~FrameCountUniform()
@@ -264,7 +338,7 @@ void TimerUniform::update(void* mappedBuffer)
     std::chrono::duration<float, std::milli> duration     = currentFrame - start;
     float                                    timer        = duration.count();
 
-    copy(mappedBuffer, timer);
+    copy(mappedBuffer, &timer);
 }
 TimerUniform::~TimerUniform()
 {
@@ -358,7 +432,7 @@ RandomUniform::RandomUniform(reshadefx::uniform_info uniformInfo)
 void RandomUniform::update(void* mappedBuffer)
 {
     int32_t value = min + (std::rand() % (max - min + 1));
-    copy(mappedBuffer, value);
+    copy(mappedBuffer, &value);
 }
 RandomUniform::~RandomUniform()
 {
@@ -372,7 +446,7 @@ KeyUniform::KeyUniform(reshadefx::uniform_info uniformInfo)
 void KeyUniform::update(void* mappedBuffer)
 {
     VkBool32 keyDown = VK_FALSE; // TODO
-    copy(mappedBuffer, keyDown);
+    copy(mappedBuffer, &keyDown);
 }
 KeyUniform::~KeyUniform()
 {
@@ -386,7 +460,7 @@ MouseButtonUniform::MouseButtonUniform(reshadefx::uniform_info uniformInfo)
 void MouseButtonUniform::update(void* mappedBuffer)
 {
     VkBool32 keyDown = VK_FALSE; // TODO
-    copy(mappedBuffer, keyDown);
+    copy(mappedBuffer, &keyDown);
 }
 MouseButtonUniform::~MouseButtonUniform()
 {
@@ -399,7 +473,13 @@ MousePointUniform::MousePointUniform(reshadefx::uniform_info uniformInfo)
 }
 void MousePointUniform::update(void* mappedBuffer)
 {
-    float point[2] = {0.0f, 0.0f}; // TODO
+    MouseCursor *cursor = steamcompmgr_get_current_cursor();
+    int32_t point[2] = {0, 0};
+    if (cursor)
+    {
+        point[0] = cursor->x();
+        point[1] = cursor->y();
+    }
     copy(mappedBuffer, point);
 }
 MousePointUniform::~MousePointUniform()
@@ -428,8 +508,8 @@ DepthUniform::DepthUniform(reshadefx::uniform_info uniformInfo)
 }
 void DepthUniform::update(void* mappedBuffer)
 {
-    VkBool32 hasDepth = VK_FALSE; // TODO
-    copy(mappedBuffer, hasDepth);
+    VkBool32 hasDepth = VK_FALSE;
+    copy(mappedBuffer, &hasDepth);
 }
 DepthUniform::~DepthUniform()
 {
@@ -442,40 +522,7 @@ DataUniform::DataUniform(reshadefx::uniform_info uniformInfo)
 }
 void DataUniform::update(void* mappedBuffer)
 {
-    assert(m_info.type.array_length == 0 || m_info.type.array_length == 1);
-
-    uint32_t zero_data[16] = {};
-
-    switch (m_info.type.base)
-    {
-    case reshadefx::type::t_bool:
-        if (m_info.has_initializer_value)
-            copy(mappedBuffer, (const void*)&m_info.initializer_value.as_uint[0], sizeof(VkBool32) * m_info.type.components() );
-        else
-            copy(mappedBuffer, (const void*)zero_data, sizeof(VkBool32) * m_info.type.components() );
-        break;
-    case reshadefx::type::t_int:
-        if (m_info.has_initializer_value)
-            copy(mappedBuffer, (const void*)&m_info.initializer_value.as_int[0], sizeof(int32_t) * m_info.type.components() );
-        else
-            copy(mappedBuffer, (const void*)zero_data, sizeof(int32_t) * m_info.type.components() );
-        break;
-    case reshadefx::type::t_uint:
-        if (m_info.has_initializer_value)
-            copy(mappedBuffer, (const void*)&m_info.initializer_value.as_uint[0], sizeof(uint32_t) * m_info.type.components() );
-        else
-            copy(mappedBuffer, (const void*)zero_data, sizeof(uint32_t) * m_info.type.components() );
-        break;
-    case reshadefx::type::t_float:
-        if (m_info.has_initializer_value)
-            copy(mappedBuffer, (const void*)&m_info.initializer_value.as_float[0], sizeof(float) * m_info.type.components() );
-        else
-            copy(mappedBuffer, (const void*)zero_data, sizeof(float) * m_info.type.components() );
-        break;
-    default:
-        reshade_log.errorf("Unknown uniform type!");
-        break;
-    }
+    copy<uint32_t>(mappedBuffer, nullptr);
 }
 DataUniform::~DataUniform()
 {

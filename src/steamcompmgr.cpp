@@ -7731,3 +7731,16 @@ struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xw
 
 	return &w->xwayland().surface;
 }
+
+MouseCursor *steamcompmgr_get_current_cursor()
+{
+	return global_focus.cursor;
+}
+
+MouseCursor *steamcompmgr_get_server_cursor(uint32_t idx)
+{
+	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( idx );
+	if ( server && server->ctx )
+		return  server->ctx->cursor.get();
+	return nullptr;
+}
