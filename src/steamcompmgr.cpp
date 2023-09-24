@@ -2432,6 +2432,7 @@ paint_all(bool async)
 	bNeedsFullComposite |= bDrewCursor;
 	bNeedsFullComposite |= g_bColorSliderInUse;
 	bNeedsFullComposite |= fadingOut;
+	bNeedsFullComposite |= !g_reshade_effect.empty();
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
