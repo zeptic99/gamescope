@@ -1,8 +1,18 @@
+#pragma once
+
 // Try to figure out when vblank is and notify steamcompmgr to render some time before it
+
+struct VBlankTimeInfo_t
+{
+        uint64_t target_vblank_time;
+        uint64_t pipe_write_time;
+};
 
 int vblank_init( void );
 
 void vblank_mark_possible_vblank( uint64_t nanos );
+
+uint64_t vblank_next_target( uint64_t offset = 0 );
 
 extern std::atomic<uint64_t> g_uVblankDrawTimeNS;
 

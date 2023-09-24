@@ -654,6 +654,7 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(UnmapMemory) \
 	VK_FUNC(UpdateDescriptorSets) \
 	VK_FUNC(WaitForFences) \
+	VK_FUNC(WaitForPresentKHR) \
 	VK_FUNC(WaitSemaphores)
 
 class CVulkanDevice

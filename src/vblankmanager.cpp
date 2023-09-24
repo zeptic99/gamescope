@@ -64,6 +64,21 @@ const uint64_t g_uVBlankDrawTimeMinCompositing = 2'400'000;
 
 //#define VBLANK_DEBUG
 
+uint64_t vblank_next_target( uint64_t offset )
+{
+	const int refresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+	const uint64_t nsecInterval = 1'000'000'000ul / refresh;
+
+	uint64_t lastVblank = g_lastVblank - offset;
+
+	uint64_t now = get_time_in_nanos();
+	uint64_t targetPoint = lastVblank + nsecInterval;
+	while ( targetPoint < now )
+		targetPoint += nsecInterval;
+
+	return targetPoint;
+}
+
 void vblankThreadRun( void )
 {
 	pthread_setname_np( pthread_self(), "gamescope-vblk" );
@@ -155,19 +170,17 @@ void vblankThreadRun( void )
 		lastOffset = offset;
 #endif
 
-		uint64_t lastVblank = g_lastVblank - offset;
-
-		uint64_t now = get_time_in_nanos();
-		uint64_t targetPoint = lastVblank + nsecInterval;
-		while ( targetPoint < now )
-			targetPoint += nsecInterval;
+		uint64_t targetPoint = vblank_next_target( offset );
 
 		sleep_until_nanos( targetPoint );
 
-		// give the time of vblank to steamcompmgr
-		uint64_t vblanktime = get_time_in_nanos();
+		VBlankTimeInfo_t time_info =
+		{
+			.target_vblank_time = targetPoint + offset,
+			.pipe_write_time    = get_time_in_nanos(),
+		};
 
-		ssize_t ret = write( g_vblankPipe[ 1 ], &vblanktime, sizeof( vblanktime ) );
+		ssize_t ret = write( g_vblankPipe[ 1 ], &time_info, sizeof( time_info ) );
 		if ( ret <= 0 )
 		{
 			perror( "vblankmanager: write failed" );
@@ -182,22 +195,27 @@ void vblankThreadRun( void )
 	}
 }
 
+#if HAVE_OPENVR
 void vblankThreadVR()
 {
 	pthread_setname_np( pthread_self(), "gamescope-vblkvr" );
 
 	while ( true )
 	{
-#if HAVE_OPENVR
 		vrsession_wait_until_visible();
 
+		// Includes redzone.
 		vrsession_framesync( ~0u );
-#else
-		abort();
-#endif
 
-		uint64_t vblanktime = get_time_in_nanos();
-		ssize_t ret = write( g_vblankPipe[ 1 ], &vblanktime, sizeof( vblanktime ) );
+		uint64_t now = get_time_in_nanos();
+
+		VBlankTimeInfo_t time_info =
+		{
+			.target_vblank_time = now + 3'000'000, // not right. just a stop-gap for now.
+			.pipe_write_time    = now,
+		};
+
+		ssize_t ret = write( g_vblankPipe[ 1 ], &time_info, sizeof( time_info ) );
 		if ( ret <= 0 )
 		{
 			perror( "vblankmanager: write failed" );
@@ -208,7 +226,7 @@ void vblankThreadVR()
 		}
 	}
 }
-
+#endif
 
 int vblank_init( void )
 {
@@ -220,9 +238,17 @@ int vblank_init( void )
 	
 	g_lastVblank = get_time_in_nanos();
 
-	std::thread vblankThread( BIsVRSession() ? vblankThreadVR : vblankThreadRun );
-	vblankThread.detach();
+#if HAVE_OPENVR
+	if ( BIsVRSession() )
+	{
+		std::thread vblankThread( vblankThreadVR );
+		vblankThread.detach();
+		return g_vblankPipe[ 0 ];
+	}
+#endif
 
+	std::thread vblankThread( vblankThreadRun );
+	vblankThread.detach();
 	return g_vblankPipe[ 0 ];
 }
 

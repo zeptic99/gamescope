@@ -33,10 +33,18 @@ struct focus_t
 	bool			outdatedInteractiveFocus;
 };
 
+struct CommitDoneEntry_t
+{
+	uint64_t commitID;
+	uint64_t desiredPresentTime;
+	uint64_t earliestPresentTime;
+	uint64_t earliestLatchTime;
+};
+
 struct CommitDoneList_t
 {
 	std::mutex listCommitsDoneLock;
-	std::vector< uint64_t > listCommitsDone;
+	std::vector< CommitDoneEntry_t > listCommitsDone;
 };
 
 struct xwayland_ctx_t

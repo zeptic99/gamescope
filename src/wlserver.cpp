@@ -39,6 +39,7 @@ extern "C" {
 #include "gamescope-xwayland-protocol.h"
 #include "gamescope-pipewire-protocol.h"
 #include "gamescope-control-protocol.h"
+#include "gamescope-swapchain-protocol.h"
 #include "gamescope-tearing-control-unstable-v1-protocol.h"
 #include "presentation-time-protocol.h"
 
@@ -83,7 +84,7 @@ std::mutex g_wlserver_xdg_shell_windows_lock;
 static struct wl_list pending_surfaces = {0};
 
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf, bool override );
-static wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
+wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
 
 std::vector<ResListEntry_t> gamescope_xwayland_server_t::retrieve_commits()
 {
@@ -108,7 +109,11 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 			.async = wlserver_surface_is_async(surf),
 			.feedback = wlserver_surface_swapchain_feedback(surf),
 			.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
+			.present_id = wl_surf->present_id,
+			.desired_present_time = wl_surf->desired_present_time,
 		};
+		wl_surf->present_id = std::nullopt;
+		wl_surf->desired_present_time = 0;
 		wl_surf->pending_presentation_feedbacks.clear();
 		wayland_commit_queue.push_back( newEntry );
 	}
@@ -428,7 +433,7 @@ static void wlserver_new_input(struct wl_listener *listener, void *data)
 
 static struct wl_listener new_input_listener = { .notify = wlserver_new_input };
 
-static wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf)
+wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf)
 {
 	return reinterpret_cast<wlserver_wl_surface_info *>(wlr_surf->data);
 }
@@ -539,10 +544,8 @@ static void content_override_handle_surface_destroy( struct wl_listener *listene
 	server->destroy_content_override( co );
 }
 
-void gamescope_xwayland_server_t::handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window )
+void gamescope_xwayland_server_t::handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wlr_surface *surface, uint32_t x11_window )
 {
-	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
-
 	if ( content_overrides.count( x11_window ) ) {
 		destroy_content_override( content_overrides[ x11_window ] );
 	}
@@ -573,6 +576,10 @@ struct wlr_output *gamescope_xwayland_server_t::get_output()
 	return output;
 }
 
+
+
+
+
 static void gamescope_xwayland_handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window )
 {
 	// This should ideally use the surface's xwayland, but we don't know it.
@@ -589,18 +596,68 @@ static void gamescope_xwayland_handle_override_window_content( struct wl_client 
 	// So... Just assume it comes from server 0 for now.
 	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( 0 );
 	assert( server );
-	server->handle_override_window_content(client, resource, surface_resource, x11_window);
+	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
+	server->handle_override_window_content(client, resource, surface, x11_window);
 }
 
-static void gamescope_xwayland_handle_override_window_content2( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t server_id, uint32_t x11_window )
+static void gamescope_xwayland_handle_destroy( struct wl_client *client, struct wl_resource *resource )
 {
+	wl_resource_destroy( resource );
+}
+
+static const struct gamescope_xwayland_interface gamescope_xwayland_impl = {
+	.destroy = gamescope_xwayland_handle_destroy,
+	.override_window_content = gamescope_xwayland_handle_override_window_content,
+};
+
+static void gamescope_xwayland_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
+{
+	struct wl_resource *resource = wl_resource_create( client, &gamescope_xwayland_interface, version, id );
+	wl_resource_set_implementation( resource, &gamescope_xwayland_impl, NULL, NULL );
+}
+
+static void create_gamescope_xwayland( void )
+{
+	uint32_t version = 1;
+	wl_global_create( wlserver.display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+static void gamescope_swapchain_destroy( struct wl_client *client, struct wl_resource *resource )
+{
+	wlserver_wl_surface_info *wl_surface_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
+
+	wlserver_x11_surface_info *x11_surface = wl_surface_info->x11_surface;
+	if (x11_surface)
+		x11_surface->xwayland_server->destroy_content_override( x11_surface, wl_surface_info->wlr );
+
+	if (wl_surface_info->gamescope_swapchain == resource)
+		wl_surface_info->gamescope_swapchain = nullptr;
+
+	wl_resource_destroy( resource );
+}
+
+static void gamescope_swapchain_override_window_content( struct wl_client *client, struct wl_resource *resource, uint32_t server_id, uint32_t x11_window )
+{
+	wlserver_wl_surface_info *wl_surface_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
+
 	gamescope_xwayland_server_t *server = wlserver_get_xwayland_server( server_id );
 	assert( server );
-	server->handle_override_window_content(client, resource, surface_resource, x11_window);
+	server->handle_override_window_content(client, resource, wl_surface_info->wlr, x11_window);
 }
 
-static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *client, struct wl_resource *resource,
-	struct wl_resource *surface_resource,
+static void gamescope_swapchain_swapchain_feedback( struct wl_client *client, struct wl_resource *resource,
 	uint32_t image_count,
 	uint32_t vk_format,
 	uint32_t vk_colorspace,
@@ -609,8 +666,7 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 	uint32_t vk_present_mode,
 	uint32_t vk_clipped)
 {
-	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
-	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	wlserver_wl_surface_info *wl_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
 	if ( wl_info )
 	{
 		wl_info->swapchain_feedback = std::make_unique<wlserver_vk_swapchain_feedback>(wlserver_vk_swapchain_feedback{
@@ -626,8 +682,7 @@ static void gamescope_xwayland_handle_swapchain_feedback( struct wl_client *clie
 	}
 }
 
-static void gamescope_xwayland_handle_set_hdr_metadata( struct wl_client *client, struct wl_resource *resource,
-	struct wl_resource *surface_resource,
+static void gamescope_swapchain_set_hdr_metadata( struct wl_client *client, struct wl_resource *resource,
 	uint32_t display_primary_red_x,
 	uint32_t display_primary_red_y,
 	uint32_t display_primary_green_x,
@@ -641,8 +696,7 @@ static void gamescope_xwayland_handle_set_hdr_metadata( struct wl_client *client
 	uint32_t max_cll,
 	uint32_t max_fall)
 {
-	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
-	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	wlserver_wl_surface_info *wl_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
 	if ( BIsNested() )
 	{
 		wl_log.infof("Ignoring HDR metadata when nested.");
@@ -685,30 +739,77 @@ static void gamescope_xwayland_handle_set_hdr_metadata( struct wl_client *client
 	}
 }
 
-static void gamescope_xwayland_handle_destroy( struct wl_client *client, struct wl_resource *resource )
+static void gamescope_swapchain_set_present_time( struct wl_client *client, struct wl_resource *resource,
+	uint32_t present_id,
+	uint32_t desired_present_time_hi,
+	uint32_t desired_present_time_lo)
+{
+	wlserver_wl_surface_info *wl_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
+
+	if ( wl_info )
+	{
+		wl_info->present_id = present_id;
+		wl_info->desired_present_time = (uint64_t(desired_present_time_hi) << 32) | desired_present_time_lo;
+	}
+}
+
+static const struct gamescope_swapchain_interface gamescope_swapchain_impl = {
+	.destroy = gamescope_swapchain_destroy,
+	.override_window_content = gamescope_swapchain_override_window_content,
+	.swapchain_feedback = gamescope_swapchain_swapchain_feedback,
+	.set_hdr_metadata = gamescope_swapchain_set_hdr_metadata,
+	.set_present_time = gamescope_swapchain_set_present_time,
+};
+
+static void gamescope_swapchain_factory_destroy( struct wl_client *client, struct wl_resource *resource )
 {
 	wl_resource_destroy( resource );
 }
 
-static const struct gamescope_xwayland_interface gamescope_xwayland_impl = {
-	.destroy = gamescope_xwayland_handle_destroy,
-	.override_window_content = gamescope_xwayland_handle_override_window_content,
-	.override_window_content2 = gamescope_xwayland_handle_override_window_content2,
-	.swapchain_feedback = gamescope_xwayland_handle_swapchain_feedback,
-	.set_hdr_metadata = gamescope_xwayland_handle_set_hdr_metadata,
+static void gamescope_swapchain_factory_create_swapchain( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t id )
+{
+	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
+
+	wlserver_wl_surface_info *wl_surface_info = get_wl_surface_info(surface);
+
+	struct wl_resource *gamescope_swapchain_resource
+		= wl_resource_create( client, &gamescope_swapchain_interface, wl_resource_get_version( resource ), id );
+	wl_resource_set_implementation( gamescope_swapchain_resource, &gamescope_swapchain_impl, wl_surface_info, NULL );
+
+	if (wl_surface_info->gamescope_swapchain != nullptr)
+		wl_log.errorf("create_swapchain: Surface already had a gamescope_swapchain! Overriding.");
+
+	wl_surface_info->gamescope_swapchain = gamescope_swapchain_resource;
+}
+
+static const struct gamescope_swapchain_factory_interface gamescope_swapchain_factory_impl = {
+	.destroy = gamescope_swapchain_factory_destroy,
+	.create_swapchain = gamescope_swapchain_factory_create_swapchain,
 };
 
-static void gamescope_xwayland_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
+static void gamescope_swapchain_factory_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
 {
-	struct wl_resource *resource = wl_resource_create( client, &gamescope_xwayland_interface, version, id );
-	wl_resource_set_implementation( resource, &gamescope_xwayland_impl, NULL, NULL );
+	struct wl_resource *resource = wl_resource_create( client, &gamescope_swapchain_factory_interface, version, id );
+	wl_resource_set_implementation( resource, &gamescope_swapchain_factory_impl, NULL, NULL );
 }
 
-static void create_gamescope_xwayland( void )
+static void create_gamescope_swapchain_factory( void )
 {
-	uint32_t version = 2;
-	wl_global_create( wlserver.display, &gamescope_xwayland_interface, version, NULL, gamescope_xwayland_bind );
+	uint32_t version = 1;
+	wl_global_create( wlserver.display, &gamescope_swapchain_factory_interface, version, NULL, gamescope_swapchain_factory_bind );
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 #if HAVE_PIPEWIRE
 static void gamescope_pipewire_handle_destroy( struct wl_client *client, struct wl_resource *resource )
@@ -854,7 +955,7 @@ static void create_presentation_time( void )
 	wl_global_create( wlserver.display, &wp_presentation_interface, version, NULL, presentation_time_bind );
 }
 
-void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks, uint64_t last_refresh_nsec, int refresh_rate )
+void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks, uint64_t last_refresh_nsec, uint64_t refresh_cycle )
 {
 	wlserver_wl_surface_info *wl_surface_info = get_wl_surface_info(surface);
 
@@ -879,8 +980,6 @@ void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std:
 
 	for (auto& feedback : presentation_feedbacks)
 	{
-		const uint64_t nsecInterval = 1'000'000'000ul / refresh_rate;
-
 		timespec last_refresh_ts;
 		last_refresh_ts.tv_sec = time_t(last_refresh_nsec / 1'000'000'000ul);
 		last_refresh_ts.tv_nsec = long(last_refresh_nsec % 1'000'000'000ul);
@@ -890,7 +989,7 @@ void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std:
 			last_refresh_ts.tv_sec >> 32,
 			last_refresh_ts.tv_sec & 0xffffffff,
 			last_refresh_ts.tv_nsec,
-			uint32_t(nsecInterval),
+			uint32_t(refresh_cycle),
 			wl_surface_info->sequence >> 32,
 			wl_surface_info->sequence & 0xffffffff,
 			flags);
@@ -915,6 +1014,32 @@ void wlserver_presentation_feedback_discard( struct wlr_surface *surface, std::v
 ///////////////////////
 
 
+void wlserver_past_present_timing( struct wlr_surface *surface, uint32_t present_id, uint64_t desired_present_time, uint64_t actual_present_time, uint64_t earliest_present_time, uint64_t present_margin )
+{
+	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	gamescope_swapchain_send_past_present_timing(
+		wl_info->gamescope_swapchain,
+		present_id,
+		desired_present_time >> 32,
+		desired_present_time & 0xffffffff,
+		actual_present_time >> 32,
+		actual_present_time & 0xffffffff,
+		earliest_present_time >> 32,
+		earliest_present_time & 0xffffffff,
+		present_margin >> 32,
+		present_margin & 0xffffffff);
+}
+
+void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle )
+{
+	wlserver_wl_surface_info *wl_info = get_wl_surface_info( surface );
+	gamescope_swapchain_send_refresh_cycle(
+		wl_info->gamescope_swapchain,
+		refresh_cycle >> 32,
+		refresh_cycle & 0xffffffff);
+}
+
+///////////////////////
 
 static void handle_session_active( struct wl_listener *listener, void *data )
 {
@@ -1266,6 +1391,8 @@ bool wlserver_init( void ) {
 	create_ime_manager( &wlserver );
 
 	create_gamescope_xwayland();
+
+	create_gamescope_swapchain_factory();
 
 #if HAVE_PIPEWIRE
 	create_gamescope_pipewire();

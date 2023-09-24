@@ -1646,7 +1646,7 @@ int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 	// is queued and would end up being the new page flip, rather than here.
 	// However, the page flip handler is called when the page flip occurs,
 	// not when it is successfully queued.
-	g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime;
+	g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime.pipe_write_time;
 
 	if ( isPageFlip ) {
 		// Wait for flip handler to unlock

@@ -8,6 +8,7 @@ protocols = [
 	'gamescope-input-method',
 	'gamescope-tearing-control-unstable-v1',
 	'gamescope-control',
+	'gamescope-swapchain',
 	'xdg-shell',
 	'presentation-time',
 ]

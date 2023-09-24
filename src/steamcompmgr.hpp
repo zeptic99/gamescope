@@ -17,6 +17,7 @@ void steamcompmgr_main(int argc, char **argv);
 
 #include "rendervulkan.hpp"
 #include "wlserver.hpp"
+#include "vblankmanager.hpp"
 
 #include <mutex>
 #include <vector>
@@ -137,7 +138,7 @@ wlserver_vk_swapchain_feedback* steamcompmgr_get_base_layer_swapchain_feedback()
 
 struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xwayland_server_t *xwayland_server, uint32_t xid );
 
-extern uint64_t g_SteamCompMgrVBlankTime;
+extern VBlankTimeInfo_t g_SteamCompMgrVBlankTime;
 extern pid_t focusWindow_pid;
 
 void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_server);

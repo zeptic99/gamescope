@@ -40,6 +40,8 @@ struct ResListEntry_t {
 	bool async;
 	std::shared_ptr<wlserver_vk_swapchain_feedback> feedback;
 	std::vector<struct wl_resource*> presentation_feedbacks;
+	std::optional<uint32_t> present_id;
+	uint64_t desired_present_time;
 };
 
 struct wlserver_content_override;
@@ -66,7 +68,7 @@ public:
 
 	std::vector<ResListEntry_t> retrieve_commits();
 
-	void handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t x11_window );
+	void handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wlr_surface *surface, uint32_t x11_window );
 	void destroy_content_override( struct wlserver_x11_surface_info *x11_surface, struct wlr_surface *surf);
 	void destroy_content_override(struct wlserver_content_override *co);
 
@@ -235,7 +237,14 @@ struct wlserver_wl_surface_info
 
 	uint64_t sequence = 0;
 	std::vector<struct wl_resource*> pending_presentation_feedbacks;
+
+	std::atomic<struct wl_resource *> gamescope_swapchain = { nullptr };
+	std::optional<uint32_t> present_id = std::nullopt;
+	uint64_t desired_present_time = 0;
+
+	uint64_t last_refresh_cycle = 0;
 };
+wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf );
@@ -249,5 +258,8 @@ void wlserver_open_steam_menu( bool qam );
 uint32_t wlserver_make_new_xwayland_server();
 void wlserver_destroy_xwayland_server(gamescope_xwayland_server_t *server);
 
-void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks, uint64_t last_refresh_nsec, int refresh_rate );
+void wlserver_presentation_feedback_presented( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks, uint64_t last_refresh_nsec, uint64_t refresh_cycle );
 void wlserver_presentation_feedback_discard( struct wlr_surface *surface, std::vector<struct wl_resource*>& presentation_feedbacks );
+
+void wlserver_past_present_timing( struct wlr_surface *surface, uint32_t present_id, uint64_t desired_present_time, uint64_t actual_present_time, uint64_t earliest_present_time, uint64_t present_margin );
+void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle );

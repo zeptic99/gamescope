@@ -473,6 +473,9 @@ bool CVulkanDevice::createDevice()
 	{
 		enabledExtensions.push_back( VK_KHR_SWAPCHAIN_EXTENSION_NAME );
 		enabledExtensions.push_back( VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME );
+
+		enabledExtensions.push_back( VK_KHR_PRESENT_ID_EXTENSION_NAME );
+		enabledExtensions.push_back( VK_KHR_PRESENT_WAIT_EXTENSION_NAME );
 	}
 
 	if ( m_bSupportsModifiers )
@@ -511,9 +514,21 @@ bool CVulkanDevice::createDevice()
 		.dynamicRendering = VK_TRUE,
 	};
 
+	VkPhysicalDevicePresentWaitFeaturesKHR presentWaitFeatures = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+		.pNext = &features13,
+		.presentWait = VK_TRUE,
+	};
+
+	VkPhysicalDevicePresentIdFeaturesKHR presentIdFeatures = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,
+		.pNext = &presentWaitFeatures,
+		.presentId = VK_TRUE,
+	};
+
 	VkPhysicalDeviceFeatures2 features2 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &features13,
+		.pNext = &presentIdFeatures,
 		.features = {
 			.shaderInt16 = m_bSupportsFp16,
 		},
@@ -2517,18 +2532,58 @@ bool acquire_next_image( void )
 	return g_device.vk.ResetFences( g_device.device(), 1, &g_output.acquireFence ) == VK_SUCCESS;
 }
 
+
+static std::atomic<uint64_t> g_currentPresentWaitId = {0u};
+static std::mutex present_wait_lock;
+
+static void present_wait_thread_func( void )
+{
+	uint64_t present_wait_id = 0;
+
+	while (true)
+	{
+		g_currentPresentWaitId.wait(present_wait_id);
+
+		// Lock to make sure swapchain destruction is waited on and that
+		// it's for this swapchain.
+		{
+			std::unique_lock lock(present_wait_lock);
+			present_wait_id = g_currentPresentWaitId.load();
+
+			if (present_wait_id != 0)
+			{
+				g_device.vk.WaitForPresentKHR( g_device.device(), g_output.swapChain, present_wait_id, 1'000'000'000lu );
+				vblank_mark_possible_vblank( get_time_in_nanos() );
+			}
+		}
+	}
+}
+
 void vulkan_present_to_window( void )
 {
+	static uint64_t s_lastPresentId = 0;
+
+	uint64_t presentId = ++s_lastPresentId;
+
+	VkPresentIdKHR presentIdInfo = {
+		.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
+		.swapchainCount = 1,
+		.pPresentIds = &presentId,
+	};
+
 	VkPresentInfoKHR presentInfo = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		.pNext = &presentIdInfo,
 		.swapchainCount = 1,
 		.pSwapchains = &g_output.swapChain,
 		.pImageIndices = &g_output.nOutImage,
 	};
 
-	if ( g_device.vk.QueuePresentKHR( g_device.queue(), &presentInfo ) != VK_SUCCESS )
+	if ( g_device.vk.QueuePresentKHR( g_device.queue(), &presentInfo ) == VK_SUCCESS )
+		g_currentPresentWaitId = presentId;
+	else
 		vulkan_remake_swapchain();
-	
+
 	while ( !acquire_next_image() )
 		vulkan_remake_swapchain();
 }
@@ -2698,6 +2753,9 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 
 bool vulkan_remake_swapchain( void )
 {
+	std::unique_lock lock(present_wait_lock);
+	g_currentPresentWaitId = 0;
+
 	VulkanOutput_t *pOutput = &g_output;
 	g_device.waitIdle();
 	g_device.vk.QueueWaitIdle( g_device.queue() );
@@ -3001,6 +3059,12 @@ bool vulkan_init( VkInstance instance, VkSurfaceKHR surface )
 
 	if (!init_nis_data())
 		return false;
+
+	if (BIsNested() && !BIsVRSession())
+	{
+		std::thread present_wait_thread( present_wait_thread_func );
+		present_wait_thread.detach();
+	}
 
 	return true;
 }

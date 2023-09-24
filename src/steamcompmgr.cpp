@@ -130,6 +130,7 @@ extern float g_flHDRItmTargetNits;
 
 extern std::atomic<uint64_t> g_lastVblank;
 
+
 std::string clipboard;
 std::string primarySelection;
 
@@ -140,6 +141,9 @@ uint64_t timespec_to_nanos(struct timespec& spec)
 {
 	return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
 }
+
+static uint64_t g_SteamCompMgrLimitedAppRefreshCycle = 16'666'666;
+static uint64_t g_SteamCompMgrAppRefreshCycle = 16'666'666;
 
 static const gamescope_color_mgmt_t k_ScreenshotColorMgmt =
 {
@@ -636,6 +640,11 @@ struct commit_t
 
 	struct wlr_surface *surf = nullptr;
 	std::vector<struct wl_resource*> presentation_feedbacks;
+
+	std::optional<uint32_t> present_id = std::nullopt;
+	uint64_t desired_present_time = 0;
+	uint64_t earliest_present_time = 0;
+	uint64_t present_margin = 0;
 };
 
 static std::vector<pollfd> pollfds;
@@ -735,7 +744,7 @@ bool			synchronize;
 
 std::mutex g_SteamCompMgrXWaylandServerMutex;
 
-uint64_t g_SteamCompMgrVBlankTime = 0;
+VBlankTimeInfo_t g_SteamCompMgrVBlankTime = {};
 
 static int g_nSteamCompMgrTargetFPS = 0;
 static uint64_t g_uDynamicRefreshEqualityTime = 0;
@@ -876,6 +885,7 @@ struct WaitListEntry_t
 	// steamcompmgr thread in handle_done_commits, it is worth it.
 	bool mangoapp_nudge;
 	uint64_t commitID;
+	uint64_t desiredPresentTime;
 };
 
 sem waitListSem;
@@ -937,7 +947,7 @@ retry:
 
 	{
 		std::unique_lock< std::mutex > lock( entry.doneCommits->listCommitsDoneLock );
-		entry.doneCommits->listCommitsDone.push_back( entry.commitID );
+		entry.doneCommits->listCommitsDone.push_back( CommitDoneEntry_t{ entry.commitID, entry.desiredPresentTime } );
 	}
 
 	nudge_steamcompmgr();
@@ -1185,7 +1195,7 @@ destroy_buffer( struct wl_listener *listener, void * )
 }
 
 static std::shared_ptr<commit_t>
-import_commit ( struct wlr_surface *surf, struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback, std::vector<struct wl_resource*> presentation_feedbacks )
+import_commit ( struct wlr_surface *surf, struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback, std::vector<struct wl_resource*> presentation_feedbacks, std::optional<uint32_t> present_id, uint64_t desired_present_time )
 {
 	std::shared_ptr<commit_t> commit = std::make_shared<commit_t>();
 	std::unique_lock<std::mutex> lock( wlr_buffer_map_lock );
@@ -1196,6 +1206,8 @@ import_commit ( struct wlr_surface *surf, struct wlr_buffer *buf, bool async, st
 	commit->presentation_feedbacks = std::move(presentation_feedbacks);
 	if (swapchain_feedback)
 		commit->feedback = *swapchain_feedback;
+	commit->present_id = present_id;
+	commit->desired_present_time = desired_present_time;
 
 	auto it = wlr_buffer_map.find( buf );
 	if ( it != wlr_buffer_map.end() )
@@ -2571,9 +2583,9 @@ paint_all(bool async)
 			{
 				vulkan_present_to_window();
 			}
-			// Update the time it took us to present.
-			// TODO: Use Vulkan present timing in future.
-			g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime;
+
+			// Update the time it took us to commit
+			g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime.pipe_write_time;
 		}
 		else
 		{
@@ -5927,7 +5939,7 @@ register_systray(xwayland_ctx_t *ctx)
 	XSetSelectionOwner(ctx->dpy, net_system_tray, ctx->ourWindow, 0);
 }
 
-bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t commitID )
+bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t commitID, uint64_t earliestPresentTime, uint64_t earliestLatchTime )
 {
 	bool bFoundWindow = false;
 	uint32_t j;
@@ -5937,6 +5949,8 @@ bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t co
 		{
 			gpuvis_trace_printf( "commit %lu done", w->commit_queue[ j ]->commitID );
 			w->commit_queue[ j ]->done = true;
+			w->commit_queue[ j ]->earliest_present_time = earliestPresentTime;
+			w->commit_queue[ j ]->present_margin = earliestPresentTime - earliestLatchTime;
 			bFoundWindow = true;
 
 			// Window just got a new available commit, determine if that's worth a repaint
@@ -6009,56 +6023,135 @@ bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t co
 	return false;
 }
 
+// TODO: Merge these two functions.
 void handle_done_commits_xwayland( xwayland_ctx_t *ctx )
 {
 	std::lock_guard<std::mutex> lock( ctx->doneCommits.listCommitsDoneLock );
 
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+
+	// commits that were not ready to be presented based on their display timing.
+	std::vector< CommitDoneEntry_t > commits_before_their_time;
+
+	uint64_t now = get_time_in_nanos();
+
 	// very fast loop yes
-	for ( uint32_t i = 0; i < ctx->doneCommits.listCommitsDone.size(); i++ )
+	for ( auto& entry : ctx->doneCommits.listCommitsDone )
 	{
+		if (!entry.earliestPresentTime)
+		{
+			entry.earliestPresentTime = next_refresh_time;
+			entry.earliestLatchTime = now;
+		}
+
+		if ( entry.desiredPresentTime > next_refresh_time )
+		{
+			commits_before_their_time.push_back( entry );
+			break;
+		}
+
 		for ( steamcompmgr_win_t *w = ctx->list; w; w = w->xwayland().next )
 		{
-			if (handle_done_commit(w, ctx, ctx->doneCommits.listCommitsDone[i]))
+			if (handle_done_commit(w, ctx, entry.commitID, entry.earliestPresentTime, entry.earliestLatchTime))
 				break;
 		}
 	}
 
-	ctx->doneCommits.listCommitsDone.clear();
+	ctx->doneCommits.listCommitsDone = std::move( commits_before_their_time );
 }
 
 void handle_done_commits_xdg()
 {
 	std::lock_guard<std::mutex> lock( g_steamcompmgr_xdg_done_commits.listCommitsDoneLock );
 
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+
+	// commits that were not ready to be presented based on their display timing.
+	std::vector< CommitDoneEntry_t > commits_before_their_time;
+
+	uint64_t now = get_time_in_nanos();
+
 	// very fast loop yes
-	for ( uint32_t i = 0; i < g_steamcompmgr_xdg_done_commits.listCommitsDone.size(); i++ )
+	for ( auto& entry : g_steamcompmgr_xdg_done_commits.listCommitsDone )
 	{
+		if (!entry.earliestPresentTime)
+		{
+			entry.earliestPresentTime = next_refresh_time;
+			entry.earliestLatchTime = now;
+		}
+
+		if ( entry.desiredPresentTime > next_refresh_time )
+		{
+			commits_before_their_time.push_back( entry );
+			break;
+		}
+
 		for (const auto& xdg_win : g_steamcompmgr_xdg_wins)
 		{
-			if (handle_done_commit(xdg_win.get(), nullptr, g_steamcompmgr_xdg_done_commits.listCommitsDone[i]))
+			if (handle_done_commit(xdg_win.get(), nullptr, entry.commitID, entry.earliestPresentTime, entry.earliestLatchTime))
 				break;
 		}
 	}
 
-	g_steamcompmgr_xdg_done_commits.listCommitsDone.clear();
+	g_steamcompmgr_xdg_done_commits.listCommitsDone = std::move( commits_before_their_time );
 }
 
 void handle_presented_for_window( steamcompmgr_win_t* w )
 {
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+
+	uint64_t refresh_cycle = g_nSteamCompMgrTargetFPS && steamcompmgr_window_should_limit_fps( w )
+		? g_SteamCompMgrLimitedAppRefreshCycle
+		: g_SteamCompMgrAppRefreshCycle;
+
 	commit_t *lastCommit = get_window_last_done_commit_peek(w);
-	if (lastCommit && !lastCommit->presentation_feedbacks.empty())
+	if (lastCommit)
 	{
-		wlserver_lock();
+		if (!lastCommit->presentation_feedbacks.empty() || lastCommit->present_id)
+		{
+			wlserver_lock();
 
-		int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+			if (!lastCommit->presentation_feedbacks.empty())
+			{
+				wlserver_presentation_feedback_presented(
+					lastCommit->surf,
+					lastCommit->presentation_feedbacks,
+					next_refresh_time,
+					refresh_cycle);
+			}
 
-		wlserver_presentation_feedback_presented(
-			lastCommit->surf,
-			lastCommit->presentation_feedbacks,
-			g_lastVblank.load(),
-			nRefresh);
+			if (lastCommit->present_id)
+			{
+				wlserver_past_present_timing(
+					lastCommit->surf,
+					*lastCommit->present_id,
+					lastCommit->desired_present_time,
+					next_refresh_time,
+					lastCommit->earliest_present_time,
+					lastCommit->present_margin);
+				lastCommit->present_id = std::nullopt;
+			}
 
-		wlserver_unlock();
+			wlserver_unlock();
+		}
+	}
+
+	if (struct wlr_surface *surface = w->current_surface())
+	{
+		auto info = get_wl_surface_info(surface);
+		if (info->gamescope_swapchain != nullptr)
+		{
+			// Could have got the override set in this bubble.s
+			surface = w->current_surface();
+
+			if  (info->last_refresh_cycle != refresh_cycle)
+			{
+				wlserver_lock();
+				info->last_refresh_cycle = refresh_cycle;
+				wlserver_refresh_cycle(surface, refresh_cycle);
+				wlserver_unlock();
+			}
+		}
 	}
 }
 
@@ -6142,7 +6235,7 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		return;
 	}
 
-	std::shared_ptr<commit_t> newCommit = import_commit( reslistentry.surf, buf, reslistentry.async, std::move(reslistentry.feedback), std::move(reslistentry.presentation_feedbacks) );
+	std::shared_ptr<commit_t> newCommit = import_commit( reslistentry.surf, buf, reslistentry.async, std::move(reslistentry.feedback), std::move(reslistentry.presentation_feedbacks), reslistentry.present_id, reslistentry.desired_present_time );
 
 	int fence = -1;
 	if ( newCommit )
@@ -6170,6 +6263,7 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 				.fence = fence,
 				.mangoapp_nudge = mango_nudge,
 				.commitID = newCommit->commitID,
+				.desiredPresentTime = newCommit->desired_present_time,
 			};
 			waitList.push_back( entry );
 		}
@@ -6534,7 +6628,7 @@ dispatch_vblank( int fd )
 	bool vblank = false;
 	for (;;)
 	{
-		uint64_t vblanktime = 0;
+		VBlankTimeInfo_t vblanktime = {};
 		ssize_t ret = read( fd, &vblanktime, sizeof( vblanktime ) );
 		if ( ret < 0 )
 		{
@@ -6546,9 +6640,10 @@ dispatch_vblank( int fd )
 		}
 
 		g_SteamCompMgrVBlankTime = vblanktime;
-		uint64_t diff = get_time_in_nanos() - vblanktime;
 
-		// give it 1 ms of slack.. maybe too long
+		uint64_t diff = get_time_in_nanos() - vblanktime.pipe_write_time;
+
+		// give it 1 ms of slack from pipe to steamcompmgr... maybe too long
 		if ( diff > 1'000'000ul )
 		{
 			gpuvis_trace_printf( "ignored stale vblank" );
@@ -7486,6 +7581,17 @@ steamcompmgr_main(int argc, char **argv)
 					}
 				}
 			}
+		}
+
+		if ( vblank )
+		{
+			int nRealRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+			int nTargetFPS = g_nSteamCompMgrTargetFPS ? g_nSteamCompMgrTargetFPS : nRealRefresh;
+			int nMultiplier = nRealRefresh / nTargetFPS;
+
+			int nAppRefresh = nRealRefresh * nMultiplier;
+			g_SteamCompMgrAppRefreshCycle = 1'000'000'000ul / nRealRefresh;
+			g_SteamCompMgrLimitedAppRefreshCycle = 1'000'000'000ul / nAppRefresh;
 		}
 
 		// Handle presentation-time stuff
