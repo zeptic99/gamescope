@@ -485,7 +485,9 @@ bool CVulkanDevice::createDevice()
 	enabledExtensions.push_back( VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME );
 
 	enabledExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
+#if 0
 	enabledExtensions.push_back( VK_KHR_MAINTENANCE_5_EXTENSION_NAME );
+#endif
 
 	if ( BIsVRSession() )
 	{
@@ -494,14 +496,18 @@ bool CVulkanDevice::createDevice()
 #endif
 	}
 
+#if 0
 	VkPhysicalDeviceMaintenance5FeaturesKHR maintenance5 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR,
 		.maintenance5 = VK_TRUE,
 	};
+#endif
 
 	VkPhysicalDeviceVulkan13Features features13 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+#if 0
 		.pNext = &maintenance5,
+#endif
 		.dynamicRendering = VK_TRUE,
 	};
 
