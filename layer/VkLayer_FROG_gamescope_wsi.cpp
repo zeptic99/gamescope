@@ -325,6 +325,29 @@ namespace GamescopeWSILayer {
       return VK_SUCCESS;
     }
 
+    static VkResult GetPhysicalDeviceSurfaceCapabilities2KHR(
+      const vkroots::VkInstanceDispatch*     pDispatch,
+            VkPhysicalDevice                 physicalDevice,
+      const VkPhysicalDeviceSurfaceInfo2KHR* pSurfaceInfo,
+            VkSurfaceCapabilities2KHR*       pSurfaceCapabilities) {
+      auto gamescopeSurface = GamescopeSurface::get(pSurfaceInfo->surface);
+      if (!gamescopeSurface)
+        return pDispatch->GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities);
+
+      VkResult res = VK_SUCCESS;
+      if ((res = pDispatch->GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities)) != VK_SUCCESS)
+        return res;
+
+      auto rect = xcb::getWindowRect(gamescopeSurface->connection, gamescopeSurface->window);
+      if (!rect)
+        return VK_ERROR_SURFACE_LOST_KHR;
+
+      pSurfaceCapabilities->surfaceCapabilities.currentExtent = rect->extent;
+      pSurfaceCapabilities->surfaceCapabilities.minImageCount = getMinImageCount();
+
+      return VK_SUCCESS;
+    }
+
     static void DestroySurfaceKHR(
       const vkroots::VkInstanceDispatch* pDispatch,
             VkInstance                   instance,
@@ -564,8 +587,9 @@ namespace GamescopeWSILayer {
         // Force the colorspace to sRGB before sending to the driver.
         swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-        fprintf(stderr, "[Gamescope WSI] Creating swapchain for xid: 0x%0x - format: %s - colorspace: %s - flip: %s\n",
+        fprintf(stderr, "[Gamescope WSI] Creating swapchain for xid: 0x%0x - minImageCount: %u - format: %s - colorspace: %s - flip: %s\n",
           gamescopeSurface->window,
+          pCreateInfo->minImageCount,
           vkroots::helpers::enumString(pCreateInfo->imageFormat),
           vkroots::helpers::enumString(pCreateInfo->imageColorSpace),
           canBypass ? "true" : "false");
@@ -612,6 +636,10 @@ namespace GamescopeWSILayer {
           if (gamescopeInstance) {
             uint32_t imageCount = 0;
             pDispatch->GetSwapchainImagesKHR(device, *pSwapchain, &imageCount, nullptr);
+
+            fprintf(stderr, "[Gamescope WSI] Created swapchain for xid: 0x%0x - imageCount: %u\n",
+              gamescopeSurface->window,
+              imageCount);
 
             gamescope_xwayland_swapchain_feedback(
               gamescopeInstance->gamescope,
