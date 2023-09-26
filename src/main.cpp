@@ -34,11 +34,16 @@
 #include "pipewire.hpp"
 #endif
 
+#include <wayland-client.h>
+
+using namespace std::literals;
+
 EStreamColorspace g_ForcedNV12ColorSpace = k_EStreamColorspace_Unknown;
 static bool s_bInitialWantsVRREnabled = false;
 
 const char *gamescope_optstring = nullptr;
 const char *g_pOriginalDisplay = nullptr;
+const char *g_pOriginalWaylandDisplay = nullptr;
 
 const struct option *gamescope_options = (struct option[]){
 	{ "help", no_argument, nullptr, 0 },
@@ -470,6 +475,41 @@ static EStreamColorspace parse_colorspace_string( const char *pszStr )
 	 	return k_EStreamColorspace_Unknown;
 }
 
+
+
+
+static bool g_bSupportsWaylandPresentationTime = false;
+static constexpr wl_registry_listener s_registryListener = {
+    .global = [](void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
+        if (interface == "wp_presentation"sv)
+            g_bSupportsWaylandPresentationTime = true;
+    },
+
+    .global_remove = [](void* data, wl_registry* registry, uint32_t name) {
+    },
+};
+
+static bool CheckWaylandPresentationTime()
+{
+	wl_display *display = wl_display_connect(g_pOriginalWaylandDisplay);
+	if (!display) {
+		fprintf(stderr, "Failed to connect to wayland socket: %s.\n", g_pOriginalWaylandDisplay);
+        exit(1);
+        return false;
+	}
+	wl_registry *registry = wl_display_get_registry(display);
+
+    wl_registry_add_listener(registry, &s_registryListener, nullptr);
+
+	wl_display_dispatch(display);
+	wl_display_roundtrip(display);
+
+	wl_registry_destroy(registry);
+
+    return g_bSupportsWaylandPresentationTime;
+}
+
+
 int g_nPreferredOutputWidth = 0;
 int g_nPreferredOutputHeight = 0;
 
@@ -647,10 +687,25 @@ int main(int argc, char **argv)
 	XInitThreads();
 	g_mainThread = pthread_self();
 
-	if ( getenv("DISPLAY") != NULL || getenv("WAYLAND_DISPLAY") != NULL )
+	g_pOriginalDisplay = getenv("DISPLAY");
+	g_pOriginalWaylandDisplay = getenv("WAYLAND_DISPLAY");
+	g_bIsNested = g_pOriginalDisplay != NULL || g_pOriginalWaylandDisplay != NULL;
+
+	if ( BIsSDLSession() && g_pOriginalWaylandDisplay != NULL )
 	{
-		g_bIsNested = true;
-		g_pOriginalDisplay = getenv("DISPLAY");
+        // Default to SDL_VIDEODRIVER wayland under Wayland and force enable vk_khr_present_wait
+        // (not enabled by default in Mesa because instance does not know if Wayland
+        //  compositor supports wp_presentation, but we can check that ourselves.)
+        setenv("vk_khr_present_wait", "true", 0);
+        setenv("SDL_VIDEODRIVER", "wayland", 0);
+
+        if (!CheckWaylandPresentationTime())
+        {
+            fprintf(stderr,
+                "Your Wayland compositor does NOT support wp_presentation/presentation-time which is required for VK_KHR_present_wait and VK_KHR_present_id which is needed for Gamescope to function.\n"
+                "Please update your compositor or complain to your compositor vendor for support.\n");
+            return 1;
+        }
 	}
 
 	if ( !wlsession_init() )
