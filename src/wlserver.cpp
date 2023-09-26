@@ -435,6 +435,8 @@ static struct wl_listener new_input_listener = { .notify = wlserver_new_input };
 
 wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf)
 {
+	if (!wlr_surf)
+		return NULL;
 	return reinterpret_cast<wlserver_wl_surface_info *>(wlr_surf->data);
 }
 
@@ -1551,6 +1553,16 @@ void wlserver_run(void)
 void wlserver_keyboardfocus( struct wlr_surface *surface )
 {
 	assert( wlserver_is_lock_held() );
+
+	if (wlserver.kb_focus_surface != surface) {
+		auto old_wl_surf = get_wl_surface_info( wlserver.kb_focus_surface );
+		if (old_wl_surf && old_wl_surf->xdg_surface && old_wl_surf->xdg_surface->xdg_toplevel)
+			wlr_xdg_toplevel_set_activated(old_wl_surf->xdg_surface->xdg_toplevel, false);
+
+		auto new_wl_surf = get_wl_surface_info( surface );
+		if (new_wl_surf && new_wl_surf->xdg_surface && new_wl_surf->xdg_surface->xdg_toplevel)
+			wlr_xdg_toplevel_set_activated(new_wl_surf->xdg_surface->xdg_toplevel, true);
+	}
 
 	assert( wlserver.wlr.virtual_keyboard_device != nullptr );
 	wlr_seat_set_keyboard( wlserver.wlr.seat, wlserver.wlr.virtual_keyboard_device );
