@@ -6402,6 +6402,8 @@ spawn_client( char **argv )
 
 		unsetenv( "ENABLE_VKBASALT" );
 
+		// Enable Gamescope WSI by default for nested.
+		setenv( "ENABLE_GAMESCOPE_WSI", "1", 0 );
 		execvp( argv[ 0 ], argv );
 
 		xwm_log.errorf_errno( "execvp failed" );
