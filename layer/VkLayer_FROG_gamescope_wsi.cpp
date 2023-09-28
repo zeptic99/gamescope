@@ -708,7 +708,8 @@ namespace GamescopeWSILayer {
         gamescopeInstance->gamescopeSwapchainFactory,
         gamescopeSurface->surface);
 
-      gamescope_swapchain_override_window_content(gamescopeSwapchainObject, *serverId, gamescopeSurface->window);
+      if (canBypass)
+        gamescope_swapchain_override_window_content(gamescopeSwapchainObject, *serverId, gamescopeSurface->window);
 
       {
         auto gamescopeSwapchain = GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
