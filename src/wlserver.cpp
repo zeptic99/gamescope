@@ -103,7 +103,6 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 		std::lock_guard<std::mutex> lock( wayland_commit_lock );
 
 		auto wl_surf = get_wl_surface_info( surf );
-		printf("commit: %p\n", surf);
 
 		ResListEntry_t newEntry = {
 			.surf = surf,
@@ -182,7 +181,6 @@ void xwayland_surface_commit(struct wlr_surface *wlr_surface) {
 	}
 	else
 	{
-        printf("pending commit: %p\n", wlr_surface);
 		g_PendingCommits.push_back(PendingCommit_t{ wlr_surface, buf });
 	}
 }
