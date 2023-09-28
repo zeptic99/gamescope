@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <optional>
 
+#include <poll.h>
 // For limiter file.
 #include <time.h>
 #include <fcntl.h>
@@ -35,6 +36,45 @@ namespace GamescopeWSILayer {
   static bool contains(const std::vector<const char *> vec, std::string_view lookupValue) {
     return std::find_if(vec.begin(), vec.end(),
       [=](const char* value) { return value == lookupValue; }) != vec.end();
+  }
+
+  static int waylandPumpEvents(wl_display *display) {
+    int wlFd = wl_display_get_fd(display);
+
+    while (true) {
+      int ret = 0;
+
+      if ((ret = wl_display_dispatch_pending(display)) < 0)
+        return ret;
+
+      if ((ret = wl_display_prepare_read(display)) < 0) {
+        if (errno == EAGAIN)
+          continue;
+
+        return -1;
+      }
+
+      pollfd pollfd = {
+        .fd = wlFd,
+        .events = POLLIN,
+      };
+      timespec zeroTimeout = {};
+      ret = ppoll(&pollfd, 1, &zeroTimeout, NULL);
+
+      if (ret <= 0) {
+        wl_display_cancel_read(display);
+        if (ret == 0)
+          wl_display_flush(display);
+        return ret;
+      }
+
+      ret = wl_display_read_events(display);
+      if (ret < 0)
+        return ret;
+
+      ret = wl_display_flush(display);
+      return ret;
+    }
   }
 
   // TODO: Maybe move to Wayland event or something.
@@ -752,6 +792,7 @@ namespace GamescopeWSILayer {
 
       auto pPresentTimes = vkroots::FindInChain<VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE, const VkPresentTimesInfoGOOGLE>(pPresentInfo);
 
+      wl_display *display = nullptr;
       for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
         if (auto gamescopeSwapchain = GamescopeSwapchain::get(pPresentInfo->pSwapchains[i])) {
           if (pPresentTimes && pPresentTimes->pTimes) {
@@ -767,12 +808,13 @@ namespace GamescopeWSILayer {
               pPresentTimes->pTimes[i].desiredPresentTime & 0xffffffff);
           }
 
-          // Dispatch then flush to ensure any of our callbacks that did Wayland-y stuff
-          // get their things flushed before QueuePresent's commit.
-          wl_display_dispatch(gamescopeSwapchain->display);
-          wl_display_flush(gamescopeSwapchain->display);
+          assert(display == nullptr || display == gamescopeSwapchain->display);
+          display = gamescopeSwapchain->display;
         }
       }
+
+      assert(display);
+      waylandPumpEvents(display);
 
       VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
 
@@ -858,7 +900,8 @@ namespace GamescopeWSILayer {
       }
 
       // Dispatch to get the latest timings.
-      wl_display_dispatch(gamescopeSwapchain->display);
+      if (waylandPumpEvents(gamescopeSwapchain->display) < 0)
+        return VK_ERROR_SURFACE_LOST_KHR;
 
       uint32_t originalCount = *pPresentationTimingCount;
 
@@ -884,7 +927,8 @@ namespace GamescopeWSILayer {
       }
 
       // Dispatch to get the latest cycle.
-      wl_display_dispatch(gamescopeSwapchain->display);
+      if (waylandPumpEvents(gamescopeSwapchain->display) < 0)
+        return VK_ERROR_SURFACE_LOST_KHR;
 
       std::unique_lock(*gamescopeSwapchain->presentTimingMutex);
       pDisplayTimingProperties->refreshDuration = gamescopeSwapchain->refreshCycle;
