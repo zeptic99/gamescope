@@ -187,7 +187,7 @@ bool wlserver_init( void );
 void wlserver_run(void);
 
 void wlserver_lock(void);
-void wlserver_unlock(void);
+void wlserver_unlock(bool flush = true);
 bool wlserver_is_lock_held(void);
 
 void wlserver_keyboardfocus( struct wlr_surface *surface );
@@ -263,3 +263,5 @@ void wlserver_presentation_feedback_discard( struct wlr_surface *surface, std::v
 
 void wlserver_past_present_timing( struct wlr_surface *surface, uint32_t present_id, uint64_t desired_present_time, uint64_t actual_present_time, uint64_t earliest_present_time, uint64_t present_margin );
 void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle );
+
+void wlserver_force_shutdown();

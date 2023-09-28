@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <poll.h>
+#include <fcntl.h>
 
 #include <linux/input-event-codes.h>
 
@@ -102,6 +103,7 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 		std::lock_guard<std::mutex> lock( wayland_commit_lock );
 
 		auto wl_surf = get_wl_surface_info( surf );
+		printf("commit: %p\n", surf);
 
 		ResListEntry_t newEntry = {
 			.surf = surf,
@@ -180,6 +182,7 @@ void xwayland_surface_commit(struct wlr_surface *wlr_surface) {
 	}
 	else
 	{
+        printf("pending commit: %p\n", wlr_surface);
 		g_PendingCommits.push_back(PendingCommit_t{ wlr_surface, buf });
 	}
 }
@@ -1507,37 +1510,54 @@ void wlserver_lock(void)
 	pthread_mutex_lock(&waylock);
 }
 
-void wlserver_unlock(void)
+void wlserver_unlock(bool flush)
 {
-	wl_display_flush_clients(wlserver.display);
+    if (flush)
+	    wl_display_flush_clients(wlserver.display);
 	pthread_mutex_unlock(&waylock);
 }
 
 extern std::mutex g_SteamCompMgrXWaylandServerMutex;
 
+static int g_wlserverNudgePipe[2] = {-1, -1};
+
 void wlserver_run(void)
 {
 	pthread_setname_np( pthread_self(), "gamescope-wl" );
 
-	struct pollfd pollfd = {
-		.fd = wl_event_loop_get_fd( wlserver.event_loop ),
-		.events = POLLIN,
-	};
+	if ( pipe2( g_wlserverNudgePipe, O_CLOEXEC | O_NONBLOCK ) != 0 )
+	{
+		wl_log.errorf_errno( "wlserver: pipe2 failed" );
+		exit( 1 );
+	}
+
+	struct pollfd pollfds[2] = {
+        {
+            .fd = wl_event_loop_get_fd( wlserver.event_loop ),
+            .events = POLLIN,
+	    },
+        {
+			.fd = g_wlserverNudgePipe[ 0 ],
+			.events = POLLIN,
+        },
+    };
+
 	while ( g_bRun ) {
-		int ret = poll( &pollfd, 1, -1 );
+		int ret = poll( pollfds, 2, -1 );
+
 		if ( ret < 0 ) {
-			if ( errno == EINTR )
+			if ( errno == EINTR || errno == EAGAIN )
 				continue;
 			wl_log.errorf_errno( "poll failed" );
 			break;
 		}
 
-		if ( pollfd.revents & (POLLHUP | POLLERR) ) {
-			wl_log.errorf( "socket %s", ( pollfd.revents & POLLERR ) ? "error" : "closed" );
+		if ( pollfds[ 0 ].revents & (POLLHUP | POLLERR) ) {
+			wl_log.errorf( "socket %s", ( pollfds[ 0 ].revents & POLLERR ) ? "error" : "closed" );
 			break;
 		}
 
-		if ( pollfd.revents & POLLIN ) {
+		if ( pollfds[ 0 ].revents & POLLIN ) {
 			// We have wayland stuff to do, do it while locked
 			wlserver_lock();
 
@@ -1569,7 +1589,19 @@ void wlserver_run(void)
 	wlserver.wlr.xwayland_servers.clear();
 	wl_display_destroy_clients(wlserver.display);
 	wl_display_destroy(wlserver.display);
-	wlserver_unlock();
+    wlserver.display = NULL;
+	wlserver_unlock(false);
+}
+
+void wlserver_force_shutdown()
+{
+    assert( wlserver_is_lock_held() );
+
+    if (wlserver.display)
+    {
+        if ( write( g_wlserverNudgePipe[ 1 ], "\n", 1 ) < 0 )
+            wl_log.errorf_errno( "wlserver_force_shutdown: write failed" );
+    }
 }
 
 void wlserver_keyboardfocus( struct wlr_surface *surface )
