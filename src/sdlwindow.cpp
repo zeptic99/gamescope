@@ -236,6 +236,7 @@ void inputSDLThreadRun( void )
 						break;
 					}
 				}
+			[[fallthrough]];
 			case SDL_KEYUP:
 				key = SDLScancodeToLinuxKey( event.key.keysym.scancode );
 
