@@ -107,16 +107,29 @@ namespace GamescopeWSILayer {
       // If we have any child windows obscuring us bigger than 1x1,
       // then we cannot flip.
       // (There can be dummy composite redirect windows and whatever.)
-      if (largestObscuringWindowSize->width > 1 || largestObscuringWindowSize->height > 1)
+      if (largestObscuringWindowSize->width > 1 || largestObscuringWindowSize->height > 1) {
+#if GAMESCOPE_WSI_BYPASS_DEBUG
+        fprintf(stderr, "[Gamescope WSI] Largest obscuring window size: %u %u\n", largestObscuringWindowSize->width, largestObscuringWindowSize->height);
+#endif
         return false;
+      }
 
       // If this window is not within 1px margin of error for the size of
       // it's top level window, then it cannot be flipped.
-      if (iabs(rect->offset.x) > 1 ||
-          iabs(rect->offset.y) > 1 ||
-          iabs(int32_t(toplevelRect->extent.width)  - int32_t(rect->extent.width)) > 1 ||
-          iabs(int32_t(toplevelRect->extent.height) - int32_t(rect->extent.height)) > 1)
-        return false;
+      if (*toplevelWindow != window) {
+        if (iabs(rect->offset.x) > 1 ||
+            iabs(rect->offset.y) > 1 ||
+            iabs(int32_t(toplevelRect->extent.width)  - int32_t(rect->extent.width)) > 1 ||
+            iabs(int32_t(toplevelRect->extent.height) - int32_t(rect->extent.height)) > 1) {
+  #if GAMESCOPE_WSI_BYPASS_DEBUG
+          fprintf(stderr, "[Gamescope WSI] Not within 1px margin of error. Offset: %d %d Extent: %u %u vs %u %u",
+            rect->offset.x, rect->offset.y,
+            toplevelRect->extent.width, toplevelRect->extent.height,
+            rect->extent.width, rect->extent.height);
+  #endif
+          return false;
+        }
+      }
 
       // I want to add more checks wrt. composite redirects and such here,
       // but it seems what is exposed in xcb_composite is quite limited.
