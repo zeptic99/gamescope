@@ -566,6 +566,28 @@ void gamescope_xwayland_server_t::handle_override_window_content( struct wl_clie
 
 	if ( x11_surface )
 		wlserver_x11_surface_info_set_wlr( x11_surface, surface, true );
+
+    if ( x11_surface )
+    {
+        for (auto it = g_PendingCommits.begin(); it != g_PendingCommits.end();)
+        {
+            if (it->surf == surface)
+            {
+                PendingCommit_t pending = *it;
+
+                // Still have the buffer lock from before...
+                assert(x11_surface);
+                assert(x11_surface->xwayland_server);
+                x11_surface->xwayland_server->wayland_commit( pending.surf, pending.buf );
+
+                it = g_PendingCommits.erase(it);
+            }
+            else
+            {
+                it++;
+            }
+        }
+    }
 }
 
 struct wl_client *gamescope_xwayland_server_t::get_client()
