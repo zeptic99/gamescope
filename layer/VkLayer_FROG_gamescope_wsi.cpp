@@ -813,8 +813,8 @@ namespace GamescopeWSILayer {
         }
       }
 
-      assert(display);
-      waylandPumpEvents(display);
+      if (display)
+        waylandPumpEvents(display);
 
       VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
 
