@@ -25,6 +25,8 @@ using namespace std::literals;
 
 namespace GamescopeWSILayer {
 
+  static const size_t MaxPastPresentationTimes = 16;
+
   static uint64_t timespecToNanos(struct timespec& spec) {
     return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
   }
@@ -217,6 +219,9 @@ namespace GamescopeWSILayer {
         .earliestPresentTime = (uint64_t(earliest_present_time_hi) << 32) | earliest_present_time_lo,
         .presentMargin       = (uint64_t(present_margin_hi) << 32) | present_margin_lo
       });
+      // Remove the first element if we are already at the max size.
+      if (swapchain->pastPresentTimings.size() >= MaxPastPresentationTimes)
+        swapchain->pastPresentTimings.erase(swapchain->pastPresentTimings.begin());
     },
 
     .refresh_cycle = [](
