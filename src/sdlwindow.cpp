@@ -147,6 +147,20 @@ void inputSDLThreadRun( void )
 		return;
 	}
 
+	// Update g_nOutputWidthPts.
+	{
+		int width, height;
+		SDL_GetWindowSize( g_SDLWindow, &width, &height );
+		g_nOutputWidthPts = width;
+		g_nOutputHeightPts = height;
+
+	#if SDL_VERSION_ATLEAST(2, 26, 0)
+		SDL_GetWindowSizeInPixels( g_SDLWindow, &width, &height );
+	#endif
+		g_nOutputWidth = width;
+		g_nOutputHeight = height;
+	}
+
 	if ( g_bForceRelativeMouse )
 	{
 		SDL_SetRelativeMouseMode( SDL_TRUE );
