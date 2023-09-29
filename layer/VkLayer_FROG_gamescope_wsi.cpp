@@ -782,6 +782,7 @@ namespace GamescopeWSILayer {
           .presentMode         = swapchainInfo.presentMode, // The new present mode.
           .originalPresentMode = originalPresentMode,
         });
+        gamescopeSwapchain->pastPresentTimings.reserve(MaxPastPresentationTimes);
 
         gamescope_swapchain_add_listener(gamescopeSwapchainObject, &s_swapchainListener, reinterpret_cast<void*>(gamescopeSwapchain.get()));
       }
