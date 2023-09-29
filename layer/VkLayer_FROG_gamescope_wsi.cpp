@@ -466,6 +466,7 @@ namespace GamescopeWSILayer {
             VkSurfaceKHR                 surface,
       const VkAllocationCallbacks*       pAllocator) {
       if (auto state = GamescopeSurface::get(surface)) {
+        pDispatch->DestroySurfaceKHR(instance, state->fallbackSurface, pAllocator);
         wl_surface_destroy(state->surface);
       }
       GamescopeSurface::remove(surface);
