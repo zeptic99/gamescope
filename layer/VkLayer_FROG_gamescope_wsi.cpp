@@ -836,7 +836,7 @@ namespace GamescopeWSILayer {
         if (!s_warned) {
           int messageId = -1;
           messagey::ShowSimple(
-            "CreateSwapchainKHR: Attempting to QueuePresent on a non-hooked swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.",
+            "QueuePresentKHR: Attempting to present to a non-hooked swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.",
             "Gamescope WSI Layer Error",
             messagey::MessageBoxFlag::Warning | messagey::MessageBoxFlag::Simple_Cancel | messagey::MessageBoxFlag::Simple_OK,
             &messageId);
