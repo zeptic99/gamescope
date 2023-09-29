@@ -19,6 +19,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "../src/messagey.h"
+
 using namespace std::literals;
 
 namespace GamescopeWSILayer {
@@ -672,8 +674,20 @@ namespace GamescopeWSILayer {
       const VkAllocationCallbacks*     pAllocator,
             VkSwapchainKHR*            pSwapchain) {
       auto gamescopeSurface = GamescopeSurface::get(pCreateInfo->surface);
+
       if (!gamescopeSurface) {
-        fprintf(stderr, "[Gamescope WSI]!!!\n[Gamescope WSI] CreateSwapchainKHR: Creating swapchain for non-Gamescope swapchain. Hooking has failed somewhere. You may have a bad Vulkan layer. Still trying to power through![Gamescope WSI]!!!\n\n");
+        static bool s_warned = false;
+        if (!s_warned) {
+          int messageId = -1;
+          messagey::ShowSimple(
+            "CreateSwapchainKHR: Creating swapchain for non-Gamescope swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.",
+            "Gamescope WSI Layer Error",
+            messagey::MessageBoxFlag::Warning | messagey::MessageBoxFlag::Simple_Cancel | messagey::MessageBoxFlag::Simple_OK,
+            &messageId);
+          if (messageId == 0) // Cancel
+            abort();
+          s_warned = true;
+        }
         return pDispatch->CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
       }
 
@@ -820,7 +834,14 @@ namespace GamescopeWSILayer {
       } else {
         static bool s_warned = false;
         if (!s_warned) {
-          fprintf(stderr, "[Gamescope WSI]!!!\n[Gamescope WSI] Attempting to QueuePresent on non-hooked swapchains. Something has gone wrong. You may have a bad Vulkan layer enabled.\n[Gamescope WSI]!!!\n");
+          int messageId = -1;
+          messagey::ShowSimple(
+            "CreateSwapchainKHR: Attempting to QueuePresent on a non-hooked swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.",
+            "Gamescope WSI Layer Error",
+            messagey::MessageBoxFlag::Warning | messagey::MessageBoxFlag::Simple_Cancel | messagey::MessageBoxFlag::Simple_OK,
+            &messageId);
+          if (messageId == 0) // Cancel
+            abort();
           s_warned = true;
         }
       }
