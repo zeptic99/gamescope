@@ -672,8 +672,10 @@ namespace GamescopeWSILayer {
       const VkAllocationCallbacks*     pAllocator,
             VkSwapchainKHR*            pSwapchain) {
       auto gamescopeSurface = GamescopeSurface::get(pCreateInfo->surface);
-      if (!gamescopeSurface)
+      if (!gamescopeSurface) {
+        fprintf(stderr, "[Gamescope WSI]!!!\n[Gamescope WSI] CreateSwapchainKHR: Creating swapchain for non-Gamescope swapchain. Hooking has failed somewhere. You may have a bad Vulkan layer. Still trying to power through![Gamescope WSI]!!!\n\n");
         return pDispatch->CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+      }
 
       VkSwapchainCreateInfoKHR swapchainInfo = *pCreateInfo;
 
@@ -813,8 +815,15 @@ namespace GamescopeWSILayer {
         }
       }
 
-      if (display)
+      if (display) {
         waylandPumpEvents(display);
+      } else {
+        static bool s_warned = false;
+        if (!s_warned) {
+          fprintf(stderr, "[Gamescope WSI]!!!\n[Gamescope WSI] Attempting to QueuePresent on non-hooked swapchains. Something has gone wrong. You may have a bad Vulkan layer enabled.\n[Gamescope WSI]!!!\n");
+          s_warned = true;
+        }
+      }
 
       VkResult result = pDispatch->QueuePresentKHR(queue, pPresentInfo);
 
