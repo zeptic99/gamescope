@@ -81,6 +81,25 @@ namespace GamescopeWSILayer {
     }
   }
 
+  uint32_t clientAppId() {
+    const char *appid = getenv("SteamAppId");
+    if (!appid || !*appid)
+      return 0;
+
+    return atoi(appid);
+  }
+
+  static GamescopeLayerClient::Flags defaultLayerClientFlags(uint32_t appid) {
+    GamescopeLayerClient::Flags flags = 0;
+
+    // My Little Pony: A Maretime Bay Adventure picks a HDR colorspace if available,
+    // but does not render as HDR at all.
+    if (appid == 1600780)
+      flags |= GamescopeLayerClient::Flag::DisableHDR;
+
+    return flags;
+  }
+
   // TODO: Maybe move to Wayland event or something.
   // This just utilizes the same code as the Mesa path used
   // for without the layer or GL though. Need to keep it around anyway.
@@ -114,6 +133,8 @@ namespace GamescopeWSILayer {
     wl_display* display;
     wl_compositor* compositor;
     gamescope_swapchain_factory* gamescopeSwapchainFactory;
+    uint32_t appId = 0;
+    GamescopeLayerClient::Flags flags = 0;
   };
   VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(GamescopeInstance, VkInstance);
 
@@ -278,10 +299,19 @@ namespace GamescopeWSILayer {
       wl_registry *registry = wl_display_get_registry(display);
 
       {
+        uint32_t appId = clientAppId();
+
         auto state = GamescopeInstance::create(*pInstance, GamescopeInstanceData {
           .display = display,
+          .appId   = appId,
+          .flags   = defaultLayerClientFlags(appId),
         });
         wl_registry_add_listener(registry, &s_registryListener, reinterpret_cast<void *>(state.get()));
+
+        // If we know at instance creation time we should disable HDR, force off
+        // DXVK_HDR now.
+        if (state->flags & GamescopeLayerClient::Flag::DisableHDR)
+          setenv("DXVK_HDR", "0", 1);
       }
       // Dispatch then roundtrip to get registry info.
       wl_display_dispatch(display);
@@ -523,7 +553,7 @@ namespace GamescopeWSILayer {
         return VK_ERROR_SURFACE_LOST_KHR;
       }
 
-      GamescopeLayerClient::Flags flags = 0u;
+      GamescopeLayerClient::Flags flags = gamescopeInstance->flags;
       if (auto prop = xcb::getPropertyValue<GamescopeLayerClient::Flags>(connection, "GAMESCOPE_LAYER_CLIENT_FLAGS"sv))
         flags = *prop;
 
@@ -573,13 +603,14 @@ namespace GamescopeWSILayer {
         .hdrOutput       = hdrOutput,
       });
 
-      DumpGamescopeSurfaceState(gamescopeSurface);
+      DumpGamescopeSurfaceState(gamescopeInstance, gamescopeSurface);
 
       return result;
     }
 
-    static void DumpGamescopeSurfaceState(GamescopeSurface& surface) {
+    static void DumpGamescopeSurfaceState(GamescopeInstance& instance, GamescopeSurface& surface) {
       fprintf(stderr, "[Gamescope WSI] Surface state:\n");
+      fprintf(stderr, "  steam app id:                  %u\n", instance->appId);
       fprintf(stderr, "  window xid:                    0x%x\n", surface->window);
       fprintf(stderr, "  wayland surface res id:        %u\n", wl_proxy_get_id(reinterpret_cast<struct wl_proxy *>(surface->surface)));
       fprintf(stderr, "  layer client flags:            0x%x\n", surface->flags);
