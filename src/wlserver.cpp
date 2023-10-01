@@ -593,6 +593,9 @@ void gamescope_xwayland_server_t::handle_override_window_content( struct wl_clie
 
 struct wl_client *gamescope_xwayland_server_t::get_client()
 {
+	if (!xwayland_server)
+		return nullptr;
+
 	return xwayland_server->client;
 }
 
@@ -1249,6 +1252,8 @@ gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 gamescope_xwayland_server_t::~gamescope_xwayland_server_t()
 {
 	wlr_xwayland_server_destroy(xwayland_server);
+	xwayland_server = nullptr;
+
 	wlr_output_destroy(output);
 }
 
