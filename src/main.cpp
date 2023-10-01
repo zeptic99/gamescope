@@ -397,16 +397,30 @@ static enum GamescopeUpscaleFilter parse_upscaler_filter(const char *str)
 	}
 }
 
+struct sigaction handle_signal_action = {};
+extern pid_t child_pid;
+
 static void handle_signal( int sig )
 {
 	switch ( sig ) {
 	case SIGUSR2:
 		take_screenshot();
 		break;
+	case SIGHUP:
+	case SIGQUIT:
 	case SIGTERM:
 	case SIGINT:
-		fprintf( stderr, "gamescope: received kill signal, terminating!\n" );
+		if (child_pid != 0)
+		{
+			fprintf( stderr, "gamescope: Received %s signal, forwarding to child!\n", strsignal(sig) );
+			kill(child_pid, sig);
+		}
+
+		fprintf( stderr, "gamescope: Received %s signal, attempting shutdown!\n", strsignal(sig) );
 		g_bRun = false;
+		break;
+	case SIGUSR1:
+		fprintf( stderr, "gamescope: hi :3\n" );
 		break;
 	default:
 		assert( false ); // unreachable
@@ -859,9 +873,13 @@ int main(int argc, char **argv)
 
 	std::thread steamCompMgrThread( steamCompMgrThreadRun, argc, argv );
 
-	signal( SIGTERM, handle_signal );
-	signal( SIGINT, handle_signal );
-	signal( SIGUSR2, handle_signal );
+	handle_signal_action.sa_handler = handle_signal;
+	sigaction(SIGHUP, &handle_signal_action, nullptr);
+	sigaction(SIGINT, &handle_signal_action, nullptr);
+	sigaction(SIGQUIT, &handle_signal_action, nullptr);
+	sigaction(SIGTERM, &handle_signal_action, nullptr);
+	sigaction(SIGUSR1, &handle_signal_action, nullptr);
+	sigaction(SIGUSR2, &handle_signal_action, nullptr);
 
 	wlserver_run();
 

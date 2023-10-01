@@ -6305,6 +6305,8 @@ void check_new_xdg_res()
 	}
 }
 
+pid_t child_pid = 0;
+
 static void
 spawn_client( char **argv )
 {
@@ -6367,13 +6369,13 @@ spawn_client( char **argv )
 		free( pchPreloadCopy );
 	}
 
-	pid_t pid = fork();
+	child_pid = fork();
 
-	if ( pid < 0 )
+	if ( child_pid < 0 )
 		xwm_log.errorf_errno( "fork failed" );
 
 	// Are we in the child?
-	if ( pid == 0 )
+	if ( child_pid == 0 )
 	{
 		// Try to snap back to old priority
 		if ( g_bNiceCap == true )
@@ -6428,6 +6430,8 @@ spawn_client( char **argv )
 			}
 		}
 
+        fprintf(stderr, "gamescope: children shut down!\n");
+        child_pid = 0;
 		g_bRun = false;
 		nudge_steamcompmgr();
 	});
