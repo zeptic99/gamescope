@@ -9,6 +9,7 @@
 #define PRIMARYSELECTION 1
 
 bool sdlwindow_init( void );
+void sdlwindow_shutdown( void );
 
 void sdlwindow_update( void );
 void sdlwindow_title( std::shared_ptr<std::string> title, std::shared_ptr<std::vector<uint32_t>> icon );

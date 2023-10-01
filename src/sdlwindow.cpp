@@ -463,17 +463,25 @@ void inputSDLThreadRun( void )
 	}
 }
 
+pthread_t sdlwindow_thread = {};
+
 bool sdlwindow_init( void )
 {
 	g_SDLInitLock.lock();
 
 	std::thread inputSDLThread( inputSDLThreadRun );
+	sdlwindow_thread = inputSDLThread.native_handle();
 	inputSDLThread.detach();
 
 	// When this returns SDL_Init should be over
 	g_SDLInitLock.lock();
 
 	return g_bSDLInitOK;
+}
+
+void sdlwindow_shutdown( void )
+{
+	pthread_cancel(sdlwindow_thread);
 }
 
 void sdlwindow_title( std::shared_ptr<std::string> title, std::shared_ptr<std::vector<uint32_t>> icon )

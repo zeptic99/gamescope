@@ -5847,6 +5847,12 @@ steamcompmgr_exit(void)
 		statsThreadSem.signal();
 	}
 
+    sdlwindow_shutdown();
+
+    wlserver_lock();
+    wlserver_force_shutdown();
+    wlserver_unlock(false);
+
 	finish_drm( &g_DRM );
 
 	pthread_exit(NULL);
