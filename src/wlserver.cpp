@@ -1251,6 +1251,14 @@ gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 
 gamescope_xwayland_server_t::~gamescope_xwayland_server_t()
 {
+	/* Clear content overrides */
+	for (auto& co : content_overrides)
+	{
+		wl_list_remove( &co.second->surface_destroy_listener.link );
+		free( co.second );
+	}
+	content_overrides.clear();
+
 	wlr_xwayland_server_destroy(xwayland_server);
 	xwayland_server = nullptr;
 
