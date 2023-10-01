@@ -973,7 +973,7 @@ namespace GamescopeWSILayer {
 
       uint32_t originalCount = *pPresentationTimingCount;
 
-      std::unique_lock(*gamescopeSwapchain->presentTimingMutex);
+      std::unique_lock lock(*gamescopeSwapchain->presentTimingMutex);
       auto& timings = gamescopeSwapchain->pastPresentTimings;
 
       VkResult result = vkroots::helpers::array(timings, pPresentationTimingCount, pPresentationTimings);
@@ -998,7 +998,7 @@ namespace GamescopeWSILayer {
       if (waylandPumpEvents(gamescopeSwapchain->display) < 0)
         return VK_ERROR_SURFACE_LOST_KHR;
 
-      std::unique_lock(*gamescopeSwapchain->presentTimingMutex);
+      std::unique_lock lock(*gamescopeSwapchain->presentTimingMutex);
       pDisplayTimingProperties->refreshDuration = gamescopeSwapchain->refreshCycle;
 
       return VK_SUCCESS;
