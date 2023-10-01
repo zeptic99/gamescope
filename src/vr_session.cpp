@@ -7,6 +7,7 @@
 #include "log.hpp"
 #include "ime.hpp"
 
+#include <signal.h>
 #include <string.h>
 #include <thread>
 #include <mutex>
@@ -283,8 +284,7 @@ static void vrsession_input_thread()
             {
                 case vr::VREvent_OverlayClosed:
                 case vr::VREvent_Quit:
-                    g_bRun = false;
-                    nudge_steamcompmgr();
+                    raise( SIGTERM );
                     break;
 
                 case vr::VREvent_KeyboardCharInput:
