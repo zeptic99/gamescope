@@ -6,6 +6,7 @@
 #include <string>
 
 #include <linux/input-event-codes.h>
+#include <signal.h>
 
 #include "SDL_clipboard.h"
 #include "SDL_events.h"
@@ -316,8 +317,7 @@ void inputSDLThreadRun( void )
 				switch( event.window.event )
 				{
 					case SDL_WINDOWEVENT_CLOSE:
-						g_bRun = false;
-						nudge_steamcompmgr();
+						raise( SIGTERM );
 						break;
 					default:
 						break;
