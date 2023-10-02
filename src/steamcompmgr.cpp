@@ -7599,6 +7599,7 @@ steamcompmgr_main(int argc, char **argv)
 		{
 			int nRealRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 			int nTargetFPS = g_nSteamCompMgrTargetFPS ? g_nSteamCompMgrTargetFPS : nRealRefresh;
+			nTargetFPS = std::min<int>( nTargetFPS, nRealRefresh );
 			int nMultiplier = nRealRefresh / nTargetFPS;
 
 			int nAppRefresh = nRealRefresh * nMultiplier;
