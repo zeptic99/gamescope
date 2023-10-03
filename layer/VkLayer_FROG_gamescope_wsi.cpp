@@ -38,8 +38,8 @@ namespace GamescopeWSILayer {
   }
 
   static bool contains(const std::vector<const char *> vec, std::string_view lookupValue) {
-    return std::find_if(vec.begin(), vec.end(),
-      [=](const char* value) { return value == lookupValue; }) != vec.end();
+    return std::any_of(vec.begin(), vec.end(),
+      [=](const char* value) { return value == lookupValue; });
   }
 
   static int waylandPumpEvents(wl_display *display) {
@@ -762,11 +762,10 @@ namespace GamescopeWSILayer {
           pDispatch->PhysicalDevice,
           swapchainInfo.surface);
 
-        bool supportedSwapchainFormat = std::find_if(
+        bool supportedSwapchainFormat = std::any_of(
           supportedSurfaceFormats.begin(),
           supportedSurfaceFormats.end(),
-          [=](VkSurfaceFormatKHR value) { return value.format == swapchainInfo.imageFormat; })
-          != supportedSurfaceFormats.end();
+          [=](VkSurfaceFormatKHR value) { return value.format == swapchainInfo.imageFormat; });
 
         if (!supportedSwapchainFormat) {
           fprintf(stderr, "[Gamescope WSI] Refusing to make swapchain (unsupported VkFormat) for xid: 0x%0x - format: %s - colorspace: %s - flip: %s\n",
