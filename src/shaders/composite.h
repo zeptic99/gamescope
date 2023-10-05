@@ -71,6 +71,41 @@ vec3 apply_layer_color_mgmt(vec3 color, uint colorspace) {
     return color;
 }
 
+vec4 sampleBilinear(sampler2D tex, vec2 coord, uint colorspace, bool unnormalized) {
+    vec2 scale = unnormalized ? vec2(1.0) : vec2(textureSize(tex, 0));
+
+    vec2 pixCoord = coord * scale - 0.5f;
+    vec2 originPixCoord = floor(pixCoord);
+
+    vec2 gatherUV = (originPixCoord * scale + 1.0f) / scale;
+
+    vec4 red   = textureGather(tex, gatherUV, 0);
+    vec4 green = textureGather(tex, gatherUV, 1);
+    vec4 blue  = textureGather(tex, gatherUV, 2);
+    vec4 alpha = textureGather(tex, gatherUV, 3);
+
+    vec4 c00 = vec4(red.w, green.w, blue.w, alpha.w);
+    vec4 c01 = vec4(red.x, green.x, blue.x, alpha.x);
+    vec4 c11 = vec4(red.y, green.y, blue.y, alpha.y);
+    vec4 c10 = vec4(red.z, green.z, blue.z, alpha.z);
+
+    c00.rgb = colorspace_plane_degamma_tf(c00.rgb, colorspace);
+    c01.rgb = colorspace_plane_degamma_tf(c01.rgb, colorspace);
+    c11.rgb = colorspace_plane_degamma_tf(c11.rgb, colorspace);
+    c10.rgb = colorspace_plane_degamma_tf(c10.rgb, colorspace);
+
+    vec2 filterWeight = pixCoord - originPixCoord;
+
+    vec4 temp0 = mix(c01, c11, filterWeight.x);
+    vec4 temp1 = mix(c00, c10, filterWeight.x);
+    return mix(temp1, temp0, filterWeight.y);
+}
+
+vec4 sampleRegular(sampler2D tex, vec2 coord, uint colorspace, bool unnormalized) {
+    vec4 color = textureLod(tex, coord, 0);
+    color.rgb = colorspace_plane_degamma_tf(color.rgb, colorspace);
+    return color;
+}
 
 vec4 sampleLayerEx(sampler2D layerSampler, uint offsetLayerIdx, uint colorspaceLayerIdx, vec2 uv, bool unnormalized) {
     vec2 coord = ((uv + u_offset[offsetLayerIdx]) * u_scale[offsetLayerIdx]);
@@ -89,13 +124,12 @@ vec4 sampleLayerEx(sampler2D layerSampler, uint offsetLayerIdx, uint colorspaceL
     if (!unnormalized)
         coord /= texSize;
 
-    vec4 color = textureLod(layerSampler, coord, 0.0f);
-
-    // TODO(Josh): If colorspace != linear, emulate bilinear ourselves to blend
-    // in linear space!
-    // Split this into two parts!
     uint colorspace = get_layer_colorspace(colorspaceLayerIdx);
-    color.rgb = colorspace_plane_degamma_tf(color.rgb, colorspace);
+    vec4 color;
+    if (u_shaderFilter[offsetLayerIdx] == filter_linear_emulated)
+        color = sampleBilinear(layerSampler, coord, colorspace, unnormalized);
+    else
+        color = sampleRegular(layerSampler, coord, colorspace, unnormalized);
     color.rgb = apply_layer_color_mgmt(color.rgb, colorspace);
 
     return color;

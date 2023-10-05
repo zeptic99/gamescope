@@ -1943,7 +1943,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->tex = m_texture;
 	layer->fbid = BIsNested() ? 0 : m_texture->fbid();
 
-	layer->linearFilter = cursor_scale != 1.0f;
+	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
 	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 }
@@ -1973,6 +1973,7 @@ struct BaseLayerInfo_t
 	float scale[2];
 	float offset[2];
 	float opacity;
+	GamescopeUpscaleFilter filter;
 };
 
 std::array< BaseLayerInfo_t, HELD_COMMIT_COUNT > g_CachedPlanes = {};
@@ -1994,7 +1995,7 @@ paint_cached_base_layer(const std::shared_ptr<commit_t>& commit, const BaseLayer
 	layer->tex = commit->vulkanTex;
 	layer->fbid = commit->fb_id;
 
-	layer->linearFilter = true;
+	layer->filter = base.filter;
 	layer->blackBorder = true;
 }
 
@@ -2194,7 +2195,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	layer->tex = lastCommit->vulkanTex;
 	layer->fbid = lastCommit->fb_id;
 
-	layer->linearFilter = (w->isOverlay || w->isExternalOverlay) ? true : g_upscaleFilter != GamescopeUpscaleFilter::NEAREST;
+	layer->filter = (w->isOverlay || w->isExternalOverlay) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
 
 	if ( flags & PaintWindowFlag::BasePlane )
@@ -2205,6 +2206,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 		basePlane.offset[0] = layer->offset.x;
 		basePlane.offset[1] = layer->offset.y;
 		basePlane.opacity = layer->opacity;
+		basePlane.filter = layer->filter;
 
 		g_CachedPlanes[ HELD_COMMIT_BASE ] = basePlane;
 		if ( !(flags & PaintWindowFlag::FadeTarget) )
@@ -2666,7 +2668,7 @@ paint_all(bool async)
 				baseLayer->applyColorMgmt = false;
 				baseLayer->allowBlending = false;
 
-				baseLayer->linearFilter = false;
+				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
 				baseLayer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
 				g_bWasPartialComposite = false;
@@ -2692,7 +2694,7 @@ paint_all(bool async)
 					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
 					overlayLayer->allowBlending = g_ColorMgmt.pending.enabled;
 
-					overlayLayer->linearFilter = false;
+					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;
 					// Partial composition stuff has the same colorspace.
 					// So read that from the composite frame info
 					overlayLayer->colorspace = compositeFrameInfo.layers[0].colorspace;

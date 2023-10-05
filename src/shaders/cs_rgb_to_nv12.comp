@@ -1,6 +1,7 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #include "descriptor_set.h"
 
@@ -15,6 +16,7 @@ layout(
 // UVUVUVUVUVUVUVU...
 
 const uint u_frameId = 0;
+const uint8_t u_shaderFilter[VKR_MAX_LAYERS] = { uint8_t(0), uint8_t(0), uint8_t(0), uint8_t(0), uint8_t(0), uint8_t(0) };
 const float u_linearToNits = 400.0f;
 const float u_nitsToLinear = 1.0f / 100.0f;
 const float u_itmSdrNits = 100.f;

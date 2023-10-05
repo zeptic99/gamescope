@@ -16,6 +16,12 @@ const int colorspace_pq = 3;
 const int colorspace_reserved = 3;
 const int colorspace_max_bits = 2;
 
+const int filter_linear_emulated = 0;
+const int filter_nearest = 1;
+const int filter_fsr = 2;
+const int filter_nis = 3;
+const int filter_from_view = 255;
+
 const int EOTF_Gamma22 = 0;
 const int EOTF_PQ = 1;
 const int EOTF_Count = 2;

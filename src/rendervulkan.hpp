@@ -10,6 +10,8 @@
 #include <array>
 #include <bitset>
 
+#include "main.hpp"
+
 #include "shaders/descriptor_set_constants.h"
 
 class CVulkanCmdBuffer;
@@ -242,6 +244,11 @@ struct vec2_t
 	float x, y;
 };
 
+static inline bool float_is_integer(float x)
+{
+	return fabsf(ceilf(x) - x) <= 0.0001f;
+}
+
 struct FrameInfo_t
 {
 	bool useFSRLayer0;
@@ -266,8 +273,9 @@ struct FrameInfo_t
 
 		float opacity;
 
+		GamescopeUpscaleFilter filter = GamescopeUpscaleFilter::LINEAR;
+
 		bool blackBorder;
-		bool linearFilter;
 		bool applyColorMgmt; // drm only
 		bool allowBlending;  // drm only
 
@@ -279,6 +287,18 @@ struct FrameInfo_t
 				return false;
 
 			return tex->isYcbcr();
+		}
+
+		bool isScreenSize() const {
+			return scale.x >= 0.99f && scale.x <= 1.01f &&
+				scale.y >= 0.99f && scale.y <= 1.01f &&
+				float_is_integer(offset.x) &&
+				float_is_integer(offset.y);
+		}
+
+		bool viewConvertsToLinearAutomatically() const {
+			return colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR ||
+				colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB;
 		}
 
 		uint32_t integerWidth() const { return tex->width() / scale.x; }
