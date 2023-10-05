@@ -136,7 +136,11 @@ struct wlserver_t {
 	std::atomic<bool> xdg_dirty;
 	std::mutex xdg_commit_lock;
 	std::vector<ResListEntry_t> xdg_commit_queue;
+
+	std::vector<wl_resource*> gamescope_controls;
 };
+
+extern struct wlserver_t wlserver;
 
 std::vector<ResListEntry_t> wlserver_xdg_commit_queue();
 

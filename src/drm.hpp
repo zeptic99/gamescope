@@ -8,6 +8,8 @@
 #include <drm_fourcc.h>
 #include <drm_mode.h>
 
+#include <span>
+
 #include "color_helpers.h"
 
 // Josh: Okay whatever, this header isn't
@@ -146,6 +148,7 @@ struct connector {
 	char *make;
 	char *model;
 	bool is_steam_deck_display;
+	std::span<uint32_t> valid_display_rates{};
 
 	int target_refresh;
 	bool vrr_capable;
@@ -335,6 +338,8 @@ void drm_set_hdr_state(struct drm_t *drm, bool enabled);
 void drm_get_native_colorimetry( struct drm_t *drm,
 	displaycolorimetry_t *displayColorimetry, EOTF *displayEOTF,
 	displaycolorimetry_t *outputEncodingColorimetry, EOTF *outputEncodingEOTF );
+
+std::span<uint32_t> drm_get_valid_refresh_rates( struct drm_t *drm );
 
 extern bool g_bSupportsAsyncFlips;
 

@@ -38,6 +38,8 @@ extern "C" {
 #include "libdisplay-info/cta.h"
 }
 
+#include "gamescope-control-protocol.h"
+
 struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
@@ -68,6 +70,55 @@ drm_screen_type drm_get_connector_type(drmModeConnector *connector);
 static void drm_unset_mode( struct drm_t *drm );
 static void drm_unset_connector( struct drm_t *drm );
 
+static uint32_t steam_deck_display_rates[] =
+{
+	40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+	50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+	60,
+};
+
+static uint32_t get_conn_display_info_flags(struct drm_t *drm, struct connector *connector)
+{
+	if (!connector)
+		return 0;
+
+	uint32_t flags = 0;
+	if ( drm_get_connector_type(connector->connector) == DRM_SCREEN_TYPE_INTERNAL )
+		flags |= GAMESCOPE_CONTROL_DISPLAY_FLAG_INTERNAL_DISPLAY;
+	if ( connector->vrr_capable )
+		flags |= GAMESCOPE_CONTROL_DISPLAY_FLAG_SUPPORTS_VRR;
+	if ( connector->metadata.supportsST2084 )
+		flags |= GAMESCOPE_CONTROL_DISPLAY_FLAG_SUPPORTS_HDR;
+
+	return flags;
+}
+
+static void update_connector_display_info_wl(struct drm_t *drm)
+{
+	if ( !drm->connector )
+		return;
+
+	auto& conn = drm->connector;
+
+	wlserver_lock();
+	for ( const auto &control : wlserver.gamescope_controls )
+	{
+		uint32_t flags = get_conn_display_info_flags( drm, drm->connector );
+
+		struct wl_array display_rates;
+		wl_array_init(&display_rates);
+		if ( conn->valid_display_rates.size() )
+		{
+			size_t size = conn->valid_display_rates.size() * sizeof(uint32_t);
+			uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, size );
+			memcpy( ptr, conn->valid_display_rates.data(), size );
+		}
+		gamescope_control_send_active_display_info( control, drm->connector->name, drm->connector->make, drm->connector->model, flags, &display_rates );
+		wl_array_release(&display_rates);
+	}
+	wlserver_unlock();
+}
+
 inline uint64_t drm_calc_s31_32(float val)
 {
 	// S31.32 sign-magnitude
@@ -83,7 +134,7 @@ inline uint64_t drm_calc_s31_32(float val)
 			uint64_t sign_part  : 1;
 		} s31_32_bits;
 		uint64_t s31_32;
-	} color;4
+	} color;
 
 	color.s31_32_bits.sign_part  = val < 0 ? 1 : 0;
 	color.s31_32_bits.integral   = uint64_t( integral );
@@ -824,6 +875,9 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 		(strcmp(conn->make_pnp, "VLV") == 0 && strcmp(conn->model, "ANX7530 U") == 0) ||
 		(strcmp(conn->make_pnp, "VLV") == 0 && strcmp(conn->model, "Jupiter") == 0);
 
+	if ( conn->is_steam_deck_display )
+		conn->valid_display_rates = std::span(steam_deck_display_rates);
+
 	drm_hdr_parse_edid(drm, conn, edid);
 
 	di_info_destroy(info);
@@ -1225,6 +1279,8 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 
 	if (!initial)
 		create_patched_edid(best->edid_data.data(), best->edid_data.size(), drm, best);
+
+	update_connector_display_info_wl( drm );
 
 	return true;
 }
@@ -3111,4 +3167,13 @@ void drm_get_native_colorimetry( struct drm_t *drm,
 		*displayEOTF = EOTF_Gamma22;
 		*outputEncodingEOTF = EOTF_Gamma22;
 	}
+}
+
+
+std::span<uint32_t> drm_get_valid_refresh_rates( struct drm_t *drm )
+{
+	if (drm && drm->connector)
+		return drm->connector->valid_display_rates;
+
+	return std::span<uint32_t>{};
 }

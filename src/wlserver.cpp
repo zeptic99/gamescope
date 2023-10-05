@@ -65,7 +65,7 @@ extern "C" {
 
 static LogScope wl_log("wlserver");
 
-static struct wlserver_t wlserver = {
+struct wlserver_t wlserver = {
 	.touch_down_ids = {}
 };
 
@@ -866,13 +866,24 @@ static void create_gamescope_pipewire( void )
 
 //
 
+static void gamescope_control_set_app_target_refresh_cycle( struct wl_client *client, struct wl_resource *resource, uint32_t fps, uint32_t flags )
+{
+	auto display_type = DRM_SCREEN_TYPE_EXTERNAL;
+	if ( flags & GAMESCOPE_CONTROL_TARGET_REFRESH_CYCLE_FLAG_INTERNAL_DISPLAY )
+		display_type = DRM_SCREEN_TYPE_INTERNAL;
+
+	steamcompmgr_set_app_refresh_cycle_override( display_type, fps );
+}
+
 static void gamescope_control_handle_destroy( struct wl_client *client, struct wl_resource *resource )
 {
+	std::erase_if(wlserver.gamescope_controls, [=](auto control) { return control == resource; });
 	wl_resource_destroy( resource );
 }
 
 static const struct gamescope_control_interface gamescope_control_impl = {
 	.destroy = gamescope_control_handle_destroy,
+	.set_app_target_refresh_cycle = gamescope_control_set_app_target_refresh_cycle,
 };
 
 static void gamescope_control_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
@@ -882,12 +893,15 @@ static void gamescope_control_bind( struct wl_client *client, void *data, uint32
 
 	// Send feature support
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_RESHADE_SHADERS, 1, 0 );
+	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_DISPLAY_INFO, 1, 0 );
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_DONE, 0, 0 );
+
+	wlserver.gamescope_controls.push_back(resource);
 }
 
 static void create_gamescope_control( void )
 {
-	uint32_t version = 1;
+	uint32_t version = 2;
 	wl_global_create( wlserver.display, &gamescope_control_interface, version, NULL, gamescope_control_bind );
 }
 

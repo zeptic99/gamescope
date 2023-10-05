@@ -29,7 +29,7 @@
     it.
   </description>
 
-  <interface name="gamescope_control" version="1">
+  <interface name="gamescope_control" version="2">
     <request name="destroy" type="destructor"></request>
 
     <enum name="feature">
@@ -38,15 +38,40 @@
       </description>
       <entry name="done" value="0" summary="sent at the end of the feature list"/>
       <entry name="reshade_shaders" value="1"/>
+      <entry name="display_info" value="2"/>
     </enum>
 
     <event name="feature_support">
-        <description summary="feature supported">
-          Says whether a feature is supported and the version.
-        </description>
-        <arg name="feature" type="uint" summary="one of the enum features"/>
-        <arg name="version" type="uint" summary="feature version"/>
-        <arg name="flags" type="uint" summary="feature flags (none currently)"/>
-      </event>
+      <description summary="feature supported">
+        Says whether a feature is supported and the version.
+      </description>
+      <arg name="feature" type="uint" summary="one of the enum features"/>
+      <arg name="version" type="uint" summary="feature version"/>
+      <arg name="flags" type="uint" summary="feature flags"/>
+    </event>
+
+    <enum name="display_flag" bitfield="true" since="2">
+      <entry name="internal_display" value="0x1"/>
+      <entry name="supports_hdr" value="0x2"/>
+      <entry name="supports_vrr" value="0x4"/>
+    </enum>
+
+    <event name="active_display_info" since="2">
+      <arg name="connector_name" type="string"/>
+      <arg name="display_make" type="string"/>
+      <arg name="display_model" type="string"/>
+      <arg name="display_flags" type="uint" enum="display_flag" summary="combination of 'display_flag' values"/>
+      <arg name="valid_refresh_rates" type="array" summary="valid refresh rates for the display for the purposes of combined fps limiting + refresh. empty if fixed at a mode. 32-bit unsigned integers."/>
+    </event>
+
+    <enum name="target_refresh_cycle_flag" bitfield="true" since="2">
+      <entry name="internal_display" value="0x1" summary="Whether we should change the target refresh cycle under external/internal display"/>
+      <entry name="allow_refresh_switching" value="0x2" summary="Whether or not to allow refresh rate switching"/>
+    </enum>
+
+    <request name="set_app_target_refresh_cycle" since="2">
+      <arg name="fps" type="uint" summary="application's target refresh cycle in frames-per-second. 0 = disabled/native"></arg>
+      <arg name="flags" type="uint" enum="target_refresh_cycle_flag" summary="combination of 'target_refresh_cycle_flag' values"/>
+    </request>
   </interface>
 </protocol>

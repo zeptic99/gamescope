@@ -148,3 +148,5 @@ MouseCursor *steamcompmgr_get_current_cursor();
 MouseCursor *steamcompmgr_get_server_cursor(uint32_t serverId);
 
 extern int g_nAsyncFlipsEnabled;
+
+extern void steamcompmgr_set_app_refresh_cycle_override( drm_screen_type type, int override_fps );

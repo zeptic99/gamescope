@@ -752,6 +752,63 @@ static int g_nDynamicRefreshRate[DRM_SCREEN_TYPE_COUNT] = { 0, 0 };
 // Delay to stop modes flickering back and forth.
 static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
+static int g_nCombinedAppRefreshCycleOverride[DRM_SCREEN_TYPE_COUNT] = { 0, 0 };
+
+static void update_app_target_refresh_cycle()
+{
+	if ( BIsNested() )
+	{
+		g_nDynamicRefreshRate[ DRM_SCREEN_TYPE_INTERNAL ] = 0;
+		g_nSteamCompMgrTargetFPS = g_nCombinedAppRefreshCycleOverride[ DRM_SCREEN_TYPE_INTERNAL ];
+		return;
+	}
+
+	static drm_screen_type last_type;
+	static int last_target_fps;
+	static bool first = true;
+
+	drm_screen_type type = drm_get_screen_type( &g_DRM );
+	int target_fps = g_nCombinedAppRefreshCycleOverride[type];
+
+	if ( !first && type == last_type && last_target_fps == target_fps )
+	{
+		return;
+	}
+
+	last_type = type;
+	last_target_fps = target_fps;
+	first = false;
+
+	if ( !target_fps )
+	{
+		g_nDynamicRefreshRate[ type ] = 0;
+		g_nSteamCompMgrTargetFPS = 0;
+		return;
+	}
+
+	auto rates = drm_get_valid_refresh_rates( &g_DRM );
+
+	g_nDynamicRefreshRate[ type ] = 0;
+	g_nSteamCompMgrTargetFPS = target_fps;
+
+	// Find highest mode to do refresh doubling with.
+	for ( auto rate = rates.rbegin(); rate != rates.rend(); rate++ )
+	{
+		if (*rate % target_fps == 0)
+		{
+			g_nDynamicRefreshRate[ type ] = *rate;
+			g_nSteamCompMgrTargetFPS = target_fps;
+			return;
+		}
+	}
+}
+
+void steamcompmgr_set_app_refresh_cycle_override( drm_screen_type type, int override_fps )
+{
+	g_nCombinedAppRefreshCycleOverride[ type ] = override_fps;
+	update_app_target_refresh_cycle();
+}
+
 static int g_nRuntimeInfoFd = -1;
 
 bool g_bFSRActive = false;
@@ -2409,6 +2466,8 @@ paint_all(bool async)
 #if HAVE_PIPEWIRE
 	pw_buffer = dequeue_pipewire_buffer();
 #endif
+
+	update_app_target_refresh_cycle();
 
 	int nDynamicRefresh = g_nDynamicRefreshRate[drm_get_screen_type( &g_DRM )];
 
