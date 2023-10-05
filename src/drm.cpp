@@ -83,7 +83,7 @@ inline uint64_t drm_calc_s31_32(float val)
 			uint64_t sign_part  : 1;
 		} s31_32_bits;
 		uint64_t s31_32;
-	} color;
+	} color;4
 
 	color.s31_32_bits.sign_part  = val < 0 ? 1 : 0;
 	color.s31_32_bits.integral   = uint64_t( integral );
@@ -1166,7 +1166,9 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 		const struct wlserver_output_info wlserver_output_info = {
 			.description = "Virtual screen",
 		};
+		wlserver_lock();
 		wlserver_set_output_info(&wlserver_output_info);
+		wlserver_unlock();
 		return true;
 	}
 
@@ -1217,7 +1219,9 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 		.phys_width = (int) best->connector->mmWidth,
 		.phys_height = (int) best->connector->mmHeight,
 	};
+	wlserver_lock();
 	wlserver_set_output_info(&wlserver_output_info);
+	wlserver_unlock();
 
 	if (!initial)
 		create_patched_edid(best->edid_data.data(), best->edid_data.size(), drm, best);
