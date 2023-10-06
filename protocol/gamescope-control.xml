@@ -39,6 +39,7 @@
       <entry name="done" value="0" summary="sent at the end of the feature list"/>
       <entry name="reshade_shaders" value="1"/>
       <entry name="display_info" value="2"/>
+      <entry name="pixel_filter" value="3"/>
     </enum>
 
     <event name="feature_support">
