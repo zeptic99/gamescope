@@ -1144,7 +1144,7 @@ static bool filter_global(const struct wl_client *client, const struct wl_global
 	 * the server. */
 	for (size_t i = 0; i < wlserver.wlr.xwayland_servers.size(); i++) {
 		gamescope_xwayland_server_t *server = wlserver.wlr.xwayland_servers[i].get();
-		if (server->get_client() == client)
+		if (server && server->get_client() == client)
 			return server->get_output() == output;
 	}
 
@@ -1154,7 +1154,7 @@ static bool filter_global(const struct wl_client *client, const struct wl_global
 	gamescope_xwayland_server_t *server = wlserver.wlr.xwayland_servers[0].get();
 	/* If we aren't an xwayland server, then only expose the first wl_output
 	 * that's associated with from server 0. */
-	return server->get_output() == output;
+	return server && server->get_output() == output;
 }
 
 bool wlsession_init( void ) {
