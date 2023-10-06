@@ -266,7 +266,7 @@ void inputSDLThreadRun( void )
 							SDL_SetWindowFullscreen( g_SDLWindow, g_bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
 							break;
 						case KEY_N:
-							g_wantedUpscaleFilter = GamescopeUpscaleFilter::NEAREST;
+							g_wantedUpscaleFilter = GamescopeUpscaleFilter::PIXEL;
 							break;
 						case KEY_B:
 							g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;

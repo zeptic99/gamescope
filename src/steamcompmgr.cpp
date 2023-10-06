@@ -2198,6 +2198,13 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	layer->filter = (w->isOverlay || w->isExternalOverlay) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
 
+	if (layer->filter == GamescopeUpscaleFilter::PIXEL)
+	{
+		// Don't bother doing more expensive filtering if we are sharp + integer.
+		if (float_is_integer(currentScaleRatio_x) && float_is_integer(currentScaleRatio_y))
+			layer->filter = GamescopeUpscaleFilter::NEAREST;
+	}
+
 	if ( flags & PaintWindowFlag::BasePlane )
 	{
 		BaseLayerInfo_t basePlane = {};
@@ -2485,7 +2492,9 @@ paint_all(bool async)
 	if ( !BIsNested() && g_nOutputRefresh != nTargetRefresh && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
 		drm_set_refresh( &g_DRM, nTargetRefresh );
 
-	bool bNeedsNearest = g_upscaleFilter == GamescopeUpscaleFilter::NEAREST && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
+	bool bLayer0ScreenSize = close_enough(frameInfo.layers[0].scale.x, 1.0f) && close_enough(frameInfo.layers[0].scale.y, 1.0f);
+
+	bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
 
 	// Disable partial composition for now until we get
 	// composite priorities working in libliftoff + also
@@ -2501,7 +2510,7 @@ paint_all(bool async)
 	bNeedsFullComposite |= frameInfo.useFSRLayer0;
 	bNeedsFullComposite |= frameInfo.useNISLayer0;
 	bNeedsFullComposite |= frameInfo.blurLayer0;
-	bNeedsFullComposite |= bNeedsNearest;
+	bNeedsFullComposite |= bNeedsCompositeFromFilter;
 	bNeedsFullComposite |= bDrewCursor;
 	bNeedsFullComposite |= g_bColorSliderInUse;
 	bNeedsFullComposite |= fadingOut;

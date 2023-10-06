@@ -3319,7 +3319,10 @@ void bind_all_layers(CVulkanCmdBuffer* cmdBuffer, const struct FrameInfo_t *fram
 	{
 		const FrameInfo_t::Layer_t *layer = &frameInfo->layers[i];
 
-		bool nearest = layer->isScreenSize() || layer->filter == GamescopeUpscaleFilter::NEAREST || (layer->filter == GamescopeUpscaleFilter::LINEAR && !layer->viewConvertsToLinearAutomatically());
+		bool nearest = layer->isScreenSize()
+                    || layer->filter == GamescopeUpscaleFilter::NEAREST
+                    || (layer->filter == GamescopeUpscaleFilter::LINEAR && !layer->viewConvertsToLinearAutomatically());
+
 		cmdBuffer->bindTexture(i, layer->tex);
 		cmdBuffer->setTextureSrgb(i, false);
 		cmdBuffer->setSamplerNearest(i, nearest);

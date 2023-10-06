@@ -246,7 +246,12 @@ struct vec2_t
 
 static inline bool float_is_integer(float x)
 {
-	return fabsf(ceilf(x) - x) <= 0.0001f;
+	return fabsf(ceilf(x) - x) <= 0.001f;
+}
+
+inline bool close_enough(float a, float b, float epsilon = 0.001f)
+{
+	return fabsf(a - b) <= epsilon;
 }
 
 struct FrameInfo_t
@@ -290,8 +295,8 @@ struct FrameInfo_t
 		}
 
 		bool isScreenSize() const {
-			return scale.x >= 0.99f && scale.x <= 1.01f &&
-				scale.y >= 0.99f && scale.y <= 1.01f &&
+			return close_enough(scale.x, 1.0f) &&
+			       close_enough(scale.y, 1.0f) &&
 				float_is_integer(offset.x) &&
 				float_is_integer(offset.y);
 		}

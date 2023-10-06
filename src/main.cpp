@@ -149,7 +149,7 @@ const char usage[] =
 	"  -r, --nested-refresh           game refresh rate (frames per second)\n"
 	"  -m, --max-scale                maximum scale factor\n"
 	"  -S, --scaler                   upscaler type (auto, integer, fit, fill, stretch)\n"
-	"  -F, --filter                   upscaler filter (linear, nearest, fsr, nis)\n"
+	"  -F, --filter                   upscaler filter (linear, nearest, fsr, nis, pixel)\n"
 	"                                     fsr => AMD FidelityFX™ Super Resolution 1.0\n"
 	"                                     nis => NVIDIA Image Scaling v1.0.3\n"
 	"  --sharpness, --fsr-sharpness   upscaler sharpness from 0 (max) to 20 (min)\n"
@@ -391,6 +391,8 @@ static enum GamescopeUpscaleFilter parse_upscaler_filter(const char *str)
 		return GamescopeUpscaleFilter::FSR;
 	} else if (strcmp(str, "nis") == 0) {
 		return GamescopeUpscaleFilter::NIS;
+	} else if (strcmp(str, "pixel") == 0) {
+		return GamescopeUpscaleFilter::PIXEL;
 	} else {
 		fprintf( stderr, "gamescope: invalid value for --filter\n" );
 		exit(1);
