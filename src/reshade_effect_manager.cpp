@@ -198,36 +198,30 @@ void ReshadeUniform::copy(void* mappedBuffer, const T* thing)
     assert(m_info.type.array_length == 0 || m_info.type.array_length == 1);
 
     uint32_t zero_data[16] = {};
-    const auto inner_common = [&](const auto accessor, const auto pred){
+    const auto copy_ = [&](const auto constantDatatype){
         T array_stuff[16] = {};
-        const auto path_thing = [&](){
+        const auto thingBuffer = [&](){
             for (uint32_t i = 0; i < m_info.type.components(); i++)
-                array_stuff[i] = pred(thing[i]);
+                array_stuff[i] = (m_info.type.base == reshadefx::type::t_bool) ? !!(thing[i]) : thing[i];
             return array_stuff;
         };
-        const auto path_zero = (m_info.has_initializer_value)
-                                   ? static_cast<const void*>(&((m_info.initializer_value).*accessor)[0])
-                                   : zero_data;
-        const auto sourceBuffer = (thing) ? path_thing() : path_zero;
-        copy(mappedBuffer, sourceBuffer, sizeof(T) * m_info.type.components());
+        const auto defaultOrZeroBuffer = (m_info.has_initializer_value) ? static_cast<const void*>(std::begin((m_info.initializer_value).*constantDatatype)) : zero_data;
+        copy(mappedBuffer, (thing) ? thingBuffer() : defaultOrZeroBuffer, sizeof(T) * m_info.type.components());
     };
-
-    const auto double_negate = [](const T item){return !!(item);};
-    const auto id = [](const T item){return item;};  // C++20 = std::identity
 
     switch (m_info.type.base)
     {
     case reshadefx::type::t_bool:   // VkBool32 = uint32_t;
-        inner_common(&reshadefx::constant::as_uint, double_negate);
+        copy_(&reshadefx::constant::as_uint);
         break;
     case reshadefx::type::t_int:
-        inner_common(&reshadefx::constant::as_int, id);
+        copy_(&reshadefx::constant::as_int);
         break;
     case reshadefx::type::t_uint:
-        inner_common(&reshadefx::constant::as_uint, id);
+        copy_(&reshadefx::constant::as_uint);
         break;
     case reshadefx::type::t_float:
-        inner_common(&reshadefx::constant::as_float, id);
+        copy_(&reshadefx::constant::as_float);
         break;
     default:
         reshade_log.errorf("Unknown uniform type!");
