@@ -708,18 +708,20 @@ int main(int argc, char **argv)
 
 	if ( BIsSDLSession() && g_pOriginalWaylandDisplay != NULL )
 	{
-        // Default to SDL_VIDEODRIVER wayland under Wayland and force enable vk_khr_present_wait
-        // (not enabled by default in Mesa because instance does not know if Wayland
-        //  compositor supports wp_presentation, but we can check that ourselves.)
-        setenv("vk_khr_present_wait", "true", 0);
-        setenv("SDL_VIDEODRIVER", "wayland", 0);
-
-        if (!CheckWaylandPresentationTime())
+        if (CheckWaylandPresentationTime())
+        {
+            // Default to SDL_VIDEODRIVER wayland under Wayland and force enable vk_khr_present_wait
+            // (not enabled by default in Mesa because instance does not know if Wayland
+            //  compositor supports wp_presentation, but we can check that ourselves.)
+            setenv("vk_khr_present_wait", "true", 0);
+            setenv("SDL_VIDEODRIVER", "wayland", 0);
+        }
+        else
         {
             fprintf(stderr,
-                "Your Wayland compositor does NOT support wp_presentation/presentation-time which is required for VK_KHR_present_wait and VK_KHR_present_id which is needed for Gamescope to function.\n"
-                "Please update your compositor or complain to your compositor vendor for support.\n");
-            return 1;
+                "Your Wayland compositor does NOT support wp_presentation/presentation-time which is required for VK_KHR_present_wait and VK_KHR_present_id.\n"
+                "Please complain to your compositor vendor for support. Falling back to X11 window with less accurate present wait.\n");
+            setenv("SDL_VIDEODRIVER", "x11", 1);
         }
 	}
 
