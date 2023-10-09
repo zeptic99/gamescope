@@ -6486,7 +6486,7 @@ spawn_client( char **argv )
 		{
 			// If we are not running with --expose-wayland
 			// set SDL_VIDEODRIVER back to x11.
-			setenv("SDL_VIDEODRIVER", "x11", 0);
+			setenv("SDL_VIDEODRIVER", "x11", 1);
 		}
 		execvp( argv[ 0 ], argv );
 
