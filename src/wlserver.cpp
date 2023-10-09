@@ -1237,6 +1237,7 @@ gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 		.lazy = false,
 		.enable_wm = false,
 		.no_touch_pointer_emulation = true,
+		.force_xrandr_emulation = true,
 	};
 	xwayland_server = wlr_xwayland_server_create(display, &xwayland_options);
 	wl_signal_add(&xwayland_server->events.ready, &xwayland_ready_listener);
