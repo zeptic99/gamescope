@@ -55,6 +55,8 @@ extern bool g_bNiceCap;
 extern int g_nOldNice;
 extern int g_nNewNice;
 
+extern bool g_bExposeWayland;
+
 extern bool g_bRt;
 extern int g_nOldPolicy;
 extern struct sched_param g_schedOldParam;

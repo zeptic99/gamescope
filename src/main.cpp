@@ -528,13 +528,12 @@ static bool CheckWaylandPresentationTime()
 
 int g_nPreferredOutputWidth = 0;
 int g_nPreferredOutputHeight = 0;
+bool g_bExposeWayland = false;
 
 int main(int argc, char **argv)
 {
 	// Force disable this horrible broken layer.
 	setenv("DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1", "1", 1);
-
-	bool bExposeWayland = false;
 
 	static std::string optstring = build_optstring(gamescope_options);
 	gamescope_optstring = optstring.c_str();
@@ -627,7 +626,7 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "adaptive-sync") == 0) {
 					s_bInitialWantsVRREnabled = true;
 				} else if (strcmp(opt_name, "expose-wayland") == 0) {
-					bExposeWayland = true;
+					g_bExposeWayland = true;
 				} else if (strcmp(opt_name, "headless") == 0) {
 					g_bHeadless = true;
 					g_bIsNested = true;
@@ -843,7 +842,7 @@ int main(int argc, char **argv)
 	gamescope_xwayland_server_t *base_server = wlserver_get_xwayland_server(0);
 
 	setenv("DISPLAY", base_server->get_nested_display_name(), 1);
-	if ( bExposeWayland )
+	if ( g_bExposeWayland )
 		setenv("XDG_SESSION_TYPE", "wayland", 1);
 	else
 		setenv("XDG_SESSION_TYPE", "x11", 1);
@@ -863,7 +862,7 @@ int main(int argc, char **argv)
 		setenv("STEAM_GAME_DISPLAY_0", base_server->get_nested_display_name(), 1);
 	}
 	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
-	if ( bExposeWayland )
+	if ( g_bExposeWayland )
 		setenv("WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
 
 #if HAVE_PIPEWIRE
