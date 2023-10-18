@@ -397,6 +397,12 @@ color_xy_to_u16(float v)
 	return (uint16_t)round(v * 50000.0f);
 }
 
+static inline float
+color_xy_from_u16(uint16_t v)
+{
+	return v / 50000.0f;
+}
+
 static inline uint16_t
 nits_to_u16(float nits)
 {
@@ -411,6 +417,12 @@ nits_to_u16(float nits)
 	return (uint16_t)round(nits);
 }
 
+static inline float
+nits_from_u16(uint16_t v)
+{
+	return float(v);
+}
+
 static inline uint16_t
 nits_to_u16_dark(float nits)
 {
@@ -422,6 +434,12 @@ nits_to_u16_dark(float nits)
 	// 6.9.1 Static Metadata Type 1
 	// min display mastering luminance
 	return (uint16_t)round(nits * 10000.0f);
+}
+
+static inline float
+nits_from_u16_dark(uint16_t v)
+{
+	return v / 10000.0f;
 }
 
 static constexpr displaycolorimetry_t displaycolorimetry_steamdeck_spec

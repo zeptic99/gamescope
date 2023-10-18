@@ -361,6 +361,7 @@ bool CVulkanDevice::createDevice()
 
 	bool hasDrmProps = false;
 	bool supportsForeignQueue = false;
+	bool supportsHDRMetadata = false;
 	for ( uint32_t i = 0; i < supportedExtensionCount; ++i )
 	{
 		if ( strcmp(supportedExts[i].extensionName,
@@ -374,6 +375,10 @@ bool CVulkanDevice::createDevice()
 		if ( strcmp(supportedExts[i].extensionName,
 		     VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME) == 0 )
 			supportsForeignQueue = true;
+
+		if ( strcmp(supportedExts[i].extensionName,
+			 VK_EXT_HDR_METADATA_EXTENSION_NAME) == 0 )
+			 supportsHDRMetadata = true;
 	}
 
 	vk_log.infof( "physical device %s DRM format modifiers", m_bSupportsModifiers ? "supports" : "does not support" );
@@ -491,6 +496,9 @@ bool CVulkanDevice::createDevice()
 #if 0
 	enabledExtensions.push_back( VK_KHR_MAINTENANCE_5_EXTENSION_NAME );
 #endif
+
+	if ( supportsHDRMetadata )
+		enabledExtensions.push_back( VK_EXT_HDR_METADATA_EXTENSION_NAME );
 
 	if ( BIsVRSession() )
 	{
@@ -2559,11 +2567,61 @@ static void present_wait_thread_func( void )
 	}
 }
 
+void vulkan_update_swapchain_hdr_metadata( VulkanOutput_t *pOutput )
+{
+	if (!g_output.swapchainHDRMetadata)
+		return;
+
+	if ( !g_device.vk.SetHdrMetadataEXT )
+	{
+		static bool s_bWarned = false;
+		if (!s_bWarned)
+		{
+			vk_log.errorf("Unable to forward HDR metadata with Vulkan as vkSetMetadataEXT is not supported.");
+			s_bWarned = true;
+		}
+		return;
+	}
+
+	hdr_metadata_infoframe &infoframe = g_output.swapchainHDRMetadata->metadata.hdmi_metadata_type1;
+	VkHdrMetadataEXT metadata =
+	{
+		.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT,
+		.displayPrimaryRed = VkXYColorEXT { color_xy_from_u16(infoframe.display_primaries[0].x), color_xy_from_u16(infoframe.display_primaries[0].y) },
+		.displayPrimaryGreen = VkXYColorEXT { color_xy_from_u16(infoframe.display_primaries[1].x), color_xy_from_u16(infoframe.display_primaries[1].y), },
+		.displayPrimaryBlue = VkXYColorEXT { color_xy_from_u16(infoframe.display_primaries[2].x), color_xy_from_u16(infoframe.display_primaries[2].y), },
+		.whitePoint = VkXYColorEXT { color_xy_from_u16(infoframe.white_point.x), color_xy_from_u16(infoframe.white_point.y), },
+		.maxLuminance = nits_from_u16(infoframe.max_display_mastering_luminance),
+		.minLuminance = nits_from_u16_dark(infoframe.min_display_mastering_luminance),
+		.maxContentLightLevel = nits_from_u16(infoframe.max_cll),
+		.maxFrameAverageLightLevel = nits_from_u16(infoframe.max_fall),
+	};
+	g_device.vk.SetHdrMetadataEXT(g_device.device(), 1, &g_output.swapChain, &metadata);
+}
+
 void vulkan_present_to_window( void )
 {
 	static uint64_t s_lastPresentId = 0;
 
 	uint64_t presentId = ++s_lastPresentId;
+	
+	auto feedback = steamcompmgr_get_base_layer_swapchain_feedback();
+	if (feedback && feedback->hdr_metadata_blob)
+	{
+		if ( feedback->hdr_metadata_blob != g_output.swapchainHDRMetadata )
+		{
+			g_output.swapchainHDRMetadata = feedback->hdr_metadata_blob;
+			vulkan_update_swapchain_hdr_metadata( &g_output );
+		}
+	}
+	else if ( g_output.swapchainHDRMetadata != nullptr )
+	{
+		// Only way to clear hdr metadata for a swapchain in Vulkan
+		// is to recreate the swapchain.
+		g_output.swapchainHDRMetadata = nullptr;
+		vulkan_remake_swapchain();
+	}
+
 
 	VkPresentIdKHR presentIdInfo = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
@@ -2747,6 +2805,8 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 	};
 
 	g_device.vk.CreateFence( g_device.device(), &fenceInfo, nullptr, &pOutput->acquireFence );
+
+	vulkan_update_swapchain_hdr_metadata(pOutput);
 
 	return true;
 }

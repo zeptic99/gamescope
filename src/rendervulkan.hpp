@@ -475,6 +475,7 @@ struct VulkanOutput_t
 	std::vector< VkPresentModeKHR > presentModes;
 
 
+	std::shared_ptr<wlserver_hdr_metadata> swapchainHDRMetadata;
 	VkSwapchainKHR swapChain;
 	VkFence acquireFence;
 
@@ -681,7 +682,8 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(UpdateDescriptorSets) \
 	VK_FUNC(WaitForFences) \
 	VK_FUNC(WaitForPresentKHR) \
-	VK_FUNC(WaitSemaphores)
+	VK_FUNC(WaitSemaphores) \
+	VK_FUNC(SetHdrMetadataEXT)
 
 class CVulkanDevice
 {
