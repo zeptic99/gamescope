@@ -2802,6 +2802,8 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 		.pViewFormats = formats,
 	};
 
+	vk_log.infof("Creating Gamescope nested swapchain with format %u and colorspace %u", pOutput->outputFormat, pOutput->surfaceFormats[surfaceFormat].colorSpace);
+
 	VkSwapchainCreateInfoKHR createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.pNext = formats[0] != formats[1] ? &usageListInfo : nullptr,
