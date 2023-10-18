@@ -725,11 +725,6 @@ static void gamescope_swapchain_set_hdr_metadata( struct wl_client *client, stru
 	uint32_t max_fall)
 {
 	wlserver_wl_surface_info *wl_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
-	if ( BIsNested() )
-	{
-		wl_log.infof("Ignoring HDR metadata when nested.");
-		return;
-	}
 
 	if ( wl_info )
 	{

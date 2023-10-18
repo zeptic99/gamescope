@@ -3107,11 +3107,14 @@ std::pair<uint32_t, uint32_t> drm_get_connector_identifier(struct drm_t *drm)
 std::shared_ptr<wlserver_hdr_metadata> drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata)
 {
 	uint32_t blob = 0;
-	int ret = drmModeCreatePropertyBlob(drm->fd, metadata, sizeof(*metadata), &blob);
+	if (BIsNested())
+	{
+		int ret = drmModeCreatePropertyBlob(drm->fd, metadata, sizeof(*metadata), &blob);
 
-	if (ret != 0) {
-		drm_log.errorf("Failed to create blob for HDR_OUTPUT_METADATA. (%s) Falling back to null blob.", strerror(-ret));
-		blob = 0;
+		if (ret != 0) {
+			drm_log.errorf("Failed to create blob for HDR_OUTPUT_METADATA. (%s) Falling back to null blob.", strerror(-ret));
+			blob = 0;
+		}
 	}
 
 	if (!blob)
