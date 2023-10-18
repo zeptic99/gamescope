@@ -2738,13 +2738,34 @@ void vulkan_present_to_openvr( void )
 bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 {
 	uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;
-	uint32_t surfaceFormat = 0;
 	uint32_t formatCount = pOutput->surfaceFormats.size();
+	uint32_t surfaceFormat = formatCount;
 
-	for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+	if ( surfaceFormat == formatCount )
 	{
-		if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
-			break;
+		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+		{
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 )
+				break;
+		}
+	}
+
+	if ( surfaceFormat == formatCount )
+	{
+		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+		{
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
+				break;
+		}
+	}
+
+	if ( surfaceFormat == formatCount )
+	{
+		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
+		{
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
+				break;
+		}
 	}
 	
 	if ( surfaceFormat == formatCount )
