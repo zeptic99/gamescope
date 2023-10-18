@@ -2735,6 +2735,17 @@ void vulkan_present_to_openvr( void )
 }
 #endif
 
+bool vulkan_supports_hdr10()
+{
+	for ( auto& format : g_output.surfaceFormats )
+	{
+		if ( format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT )
+			return true;
+	}
+
+	return false;
+}
+
 bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 {
 	uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;

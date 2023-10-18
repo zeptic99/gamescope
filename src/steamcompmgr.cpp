@@ -7150,7 +7150,7 @@ void update_vrr_atoms(xwayland_ctx_t *root_ctx, bool force, bool* needs_flush = 
 			*needs_flush = true;
 	}
 
-	bool st2084 = drm_supports_st2084( &g_DRM );
+	bool st2084 = BIsNested() ? vulkan_supports_hdr10() : drm_supports_st2084( &g_DRM );
 	if ( st2084 != g_bSupportsST2084_CachedValue || force )
 	{
 		uint32_t hdr_value = st2084 ? 1 : 0;
