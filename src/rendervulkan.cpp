@@ -2746,17 +2746,21 @@ bool vulkan_supports_hdr10()
 	return false;
 }
 
+extern bool g_bOutputHDREnabled;
+
 bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 {
 	uint32_t imageCount = pOutput->surfaceCaps.minImageCount + 1;
 	uint32_t formatCount = pOutput->surfaceFormats.size();
 	uint32_t surfaceFormat = formatCount;
+	VkColorSpaceKHR preferredColorSpace = g_bOutputHDREnabled ? VK_COLOR_SPACE_HDR10_ST2084_EXT : VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
 	if ( surfaceFormat == formatCount )
 	{
 		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
 		{
-			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 )
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 &&
+				 pOutput->surfaceFormats[ surfaceFormat ].colorSpace == preferredColorSpace )
 				break;
 		}
 	}
@@ -2765,7 +2769,8 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 	{
 		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
 		{
-			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_A2R10G10B10_UNORM_PACK32 &&
+				 pOutput->surfaceFormats[ surfaceFormat ].colorSpace == preferredColorSpace )
 				break;
 		}
 	}
@@ -2774,7 +2779,8 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 	{
 		for ( surfaceFormat = 0; surfaceFormat < formatCount; surfaceFormat++ )
 		{
-			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM )
+			if ( pOutput->surfaceFormats[ surfaceFormat ].format == VK_FORMAT_B8G8R8A8_UNORM &&
+				 pOutput->surfaceFormats[ surfaceFormat ].colorSpace == preferredColorSpace )
 				break;
 		}
 	}
