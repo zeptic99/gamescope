@@ -472,3 +472,12 @@ static constexpr displaycolorimetry_t displaycolorimetry_2020
 	.primaries = { { 0.708f, 0.292f }, { 0.170f, 0.797f }, { 0.131f, 0.046f } },
 	.white = { 0.3127f, 0.3290f },  // D65
 };
+
+
+extern const glm::mat3 k_xyz_from_709;
+extern const glm::mat3 k_709_from_xyz;
+
+extern const glm::mat3 k_xyz_from_2020;
+extern const glm::mat3 k_2020_from_xyz;
+
+extern const glm::mat3 k_2020_from_709;

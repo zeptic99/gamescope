@@ -891,3 +891,11 @@ bool approxEqual( const glm::vec3 & a, const glm::vec3 & b, float flTolerance = 
     glm::vec3 v = glm::abs(a - b);
     return ( v.x < flTolerance && v.y < flTolerance && v.z < flTolerance );
 }
+
+const glm::mat3 k_xyz_from_709 = normalised_primary_matrix( displaycolorimetry_709.primaries, displaycolorimetry_709.white, 1.f );
+const glm::mat3 k_709_from_xyz = glm::inverse( k_xyz_from_709 );
+
+const glm::mat3 k_xyz_from_2020 = normalised_primary_matrix( displaycolorimetry_2020.primaries, displaycolorimetry_2020.white, 1.f );
+const glm::mat3 k_2020_from_xyz = glm::inverse( k_xyz_from_2020 );
+
+const glm::mat3 k_2020_from_709 = k_2020_from_xyz * k_xyz_from_709;

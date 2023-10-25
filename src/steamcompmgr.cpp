@@ -130,6 +130,7 @@ extern float g_flHDRItmTargetNits;
 
 extern std::atomic<uint64_t> g_lastVblank;
 
+static std::shared_ptr<wlserver_ctm> s_scRGB709To2020Matrix;
 
 std::string clipboard;
 std::string primarySelection;
@@ -1944,6 +1945,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 
 	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
+	layer->ctm = nullptr;
 	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 }
 
@@ -1991,6 +1993,9 @@ paint_cached_base_layer(const std::shared_ptr<commit_t>& commit, const BaseLayer
 	layer->opacity = base.opacity * flOpacityScale;
 
 	layer->colorspace = commit->colorspace();
+	layer->ctm = nullptr;
+	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
+		layer->ctm = s_scRGB709To2020Matrix;
 	layer->tex = commit->vulkanTex;
 	layer->fbid = commit->fb_id;
 
@@ -2195,6 +2200,9 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 
 	layer->filter = (w->isOverlay || w->isExternalOverlay) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
+	layer->ctm = nullptr;
+	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
+		layer->ctm = s_scRGB709To2020Matrix;
 
 	if (layer->filter == GamescopeUpscaleFilter::PIXEL)
 	{
@@ -2675,6 +2683,7 @@ paint_all(bool async)
 				baseLayer->applyColorMgmt = false;
 
 				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
+				baseLayer->ctm = nullptr;
 				baseLayer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
 				g_bWasPartialComposite = false;
@@ -2702,6 +2711,7 @@ paint_all(bool async)
 					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;
 					// Partial composition stuff has the same colorspace.
 					// So read that from the composite frame info
+					overlayLayer->ctm = nullptr;
 					overlayLayer->colorspace = compositeFrameInfo.layers[0].colorspace;
 				}
 				else
@@ -7464,6 +7474,11 @@ steamcompmgr_main(int argc, char **argv)
 	}
 
 	update_screenshot_color_mgmt();
+
+	// Transpose to get this 3x3 matrix into the right state for applying as a 3x4
+	// on DRM + the Vulkan side.
+	// ie. color.rgb = color.rgba * u_ctm[offsetLayerIdx];
+	s_scRGB709To2020Matrix = drm_create_ctm(&g_DRM, glm::mat3x4(glm::transpose(k_2020_from_709)));
 
 	for (;;)
 	{
