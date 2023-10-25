@@ -72,14 +72,17 @@ void compositing_debug(uvec2 coord) {
 //
 // ie. call colorspace_plane_degamma_tf(color.rgb, colorspace) before
 // input to this function.
-vec3 apply_layer_color_mgmt(vec3 color, uint colorspace) {
+vec3 apply_layer_color_mgmt(vec3 color, uint layer, uint colorspace) {
+    if (colorspace == colorspace_passthru)
+        return color;
+
     if (c_itm_enable)
     {
         color = bt2446a_inverse_tonemapping(color, u_itmSdrNits, u_itmTargetNits);
         colorspace = colorspace_pq;
     }
 
-    if (checkDebugFlag(compositedebug_Heatmap))
+    if (layer == 0 && checkDebugFlag(compositedebug_Heatmap))
     {
         // Debug HDR heatmap.
         color = hdr_heatmap(color, colorspace);
@@ -90,7 +93,6 @@ vec3 apply_layer_color_mgmt(vec3 color, uint colorspace) {
 
         uint plane_eotf = colorspace_to_eotf(colorspace);
 
-        color = colorspace_plane_shaper_tf(color, colorspace);
         // The shaper TF is basically just a regamma to get into something the shaper LUT can handle.
         //
         // Despite naming, degamma + shaper TF are NOT necessarily the inverse of each other. ^^^
@@ -102,10 +104,11 @@ vec3 apply_layer_color_mgmt(vec3 color, uint colorspace) {
         bool lut3d_enabled = textureQueryLevels(s_shaperLut[plane_eotf]) != 0;
         if (lut3d_enabled)
         {
+            color = colorspace_plane_shaper_tf(color, colorspace);
             color = perform_1dlut(color, s_shaperLut[plane_eotf]);
             color = perform_3dlut(color, s_lut3D[plane_eotf]);
         }
-        color = colorspace_blend_tf(color, c_output_eotf);
+        //color = colorspace_blend_tf(color, c_output_eotf);
     }
 
     return color;
@@ -173,6 +176,7 @@ vec4 sampleLayerEx(sampler2D layerSampler, uint offsetLayerIdx, uint colorspaceL
     }
     // JoshA: AMDGPU applies 3x4 CTM like this, where A is 1.0, but it only affects .rgb.
     color.rgb = vec4(color.rgb, 1.0f) * u_ctm[offsetLayerIdx];
+    color.rgb = apply_layer_color_mgmt(color.rgb, offsetLayerIdx, colorspace);
 
     return color;
 }

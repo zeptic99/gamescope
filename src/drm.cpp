@@ -2187,6 +2187,7 @@ static inline drm_valve1_transfer_function colorspace_to_plane_degamma_tf(Gamesc
 		default: // Linear in this sense is SRGB. Linear = sRGB image view doing automatic sRGB -> Linear which doesn't happen on DRM side.
 		case GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB:
 			return DRM_VALVE1_TRANSFER_FUNCTION_SRGB;
+		case GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU:
 		case GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB:
 			// Use LINEAR TF for scRGB float format as 80 nit = 1.0 in scRGB, which matches
 			// what PQ TF decodes to/encodes from.
@@ -2208,6 +2209,8 @@ static inline drm_valve1_transfer_function colorspace_to_plane_shaper_tf(Gamesco
 		case GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB: // scRGB Linear -> PQ for shaper + 3D LUT
 		case GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ:
 			return DRM_VALVE1_TRANSFER_FUNCTION_PQ;
+		case GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU:
+			return DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT;
 	}
 }
 

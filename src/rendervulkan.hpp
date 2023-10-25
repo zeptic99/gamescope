@@ -305,7 +305,8 @@ struct FrameInfo_t
 
 		bool viewConvertsToLinearAutomatically() const {
 			return colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR ||
-				colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB;
+				colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB ||
+				colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU;
 		}
 
 		uint32_t integerWidth() const { return tex->width() / scale.x; }
@@ -340,7 +341,7 @@ struct FrameInfo_t
 		uint32_t result = 0;
 		for (int i = 0; i < layerCount; i++)
 		{
-			result |= layers[ i ].colorspace << i * GamescopeAppTextureColorspace_Bits;
+			result |= layers[ i ].colorspace << (i * GamescopeAppTextureColorspace_Bits);
 		}
 		return result;
 	}

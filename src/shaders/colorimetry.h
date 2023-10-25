@@ -312,6 +312,7 @@ vec3 colorspace_plane_degamma_tf(vec3 color, uint colorspace) {
     switch (colorspace) {
         default: return vec3(1, 1, 0); // should never happen
 
+        case colorspace_passthru:
         case colorspace_linear: // Using sRGB image view. Unlike DRM which doesn't get that liberty for scanout.
 		case colorspace_scRGB:
             return color;
@@ -326,6 +327,7 @@ vec3 colorspace_plane_regamma_tf(vec3 color, uint colorspace) {
     switch (colorspace) {
         default: return vec3(1, 1, 0); // should never happen
 
+        case colorspace_passthru:
 		case colorspace_scRGB:
             return color;
         case colorspace_linear: // Using sRGB image view. Unlike DRM which doesn't get that liberty for scanout.
@@ -354,7 +356,8 @@ vec3 colorspace_plane_shaper_tf(vec3 color, uint colorspace) {
 // pre-blend doing display EOTF -> display linearized
 vec3 colorspace_blend_tf(vec3 color, uint eotf) {
     switch (eotf) {
-        default: return vec3(1, 0, 0); // should never happen
+        default:
+            return color;
 
         // Note from Josh:
         //
@@ -376,7 +379,8 @@ vec3 colorspace_blend_tf(vec3 color, uint eotf) {
 // post blend doing display linearized -> display EOTF
 vec3 colorspace_output_tf(vec3 color, uint eotf) {
     switch (eotf) {
-        default: return vec3(0, 1, 0); // should never happen
+        default:
+            return color;
 
         // see comment in colorspace_blend_tf
 		case EOTF_Gamma22:

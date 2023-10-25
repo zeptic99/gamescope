@@ -41,8 +41,9 @@ enum GamescopeAppTextureColorspace {
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB,
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB,
 	GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ,
+	GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
 };
-const uint32_t GamescopeAppTextureColorspace_Bits = 2;
+const uint32_t GamescopeAppTextureColorspace_Bits = 3;
 
 inline bool ColorspaceIsHDR( GamescopeAppTextureColorspace colorspace )
 {

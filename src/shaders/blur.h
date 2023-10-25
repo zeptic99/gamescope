@@ -502,7 +502,7 @@ vec4 gaussian_blur(sampler2D layerSampler, uint layerIdx, vec2 pos, uint radius,
 
     if (vertical)
     {
-        color.rgb = apply_layer_color_mgmt(color.rgb, colorspace);
+        color.rgb = apply_layer_color_mgmt(color.rgb, layerIdx, colorspace);
     }
 
     return color;

@@ -13,8 +13,8 @@ const int colorspace_linear = 0;
 const int colorspace_sRGB = 1;
 const int colorspace_scRGB = 2;
 const int colorspace_pq = 3;
-const int colorspace_reserved = 3;
-const int colorspace_max_bits = 2;
+const int colorspace_passthru = 4;
+const int colorspace_max_bits = 3;
 
 const int filter_linear_emulated = 0;
 const int filter_nearest = 1;
