@@ -3329,7 +3329,7 @@ struct BlitPushData_t
 		borderMask = frameInfo->borderMask();
 		frameId = s_frameId++;
 		blurRadius = frameInfo->blurRadius ? ( frameInfo->blurRadius * 2 ) - 1 : 0;
-
+bind_all_layers
 		u_linearToNits = g_flInternalDisplayBrightnessNits;
 		u_nitsToLinear = 1.0f / g_flInternalDisplayBrightnessNits;
 		u_itmSdrNits = g_flHDRItmSdrNits;
@@ -3469,7 +3469,7 @@ void bind_all_layers(CVulkanCmdBuffer* cmdBuffer, const struct FrameInfo_t *fram
                     || (layer->filter == GamescopeUpscaleFilter::LINEAR && !layer->viewConvertsToLinearAutomatically());
 
 		cmdBuffer->bindTexture(i, layer->tex);
-		cmdBuffer->setTextureSrgb(i, false);
+		cmdBuffer->setTextureSrgb(i, layer->colorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR);
 		cmdBuffer->setSamplerNearest(i, nearest);
 		cmdBuffer->setSamplerUnnormalized(i, true);
 	}
