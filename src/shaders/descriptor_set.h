@@ -44,13 +44,13 @@ uint get_layer_colorspace(uint layerIdx) {
     return bitfieldExtract(c_colorspaceMask, int(layerIdx) * colorspace_max_bits, colorspace_max_bits);
 }
 
-layout(binding = 0, rgba8) writeonly uniform image2D dst;
+layout(binding = 1, rgba8) writeonly uniform image2D dst;
 // alias
-layout(binding = 0, rgba8) writeonly uniform image2D dst_luma;
-layout(binding = 1, rgba8) writeonly uniform image2D dst_chroma;
+layout(binding = 1, rgba8) writeonly uniform image2D dst_luma;
+layout(binding = 2, rgba8) writeonly uniform image2D dst_chroma;
 
-layout(binding = 2) uniform sampler2D s_samplers[VKR_SAMPLER_SLOTS];
-layout(binding = 3) uniform sampler2D s_ycbcr_samplers[VKR_SAMPLER_SLOTS];
+layout(binding = 3) uniform sampler2D s_samplers[VKR_SAMPLER_SLOTS];
+layout(binding = 4) uniform sampler2D s_ycbcr_samplers[VKR_SAMPLER_SLOTS];
 
-layout(binding = 4) uniform sampler1D s_shaperLut[VKR_LUT3D_COUNT];
-layout(binding = 5) uniform sampler3D s_lut3D[VKR_LUT3D_COUNT];
+layout(binding = 5) uniform sampler1D s_shaperLut[VKR_LUT3D_COUNT];
+layout(binding = 6) uniform sampler3D s_lut3D[VKR_LUT3D_COUNT];

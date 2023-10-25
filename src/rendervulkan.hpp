@@ -686,6 +686,11 @@ static inline uint32_t div_roundup(uint32_t x, uint32_t y)
 	VK_FUNC(WaitSemaphores) \
 	VK_FUNC(SetHdrMetadataEXT)
 
+template<typename T, typename U = T>
+constexpr T align(T what, U to) {
+return (what + to - 1) & ~(to - 1);
+}
+
 class CVulkanDevice
 {
 public:
@@ -730,8 +735,12 @@ public:
 	{
 		assert(size < upload_buffer_size);
 
+		m_uploadBufferOffset = align(m_uploadBufferOffset, 16);
 		if (m_uploadBufferOffset + size > upload_buffer_size)
+		{
+			fprintf(stderr, "Exceeded uploadBufferData\n");
 			waitIdle(false);
+		}
 
 		uint8_t *ptr = ((uint8_t*)m_uploadBufferData) + m_uploadBufferOffset;
 		m_uploadBufferOffset += size;
@@ -748,7 +757,9 @@ public:
 
 	void resetCmdBuffers(uint64_t sequence);
 
-private:
+protected:
+	friend class CVulkanCmdBuffer;
+
 	bool selectPhysDev(VkSurfaceKHR surface);
 	bool createDevice();
 	bool createLayouts();
@@ -848,7 +859,7 @@ public:
 	void bindTarget(std::shared_ptr<CVulkanTexture> target);
 	void clearState();
 	template<class PushData, class... Args>
-	void pushConstants(Args&&... args);
+	void uploadConstants(Args&&... args);
 	void bindPipeline(VkPipeline pipeline);
 	void dispatch(uint32_t x, uint32_t y = 1, uint32_t z = 1);
 	void copyImage(std::shared_ptr<CVulkanTexture> src, std::shared_ptr<CVulkanTexture> dst);
@@ -883,6 +894,8 @@ private:
 
 	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_shaperLut;
 	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_lut3D;
+
+	uint32_t m_renderBufferOffset = 0;
 };
 
 uint32_t VulkanFormatToDRM( VkFormat vkFormat );

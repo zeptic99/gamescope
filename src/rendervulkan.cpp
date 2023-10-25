@@ -557,7 +557,9 @@ bool CVulkanDevice::createDevice()
 	VkPhysicalDeviceVulkan12Features vulkan12Features = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.pNext = std::exchange(features2.pNext, &vulkan12Features),
+		.uniformAndStorageBuffer8BitAccess = VK_TRUE,
 		.shaderFloat16 = m_bSupportsFp16,
+		.scalarBlockLayout = VK_TRUE,
 		.timelineSemaphore = VK_TRUE,
 	};
 
@@ -684,10 +686,10 @@ bool CVulkanDevice::createLayouts()
 	for (auto& sampler : ycbcrSamplers)
 		sampler = m_ycbcrSampler;
 
-	std::array<VkDescriptorSetLayoutBinding, 6 > layoutBindings = {
+	std::array<VkDescriptorSetLayoutBinding, 7 > layoutBindings = {
 		VkDescriptorSetLayoutBinding {
 			.binding = 0,
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		},
@@ -699,8 +701,8 @@ bool CVulkanDevice::createLayouts()
 		},
 		VkDescriptorSetLayoutBinding {
 			.binding = 2,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = VKR_SAMPLER_SLOTS,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		},
 		VkDescriptorSetLayoutBinding {
@@ -708,16 +710,22 @@ bool CVulkanDevice::createLayouts()
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = VKR_SAMPLER_SLOTS,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.pImmutableSamplers = ycbcrSamplers.data(),
 		},
 		VkDescriptorSetLayoutBinding {
 			.binding = 4,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = VKR_SAMPLER_SLOTS,
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.pImmutableSamplers = ycbcrSamplers.data(),
+		},
+		VkDescriptorSetLayoutBinding {
+			.binding = 5,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = VKR_LUT3D_COUNT,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		},
 		VkDescriptorSetLayoutBinding {
-			.binding = 5,
+			.binding = 6,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = VKR_LUT3D_COUNT,
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -738,18 +746,10 @@ bool CVulkanDevice::createLayouts()
 		return false;
 	}
 
-	VkPushConstantRange pushConstantRange = {
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		.offset = 0,
-		.size = 256,
-	};
-	
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = 1,
 		.pSetLayouts = &m_descriptorSetLayout,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushConstantRange,
 	};
 	
 	res = vk.CreatePipelineLayout(device(), &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
@@ -790,7 +790,11 @@ bool CVulkanDevice::createPools()
 		return false;
 	}
 
-	VkDescriptorPoolSize poolSizes[2] {
+	VkDescriptorPoolSize poolSizes[3] {
+		{
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			uint32_t(m_descriptorSets.size()),
+		},
 		{
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			uint32_t(m_descriptorSets.size()) * 2,
@@ -887,8 +891,8 @@ bool CVulkanDevice::createScratchResources()
 	
 	VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = 512 * 512 * 4,
-		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		.size = upload_buffer_size,
+		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	};
 
 	res = vk.CreateBuffer( device(), &bufferCreateInfo, nullptr, &m_uploadBuffer );
@@ -1354,11 +1358,13 @@ void CVulkanCmdBuffer::clearState()
 }
 
 template<class PushData, class... Args>
-void CVulkanCmdBuffer::pushConstants(Args&&... args)
+void CVulkanCmdBuffer::uploadConstants(Args&&... args)
 {
-	static_assert(sizeof(PushData) <= 256, "Only 256 bytes push constants.");
 	PushData data(std::forward<Args>(args)...);
-	m_device->vk.CmdPushConstants(m_cmdBuffer, m_device->pipelineLayout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(data), &data);
+
+	void *ptr = m_device->uploadBufferData(sizeof(data));
+	m_renderBufferOffset = m_device->m_uploadBufferOffset - sizeof(data);
+	memcpy(ptr, &data, sizeof(data));
 }
 
 void CVulkanCmdBuffer::bindPipeline(VkPipeline pipeline)
@@ -1379,12 +1385,13 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 
 	VkDescriptorSet descriptorSet = m_device->descriptorSet();
 
-	std::array<VkWriteDescriptorSet, 6> writeDescriptorSets;
+	std::array<VkWriteDescriptorSet, 7> writeDescriptorSets;
 	std::array<VkDescriptorImageInfo, VKR_SAMPLER_SLOTS> imageDescriptors = {};
 	std::array<VkDescriptorImageInfo, VKR_SAMPLER_SLOTS> ycbcrImageDescriptors = {};
 	std::array<VkDescriptorImageInfo, VKR_TARGET_SLOTS> targetDescriptors = {};
 	std::array<VkDescriptorImageInfo, VKR_LUT3D_COUNT> shaperLutDescriptor = {};
 	std::array<VkDescriptorImageInfo, VKR_LUT3D_COUNT> lut3DDescriptor = {};
+	VkDescriptorBufferInfo scratchDescriptor = {};
 
 	writeDescriptorSets[0] = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1392,8 +1399,8 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstBinding = 0,
 		.dstArrayElement = 0,
 		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		.pImageInfo = &targetDescriptors[0],
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.pBufferInfo = &scratchDescriptor,
 	};
 
 	writeDescriptorSets[1] = {
@@ -1403,7 +1410,7 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstArrayElement = 0,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		.pImageInfo = &targetDescriptors[1],
+		.pImageInfo = &targetDescriptors[0],
 	};
 
 	writeDescriptorSets[2] = {
@@ -1411,9 +1418,9 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstSet = descriptorSet,
 		.dstBinding = 2,
 		.dstArrayElement = 0,
-		.descriptorCount = imageDescriptors.size(),
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = imageDescriptors.data(),
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		.pImageInfo = &targetDescriptors[1],
 	};
 
 	writeDescriptorSets[3] = {
@@ -1421,9 +1428,9 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstSet = descriptorSet,
 		.dstBinding = 3,
 		.dstArrayElement = 0,
-		.descriptorCount = ycbcrImageDescriptors.size(),
+		.descriptorCount = imageDescriptors.size(),
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = ycbcrImageDescriptors.data(),
+		.pImageInfo = imageDescriptors.data(),
 	};
 
 	writeDescriptorSets[4] = {
@@ -1431,9 +1438,9 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstSet = descriptorSet,
 		.dstBinding = 4,
 		.dstArrayElement = 0,
-		.descriptorCount = shaperLutDescriptor.size(),
+		.descriptorCount = ycbcrImageDescriptors.size(),
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = shaperLutDescriptor.data(),
+		.pImageInfo = ycbcrImageDescriptors.data(),
 	};
 
 	writeDescriptorSets[5] = {
@@ -1441,10 +1448,24 @@ void CVulkanCmdBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z)
 		.dstSet = descriptorSet,
 		.dstBinding = 5,
 		.dstArrayElement = 0,
+		.descriptorCount = shaperLutDescriptor.size(),
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = shaperLutDescriptor.data(),
+	};
+
+	writeDescriptorSets[6] = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = descriptorSet,
+		.dstBinding = 6,
+		.dstArrayElement = 0,
 		.descriptorCount = lut3DDescriptor.size(),
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.pImageInfo = lut3DDescriptor.data(),
 	};
+
+	scratchDescriptor.buffer = m_device->m_uploadBuffer;
+	scratchDescriptor.offset = m_renderBufferOffset;
+	scratchDescriptor.range = VK_WHOLE_SIZE;
 
 	for (uint32_t i = 0; i < VKR_SAMPLER_SLOTS; i++)
 	{
@@ -3450,7 +3471,7 @@ bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVu
 	cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, frameInfo->layerCount, frameInfo->ycbcrMask(), 0u, frameInfo->colorspaceMask(), EOTF_Gamma22 ));
 	bind_all_layers(cmdBuffer.get(), frameInfo);
 	cmdBuffer->bindTarget(pScreenshotTexture);
-	cmdBuffer->pushConstants<BlitPushData_t>(frameInfo);
+	cmdBuffer->uploadConstants<BlitPushData_t>(frameInfo);
 
 	const int pixelsPerGroup = 8;
 
@@ -3529,7 +3550,7 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 		cmdBuffer->setTextureSrgb(0, true);
 		cmdBuffer->setSamplerUnnormalized(0, false);
 		cmdBuffer->setSamplerNearest(0, false);
-		cmdBuffer->pushConstants<EasuPushData_t>(inputX, inputY, tempX, tempY);
+		cmdBuffer->uploadConstants<EasuPushData_t>(inputX, inputY, tempX, tempY);
 
 		int pixelsPerGroup = 16;
 
@@ -3542,7 +3563,7 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 		cmdBuffer->setSamplerUnnormalized(0, false);
 		cmdBuffer->setSamplerNearest(0, false);
 		cmdBuffer->bindTarget(compositeImage);
-		cmdBuffer->pushConstants<RcasPushData_t>(frameInfo, g_upscaleFilterSharpness / 10.0f);
+		cmdBuffer->uploadConstants<RcasPushData_t>(frameInfo, g_upscaleFilterSharpness / 10.0f);
 
 		cmdBuffer->dispatch(div_roundup(currentOutputWidth, pixelsPerGroup), div_roundup(currentOutputHeight, pixelsPerGroup));
 	}
@@ -3570,7 +3591,7 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 		cmdBuffer->bindTexture(VKR_NIS_COEF_USM_SLOT, g_output.nisUsmImage);
 		cmdBuffer->setSamplerUnnormalized(VKR_NIS_COEF_USM_SLOT, false);
 		cmdBuffer->setSamplerNearest(VKR_NIS_COEF_USM_SLOT, false);
-		cmdBuffer->pushConstants<NisPushData_t>(inputX, inputY, tempX, tempY, nisSharpness);
+		cmdBuffer->uploadConstants<NisPushData_t>(inputX, inputY, tempX, tempY, nisSharpness);
 
 		int pixelsPerGroupX = 32;
 		int pixelsPerGroupY = 24;
@@ -3585,7 +3606,7 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 		cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, nisFrameInfo.layerCount, nisFrameInfo.ycbcrMask()));
 		bind_all_layers(cmdBuffer.get(), &nisFrameInfo);
 		cmdBuffer->bindTarget(compositeImage);
-		cmdBuffer->pushConstants<BlitPushData_t>(&nisFrameInfo);
+		cmdBuffer->uploadConstants<BlitPushData_t>(&nisFrameInfo);
 
 		int pixelsPerGroup = 8;
 
@@ -3611,7 +3632,7 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 			cmdBuffer->setSamplerUnnormalized(i, true);
 			cmdBuffer->setSamplerNearest(i, false);
 		}
-		cmdBuffer->pushConstants<BlitPushData_t>(frameInfo);
+		cmdBuffer->uploadConstants<BlitPushData_t>(frameInfo);
 
 		int pixelsPerGroup = 8;
 
@@ -3635,7 +3656,7 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 		cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, frameInfo->layerCount, frameInfo->ycbcrMask(), 0u, frameInfo->colorspaceMask(), g_ColorMgmt.current.outputEncodingEOTF ));
 		bind_all_layers(cmdBuffer.get(), frameInfo);
 		cmdBuffer->bindTarget(compositeImage);
-		cmdBuffer->pushConstants<BlitPushData_t>(frameInfo);
+		cmdBuffer->uploadConstants<BlitPushData_t>(frameInfo);
 
 		const int pixelsPerGroup = 8;
 
@@ -3657,12 +3678,12 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 				CaptureConvertBlitData_t constants( scale, colorspace_to_conversion_from_srgb_matrix( compositeImage->streamColorspace() ) );
 				constants.halfExtent[0] = pPipewireTexture->width() / 2.0f;
 				constants.halfExtent[1] = pPipewireTexture->height() / 2.0f;
-				cmdBuffer->pushConstants<CaptureConvertBlitData_t>(constants);
+				cmdBuffer->uploadConstants<CaptureConvertBlitData_t>(constants);
 			}
 			else
 			{
 				BlitPushData_t constants( scale );
-				cmdBuffer->pushConstants<BlitPushData_t>(constants);
+				cmdBuffer->uploadConstants<BlitPushData_t>(constants);
 			}
 
 			for (uint32_t i = 0; i < EOTF_Count; i++)

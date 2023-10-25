@@ -1,4 +1,4 @@
-layout(push_constant)
+layout(binding = 0, std430)
 uniform layers_t {
     vec2 u_scale[VKR_MAX_LAYERS];
     vec2 u_offset[VKR_MAX_LAYERS];
