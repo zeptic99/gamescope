@@ -670,7 +670,7 @@ static void create_patched_edid( const uint8_t *orig_data, size_t orig_size, drm
 			(1 << HDMI_EOTF_SDR) | (1 << HDMI_EOTF_TRADITIONAL_HDR) | (1 << HDMI_EOTF_ST2084), /* supported eotfs */
 			1, /* type 1 */
 			encode_max_luminance(flMaxPeakLuminance), /* desired content max peak luminance */
-			encode_max_luminance(flMaxPeakLuminance), /* desired content max frame avg luminance */
+			encode_max_luminance(flMaxPeakLuminance * 0.8f), /* desired content max frame avg luminance */
 			0, /* desired content min luminance -- 0 is technically "undefined" */
 		};
 
