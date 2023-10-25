@@ -6221,18 +6221,21 @@ void handle_presented_for_window( steamcompmgr_win_t* w )
 	if (struct wlr_surface *surface = w->current_surface())
 	{
 		auto info = get_wl_surface_info(surface);
-		if (info->gamescope_swapchain != nullptr)
+		if  (info->gamescope_swapchain != nullptr && info->last_refresh_cycle != refresh_cycle)
 		{
-			// Could have got the override set in this bubble.s
-			surface = w->current_surface();
-
-			if  (info->last_refresh_cycle != refresh_cycle)
+			wlserver_lock();
+			if (info->gamescope_swapchain != nullptr)
 			{
-				wlserver_lock();
-				info->last_refresh_cycle = refresh_cycle;
-				wlserver_refresh_cycle(surface, refresh_cycle);
-				wlserver_unlock();
+				// Could have got the override set in this bubble.s
+				surface = w->current_surface();
+
+				if  (info->last_refresh_cycle != refresh_cycle)
+				{
+					info->last_refresh_cycle = refresh_cycle;
+					wlserver_refresh_cycle(surface, refresh_cycle);
+				}
 			}
+			wlserver_unlock();
 		}
 	}
 }
