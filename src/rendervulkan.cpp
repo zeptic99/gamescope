@@ -1223,6 +1223,9 @@ void CVulkanDevice::garbageCollect( void )
 
 void CVulkanDevice::wait(uint64_t sequence, bool reset)
 {
+	if (m_submissionSeqNo == sequence)
+		m_uploadBufferOffset = 0;
+
 	VkSemaphoreWaitInfo waitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
@@ -2679,10 +2682,10 @@ std::shared_ptr<CVulkanTexture> vulkan_create_3d_lut(uint32_t width, uint32_t he
 
 void vulkan_update_luts(const std::shared_ptr<CVulkanTexture>& lut1d, const std::shared_ptr<CVulkanTexture>& lut3d, void* lut1d_data, void* lut3d_data)
 {
-	void* base_dst = g_device.uploadBufferData();
-
 	size_t lut1d_size = lut1d->width() * sizeof(uint16_t) * 4;
 	size_t lut3d_size = lut3d->width() * lut3d->height() * lut3d->depth() * sizeof(uint16_t) * 4;
+
+	void* base_dst = g_device.uploadBufferData(lut1d_size + lut3d_size);
 
 	void* lut1d_dst = base_dst;
 	void *lut3d_dst = ((uint8_t*)base_dst) + lut1d_size;
@@ -3097,9 +3100,7 @@ static bool init_nis_data()
 	uint32_t height = kPhaseCount;
 
 	g_output.nisScalerImage = vulkan_create_texture_from_bits( width, height, width, height, nisFormat, {}, coefScaleData );
-	g_device.waitIdle();
 	g_output.nisUsmImage = vulkan_create_texture_from_bits( width, height, width, height, nisFormat, {}, coefUsmData );
-	g_device.waitIdle();
 
 	return true;
 }
@@ -3198,7 +3199,8 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_bits( uint32_t width,
 	if ( pTex->BInit( width, height, 1u, drmFormat, texCreateFlags, nullptr,  contentWidth, contentHeight) == false )
 		return nullptr;
 
-	memcpy( g_device.uploadBufferData(), bits, width * height * DRMFormatGetBPP(drmFormat) );
+	size_t size = width * height * DRMFormatGetBPP(drmFormat);
+	memcpy( g_device.uploadBufferData(size), bits, size );
 
 	auto cmdBuffer = g_device.commandBuffer();
 
@@ -3206,6 +3208,7 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_bits( uint32_t width,
 	// TODO: Sync this copyBufferToImage.
 
 	g_device.submit(std::move(cmdBuffer));
+	g_device.waitIdle();
 
 	return pTex;
 }

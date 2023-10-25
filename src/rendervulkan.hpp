@@ -707,6 +707,8 @@ public:
 		return ret;
 	}
 
+	static const uint32_t upload_buffer_size = 1024 * 1024 * 4;
+
 	inline VkDevice device() { return m_device; }
 	inline VkPhysicalDevice physDev() {return m_physDev; }
 	inline VkInstance instance() { return m_instance; }
@@ -718,12 +720,23 @@ public:
 	inline uint32_t generalQueueFamily() {return m_generalQueueFamily;}
 	inline VkBuffer uploadBuffer() {return m_uploadBuffer;}
 	inline VkPipelineLayout pipelineLayout() {return m_pipelineLayout;}
-	inline void *uploadBufferData() {return m_uploadBufferData;}
 	inline int drmRenderFd() {return m_drmRendererFd;}
 	inline bool supportsModifiers() {return m_bSupportsModifiers;}
 	inline bool hasDrmPrimaryDevId() {return m_bHasDrmPrimaryDevId;}
 	inline dev_t primaryDevId() {return m_drmPrimaryDevId;}
 	inline bool supportsFp16() {return m_bSupportsFp16;}
+
+	inline void *uploadBufferData(uint32_t size)
+	{
+		assert(size < upload_buffer_size);
+
+		if (m_uploadBufferOffset + size > upload_buffer_size)
+			waitIdle(false);
+
+		uint8_t *ptr = ((uint8_t*)m_uploadBufferData) + m_uploadBufferOffset;
+		m_uploadBufferOffset += size;
+		return ptr;
+	}
 
 	#define VK_FUNC(x) PFN_vk##x x = nullptr;
 	struct
@@ -786,7 +799,7 @@ private:
 	VkBuffer m_uploadBuffer;
 	VkDeviceMemory m_uploadBufferMemory;
 	void *m_uploadBufferData;
-
+	uint32_t m_uploadBufferOffset = 0;
 
 	VkSemaphore m_scratchTimelineSemaphore;
 	std::atomic<uint64_t> m_submissionSeqNo = { 0 };
@@ -878,3 +891,5 @@ bool DRMFormatHasAlpha( uint32_t nDRMFormat );
 uint32_t DRMFormatGetBPP( uint32_t nDRMFormat );
 
 bool vulkan_supports_hdr10();
+
+void vulkan_wait_idle();
