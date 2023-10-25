@@ -3329,7 +3329,7 @@ struct BlitPushData_t
 		borderMask = frameInfo->borderMask();
 		frameId = s_frameId++;
 		blurRadius = frameInfo->blurRadius ? ( frameInfo->blurRadius * 2 ) - 1 : 0;
-bind_all_layers
+
 		u_linearToNits = g_flInternalDisplayBrightnessNits;
 		u_nitsToLinear = 1.0f / g_flInternalDisplayBrightnessNits;
 		u_itmSdrNits = g_flHDRItmSdrNits;
