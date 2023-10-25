@@ -171,8 +171,8 @@ vec4 sampleLayerEx(sampler2D layerSampler, uint offsetLayerIdx, uint colorspaceL
     else {
         color = sampleRegular(layerSampler, coord, colorspace);
     }
-    color.rgb = color.rgba * u_ctm[offsetLayerIdx];
-    color.rgb = apply_layer_color_mgmt(color.rgb, colorspace);
+    // JoshA: AMDGPU applies 3x4 CTM like this, where A is 1.0, but it only affects .rgb.
+    color.rgb = vec4(color.rgb, 1.0f) * u_ctm[offsetLayerIdx];
 
     return color;
 }
