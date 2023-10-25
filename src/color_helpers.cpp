@@ -709,7 +709,7 @@ void calcColorTransform( lut1d_t * pShaper, int nLutSize1d,
 
         // Calculate the virtual white point adaptation
         glm::mat3x3 whitePointDestAdaptation = glm::mat3x3( 1.f ); // identity
-        if ( destVirtualWhite.x != 0.f && destVirtualWhite.y != 0.f )
+        if ( destVirtualWhite.x > 0.01f && destVirtualWhite.y > 0.01f )
         {
             // if source white is within tiny tolerance of sourceWhitePointOverride
             // don't do the override? (aka two quantizations of d65)
