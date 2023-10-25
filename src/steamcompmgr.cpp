@@ -6488,12 +6488,8 @@ spawn_client( char **argv )
 
 		// Enable Gamescope WSI by default for nested.
 		setenv( "ENABLE_GAMESCOPE_WSI", "1", 0 );
-		if ( !g_bExposeWayland )
-		{
-			// If we are not running with --expose-wayland
-			// set SDL_VIDEODRIVER back to x11.
-			setenv("SDL_VIDEODRIVER", "x11", 1);
-		}
+		// Unset this to avoid it leaking to Proton apps, etc.
+		unsetenv("SDL_VIDEODRIVER");
 		execvp( argv[ 0 ], argv );
 
 		xwm_log.errorf_errno( "execvp failed" );
