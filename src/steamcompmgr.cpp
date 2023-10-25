@@ -1938,7 +1938,6 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 
 	layer->zpos = g_zposCursor; // cursor, on top of both bottom layers
 	layer->applyColorMgmt = false;
-	layer->allowBlending = g_ColorMgmt.pending.enabled;
 
 	layer->tex = m_texture;
 	layer->fbid = BIsNested() ? 0 : m_texture->fbid();
@@ -2175,7 +2174,6 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	layer->blackBorder = flags & PaintWindowFlag::DrawBorders;
 
 	layer->applyColorMgmt = g_ColorMgmt.pending.enabled;
-	layer->allowBlending = g_ColorMgmt.pending.enabled;
 	layer->zpos = g_zposBase;
 
 	if ( w != scaleW )
@@ -2675,7 +2673,6 @@ paint_all(bool async)
 				baseLayer->tex = vulkan_get_last_output_image( false, false );
 				baseLayer->fbid = baseLayer->tex->fbid();
 				baseLayer->applyColorMgmt = false;
-				baseLayer->allowBlending = false;
 
 				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
 				baseLayer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
@@ -2701,7 +2698,6 @@ paint_all(bool async)
 					overlayLayer->tex = vulkan_get_last_output_image( true, bDefer );
 					overlayLayer->fbid = overlayLayer->tex->fbid();
 					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
-					overlayLayer->allowBlending = g_ColorMgmt.pending.enabled;
 
 					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;
 					// Partial composition stuff has the same colorspace.

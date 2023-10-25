@@ -2393,22 +2393,12 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 				}
 			}
 
-			if ( frameInfo->layers[i].allowBlending )
+			if ( drm_supports_color_mgmt( drm ) )
 			{
-				if ( drm_supports_color_mgmt( drm ) )
-				{
-					if (!g_bDisableBlendTF && !bSinglePlane)
-						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
-					else
-						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", 0 );
-				}
-			}
-			else
-			{
-				if ( drm_supports_color_mgmt( drm ) )
-				{
+				if (!g_bDisableBlendTF && !bSinglePlane)
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
+				else
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
-				}
 			}
 		}
 		else

@@ -283,7 +283,6 @@ struct FrameInfo_t
 
 		bool blackBorder;
 		bool applyColorMgmt; // drm only
-		bool allowBlending;  // drm only
 
 		GamescopeAppTextureColorspace colorspace;
 
