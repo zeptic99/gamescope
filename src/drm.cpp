@@ -53,6 +53,14 @@ const char *g_sOutputName = nullptr;
 #define DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP 0x15
 #endif
 
+struct drm_color_ctm2 {
+	/*
+	 * Conversion matrix in S31.32 sign-magnitude
+	 * (not two's complement!) format.
+	 */
+	__u64 matrix[12];
+};
+
 bool g_bSupportsAsyncFlips = false;
 
 enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
@@ -1581,6 +1589,8 @@ void finish_drm(struct drm_t *drm)
 			add_plane_property(req, plane, "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
 		if (plane->props.count("VALVE1_PLANE_BLEND_LUT") > 0)
 			add_plane_property(req, plane, "VALVE1_PLANE_BLEND_LUT", 0 );
+		if (plane->props.count("VALVE1_PLANE_CTM") > 0)
+			add_plane_property(req, plane, "VALVE1_PLANE_CTM", 0 );
 	}
 	// We can't do a non-blocking commit here or else risk EBUSY in case the
 	// previous page-flip is still in flight.
@@ -2399,6 +2409,11 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
 				else
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
+
+				if (frameInfo->layers[i].ctm != nullptr)
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_CTM", frameInfo->layers[i].ctm->blob );
+				else
+					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_CTM", 0 );
 			}
 		}
 		else
@@ -2415,6 +2430,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_SHAPER_TF", 0 );
 				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_LUT3D", 0 );
 				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
+				liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_CTM", 0 );
 			}
 		}
 	}
@@ -3113,10 +3129,37 @@ std::shared_ptr<wlserver_hdr_metadata> drm_create_hdr_metadata_blob(struct drm_t
 
 	return std::make_shared<wlserver_hdr_metadata>(metadata, blob);
 }
-void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob)
+void drm_destroy_blob(struct drm_t *drm, uint32_t blob)
 {
 	drmModeDestroyPropertyBlob(drm->fd, blob);
 }
+
+std::shared_ptr<wlserver_ctm> drm_create_ctm(struct drm_t *drm, glm::mat3x4 ctm)
+{
+	uint32_t blob = 0;
+	if (!BIsNested())
+	{
+		drm_color_ctm2 ctm2;
+		for (uint32_t i = 0; i < 12; i++)
+		{
+			float *data = (float*)&ctm;
+			ctm2.matrix[i] = drm_calc_s31_32(data[i]);
+		}
+
+		int ret = drmModeCreatePropertyBlob(drm->fd, &ctm2, sizeof(ctm2), &blob);
+
+		if (ret != 0) {
+			drm_log.errorf("Failed to create blob for CTM. (%s) Falling back to null blob.", strerror(-ret));
+			blob = 0;
+		}
+
+		if (!blob)
+			return nullptr;
+	}
+
+	return std::make_shared<wlserver_ctm>(ctm, blob);
+}
+
 
 bool drm_supports_color_mgmt(struct drm_t *drm)
 {

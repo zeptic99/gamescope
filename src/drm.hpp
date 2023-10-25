@@ -51,7 +51,7 @@ inline bool ColorspaceIsHDR( GamescopeAppTextureColorspace colorspace )
 }
 
 extern struct drm_t g_DRM;
-void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob);
+void drm_destroy_blob(struct drm_t *drm, uint32_t blob);
 
 struct wlserver_hdr_metadata
 {
@@ -70,10 +70,34 @@ struct wlserver_hdr_metadata
 	~wlserver_hdr_metadata()
 	{
 		if ( blob && owned )
-			drm_destroy_hdr_metadata_blob( &g_DRM, blob );
+			drm_destroy_blob( &g_DRM, blob );
 	}
 
 	hdr_output_metadata metadata = {};
+	uint32_t blob = 0;
+	bool owned = true;
+};
+
+struct wlserver_ctm
+{
+	wlserver_ctm()
+	{
+
+	}
+
+	wlserver_ctm(glm::mat3x4 ctm, uint32_t blob, bool owned = true)
+		: matrix(ctm)
+		, blob(blob)
+	{
+	}
+
+	~wlserver_ctm()
+	{
+		if ( blob && owned )
+			drm_destroy_blob( &g_DRM, blob );
+	}
+
+	glm::mat3x4 matrix{};
 	uint32_t blob = 0;
 	bool owned = true;
 };
@@ -327,7 +351,8 @@ void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
 bool drm_supports_color_mgmt(struct drm_t *drm);
 std::shared_ptr<wlserver_hdr_metadata> drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata);
-void drm_destroy_hdr_metadata_blob(struct drm_t *drm, uint32_t blob);
+std::shared_ptr<wlserver_ctm> drm_create_ctm(struct drm_t *drm, glm::mat3x4 ctm);
+void drm_destroy_blob(struct drm_t *drm, uint32_t blob);
 
 const char *drm_get_connector_name(struct drm_t *drm);
 const char *drm_get_device_name(struct drm_t *drm);

@@ -284,6 +284,8 @@ struct FrameInfo_t
 		bool blackBorder;
 		bool applyColorMgmt; // drm only
 
+		std::shared_ptr<wlserver_ctm> ctm;
+
 		GamescopeAppTextureColorspace colorspace;
 
 		bool isYcbcr() const
