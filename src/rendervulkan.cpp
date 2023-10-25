@@ -3280,11 +3280,13 @@ float g_flInternalDisplayBrightnessNits = 500.0f;
 float g_flHDRItmSdrNits = 100.f;
 float g_flHDRItmTargetNits = 1000.f;
 
+#pragma pack(push, 1)
 struct BlitPushData_t
 {
 	vec2_t scale[k_nMaxLayers];
 	vec2_t offset[k_nMaxLayers];
 	float opacity[k_nMaxLayers];
+	glm::mat3x4 ctm[k_nMaxLayers];
 	uint32_t borderMask;
 	uint32_t frameId;
 	uint32_t blurRadius;
@@ -3309,7 +3311,21 @@ struct BlitPushData_t
             else
                 u_shaderFilter[i] = (uint32_t)layer->filter;
 
+			if (layer->ctm)
+			{
+				ctm[i] = layer->ctm->matrix;
+			}
+			else
+			{
+				ctm[i] = glm::mat3x4
+				{
+					1, 0, 0, 0,
+					0, 1, 0, 0,
+					0, 0, 1, 0
+				};
+			}
 		}
+
 		borderMask = frameInfo->borderMask();
 		frameId = s_frameId++;
 		blurRadius = frameInfo->blurRadius ? ( frameInfo->blurRadius * 2 ) - 1 : 0;
@@ -3340,16 +3356,16 @@ struct CaptureConvertBlitData_t
 	vec2_t scale[1];
 	vec2_t offset[1];
 	float opacity[1];
+	mat3x4 ctm[1];
 	uint32_t borderMask;
 	uint32_t halfExtent[2];
-	mat3x4 colorMatrix;
 
 	explicit CaptureConvertBlitData_t(float blit_scale, const mat3x4 &color_matrix) {
 		scale[0] = { blit_scale, blit_scale };
 		offset[0] = { 0.0f, 0.0f };
 		opacity[0] = 1.0f;
 		borderMask = 0;
-		colorMatrix = color_matrix;
+		ctm[0] = color_matrix;
 	}
 };
 
@@ -3385,6 +3401,7 @@ struct RcasPushData_t
 	vec2_t u_scale[k_nMaxLayers - 1];
 	vec2_t u_offset[k_nMaxLayers - 1];
 	float u_opacity[k_nMaxLayers];
+	glm::mat3x4 ctm[k_nMaxLayers];
 	uint32_t u_borderMask;
 	uint32_t u_frameId;
 	uint32_t u_c1;
@@ -3439,6 +3456,7 @@ struct NisPushData_t
 			tempX, tempY);
 	}
 };
+#pragma pack(pop)
 
 void bind_all_layers(CVulkanCmdBuffer* cmdBuffer, const struct FrameInfo_t *frameInfo)
 {

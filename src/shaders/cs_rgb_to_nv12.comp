@@ -23,14 +23,14 @@ const float u_nitsToLinear = 1.0f / 100.0f;
 const float u_itmSdrNits = 100.f;
 const float u_itmTargetNits = 1000.f;
 
-layout(binding = 0, std430)
+layout(binding = 0, scalar)
 uniform layers_t {
     vec2 u_scale[1];
     vec2 u_offset[1];
     float u_opacity[1];
+    mat3x4 u_ctm[1];
     uint u_borderMask;
     uvec2 u_halfExtent;
-    mat3x4 u_colorMatrix;
 };
 
 #include "composite.h"
@@ -63,11 +63,11 @@ void main() {
     };
 
     vec3 avg_color = (color[0] + color[1] + color[2] + color[3]) / 4.0f;
-    vec2 uv = applyColorMatrix(avg_color, u_colorMatrix).yz;
+    vec2 uv = applyColorMatrix(avg_color, u_ctm[0]).yz;
     imageStore(dst_chroma, chroma_uv, vec4(uv, 0.0f, 1.0f));
 
     for (int i = 0; i < 4; i++) {
-      float y = applyColorMatrix(color[i], u_colorMatrix).x;
+      float y = applyColorMatrix(color[i], u_ctm[0]).x;
       imageStore(dst_luma, luma_uv + offset_table[i], vec4(y, 0.0f, 0.0f, 1.0f));
     }
   }

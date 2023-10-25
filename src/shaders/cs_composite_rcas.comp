@@ -11,12 +11,13 @@ layout(
   local_size_y = 1,
   local_size_z = 1) in;
 
-layout(binding = 0, std430)
+layout(binding = 0, scalar)
 uniform layers_t {
     uvec2 u_layer0Offset;
     vec2 u_scale[VKR_MAX_LAYERS - 1];
     vec2 u_offset[VKR_MAX_LAYERS - 1];
     float u_opacity[VKR_MAX_LAYERS];
+    mat3x4 u_ctm[VKR_MAX_LAYERS];
     uint u_borderMask;
     uint u_frameId;
     uint u_c1;
@@ -72,6 +73,7 @@ void rcasComposite(uvec2 pos)
             }
 
             outputValue.rgb = colorspace_plane_degamma_tf(outputValue.rgb, colorspace);
+            outputValue.rgb = (vec4(outputValue.rgb, 1.0f) * u_ctm[0]).rgb;
             outputValue.rgb = apply_layer_color_mgmt(outputValue.rgb, colorspace);
             outputValue *= u_opacity[0];
         }

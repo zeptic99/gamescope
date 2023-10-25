@@ -9,7 +9,7 @@
 
 #include "descriptor_set.h"
 
-layout(binding = 0, std430)
+layout(binding = 0, scalar)
 uniform const_buffer
 {
     float kDetectRatio;

@@ -171,6 +171,7 @@ vec4 sampleLayerEx(sampler2D layerSampler, uint offsetLayerIdx, uint colorspaceL
     else {
         color = sampleRegular(layerSampler, coord, colorspace);
     }
+    color.rgb = color.rgba * u_ctm[offsetLayerIdx];
     color.rgb = apply_layer_color_mgmt(color.rgb, colorspace);
 
     return color;
