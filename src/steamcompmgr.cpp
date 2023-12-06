@@ -110,7 +110,7 @@ static const int g_nBaseCursorScale = 36;
 #include "gpuvis_trace_utils.h"
 
 
-static LogScope xwm_log("xwm");
+LogScope xwm_log("xwm");
 LogScope g_WaitableLog("waitable");
 
 bool g_bWasPartialComposite = false;
@@ -822,7 +822,7 @@ static inline void GarbageCollectWaitableCommit( std::shared_ptr<commit_t> &comm
 	}
 }
 
-static std::vector<pollfd> pollfds;
+gamescope::CWaiter g_SteamCompMgrWaiter;
 
 Window x11_win(steamcompmgr_win_t *w) {
 	if (w == nullptr)
@@ -1074,8 +1074,6 @@ static bool g_bPropertyRequestedScreenshot;
 
 static std::atomic<bool> g_bForceRepaint{false};
 
-static int g_nudgePipe[2] = {-1, -1};
-
 static int g_nCursorScaleHeight = -1;
 
 // poor man's semaphore
@@ -1104,21 +1102,6 @@ private:
 	std::condition_variable cv;
 	int count = 0;
 };
-
-static void
-dispatch_nudge( int fd )
-{
-	for (;;)
-	{
-		static char buf[1024];
-		if ( read( fd, buf, sizeof(buf) ) < 0 )
-		{
-			if ( errno != EAGAIN )
-				xwm_log.errorf_errno(" steamcompmgr: dispatch_nudge: read failed" );
-			break;
-		}
-	}
-}
 
 sem statsThreadSem;
 std::mutex statsEventQueueLock;
@@ -1268,12 +1251,11 @@ should_ignore(xwayland_ctx_t *ctx, unsigned long sequence)
 	return ctx->ignore_head && ctx->ignore_head->sequence == sequence;
 }
 
-static bool
-x_events_queued(xwayland_ctx_t* ctx)
+bool xwayland_ctx_t::HasQueuedEvents()
 {
 	// If mode is QueuedAlready, XEventsQueued() returns the number of
 	// events already in the event queue (and never performs a system call).
-	return XEventsQueued(ctx->dpy, QueuedAlready) != 0;
+	return XEventsQueued( dpy, QueuedAlready ) != 0;
 }
 
 static steamcompmgr_win_t *
@@ -6030,10 +6012,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 				.format = 8,
 				.nitems = strlen(propertyString),
 			};
-			pollfds.push_back(pollfd {
-				.fd = XConnectionNumber( server->ctx->dpy ),
-				.events = POLLIN,
-			});
+			g_SteamCompMgrWaiter.AddWaitable( server->ctx.get() );
 			XSetTextProperty( ctx->dpy, ctx->root, &text_property, ctx->atoms.gamescopeCreateXWaylandServerFeedback );
 			wlserver_unlock();
 		}
@@ -6090,9 +6069,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 				global_focus.cursor = nullptr;
 
 			wlserver_lock();
-			std::erase_if(pollfds, [=](const auto& other){
-				return other.fd == XConnectionNumber( server->ctx->dpy );
-			});
+			g_SteamCompMgrWaiter.RemoveWaitable( server->ctx.get() );
 			wlserver_destroy_xwayland_server(server);
 			wlserver_unlock();
 
@@ -6589,8 +6566,7 @@ void handle_presented_xdg()
 
 void nudge_steamcompmgr( void )
 {
-	if ( write( g_nudgePipe[ 1 ], "\n", 1 ) < 0 )
-		xwm_log.errorf_errno( "nudge_steamcompmgr: write failed" );
+	g_SteamCompMgrWaiter.Nudge();
 }
 
 void take_screenshot( int flags )
@@ -6858,9 +6834,10 @@ handle_xfixes_selection_notify( xwayland_ctx_t *ctx, XFixesSelectionNotifyEvent 
 	XFlush(ctx->dpy);
 }
 
-static void
-dispatch_x11( xwayland_ctx_t *ctx )
+void xwayland_ctx_t::Dispatch()
 {
+	xwayland_ctx_t *ctx = this;
+
 	MouseCursor *cursor = ctx->cursor.get();
 	bool bShouldResetCursor = false;
 	bool bSetFocus = false;
@@ -7139,13 +7116,6 @@ load_host_cursor( MouseCursor *cursor )
 	cursor->setCursorImage((char *)cursorData.data(), image->width, image->height, image->xhot, image->yhot);
 	return true;
 }
-
-enum steamcompmgr_event_type {
-	EVENT_VBLANK,
-	EVENT_NUDGE,
-	EVENT_X11,
-	// Any past here are X11
-};
 
 const char* g_customCursorPath = nullptr;
 int g_customCursorHotspotX = 0;
@@ -7702,12 +7672,6 @@ steamcompmgr_main(int argc, char **argv)
 		subCommandArg = optind;
 	}
 
-	if ( pipe2( g_nudgePipe, O_CLOEXEC | O_NONBLOCK ) != 0 )
-	{
-		xwm_log.errorf_errno( "steamcompmgr: pipe2 failed" );
-		exit( 1 );
-	}
-
 	const char *pchEnableVkBasalt = getenv( "ENABLE_VKBASALT" );
 	if ( pchEnableVkBasalt != nullptr && pchEnableVkBasalt[0] == '1' )
 	{
@@ -7761,27 +7725,22 @@ steamcompmgr_main(int argc, char **argv)
 		spawn_client( &argv[ subCommandArg ] );
 	}
 
-	// EVENT_VBLANK
-	pollfds.push_back(pollfd {
-		.fd = vblankFD,
-		.events = POLLIN,
-	});
-	// EVENT_NUDGE
-	pollfds.push_back(pollfd {
-			.fd = g_nudgePipe[ 0 ],
-			.events = POLLIN,
-	});
-	// EVENT_X11
-	{
-		gamescope_xwayland_server_t *server = NULL;
-		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
+	bool vblank = false;
+	g_SteamCompMgrWaiter.AddWaitable(
+		new gamescope::CFunctionWaitable{ vblankFD, [ vblankFD, &vblank ]()
 		{
-			pollfds.push_back(pollfd {
-				.fd = XConnectionNumber( server->ctx->dpy ),
-				.events = POLLIN,
-			});
+			vblank = dispatch_vblank( vblankFD );
+		}}
+	);
 
-			server->ctx->force_windows_fullscreen = bForceWindowsFullscreen;
+	{
+		gamescope_xwayland_server_t *pServer = NULL;
+		for (size_t i = 0; (pServer = wlserver_get_xwayland_server(i)); i++)
+		{
+			xwayland_ctx_t *pXWaylandCtx = pServer->ctx.get();
+			g_SteamCompMgrWaiter.AddWaitable( pXWaylandCtx );
+
+			pServer->ctx->force_windows_fullscreen = bForceWindowsFullscreen;
 		}
 	}
 
@@ -7804,52 +7763,19 @@ steamcompmgr_main(int argc, char **argv)
 
 	for (;;)
 	{
-		bool vblank = false;
+		vblank = false;
 
 		{
 			gamescope_xwayland_server_t *server = NULL;
 			for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 			{
-				assert(server);
-				if (x_events_queued(server->ctx.get()))
-					dispatch_x11(server->ctx.get());
+				assert(server->ctx);
+				if (server->ctx->HasQueuedEvents())
+					server->ctx->Dispatch();
 			}
 		}
 
-		if ( poll( pollfds.data(), pollfds.size(), -1 ) < 0)
-		{
-			if ( errno == EAGAIN )
-				continue;
-
-			xwm_log.errorf_errno( "poll failed" );
-			break;
-		}
-
-		for (size_t i = EVENT_X11; i < pollfds.size(); i++)
-		{
-			if ( pollfds[ i ].revents & POLLHUP )
-			{
-				xwm_log.errorf( "Lost connection to the X11 server %zd", i - EVENT_X11 );
-				break;
-			}
-		}
-
-		assert( !( pollfds[ EVENT_VBLANK ].revents & POLLHUP ) );
-		assert( !( pollfds[ EVENT_NUDGE ].revents & POLLHUP ) );
-
-		for (size_t i = EVENT_X11; i < pollfds.size(); i++)
-		{
-			if ( pollfds[ i ].revents & POLLIN )
-			{
-				gamescope_xwayland_server_t *server = wlserver_get_xwayland_server(i - EVENT_X11);
-				assert(server);
-				dispatch_x11( server->ctx.get() );
-			}
-		}
-		if ( pollfds[ EVENT_VBLANK ].revents & POLLIN )
-			vblank = dispatch_vblank( vblankFD );
-		if ( pollfds[ EVENT_NUDGE ].revents & POLLIN )
-			dispatch_nudge( g_nudgePipe[ 0 ] );
+		g_SteamCompMgrWaiter.PollEvents();
 
 		if ( g_bRun == false )
 		{

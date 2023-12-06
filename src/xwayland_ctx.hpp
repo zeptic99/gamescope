@@ -1,6 +1,7 @@
 #pragma once
 
 #include "drm.hpp"
+#include "waitable.h"
 
 #include <mutex>
 #include <memory>
@@ -20,6 +21,8 @@ class gamescope_xwayland_server_t;
 struct ignore;
 struct steamcompmgr_win_t;
 class MouseCursor;
+
+extern LogScope xwm_log;
 
 struct focus_t
 {
@@ -49,7 +52,7 @@ struct CommitDoneList_t
 	std::vector< CommitDoneEntry_t > listCommitsDone;
 };
 
-struct xwayland_ctx_t
+struct xwayland_ctx_t final : public gamescope::IWaitable
 {
 	gamescope_xwayland_server_t *xwayland_server;
 	Display			*dpy;
@@ -234,4 +237,24 @@ struct xwayland_ctx_t
 		Atom primarySelection;
 		Atom targets;
 	} atoms;
+
+	bool HasQueuedEvents();
+
+	void Dispatch();
+
+	int GetFD() final
+	{
+		return XConnectionNumber( dpy );
+	}
+
+	void OnPollIn() final
+	{
+		Dispatch();
+	}
+
+	void OnPollHangUp() final
+	{
+		xwm_log.errorf( "XWayland server hung up! This is fatal. Aborting..." );
+		abort();
+	}
 };

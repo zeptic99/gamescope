@@ -2,7 +2,10 @@
 
 #include <thread>
 #include <stdint.h>
+#include <fcntl.h>
 #include <sys/epoll.h>
+
+#include <functional>
 
 #include "log.hpp"
 
@@ -19,7 +22,11 @@ namespace gamescope
 
         virtual void OnPollIn() {}
         virtual void OnPollOut() {}
-        virtual void OnPollHangUp() {}
+        virtual void OnPollHangUp()
+        {
+            g_WaitableLog.errorf( "IWaitable hung up. Aborting." );
+            abort();
+        }
 
         void HandleEvents( uint32_t nEvents )
         {
@@ -29,6 +36,23 @@ namespace gamescope
                 this->OnPollOut();
             if ( nEvents & EPOLLHUP )
                 this->OnPollHangUp();
+        }
+
+        static void Drain( int nFD )
+        {
+            if ( nFD < 0 )
+                return;
+
+            char buf[1024];
+            for (;;)
+            {
+                if ( read( nFD, buf, sizeof( buf ) ) < 0 )
+                {
+                    if ( errno != EAGAIN )
+                        g_WaitableLog.errorf_errno( "Failed to drain CNudgeWaitable" );
+                    break;
+                }
+            }
         }
     };
 
@@ -57,19 +81,7 @@ namespace gamescope
 
         void Drain()
         {
-            if ( m_nFDs[0] < 0 )
-                return;
-
-            char buf[1024];
-            for (;;)
-            {
-                if ( read( m_nFDs[0], buf, sizeof( buf ) ) < 0 )
-                {
-                    if ( errno != EAGAIN )
-                        g_WaitableLog.errorf_errno( "Failed to drain CNudgeWaitable" );
-                    break;
-                }
-            }
+            IWaitable::Drain( m_nFDs[0] );
         }
 
         void OnPollIn() final
@@ -85,6 +97,35 @@ namespace gamescope
         int GetFD() final { return m_nFDs[0]; }
     private:
         int m_nFDs[2] = { -1, -1 };
+    };
+
+
+    class CFunctionWaitable final : public IWaitable
+    {
+    public:
+        CFunctionWaitable( int nFD, std::function<void()> fnPollFunc )
+            : m_nFD{ nFD }
+            , m_fnPollFunc{ fnPollFunc }
+        {
+        }
+
+        void OnPollIn() final
+        {
+            m_fnPollFunc();
+        }
+
+        void Drain()
+        {
+            IWaitable::Drain( m_nFD );
+        }
+
+        int GetFD() final
+        {
+            return m_nFD;
+        }
+    private:
+        int m_nFD;
+        std::function<void()> m_fnPollFunc;
     };
 
     template <size_t MaxEvents = 1024>
@@ -142,27 +183,35 @@ namespace gamescope
             epoll_ctl( m_nEpollFD, EPOLL_CTL_DEL, pWaitable->GetFD(), nullptr );
         }
 
-        void PollEvents()
+        void PollEvents( int nTimeOut = -1 )
         {
             epoll_event events[MaxEvents];
 
-            int nEventCount = epoll_wait( m_nEpollFD, events, MaxEvents, -1 );
-
-            if ( !m_bRunning )
-                return;
-
-            if ( nEventCount < 0 )
+            for ( ;; )
             {
-                g_WaitableLog.errorf_errno( "Failed to epoll_wait in CAsyncWaiter" );
+                int nEventCount = epoll_wait( m_nEpollFD, events, MaxEvents, nTimeOut );
+
+                if ( !m_bRunning )
+                    return;
+
+                if ( nEventCount < 0 )
+                {
+                    if ( errno == EAGAIN )
+                        continue;
+
+                    g_WaitableLog.errorf_errno( "Failed to epoll_wait in CAsyncWaiter" );
+                    return;
+                }
+
+                for ( int i = 0; i < nEventCount; i++ )
+                {
+                    epoll_event &event = events[i];
+
+                    IWaitable *pWaitable = reinterpret_cast<IWaitable *>( event.data.ptr );
+                    pWaitable->HandleEvents( event.events );
+                }
+
                 return;
-            }
-
-            for ( int i = 0; i < nEventCount; i++ )
-            {
-                epoll_event &event = events[i];
-
-                IWaitable *pWaitable = reinterpret_cast<IWaitable *>( event.data.ptr );
-                pWaitable->HandleEvents( event.events );
             }
         }
 
