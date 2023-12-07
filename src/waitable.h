@@ -94,7 +94,7 @@ namespace gamescope
         CWaiter()
             : m_nEpollFD{ epoll_create1( EPOLL_CLOEXEC ) }
         {
-            AddWaitable( &m_NudgeWaitable, EPOLLIN | EPOLLHUP );
+            AddWaitable( &m_NudgeWaitable );
         }
 
         ~CWaiter()
@@ -117,7 +117,7 @@ namespace gamescope
             }
         }
 
-        bool AddWaitable( IWaitable *pWaitable, uint32_t nEvents = EPOLLIN | EPOLLOUT | EPOLLHUP )
+        bool AddWaitable( IWaitable *pWaitable, uint32_t nEvents = EPOLLIN | EPOLLHUP )
         {
             epoll_event event =
             {

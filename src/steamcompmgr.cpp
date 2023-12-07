@@ -6758,7 +6758,7 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		gpuvis_trace_printf( "pushing wait for commit %lu win %lx", newCommit->commitID, w->type == steamcompmgr_win_type_t::XWAYLAND ? w->xwayland().id : 0 );
 		{
 			newCommit->SetFence( fence, mango_nudge, doneCommits );
-			g_ImageWaiter.AddWaitable( newCommit.get(), EPOLLIN | EPOLLHUP );
+			g_ImageWaiter.AddWaitable( newCommit.get() );
 		}
 
 		w->commit_queue.push_back( std::move(newCommit) );
