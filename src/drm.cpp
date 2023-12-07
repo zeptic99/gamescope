@@ -283,7 +283,7 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 
 	// This is the last vblank time
 	uint64_t vblanktime = sec * 1'000'000'000lu + usec * 1'000lu;
-	vblank_mark_possible_vblank(vblanktime);
+	g_VBlankTimer.MarkVBlank( vblanktime, true );
 
 	// TODO: get the fbids_queued instance from data if we ever have more than one in flight
 
@@ -1351,7 +1351,7 @@ void load_pnps(void)
 	fclose(f);
 }
 
-static bool env_to_bool(const char *env)
+bool env_to_bool(const char *env)
 {
 	if (!env || !*env)
 		return false;
@@ -1758,7 +1758,7 @@ int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 	// is queued and would end up being the new page flip, rather than here.
 	// However, the page flip handler is called when the page flip occurs,
 	// not when it is successfully queued.
-	g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime.pipe_write_time;
+	g_VBlankTimer.UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
 
 	if ( isPageFlip ) {
 		// Wait for flip handler to unlock

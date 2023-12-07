@@ -139,8 +139,6 @@ extern float g_flHDRItmTargetNits;
 
 uint64_t g_lastWinSeq = 0;
 
-extern std::atomic<uint64_t> g_lastVblank;
-
 static std::shared_ptr<wlserver_ctm> s_scRGB709To2020Matrix;
 
 std::string clipboard;
@@ -154,6 +152,16 @@ bool g_bSteamIsActiveWindow = false;
 uint64_t timespec_to_nanos(struct timespec& spec)
 {
 	return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
+}
+
+timespec nanos_to_timespec( uint64_t ulNanos )
+{
+	timespec ts =
+	{
+		.tv_sec = time_t( ulNanos / 1'000'000'000ul ),
+		.tv_nsec = long( ulNanos % 1'000'000'000ul ),
+	};
+	return ts;
 }
 
 static void
@@ -882,7 +890,7 @@ bool			synchronize;
 
 std::mutex g_SteamCompMgrXWaylandServerMutex;
 
-VBlankTimeInfo_t g_SteamCompMgrVBlankTime = {};
+gamescope::VBlankTime g_SteamCompMgrVBlankTime = {};
 
 uint64_t g_uCurrentBasePlaneCommitID = 0;
 bool g_bCurrentBasePlaneIsFifo = false;
@@ -1194,9 +1202,7 @@ uint64_t get_time_in_nanos()
 
 void sleep_for_nanos(uint64_t nanos)
 {
-	timespec ts;
-	ts.tv_sec = time_t(nanos / 1'000'000'000ul);
-	ts.tv_nsec = long(nanos % 1'000'000'000ul);
+	timespec ts = nanos_to_timespec( nanos );
 	nanosleep(&ts, nullptr);
 }
 
@@ -2736,7 +2742,7 @@ paint_all(bool async)
 	}
 
 	// Update to let the vblank manager know we are currently compositing.
-	g_bCurrentlyCompositing = bDoComposite;
+	g_VBlankTimer.UpdateWasCompositing( bDoComposite );
 
 	if ( bDoComposite == true )
 	{
@@ -2859,7 +2865,7 @@ paint_all(bool async)
 			}
 
 			// Update the time it took us to commit
-			g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime.pipe_write_time;
+			g_VBlankTimer.UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
 		}
 		else
 		{
@@ -3139,7 +3145,7 @@ paint_all(bool async)
 						int ret = system(cmd);
 
 						/* Above call may fail, ffmpeg returns 0 on success */
-						if (ret) {
+						if (ret) {	
 							xwm_log.infof("Ffmpeg call return status %i", ret);
 							xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
 						} else {
@@ -5587,6 +5593,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			focusDirty = true;
 		}
 	}
+#if 0
 	if ( ev->atom == ctx->atoms.gamescopeTuneableVBlankRedZone )
 	{
 		g_uVblankDrawBufferRedZoneNS = (uint64_t)get_prop( ctx, ctx->root, ctx->atoms.gamescopeTuneableVBlankRedZone, g_uDefaultVBlankRedZone );
@@ -5595,6 +5602,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_uVBlankRateOfDecayPercentage = (uint64_t)get_prop( ctx, ctx->root, ctx->atoms.gamescopeTuneableRateOfDecay, g_uDefaultVBlankRateOfDecayPercentage );
 	}
+#endif
 	if ( ev->atom == ctx->atoms.gamescopeScalingFilter )
 	{
 		int nScalingMode = get_prop( ctx, ctx->root, ctx->atoms.gamescopeScalingFilter, 0 );
@@ -6397,7 +6405,7 @@ void handle_done_commits_xwayland( xwayland_ctx_t *ctx, bool vblank, uint64_t vb
 {
 	std::lock_guard<std::mutex> lock( ctx->doneCommits.listCommitsDoneLock );
 
-	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	// commits that were not ready to be presented based on their display timing.
 	static std::vector< CommitDoneEntry_t > commits_before_their_time;
@@ -6454,7 +6462,7 @@ void handle_done_commits_xdg()
 {
 	std::lock_guard<std::mutex> lock( g_steamcompmgr_xdg_done_commits.listCommitsDoneLock );
 
-	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	// commits that were not ready to be presented based on their display timing.
 	std::vector< CommitDoneEntry_t > commits_before_their_time;
@@ -6488,7 +6496,7 @@ void handle_done_commits_xdg()
 
 void handle_presented_for_window( steamcompmgr_win_t* w )
 {
-	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	uint64_t refresh_cycle = g_nSteamCompMgrTargetFPS && steamcompmgr_window_should_limit_fps( w )
 		? g_SteamCompMgrLimitedAppRefreshCycle
@@ -7010,41 +7018,6 @@ void xwayland_ctx_t::Dispatch()
 	{
 		XSetInputFocus(ctx->dpy, ctx->currentKeyboardFocusWindow, RevertToNone, CurrentTime);
 	}
-}
-
-static bool
-dispatch_vblank( int fd )
-{
-	bool vblank = false;
-	for (;;)
-	{
-		VBlankTimeInfo_t vblanktime = {};
-		ssize_t ret = read( fd, &vblanktime, sizeof( vblanktime ) );
-		if ( ret < 0 )
-		{
-			if ( errno == EAGAIN )
-				break;
-
-			xwm_log.errorf_errno( "steamcompmgr: dispatch_vblank: read failed" );
-			break;
-		}
-
-		g_SteamCompMgrVBlankTime = vblanktime;
-
-		uint64_t diff = get_time_in_nanos() - vblanktime.pipe_write_time;
-
-		// give it 1 ms of slack from pipe to steamcompmgr... maybe too long
-		if ( diff > 1'000'000ul )
-		{
-			gpuvis_trace_printf( "ignored stale vblank" );
-		}
-		else
-		{
-			gpuvis_trace_printf( "got vblank" );
-			vblank = true;
-		}
-	}
-	return vblank;
 }
 
 struct rgba_t
@@ -7690,9 +7663,6 @@ steamcompmgr_main(int argc, char **argv)
 		vrsession_steam_mode( steamMode );
 #endif
 
-	int vblankFD = vblank_init();
-	assert( vblankFD >= 0 );
-
 	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
 
 	// Initialize any xwayland ctxs we have
@@ -7726,12 +7696,8 @@ steamcompmgr_main(int argc, char **argv)
 	}
 
 	bool vblank = false;
-	g_SteamCompMgrWaiter.AddWaitable(
-		new gamescope::CFunctionWaitable{ vblankFD, [ vblankFD, &vblank ]()
-		{
-			vblank = dispatch_vblank( vblankFD );
-		}}
-	);
+	g_SteamCompMgrWaiter.AddWaitable( &g_VBlankTimer );
+	g_VBlankTimer.RearmTimer( true );
 
 	{
 		gamescope_xwayland_server_t *pServer = NULL;
@@ -7776,6 +7742,12 @@ steamcompmgr_main(int argc, char **argv)
 		}
 
 		g_SteamCompMgrWaiter.PollEvents();
+
+		if ( std::optional<gamescope::VBlankTime> pendingVBlank = g_VBlankTimer.ProcessVBlank() )
+		{
+			g_SteamCompMgrVBlankTime = *pendingVBlank;
+			vblank = true;
+		}
 
 		if ( g_bRun == false )
 		{
@@ -8068,13 +8040,13 @@ steamcompmgr_main(int argc, char **argv)
 		// If we are compositing, always force sync flips because we currently wait
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
-		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nIgnoredOverlayRepaints;
+		const bool bNeedsSyncFlip = bForceSyncFlip || g_VBlankTimer.WasCompositing() || nIgnoredOverlayRepaints;
 		const bool bDoAsyncFlip   = ( ((g_nAsyncFlipsEnabled >= 1) && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bHasOverlay) || bVRR ) && !bSteamOverlayOpen && !bNeedsSyncFlip;
 
 		bool bShouldPaint = false;
 		if ( bDoAsyncFlip )
 		{
-			if ( hasRepaint && !g_bCurrentlyCompositing )
+			if ( hasRepaint && !g_VBlankTimer.WasCompositing() )
 				bShouldPaint = true;
 		}
 		else
@@ -8108,6 +8080,16 @@ steamcompmgr_main(int argc, char **argv)
 			{
 				nudge_steamcompmgr();
 			}
+		}
+
+		if ( vblank )
+		{
+			// Pre-emptively re-arm the vblank timer if it
+			// isn't already re-armed.
+			//
+			// Juuust in case pageflip handler doesn't happen
+			// so we don't stop vblanking forever.
+			g_VBlankTimer.RearmTimer( true );
 		}
 
 		update_vrr_atoms(root_ctx, false, &flush_root);
