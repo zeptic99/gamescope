@@ -2678,7 +2678,10 @@ void vulkan_present_to_window( void )
 	};
 
 	if ( g_device.vk.QueuePresentKHR( g_device.queue(), &presentInfo ) == VK_SUCCESS )
+	{
 		g_currentPresentWaitId = presentId;
+		g_currentPresentWaitId.notify_all();
+	}
 	else
 		vulkan_remake_swapchain();
 
@@ -2925,6 +2928,7 @@ bool vulkan_remake_swapchain( void )
 {
 	std::unique_lock lock(present_wait_lock);
 	g_currentPresentWaitId = 0;
+	g_currentPresentWaitId.notify_all();
 
 	VulkanOutput_t *pOutput = &g_output;
 	g_device.waitIdle();
