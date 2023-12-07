@@ -297,14 +297,21 @@ namespace gamescope
 			if ( !m_bArmed.exchange( false ) )
 				return;
 
-			uint64_t ulNow = get_time_in_nanos();
 
 			m_PendingVBlank = VBlankTime
 			{
 				.schedule = m_TimerFDSchedule,
-				.ulWakeupTime = ulNow,
+				// One might think this should just be 'now', however consider the fact
+				// that the effective draw-time should also include the scheduling quantums
+				// and any work before we reached this poll.
+				// The old path used to be be on its own thread, simply awaking from sleep
+				// then writing to a pipe and going back to sleep, the wakeup time was before we
+				// did the write, so we included the quantum of pipe nudge -> wakeup.
+				// Doing this aims to include that, like we were before, but with timerfd.
+				.ulWakeupTime = m_TimerFDSchedule.ulScheduledWakeupPoint,
 			};
 #ifdef VBLANK_DEBUG
+			uint64_t ulNow = get_time_in_nanos();
 			fprintf( stderr, "wakeup: %lu\n", ulNow );
 #endif
 
