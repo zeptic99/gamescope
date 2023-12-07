@@ -8021,6 +8021,11 @@ steamcompmgr_main(int argc, char **argv)
 			g_upscaleFilter = g_wantedUpscaleFilter;
 		}
 
+		// If we're in the middle of a fade, then keep us
+		// as needing a repaint.
+		if ( is_fading_out() )
+			hasRepaint = true;
+
 		static int nIgnoredOverlayRepaints = 0;
 
 		const bool bVRR = drm_get_vrr_in_use( &g_DRM );
@@ -8073,13 +8078,6 @@ steamcompmgr_main(int argc, char **argv)
 			hasRepaint = false;
 			hasRepaintNonBasePlane = false;
 			nIgnoredOverlayRepaints = 0;
-
-			// If we're in the middle of a fade, pump an event into the loop to
-			// make sure we keep pushing frames even if the app isn't updating.
-			if ( is_fading_out() )
-			{
-				nudge_steamcompmgr();
-			}
 		}
 
 		if ( vblank )
