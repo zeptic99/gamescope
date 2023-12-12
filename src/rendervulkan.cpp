@@ -3571,7 +3571,7 @@ void bind_all_layers(CVulkanCmdBuffer* cmdBuffer, const struct FrameInfo_t *fram
 	}
 }
 
-bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture )
+std::optional<uint64_t> vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture )
 {
 	auto cmdBuffer = g_device.commandBuffer();
 
@@ -3588,28 +3588,14 @@ bool vulkan_screenshot( const struct FrameInfo_t *frameInfo, std::shared_ptr<CVu
 	cmdBuffer->dispatch(div_roundup(currentOutputWidth, pixelsPerGroup), div_roundup(currentOutputHeight, pixelsPerGroup));
 
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
-	g_device.wait(sequence);
-
-	return true;
+	return sequence;
 }
 
 extern std::string g_reshade_effect;
 extern uint32_t g_reshade_technique_idx;
 
-std::unique_ptr<std::thread> defer_wait_thread;
-uint64_t defer_sequence = 0;
-
-bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture, bool partial, bool defer, std::shared_ptr<CVulkanTexture> pOutputOverride, bool increment )
+std::optional<uint64_t> vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pPipewireTexture, bool partial, std::shared_ptr<CVulkanTexture> pOutputOverride, bool increment )
 {
-	if ( defer_wait_thread )
-	{
-		defer_wait_thread->join();
-		defer_wait_thread = nullptr;
-
-		g_device.resetCmdBuffers(defer_sequence);
-		defer_sequence = 0;
-	}
-
 	EOTF outputTF = g_ColorMgmt.current.outputEncodingEOTF;
 	if (!frameInfo->applyOutputColorMgmt)
 		outputTF = EOTF_Count; //Disable blending stuff.
@@ -3830,25 +3816,17 @@ bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTex
 
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
 
-	if ( defer )
-	{
-		defer_wait_thread = std::make_unique<std::thread>([sequence]
-		{
-			g_device.wait(sequence, false);
-		});
-		defer_sequence = sequence;
-	}
-	else
-	{
-		g_device.wait(sequence);
-	}
-
 	if ( !BIsSDLSession() && pOutputOverride == nullptr && increment )
 	{
 		g_output.nOutImage = ( g_output.nOutImage + 1 ) % 3;
 	}
 
-	return true;
+	return sequence;
+}
+
+void vulkan_wait( uint64_t ulSeqNo, bool bReset )
+{
+	return g_device.wait( ulSeqNo, bReset );
 }
 
 std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial, bool defer )

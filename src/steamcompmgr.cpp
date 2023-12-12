@@ -2640,11 +2640,6 @@ paint_all(bool async)
 	bool propertyRequestedScreenshot = g_bPropertyRequestedScreenshot;
 	g_bPropertyRequestedScreenshot = false;
 
-	struct pipewire_buffer *pw_buffer = nullptr;
-#if HAVE_PIPEWIRE
-	pw_buffer = dequeue_pipewire_buffer();
-#endif
-
 	update_app_target_refresh_cycle();
 
 	int nDynamicRefresh = g_nDynamicRefreshRate[drm_get_screen_type( &g_DRM )];
@@ -2665,7 +2660,7 @@ paint_all(bool async)
 
 	bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
 
-	bool bDoMuraCompensation = is_mura_correction_enabled() && frameInfo.layerCount && !pw_buffer;
+	bool bDoMuraCompensation = is_mura_correction_enabled() && frameInfo.layerCount;
 	if ( bDoMuraCompensation )
 	{
 		auto& MuraCorrectionImage = s_MuraCorrectionImage[drm_get_screen_type( &g_DRM )];
@@ -2693,7 +2688,6 @@ paint_all(bool async)
 
 	bool bNeedsFullComposite = BIsNested();
 	bNeedsFullComposite |= alwaysComposite;
-	bNeedsFullComposite |= pw_buffer != nullptr;
 	bNeedsFullComposite |= bWasFirstFrame;
 	bNeedsFullComposite |= frameInfo.useFSRLayer0;
 	bNeedsFullComposite |= frameInfo.useNISLayer0;
@@ -2748,14 +2742,6 @@ paint_all(bool async)
 	{
 		if ( kDisablePartialComposition )
 			bNeedsFullComposite = true;
-
-		std::shared_ptr<CVulkanTexture> pPipewireTexture = nullptr;
-#if HAVE_PIPEWIRE
-		if ( pw_buffer != nullptr )
-		{
-			pPipewireTexture = pw_buffer->texture;
-		}
-#endif
 
 		struct FrameInfo_t compositeFrameInfo = frameInfo;
 
@@ -2819,37 +2805,19 @@ paint_all(bool async)
 		if ( bDefer && !!( g_uCompositeDebug & CompositeDebugFlag::Markers ) )
 			g_uCompositeDebug |= CompositeDebugFlag::Markers_Partial;
 
-		bool bResult;
-		// If using a pipewire stream, apply screenshot color management.
-		if ( pPipewireTexture )
-		{
-			for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
-			{
-				compositeFrameInfo.lut3D[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut3d;
-				compositeFrameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
-			}
-			vulkan_composite( &compositeFrameInfo, pPipewireTexture, !bNeedsFullComposite, bDefer, nullptr, false );
-			for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
-			{
-				if (g_ColorMgmtLuts[nInputEOTF].HasLuts())
-				{
-					compositeFrameInfo.shaperLut[nInputEOTF] = g_ColorMgmtLuts[nInputEOTF].vk_lut1d;
-					compositeFrameInfo.lut3D[nInputEOTF] = g_ColorMgmtLuts[nInputEOTF].vk_lut3d;
-				}
-			}
-		}
-
-		bResult = vulkan_composite( &compositeFrameInfo, nullptr, !bNeedsFullComposite, bDefer );
+		std::optional oCompositeResult = vulkan_composite( &compositeFrameInfo, nullptr, !bNeedsFullComposite );
 
 		g_bWasCompositing = true;
 
 		g_uCompositeDebug &= ~CompositeDebugFlag::Markers_Partial;
 
-		if ( bResult != true )
+		if ( !oCompositeResult )
 		{
 			xwm_log.errorf("vulkan_composite failed");
 			return;
 		}
+
+		vulkan_wait( *oCompositeResult, true );
 
 		if ( BIsNested() == true )
 		{
@@ -2994,15 +2962,6 @@ paint_all(bool async)
 
 			drm_commit( &g_DRM, &compositeFrameInfo );
 		}
-
-#if HAVE_PIPEWIRE
-		if ( pw_buffer != nullptr )
-		{
-			push_pipewire_buffer(pw_buffer);
-			// TODO: make sure the pw_buffer isn't lost in one of the failure
-			// code-paths above
-		}
-#endif
 	}
 	else
 	{
@@ -3010,6 +2969,51 @@ paint_all(bool async)
 
 		drm_commit( &g_DRM, &frameInfo );
 	}
+
+#if HAVE_PIPEWIRE
+	struct pipewire_buffer *pw_buffer = dequeue_pipewire_buffer();
+	if ( pw_buffer )
+	{
+		if ( pw_buffer->texture )
+		{
+			struct FrameInfo_t pipewireFrameInfo = frameInfo;
+
+			// If using a pipewire stream, apply screenshot color management.
+			for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
+			{
+				pipewireFrameInfo.lut3D[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut3d;
+				pipewireFrameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
+			}
+
+			if ( is_mura_correction_enabled() )
+			{
+				// Remove the last layer which is for mura...
+				for (int i = 0; i < pipewireFrameInfo.layerCount; i++)
+				{
+					if (pipewireFrameInfo.layers[i].zpos >= (int)g_zposMuraCorrection)
+					{
+						pipewireFrameInfo.layerCount = i;
+						break;
+					}
+				}
+
+				// Re-enable output color management (blending) if it was disabled by mura.
+				pipewireFrameInfo.applyOutputColorMgmt = true;
+			}
+
+			std::optional<uint64_t> oPipewireSequence = vulkan_composite( &pipewireFrameInfo, pw_buffer->texture, false, nullptr, false );
+
+			if ( oPipewireSequence )
+			{
+				vulkan_wait( *oPipewireSequence, true );
+
+				push_pipewire_buffer( pw_buffer );
+				// TODO: make sure the pw_buffer isn't lost in one of the failure
+				// code-paths above
+			}
+		}
+	}
+#endif
 
 	if ( takeScreenshot )
 	{
@@ -3067,19 +3071,21 @@ paint_all(bool async)
 
 			frameInfo.applyOutputColorMgmt = true;
 
-			bool bResult;
+			std::optional<uint64_t> oScreenshotSeq;
 			if ( drmCaptureFormat == DRM_FORMAT_NV12 )
-				bResult = vulkan_composite( &frameInfo, pScreenshotTexture, false, false, nullptr );
+				oScreenshotSeq = vulkan_composite( &frameInfo, pScreenshotTexture, false, nullptr );
 			else if ( takeScreenshot == TAKE_SCREENSHOT_FULL_COMPOSITION || takeScreenshot == TAKE_SCREENSHOT_SCREEN_BUFFER )
-				bResult = vulkan_composite( &frameInfo, nullptr, false, false, pScreenshotTexture );
+				oScreenshotSeq = vulkan_composite( &frameInfo, nullptr, false, pScreenshotTexture );
 			else
-				bResult = vulkan_screenshot( &frameInfo, pScreenshotTexture );
+				oScreenshotSeq = vulkan_screenshot( &frameInfo, pScreenshotTexture );
 
-			if ( bResult != true )
+			if ( !oScreenshotSeq )
 			{
 				xwm_log.errorf("vulkan_screenshot failed");
 				return;
 			}
+
+			vulkan_wait( *oScreenshotSeq, false );
 
 			std::thread screenshotThread = std::thread([=] {
 				pthread_setname_np( pthread_self(), "gamescope-scrsh" );
