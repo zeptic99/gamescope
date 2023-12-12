@@ -571,6 +571,8 @@ static void stream_handle_remove_buffer(void *data, struct pw_buffer *pw_buffer)
 
 	if (!buffer->copying) {
 		destroy_buffer(buffer);
+	} else {
+		nudge_pipewire();
 	}
 }
 
