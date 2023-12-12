@@ -495,7 +495,7 @@ struct VulkanOutput_t
 	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
 	VkFormat outputFormatOverlay = VK_FORMAT_UNDEFINED;
 
-	std::array<std::shared_ptr<CVulkanTexture>, 9> pScreenshotImages;
+	std::array<std::shared_ptr<CVulkanTexture>, 2> pScreenshotImages;
 
 	// NIS and FSR
 	std::shared_ptr<CVulkanTexture> tmpOutput;
