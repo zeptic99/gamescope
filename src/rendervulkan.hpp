@@ -180,6 +180,7 @@ public:
 	inline bool swapchainImage() { return m_bSwapchain; }
 	inline bool externalImage() { return m_bExternal; }
 	inline VkDeviceSize totalSize() const { return m_size; }
+	inline uint32_t drmFormat() const { return m_drmFormat; }
 
 	inline uint32_t lumaOffset() const { return m_lumaOffset; }
 	inline uint32_t lumaRowPitch() const { return m_lumaPitch; }
@@ -205,6 +206,8 @@ private:
 	bool m_bInitialized = false;
 	bool m_bExternal = false;
 	bool m_bSwapchain = false;
+
+	uint32_t m_drmFormat = DRM_FORMAT_INVALID;
 
 	VkImage m_vkImage = VK_NULL_HANDLE;
 	VkDeviceMemory m_vkImageMemory = VK_NULL_HANDLE;

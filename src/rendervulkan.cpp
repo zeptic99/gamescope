@@ -1770,6 +1770,7 @@ static VkImageViewType VulkanImageTypeToViewType(VkImageType type)
 
 bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uint32_t drmFormat, createFlags flags, wlr_dmabuf_attributes *pDMA /* = nullptr */,  uint32_t contentWidth /* = 0 */, uint32_t contentHeight /* =  0 */, CVulkanTexture *pExistingImageToReuseMemory )
 {
+	m_drmFormat = drmFormat;
 	VkResult res = VK_ERROR_INITIALIZATION_FAILED;
 
 	VkImageTiling tiling = (flags.bMappable || flags.bLinear) ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
@@ -2330,6 +2331,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 
 bool CVulkanTexture::BInitFromSwapchain( VkImage image, uint32_t width, uint32_t height, VkFormat format )
 {
+	m_drmFormat = VulkanFormatToDRM( format );
 	m_vkImage = image;
 	m_vkImageMemory = VK_NULL_HANDLE;
 	m_width = width;
@@ -3314,7 +3316,10 @@ std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width
 			assert( bSuccess );
 		}
 
-		if (pScreenshotImage.use_count() > 1 || width != pScreenshotImage->width() || height != pScreenshotImage->height())
+		if (pScreenshotImage.use_count() > 1 ||
+			width != pScreenshotImage->width() ||
+			height != pScreenshotImage->height() ||
+			drmFormat != pScreenshotImage->drmFormat())
 			continue;
 
 		return pScreenshotImage;
