@@ -1,3 +1,4 @@
+
 #include <assert.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -473,8 +474,23 @@ static void stream_handle_add_buffer(void *user_data, struct pw_buffer *pw_buffe
 
 	uint32_t drmFormat = spa_format_to_drm(state->video_info.format);
 
-	buffer->texture = vulkan_acquire_screenshot_texture(s_nCaptureWidth, s_nCaptureHeight, is_dmabuf, drmFormat, colorspace);
-	assert(buffer->texture != nullptr);
+	buffer->texture = std::make_shared<CVulkanTexture>();
+	CVulkanTexture::createFlags screenshotImageFlags;
+	screenshotImageFlags.bMappable = true;
+	screenshotImageFlags.bTransferDst = true;
+	screenshotImageFlags.bStorage = true;
+	if (is_dmabuf || drmFormat == DRM_FORMAT_NV12)
+	{
+		screenshotImageFlags.bExportable = true;
+		screenshotImageFlags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
+	}
+	bool bImageInitSuccess = buffer->texture->BInit( s_nCaptureWidth, s_nCaptureHeight, 1u, drmFormat, screenshotImageFlags );
+	if ( !bImageInitSuccess )
+	{
+		pwr_log.errorf("Failed to initialize pipewire texture");
+		goto error;
+	}
+	buffer->texture->setStreamColorspace(colorspace);
 
 	if (is_dmabuf) {
 		const struct wlr_dmabuf_attributes dmabuf = buffer->texture->dmabuf();
