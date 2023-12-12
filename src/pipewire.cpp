@@ -730,7 +730,10 @@ struct pipewire_buffer *dequeue_pipewire_buffer(void)
 void push_pipewire_buffer(struct pipewire_buffer *buffer)
 {
 	struct pipewire_buffer *old = in_buffer.exchange(buffer);
-	assert(old == nullptr);
+	if ( old != nullptr )
+	{
+		pwr_log.errorf_errno("push_pipewire_buffer: Already had a buffer?!");
+	}
 	nudge_pipewire();
 }
 
