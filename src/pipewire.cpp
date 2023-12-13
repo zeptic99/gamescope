@@ -296,7 +296,7 @@ static void stream_handle_state_changed(void *data, enum pw_stream_state old_str
 {
 	struct pipewire_state *state = (struct pipewire_state *) data;
 
-	pwr_log.debugf("stream state changed: %s", pw_stream_state_as_string(stream_state));
+	pwr_log.infof("stream state changed: %s", pw_stream_state_as_string(stream_state));
 
 	switch (stream_state) {
 	case PW_STREAM_STATE_PAUSED:
