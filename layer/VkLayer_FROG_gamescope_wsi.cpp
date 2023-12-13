@@ -92,6 +92,10 @@ namespace GamescopeWSILayer {
   static GamescopeLayerClient::Flags defaultLayerClientFlags(uint32_t appid) {
     GamescopeLayerClient::Flags flags = 0;
 
+    const char *bypassEnv = getenv("GAMESCOPE_WSI_FORCE_BYPASS");
+    if (bypassEnv && *bypassEnv && atoi(bypassEnv) != 0)
+      flags |= GamescopeLayerClient::Flag::ForceBypass;
+
     // My Little Pony: A Maretime Bay Adventure picks a HDR colorspace if available,
     // but does not render as HDR at all.
     if (appid == 1600780)
@@ -168,6 +172,13 @@ namespace GamescopeWSILayer {
         fprintf(stderr, "[Gamescope WSI] canBypassXWayland: failed to get window info for window 0x%x.\n", window);
         return false;
       }
+
+      // Some games do things like have a 1280x800 top-level window and
+      // a 1280x720 child window for "fullscreen".
+      // To avoid Glamor work on the XWayland side of things, have a
+      // flag to force bypassing this.
+      if (!!(flags & GamescopeLayerClient::Flag::ForceBypass))
+        return true;
 
       // If we have any child windows obscuring us bigger than 1x1,
       // then we cannot flip.
