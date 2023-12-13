@@ -542,6 +542,9 @@ void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_x11_
 	if (iter == content_overrides.end())
 		return;
 
+	if ( x11_surface->override_surface == surf )
+		x11_surface->override_surface = nullptr;
+
 	struct wlserver_content_override *co = iter->second;
 	if (co->surface == surf)
 		destroy_content_override(iter->second);
