@@ -187,7 +187,7 @@ namespace GamescopeWSILayer {
             iabs(int32_t(toplevelRect->extent.width)  - int32_t(rect->extent.width)) > 1 ||
             iabs(int32_t(toplevelRect->extent.height) - int32_t(rect->extent.height)) > 1) {
   #if GAMESCOPE_WSI_BYPASS_DEBUG
-          fprintf(stderr, "[Gamescope WSI] Not within 1px margin of error. Offset: %d %d Extent: %u %u vs %u %u",
+          fprintf(stderr, "[Gamescope WSI] Not within 1px margin of error. Offset: %d %d Extent: %u %u vs %u %u\n",
             rect->offset.x, rect->offset.y,
             toplevelRect->extent.width, toplevelRect->extent.height,
             rect->extent.width, rect->extent.height);
