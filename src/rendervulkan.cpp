@@ -2449,6 +2449,49 @@ int CVulkanTexture::memoryFence()
 	return fence;
 }
 
+static bool is_image_format_modifier_supported(VkFormat format, uint32_t drmFormat, uint64_t modifier)
+{
+  VkPhysicalDeviceImageFormatInfo2 imageFormatInfo = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+    .format = format,
+    .type = VK_IMAGE_TYPE_2D,
+    .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+    .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  std::array<VkFormat, 2> formats = {
+    DRMFormatToVulkan(drmFormat, false),
+    DRMFormatToVulkan(drmFormat, true),
+  };
+
+  VkImageFormatListCreateInfo formatList = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,
+    .viewFormatCount = (uint32_t)formats.size(),
+    .pViewFormats = formats.data(),
+  };
+
+  if ( formats[0] != formats[1] )
+    {
+      formatList.pNext = std::exchange(imageFormatInfo.pNext,
+				       &formatList);
+      imageFormatInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    }
+
+  VkPhysicalDeviceImageDrmFormatModifierInfoEXT modifierInfo = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT,
+    .pNext = nullptr,
+    .drmFormatModifier = modifier,
+  };
+
+  modifierInfo.pNext = std::exchange(imageFormatInfo.pNext, &modifierInfo);
+
+  VkImageFormatProperties2 imageFormatProps = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+  };
+
+  VkResult res = g_device.vk.GetPhysicalDeviceImageFormatProperties2( g_device.physDev(), &imageFormatInfo, &imageFormatProps );
+  return res == VK_SUCCESS;
+}
 
 bool vulkan_init_format(VkFormat format, uint32_t drmFormat)
 {
@@ -2460,6 +2503,25 @@ bool vulkan_init_format(VkFormat format, uint32_t drmFormat)
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage = VK_IMAGE_USAGE_SAMPLED_BIT,
 	};
+
+	std::array<VkFormat, 2> formats = {
+		DRMFormatToVulkan(drmFormat, false),
+		DRMFormatToVulkan(drmFormat, true),
+	};
+
+	VkImageFormatListCreateInfo formatList = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,
+		.viewFormatCount = (uint32_t)formats.size(),
+		.pViewFormats = formats.data(),
+	};
+
+	if ( formats[0] != formats[1] )
+	{
+		formatList.pNext = std::exchange(imageFormatInfo.pNext,
+						 &formatList);
+		imageFormatInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+	}
+
 
 	VkImageFormatProperties2 imageFormatProps = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
@@ -2517,6 +2579,9 @@ bool vulkan_init_format(VkFormat format, uint32_t drmFormat)
 		map[ modifierProps[j].drmFormatModifier ] = modifierProps[j];
 
 		uint64_t modifier = modifierProps[j].drmFormatModifier;
+
+		if ( !is_image_format_modifier_supported( format, drmFormat, modifier ) )
+		  continue;
 
 		if ( ( modifierProps[j].drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT ) == 0 )
 		{
