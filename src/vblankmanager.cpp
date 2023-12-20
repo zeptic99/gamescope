@@ -82,7 +82,7 @@ namespace gamescope
 			if ( m_nNudgePipe[ i ] >= 0 )
 			{
 				close ( m_nNudgePipe[ i ] );
-				m_nNudgePipe[ i ] = 0;
+				m_nNudgePipe[ i ] = -1;
 			}
 		}
 	}

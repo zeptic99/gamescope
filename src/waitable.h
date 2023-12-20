@@ -78,7 +78,10 @@ namespace gamescope
             for ( int i = 0; i < 2; i++ )
             {
                 if ( m_nFDs[i] >= 0 )
+                {
                     close( m_nFDs[i] );
+                    m_nFDs[i] = -1;
+                }
             }
         }
 
