@@ -1013,7 +1013,7 @@ namespace GamescopeWSILayer {
           nits_to_u16(metadata.maxContentLightLevel),
           nits_to_u16(metadata.maxFrameAverageLightLevel));
 
-          fprintf(stderr, "[Gamescope WSI] VkHdrMetadataEXT: display primaries:\n", metadata.minLuminance, metadata.maxLuminance);
+          fprintf(stderr, "[Gamescope WSI] VkHdrMetadataEXT: display primaries:\n");
           fprintf(stderr, "                                      r: %.4g %.4g\n", metadata.displayPrimaryRed.x, metadata.displayPrimaryRed.y);
           fprintf(stderr, "                                      g: %.4g %.4g\n", metadata.displayPrimaryGreen.x, metadata.displayPrimaryGreen.y);
           fprintf(stderr, "                                      b: %.4g %.4g\n", metadata.displayPrimaryBlue.x, metadata.displayPrimaryBlue.y);
