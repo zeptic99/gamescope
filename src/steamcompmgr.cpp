@@ -7703,7 +7703,7 @@ steamcompmgr_main(int argc, char **argv)
 
 	bool vblank = false;
 	g_SteamCompMgrWaiter.AddWaitable( &g_VBlankTimer );
-	g_VBlankTimer.RearmTimer( true );
+	g_VBlankTimer.ArmNextVBlank( true );
 
 	{
 		gamescope_xwayland_server_t *pServer = NULL;
@@ -8092,7 +8092,7 @@ steamcompmgr_main(int argc, char **argv)
 			//
 			// Juuust in case pageflip handler doesn't happen
 			// so we don't stop vblanking forever.
-			g_VBlankTimer.RearmTimer( true );
+			g_VBlankTimer.ArmNextVBlank( true );
 		}
 
 		update_vrr_atoms(root_ctx, false, &flush_root);
