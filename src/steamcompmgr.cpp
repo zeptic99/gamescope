@@ -48,6 +48,7 @@
 #include <fstream>
 #include <string>
 #include <queue>
+#include <filesystem>
 #include <variant>
 #include <unordered_set>
 
@@ -116,8 +117,6 @@ LogScope xwm_log("xwm");
 LogScope g_WaitableLog("waitable");
 
 bool g_bWasPartialComposite = false;
-
-bool g_bUseAVIFScreenshots = false;
 
 ///
 // Color Mgmt
@@ -1092,8 +1091,15 @@ struct wlr_buffer_map_entry {
 static std::mutex wlr_buffer_map_lock;
 static std::unordered_map<struct wlr_buffer*, wlr_buffer_map_entry> wlr_buffer_map;
 
-static std::atomic< int > g_nTakeScreenshot{ 0 };
-static bool g_bPropertyRequestedScreenshot;
+namespace gamescope
+{
+	CScreenshotManager &CScreenshotManager::Get()
+	{
+		static CScreenshotManager s_Instance;
+		return s_Instance;
+	}
+}
+
 
 static std::atomic<bool> g_bForceRepaint{false};
 
@@ -2651,11 +2657,6 @@ paint_all(bool async)
 
 	bool bDoComposite = true;
 
-	// Handoff from whatever thread to this one since we check ours twice
-	int takeScreenshot = g_nTakeScreenshot.exchange( 0 );
-	bool propertyRequestedScreenshot = g_bPropertyRequestedScreenshot;
-	g_bPropertyRequestedScreenshot = false;
-
 	update_app_target_refresh_cycle();
 
 	int nDynamicRefresh = g_nDynamicRefreshRate[drm_get_screen_type( &g_DRM )];
@@ -2713,8 +2714,6 @@ paint_all(bool async)
 	bNeedsFullComposite |= g_bColorSliderInUse;
 	bNeedsFullComposite |= fadingOut;
 	bNeedsFullComposite |= !g_reshade_effect.empty();
-
-	constexpr bool bHackForceNV12DumpScreenshot = false;
 
 	for (uint32_t i = 0; i < EOTF_Count; i++)
 	{
@@ -3031,24 +3030,33 @@ paint_all(bool async)
 	}
 #endif
 
-	if ( takeScreenshot )
+	std::optional<gamescope::GamescopeScreenshotInfo> oScreenshotInfo =
+		gamescope::CScreenshotManager::Get().ProcessPendingScreenshot();
+
+	if ( oScreenshotInfo )
 	{
-		uint32_t drmCaptureFormat = DRM_FORMAT_XRGB8888;
+		std::filesystem::path path = std::filesystem::path{ oScreenshotInfo->szScreenshotPath };
 
-		if ( bHackForceNV12DumpScreenshot )
-			drmCaptureFormat = DRM_FORMAT_NV12;
-		else if ( g_bUseAVIFScreenshots )
+		uint32_t drmCaptureFormat = DRM_FORMAT_INVALID;
+
+		if ( path.extension() == ".avif" )
 			drmCaptureFormat = DRM_FORMAT_XRGB2101010;
+		else if ( path.extension() == ".png" )
+			drmCaptureFormat = DRM_FORMAT_XRGB8888;
+		else if ( path.extension() == ".nv12.bin" )
+			drmCaptureFormat = DRM_FORMAT_NV12;
 
-		std::shared_ptr<CVulkanTexture> pScreenshotTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat);
+		std::shared_ptr<CVulkanTexture> pScreenshotTexture;
+		if ( drmCaptureFormat != DRM_FORMAT_INVALID )
+			pScreenshotTexture = vulkan_acquire_screenshot_texture( g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat );
 
 		if ( pScreenshotTexture )
 		{
 			bool bHDRScreenshot = frameInfo.layerCount > 0 &&
 								  ColorspaceIsHDR( frameInfo.layers[0].colorspace ) &&
-								  takeScreenshot != TAKE_SCREENSHOT_SCREEN_BUFFER;
+								  oScreenshotInfo->eScreenshotType != GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER;
 
-			if ( drmCaptureFormat == DRM_FORMAT_NV12 || takeScreenshot != TAKE_SCREENSHOT_SCREEN_BUFFER )
+			if ( drmCaptureFormat == DRM_FORMAT_NV12 || oScreenshotInfo->eScreenshotType != GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER )
 			{
 				// Basically no color mgmt applied for screenshots. (aside from being able to handle HDR content with LUTs)
 				for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
@@ -3058,7 +3066,7 @@ paint_all(bool async)
 					frameInfo.shaperLut[nInputEOTF] = luts[nInputEOTF].vk_lut1d;
 				}
 
-				if ( takeScreenshot == TAKE_SCREENSHOT_BASEPLANE_ONLY )
+				if ( oScreenshotInfo->eScreenshotType == GAMESCOPE_CONTROL_SCREENSHOT_TYPE_BASE_PLANE_ONLY )
 				{
 					// Remove everything but base planes from the screenshot.
 					for (int i = 0; i < frameInfo.layerCount; i++)
@@ -3103,7 +3111,8 @@ paint_all(bool async)
 			std::optional<uint64_t> oScreenshotSeq;
 			if ( drmCaptureFormat == DRM_FORMAT_NV12 )
 				oScreenshotSeq = vulkan_composite( &frameInfo, pScreenshotTexture, false, nullptr );
-			else if ( takeScreenshot == TAKE_SCREENSHOT_FULL_COMPOSITION || takeScreenshot == TAKE_SCREENSHOT_SCREEN_BUFFER )
+			else if ( oScreenshotInfo->eScreenshotType == GAMESCOPE_CONTROL_SCREENSHOT_TYPE_FULL_COMPOSITION ||
+					  oScreenshotInfo->eScreenshotType == GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER )
 				oScreenshotSeq = vulkan_composite( &frameInfo, nullptr, false, pScreenshotTexture );
 			else
 				oScreenshotSeq = vulkan_screenshot( &frameInfo, pScreenshotTexture );
@@ -3149,6 +3158,8 @@ paint_all(bool async)
 
 				const uint8_t *mappedData = pScreenshotTexture->mappedData();
 
+				bool bScreenshotSuccess = false;
+
 				if ( pScreenshotTexture->format() == VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
 				{
 					// Make our own copy of the image to remove the alpha channel.
@@ -3179,7 +3190,7 @@ paint_all(bool async)
 					// This does not compress as well, but is always lossless!
 					pAvifImage->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
 
-					if ( takeScreenshot == TAKE_SCREENSHOT_SCREEN_BUFFER )
+					if ( oScreenshotInfo->eScreenshotType == GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER )
 					{
 						// When dumping the screen output buffer for debugging,
 						// mark the primaries as UNKNOWN as stuff has likely been transformed
@@ -3224,26 +3235,18 @@ paint_all(bool async)
 						return;
 					}
 
-					char pFileName[1024] = "/tmp/gamescope.avif";
-
-					if ( !propertyRequestedScreenshot )
-					{
-						time_t currentTime = time(0);
-						struct tm *localTime = localtime( &currentTime );
-						strftime( pFileName, sizeof( pFileName ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.avif", localTime );
-					}
-
 					FILE *pScreenshotFile = nullptr;
-					if ( ( pScreenshotFile = fopen( pFileName, "wb" ) ) == nullptr )
+					if ( ( pScreenshotFile = fopen( oScreenshotInfo->szScreenshotPath.c_str(), "wb" ) ) == nullptr )
 					{
-						xwm_log.errorf( "Failed to fopen file: %s", pFileName );
+						xwm_log.errorf( "Failed to fopen file: %s", oScreenshotInfo->szScreenshotPath.c_str() );
 						return;
 					}
 
 					fwrite( avifOutput.data, 1, avifOutput.size, pScreenshotFile );
 					fclose( pScreenshotFile );
 
-					xwm_log.infof( "Screenshot saved to %s", pFileName );
+					xwm_log.infof( "Screenshot saved to %s", oScreenshotInfo->szScreenshotPath.c_str() );
+					bScreenshotSuccess = true;
 				}
 				else if (pScreenshotTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
 				{
@@ -3262,73 +3265,65 @@ paint_all(bool async)
 							imageData[y * pitch + x * comp + 3] = 255;
 						}
 					}
-
-					char pTimeBuffer[1024] = "/tmp/gamescope.png";
-
-					if ( !propertyRequestedScreenshot )
+					if ( stbi_write_png( oScreenshotInfo->szScreenshotPath.c_str(), currentOutputWidth, currentOutputHeight, 4, imageData.data(), pitch ) )
 					{
-						time_t currentTime = time(0);
-						struct tm *localTime = localtime( &currentTime );
-						strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.png", localTime );
-					}
-
-					if ( stbi_write_png(pTimeBuffer, currentOutputWidth, currentOutputHeight, 4, imageData.data(), pitch) )
-					{
-						xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
+						xwm_log.infof( "Screenshot saved to %s", oScreenshotInfo->szScreenshotPath.c_str() );
+						bScreenshotSuccess = true;
 					}
 					else
 					{
-						xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
+						xwm_log.errorf( "Failed to save screenshot to %s", oScreenshotInfo->szScreenshotPath.c_str() );
 					}
 				}
 				else if (pScreenshotTexture->format() == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM)
 				{
-					char pTimeBuffer[1024] = "/tmp/gamescope.raw";
-
-					if ( !propertyRequestedScreenshot )
-					{
-						time_t currentTime = time(0);
-						struct tm *localTime = localtime( &currentTime );
-						strftime( pTimeBuffer, sizeof( pTimeBuffer ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.raw", localTime );
-					}
-
-					FILE *file = fopen(pTimeBuffer, "wb");
+					FILE *file = fopen( oScreenshotInfo->szScreenshotPath.c_str(), "wb" );
 					if (file)
 					{
 						fwrite(mappedData, 1, pScreenshotTexture->totalSize(), file );
 						fclose(file);
 
 						char cmd[4096];
-						sprintf(cmd, "ffmpeg -f rawvideo -pixel_format nv12 -video_size %dx%d -i %s %s_encoded.png", pScreenshotTexture->width(), pScreenshotTexture->height(), pTimeBuffer, pTimeBuffer);
+						sprintf(cmd, "ffmpeg -f rawvideo -pixel_format nv12 -video_size %dx%d -i %s %s_encoded.png", pScreenshotTexture->width(), pScreenshotTexture->height(), oScreenshotInfo->szScreenshotPath.c_str(), oScreenshotInfo->szScreenshotPath.c_str() );
 
 						int ret = system(cmd);
 
 						/* Above call may fail, ffmpeg returns 0 on success */
-						if (ret) {	
+						if (ret) {
 							xwm_log.infof("Ffmpeg call return status %i", ret);
-							xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
+							xwm_log.errorf( "Failed to save screenshot to %s", oScreenshotInfo->szScreenshotPath.c_str() );
 						} else {
-							xwm_log.infof("Screenshot saved to %s", pTimeBuffer);
+							xwm_log.infof("Screenshot saved to %s", oScreenshotInfo->szScreenshotPath.c_str());
+							bScreenshotSuccess = true;
 						}
 					}
 					else
 					{
-						xwm_log.errorf( "Failed to save screenshot to %s", pTimeBuffer );
+						xwm_log.errorf( "Failed to save screenshot to %s", oScreenshotInfo->szScreenshotPath.c_str() );
 					}
 				}
 
-				XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeScreenShotAtom );
+				if ( oScreenshotInfo->bX11PropertyRequested )
+					XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeScreenShotAtom );
+
+				if ( bScreenshotSuccess )
+				{
+						wlserver_lock();
+						for ( const auto &control : wlserver.gamescope_controls )
+						{
+							gamescope_control_send_screenshot_taken( control, oScreenshotInfo->szScreenshotPath.c_str() );
+						}
+						wlserver_unlock();
+				}
 			});
 
 			screenshotThread.detach();
-
-			takeScreenshot = 0;
 		}
 		else
 		{
 			xwm_log.errorf( "Oh no, we ran out of screenshot images. Not actually writing a screenshot." );
-			XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeScreenShotAtom );
-			takeScreenshot = 0;
+			if ( oScreenshotInfo->bX11PropertyRequested )
+				XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeScreenShotAtom );
 		}
 	}
 
@@ -5602,15 +5597,13 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		if ( ev->state == PropertyNewValue )
 		{
-			g_nTakeScreenshot = (int)get_prop( ctx, ctx->root, ctx->atoms.gamescopeScreenShotAtom, None );
-			g_bPropertyRequestedScreenshot = true;
-		}
-	}
-	if ( ev->atom == ctx->atoms.gamescopeDebugScreenShotAtom )
-	{
-		if ( ev->state == PropertyNewValue )
-		{
-			g_nTakeScreenshot = (int)get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugScreenShotAtom, None );
+			gamescope::CScreenshotManager::Get().TakeScreenshot( gamescope::GamescopeScreenshotInfo
+			{
+				.szScreenshotPath = "/tmp/gamescope.png",
+				.eScreenshotType = (gamescope_control_screenshot_type) get_prop( ctx, ctx->root, ctx->atoms.gamescopeScreenShotAtom, None ),
+				.uScreenshotFlags = 0,
+				.bX11PropertyRequested = true,
+			} );
 		}
 	}
 	if (ev->atom == ctx->atoms.gameAtom)
@@ -6736,12 +6729,6 @@ void nudge_steamcompmgr( void )
 	g_SteamCompMgrWaiter.Nudge();
 }
 
-void take_screenshot( int flags )
-{
-	g_nTakeScreenshot = flags;
-	nudge_steamcompmgr();
-}
-
 void force_repaint( void )
 {
 	g_bForceRepaint = true;
@@ -7387,7 +7374,6 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.WMChangeStateAtom = XInternAtom(ctx->dpy, "WM_CHANGE_STATE", false);
 	ctx->atoms.gamescopeInputCounterAtom = XInternAtom(ctx->dpy, "GAMESCOPE_INPUT_COUNTER", false);
 	ctx->atoms.gamescopeScreenShotAtom = XInternAtom( ctx->dpy, "GAMESCOPECTRL_REQUEST_SCREENSHOT", false );
-	ctx->atoms.gamescopeDebugScreenShotAtom = XInternAtom( ctx->dpy, "GAMESCOPECTRL_DEBUG_REQUEST_SCREENSHOT", false );
 
 	ctx->atoms.gamescopeFocusDisplay = XInternAtom(ctx->dpy, "GAMESCOPE_FOCUS_DISPLAY", false);
 	ctx->atoms.gamescopeMouseFocusDisplay = XInternAtom(ctx->dpy, "GAMESCOPE_MOUSE_FOCUS_DISPLAY", false);

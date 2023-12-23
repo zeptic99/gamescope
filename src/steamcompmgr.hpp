@@ -49,14 +49,6 @@ extern EStreamColorspace g_ForcedNV12ColorSpace;
 // use the proper libliftoff composite plane system.
 static constexpr bool kDisablePartialComposition = true;
 
-enum TakeScreenshotMode_t
-{
-	TAKE_SCREENSHOT_BASEPLANE_ONLY = 1, // Just the game/base plane
-	TAKE_SCREENSHOT_ALL_REAL_LAYERS = 2, // Just the game + steam overlay/perf overlays
-	TAKE_SCREENSHOT_FULL_COMPOSITION = 3, // Everything, but no display color management + no mura
-	TAKE_SCREENSHOT_SCREEN_BUFFER = 4,	// Yes, mura comp, color management! Exactly what we put on the screen.
-};
-
 class MouseCursor
 {
 public:
@@ -146,7 +138,6 @@ extern uint32_t inputCounter;
 extern uint64_t g_lastWinSeq;
 
 void nudge_steamcompmgr( void );
-void take_screenshot( int flags = TAKE_SCREENSHOT_BASEPLANE_ONLY );
 void force_repaint( void );
 
 extern void mangoapp_update( uint64_t visible_frametime, uint64_t app_frametime_ns, uint64_t latency_ns );

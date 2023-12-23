@@ -133,7 +133,6 @@ struct xwayland_ctx_t final : public gamescope::IWaitable
 		Atom gamescopeCtrlWindowAtom;
 		Atom gamescopeInputCounterAtom;
 		Atom gamescopeScreenShotAtom;
-		Atom gamescopeDebugScreenShotAtom;
 
 		Atom gamescopeFocusDisplay;
 		Atom gamescopeMouseFocusDisplay;

@@ -286,7 +286,7 @@ void inputSDLThreadRun( void )
 							g_upscaleFilterSharpness = std::max(0, g_upscaleFilterSharpness - 1);
 							break;
 						case KEY_S:
-							take_screenshot();
+							gamescope::CScreenshotManager::Get().TakeScreenshot( true );
 							break;
 						case KEY_G:
 							g_bGrabbed = !g_bGrabbed;
