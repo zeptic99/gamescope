@@ -486,6 +486,9 @@ drm_hdr_parse_edid(drm_t *drm, struct connector *connector, const struct di_edid
 			infoframe->max_cll = nits_to_u16(default_max_fall);
 			infoframe->max_fall = nits_to_u16(default_max_fall);
 		}
+
+		metadata->maxCLL = (uint16_t)hdr_static_metadata->desired_content_max_luminance;
+		metadata->maxFALL = (uint16_t)hdr_static_metadata->desired_content_max_frame_avg_luminance;
 	}
 
 	metadata->supportsST2084 =
@@ -3124,10 +3127,16 @@ bool drm_get_vrr_capable(struct drm_t *drm)
 	return false;
 }
 
-bool drm_supports_st2084(struct drm_t *drm)
+bool drm_supports_st2084(struct drm_t *drm, uint16_t *maxCLL, uint16_t *maxFALL)
 {
-	if ( drm->connector )
-		return drm->connector->metadata.supportsST2084;
+	if ( drm->connector && drm->connector->metadata.supportsST2084 )
+	{
+		if ( maxCLL )
+			*maxCLL = drm->connector->metadata.maxCLL;
+		if ( maxFALL )
+			*maxFALL = drm->connector->metadata.maxFALL;
+		return true;
+	}
 
 	return false;
 }

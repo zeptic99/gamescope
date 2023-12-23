@@ -270,6 +270,7 @@ struct FrameInfo_t
 	std::shared_ptr<CVulkanTexture> lut3D[EOTF_Count];
 
 	bool applyOutputColorMgmt; // drm only
+	EOTF outputEncodingEOTF;
 
 	int layerCount;
 	struct Layer_t

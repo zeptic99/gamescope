@@ -20,6 +20,7 @@ epoll_dep = dependency('epoll-shim', required: false)
 glm_dep = dependency('glm')
 sdl_dep = dependency('SDL2')
 stb_dep = dependency('stb')
+avif_dep = dependency('libavif')
 
 wlroots_dep = dependency(
   'wlroots',
@@ -135,7 +136,7 @@ endif
       dep_xxf86vm, dep_xres, glm_dep, drm_dep, wayland_server,
       xkbcommon, thread_dep, sdl_dep, wlroots_dep,
       vulkan_dep, liftoff_dep, dep_xtst, dep_xmu, cap_dep, epoll_dep, pipewire_dep, librt_dep,
-      stb_dep, displayinfo_dep, openvr_dep, dep_xcursor,
+      stb_dep, displayinfo_dep, openvr_dep, dep_xcursor, avif_dep,
     ],
     install: true,
   )

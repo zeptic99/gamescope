@@ -90,6 +90,8 @@
 #include "win32_styles.h"
 #include "mwm_hints.h"
 
+#include "avif/avif.h"
+
 static const int g_nBaseCursorScale = 36;
 
 #if HAVE_PIPEWIRE
@@ -115,6 +117,8 @@ LogScope g_WaitableLog("waitable");
 
 bool g_bWasPartialComposite = false;
 
+bool g_bUseAVIFScreenshots = false;
+
 ///
 // Color Mgmt
 //
@@ -128,6 +132,7 @@ static lut3d_t g_ColorMgmtLooks[ EOTF_Count ];
 gamescope_color_mgmt_luts g_ColorMgmtLuts[ EOTF_Count ];
 
 gamescope_color_mgmt_luts g_ScreenshotColorMgmtLuts[ EOTF_Count ];
+gamescope_color_mgmt_luts g_ScreenshotColorMgmtLutsHDR[ EOTF_Count ];
 
 static lut1d_t g_tmpLut1d;
 static lut3d_t g_tmpLut3d;
@@ -177,6 +182,15 @@ static const gamescope_color_mgmt_t k_ScreenshotColorMgmt =
 	.displayEOTF = EOTF_Gamma22,
 	.outputEncodingColorimetry = displaycolorimetry_709,
 	.outputEncodingEOTF = EOTF_Gamma22,
+};
+
+static const gamescope_color_mgmt_t k_ScreenshotColorMgmtHDR =
+{
+	.enabled = true,
+	.displayColorimetry = displaycolorimetry_2020,
+	.displayEOTF = EOTF_PQ,
+	.outputEncodingColorimetry = displaycolorimetry_2020,
+	.outputEncodingEOTF = EOTF_PQ,
 };
 
 //#define COLOR_MGMT_MICROBENCH
@@ -399,6 +413,7 @@ static void
 update_screenshot_color_mgmt()
 {
 	create_color_mgmt_luts(k_ScreenshotColorMgmt, g_ScreenshotColorMgmtLuts);
+	create_color_mgmt_luts(k_ScreenshotColorMgmtHDR, g_ScreenshotColorMgmtLutsHDR);
 }
 
 bool set_color_sdr_gamut_wideness( float flVal )
@@ -2431,6 +2446,7 @@ paint_all(bool async)
 
 	struct FrameInfo_t frameInfo = {};
 	frameInfo.applyOutputColorMgmt = g_ColorMgmt.pending.enabled;
+	frameInfo.outputEncodingEOTF = g_ColorMgmt.pending.outputEncodingEOTF;
 
 	// If the window we'd paint as the base layer is the streaming client,
 	// find the video underlay and put it up first in the scenegraph
@@ -3017,21 +3033,29 @@ paint_all(bool async)
 
 	if ( takeScreenshot )
 	{
-		uint32_t drmCaptureFormat = bHackForceNV12DumpScreenshot
-			? DRM_FORMAT_NV12
-			: DRM_FORMAT_XRGB8888;
+		uint32_t drmCaptureFormat = DRM_FORMAT_XRGB8888;
+
+		if ( bHackForceNV12DumpScreenshot )
+			drmCaptureFormat = DRM_FORMAT_NV12;
+		else if ( g_bUseAVIFScreenshots )
+			drmCaptureFormat = DRM_FORMAT_XRGB2101010;
 
 		std::shared_ptr<CVulkanTexture> pScreenshotTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat);
 
 		if ( pScreenshotTexture )
 		{
+			bool bHDRScreenshot = frameInfo.layerCount > 0 &&
+								  ColorspaceIsHDR( frameInfo.layers[0].colorspace ) &&
+								  takeScreenshot != TAKE_SCREENSHOT_SCREEN_BUFFER;
+
 			if ( drmCaptureFormat == DRM_FORMAT_NV12 || takeScreenshot != TAKE_SCREENSHOT_SCREEN_BUFFER )
 			{
 				// Basically no color mgmt applied for screenshots. (aside from being able to handle HDR content with LUTs)
 				for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
 				{
-					frameInfo.lut3D[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut3d;
-					frameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
+					auto& luts = bHDRScreenshot ? g_ScreenshotColorMgmtLutsHDR : g_ScreenshotColorMgmtLuts;
+					frameInfo.lut3D[nInputEOTF] = luts[nInputEOTF].vk_lut3d;
+					frameInfo.shaperLut[nInputEOTF] = luts[nInputEOTF].vk_lut1d;
 				}
 
 				if ( takeScreenshot == TAKE_SCREENSHOT_BASEPLANE_ONLY )
@@ -3071,6 +3095,11 @@ paint_all(bool async)
 
 			frameInfo.applyOutputColorMgmt = true;
 
+			frameInfo.outputEncodingEOTF = bHDRScreenshot ? EOTF_PQ : EOTF_Gamma22;
+
+			uint32_t uCompositeDebugBackup = g_uCompositeDebug;
+			g_uCompositeDebug = 0;
+
 			std::optional<uint64_t> oScreenshotSeq;
 			if ( drmCaptureFormat == DRM_FORMAT_NV12 )
 				oScreenshotSeq = vulkan_composite( &frameInfo, pScreenshotTexture, false, nullptr );
@@ -3078,6 +3107,8 @@ paint_all(bool async)
 				oScreenshotSeq = vulkan_composite( &frameInfo, nullptr, false, pScreenshotTexture );
 			else
 				oScreenshotSeq = vulkan_screenshot( &frameInfo, pScreenshotTexture );
+
+			g_uCompositeDebug = uCompositeDebugBackup;
 
 			if ( !oScreenshotSeq )
 			{
@@ -3087,12 +3118,134 @@ paint_all(bool async)
 
 			vulkan_wait( *oScreenshotSeq, false );
 
+			uint16_t maxCLLNits = 0;
+			uint16_t maxFALLNits = 0;
+
+			if ( bHDRScreenshot )
+			{
+				// Unfortunately games give us very bogus values here.
+				// Thus we don't really use them.
+				// Instead rely on the display it was initially tonemapped for.
+				//if ( g_ColorMgmt.current.appHDRMetadata )
+				//{
+				//	maxCLLNits = g_ColorMgmt.current.appHDRMetadata->metadata.hdmi_metadata_type1.max_cll;
+				//	maxFALLNits = g_ColorMgmt.current.appHDRMetadata->metadata.hdmi_metadata_type1.max_fall;
+				//}
+
+				if ( !maxCLLNits && !maxFALLNits )
+				{
+					drm_supports_st2084( &g_DRM, &maxCLLNits, &maxFALLNits );
+				}
+
+				if ( !maxCLLNits && !maxFALLNits )
+				{
+					maxCLLNits = g_ColorMgmt.pending.flInternalDisplayBrightness;
+					maxFALLNits = g_ColorMgmt.pending.flInternalDisplayBrightness * 0.8f;
+				}
+			}
+
 			std::thread screenshotThread = std::thread([=] {
 				pthread_setname_np( pthread_self(), "gamescope-scrsh" );
 
 				const uint8_t *mappedData = pScreenshotTexture->mappedData();
 
-				if (pScreenshotTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
+				if ( pScreenshotTexture->format() == VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
+				{
+					// Make our own copy of the image to remove the alpha channel.
+					constexpr uint32_t kCompCnt = 3;
+					auto imageData = std::vector<uint16_t>( g_nOutputWidth * g_nOutputHeight * kCompCnt );
+
+					for (uint32_t y = 0; y < g_nOutputHeight; y++)
+					{
+						for (uint32_t x = 0; x < g_nOutputWidth; x++)
+						{
+							uint32_t *pInPixel = (uint32_t *)&mappedData[(y * pScreenshotTexture->rowPitch()) + x * (32 / 8)];
+							uint32_t uInPixel = *pInPixel;
+
+							imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 20)) >> 20;
+							imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+							imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 0))  >> 0;
+						}
+					}
+
+					avifResult avifResult = AVIF_RESULT_OK;
+
+					avifImage *pAvifImage = avifImageCreate( g_nOutputWidth, g_nOutputHeight, 10, AVIF_PIXEL_FORMAT_YUV444 );
+					defer( avifImageDestroy( pAvifImage ) );
+					pAvifImage->yuvRange = AVIF_RANGE_FULL;
+					pAvifImage->colorPrimaries = bHDRScreenshot ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
+					pAvifImage->transferCharacteristics = bHDRScreenshot ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_SRGB;
+					// We are not actually using YUV, but storing raw GBR (yes not RGB) data
+					// This does not compress as well, but is always lossless!
+					pAvifImage->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
+
+					if ( takeScreenshot == TAKE_SCREENSHOT_SCREEN_BUFFER )
+					{
+						// When dumping the screen output buffer for debugging,
+						// mark the primaries as UNKNOWN as stuff has likely been transformed
+						// to native if HDR on Deck OLED etc.
+						// We want everything to be seen unadulterated by a viewer/image editor.
+						pAvifImage->colorPrimaries = AVIF_COLOR_PRIMARIES_UNKNOWN;
+					}
+
+					if ( bHDRScreenshot )
+					{
+						pAvifImage->clli.maxCLL = maxCLLNits;
+						pAvifImage->clli.maxPALL = maxFALLNits;
+					}
+
+					avifRGBImage rgbAvifImage{};
+					avifRGBImageSetDefaults( &rgbAvifImage, pAvifImage );
+					rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
+					rgbAvifImage.ignoreAlpha = AVIF_TRUE;
+
+					rgbAvifImage.pixels = (uint8_t *)imageData.data();
+					rgbAvifImage.rowBytes = g_nOutputWidth * kCompCnt * sizeof( uint16_t );
+
+					avifImageRGBToYUV( pAvifImage, &rgbAvifImage ); // Not really! See Matrix Coefficients IDENTITY above.
+
+					avifEncoder *pEncoder = avifEncoderCreate();
+					defer( avifEncoderDestroy( pEncoder ) );
+					pEncoder->quality = AVIF_QUALITY_LOSSLESS;
+					pEncoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
+					pEncoder->speed = AVIF_SPEED_FASTEST;
+
+					if ( ( avifResult = avifEncoderAddImage( pEncoder, pAvifImage, 1, AVIF_ADD_IMAGE_FLAG_SINGLE ) ) != AVIF_RESULT_OK )
+					{
+						xwm_log.errorf( "Failed to add image to avif encoder: %u", avifResult );
+						return;
+					}
+
+					avifRWData avifOutput = AVIF_DATA_EMPTY;
+					defer( avifRWDataFree( &avifOutput ) );
+					if ( ( avifResult = avifEncoderFinish( pEncoder, &avifOutput ) ) != AVIF_RESULT_OK )
+					{
+						xwm_log.errorf( "Failed to finish encoder: %u", avifResult );
+						return;
+					}
+
+					char pFileName[1024] = "/tmp/gamescope.avif";
+
+					if ( !propertyRequestedScreenshot )
+					{
+						time_t currentTime = time(0);
+						struct tm *localTime = localtime( &currentTime );
+						strftime( pFileName, sizeof( pFileName ), "/tmp/gamescope_%Y-%m-%d_%H-%M-%S.avif", localTime );
+					}
+
+					FILE *pScreenshotFile = nullptr;
+					if ( ( pScreenshotFile = fopen( pFileName, "wb" ) ) == nullptr )
+					{
+						xwm_log.errorf( "Failed to fopen file: %s", pFileName );
+						return;
+					}
+
+					fwrite( avifOutput.data, 1, avifOutput.size, pScreenshotFile );
+					fclose( pScreenshotFile );
+
+					xwm_log.infof( "Screenshot saved to %s", pFileName );
+				}
+				else if (pScreenshotTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
 				{
 					// Make our own copy of the image to remove the alpha channel.
 					auto imageData = std::vector<uint8_t>(currentOutputWidth * currentOutputHeight * 4);

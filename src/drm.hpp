@@ -174,6 +174,8 @@ struct connector_metadata_t {
 
    displaycolorimetry_t colorimetry = displaycolorimetry_709;
    EOTF eotf = EOTF_Gamma22;
+   uint16_t maxCLL = 0;
+   uint16_t maxFALL = 0;
 };
 
 struct connector {
@@ -363,7 +365,7 @@ drm_screen_type drm_get_screen_type(struct drm_t *drm);
 char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);
 bool drm_get_vrr_capable(struct drm_t *drm);
-bool drm_supports_st2084(struct drm_t *drm);
+bool drm_supports_st2084(struct drm_t *drm, uint16_t *maxCLL = nullptr, uint16_t *maxFALL = nullptr);
 void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
 bool drm_supports_color_mgmt(struct drm_t *drm);
