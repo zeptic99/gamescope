@@ -3052,7 +3052,8 @@ paint_all(bool async)
 
 		if ( pScreenshotTexture )
 		{
-			bool bHDRScreenshot = frameInfo.layerCount > 0 &&
+			bool bHDRScreenshot = path.extension() == ".avif" &&
+								  frameInfo.layerCount > 0 &&
 								  ColorspaceIsHDR( frameInfo.layers[0].colorspace ) &&
 								  oScreenshotInfo->eScreenshotType != GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER;
 
