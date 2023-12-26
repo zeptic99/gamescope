@@ -49,6 +49,20 @@ extern EStreamColorspace g_ForcedNV12ColorSpace;
 // use the proper libliftoff composite plane system.
 static constexpr bool kDisablePartialComposition = true;
 
+struct CursorBarrierInfo
+{
+	int x1 = 0;
+	int y1 = 0;
+	int x2 = 0;
+	int y2 = 0;
+};
+
+struct CursorBarrier
+{
+	PointerBarrier obj = None;
+	CursorBarrierInfo info = {};
+};
+
 class MouseCursor
 {
 public:
@@ -58,9 +72,7 @@ public:
 	int y() const;
 
 	void move(int x, int y);
-	void updatePosition();
 	void constrainPosition();
-	void resetPosition();
 
 	void paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, FrameInfo_t *frameInfo);
 	void setDirty();
@@ -72,6 +84,7 @@ public:
 	void hide() { m_lastMovedTime = 0; checkSuspension(); }
 
 	bool isHidden() { return m_hideForMovement || m_imageEmpty; }
+	bool imageEmpty() const { return m_imageEmpty; }
 
 	void forcePosition(int x, int y)
 	{
@@ -89,13 +102,12 @@ public:
 
 	void GetDesiredSize( int& nWidth, int &nHeight );
 
+	void UpdateXInputMotionMasks();
+	void UpdatePosition();
+
+	void checkSuspension();
 private:
 	void warp(int x, int y);
-	void checkSuspension();
-
-	void queryGlobalPosition(int &x, int &y);
-	void queryPositions(int &rootX, int &rootY, int &winX, int &winY);
-	void queryButtonMask(unsigned int &mask);
 
 	bool getTexture();
 
@@ -111,7 +123,9 @@ private:
 	unsigned int m_lastMovedTime = 0;
 	bool m_hideForMovement;
 
-	PointerBarrier m_scaledFocusBarriers[4] = { None };
+	bool m_bMotionMaskEnabled = false;
+
+	CursorBarrier m_barriers[4] = {};
 
 	xwayland_ctx_t *m_ctx;
 

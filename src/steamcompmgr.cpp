@@ -34,6 +34,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xcursor/Xcursor.h>
 #include <X11/extensions/xfixeswire.h>
+#include <X11/extensions/XInput2.h>
 #include <cstdint>
 #include <drm_mode.h>
 #include <memory>
@@ -1579,35 +1580,9 @@ MouseCursor::MouseCursor(xwayland_ctx_t *ctx)
 	updateCursorFeedback( true );
 }
 
-void MouseCursor::queryPositions(int &rootX, int &rootY, int &winX, int &winY)
-{
-	Window window, child;
-	unsigned int mask;
-
-	XQueryPointer(m_ctx->dpy, DefaultRootWindow(m_ctx->dpy), &window, &child,
-				  &rootX, &rootY, &winX, &winY, &mask);
-
-}
-
-void MouseCursor::queryGlobalPosition(int &x, int &y)
-{
-	int winX, winY;
-	queryPositions(x, y, winX, winY);
-}
-
-void MouseCursor::queryButtonMask(unsigned int &mask)
-{
-	Window window, child;
-	int rootX, rootY, winX, winY;
-
-	XQueryPointer(m_ctx->dpy, DefaultRootWindow(m_ctx->dpy), &window, &child,
-				  &rootX, &rootY, &winX, &winY, &mask);
-}
-
 void MouseCursor::checkSuspension()
 {
-	unsigned int buttonMask;
-	queryButtonMask(buttonMask);
+	unsigned int buttonMask = 0;
 
 	bool bWasHidden = m_hideForMovement;
 
@@ -1664,11 +1639,6 @@ void MouseCursor::checkSuspension()
 void MouseCursor::warp(int x, int y)
 {
 	XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, x, y);
-}
-
-void MouseCursor::resetPosition()
-{
-	warp(m_x, m_y);
 }
 
 void MouseCursor::setDirty()
@@ -1767,23 +1737,28 @@ bool MouseCursor::setCursorImageByName(const char *name)
 
 void MouseCursor::constrainPosition()
 {
-	int i;
 	steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
 	steamcompmgr_win_t *override = m_ctx->focus.overrideWindow;
 	if (window == override)
 		window = m_ctx->focus.focusWindow;
 
-	// If we had barriers before, get rid of them.
-	for (i = 0; i < 4; i++) {
-		if (m_scaledFocusBarriers[i] != None) {
-			XFixesDestroyPointerBarrier(m_ctx->dpy, m_scaledFocusBarriers[i]);
-			m_scaledFocusBarriers[i] = None;
-		}
-	}
+	if (!window)
+		return;
 
-	auto barricade = [this](int x1, int y1, int x2, int y2) {
-		return XFixesCreatePointerBarrier(m_ctx->dpy, DefaultRootWindow(m_ctx->dpy),
-										  x1, y1, x2, y2, 0, 0, NULL);
+	auto barricade = [this](CursorBarrier& barrier, const CursorBarrierInfo& info) {
+		if (barrier.info.x1 == info.x1 && barrier.info.x2 == info.x2 &&
+			barrier.info.y1 == info.y1 && barrier.info.y2 == info.y2)
+			return;
+
+		if (barrier.obj != None)
+		{
+			XFixesDestroyPointerBarrier(m_ctx->dpy, barrier.obj);
+			barrier.obj = None;
+		}
+
+		barrier.obj = XFixesCreatePointerBarrier(m_ctx->dpy, DefaultRootWindow(m_ctx->dpy),
+										  info.x1, info.y1, info.x2, info.y2, 0, 0, NULL);
+		barrier.info = info;
 	};
 
 	int x1 = window->xwayland().a.x;
@@ -1802,14 +1777,13 @@ void MouseCursor::constrainPosition()
 	}
 
 	// Constrain it to the window; careful, the corners will leak due to a known X server bug.
-	m_scaledFocusBarriers[0] = barricade(0, y1, m_ctx->root_width, y1);
-	m_scaledFocusBarriers[1] = barricade(x2, 0, x2, m_ctx->root_height);
-	m_scaledFocusBarriers[2] = barricade(m_ctx->root_width, y2, 0, y2);
-	m_scaledFocusBarriers[3] = barricade(x1, m_ctx->root_height, x1, 0);
+	barricade(m_barriers[0], CursorBarrierInfo{ 0, y1, m_ctx->root_width, y1 });
+	barricade(m_barriers[1], CursorBarrierInfo{ x2, 0, x2, m_ctx->root_height });
+	barricade(m_barriers[2], CursorBarrierInfo{ m_ctx->root_width, y2, 0, y2 });
+	barricade(m_barriers[3], CursorBarrierInfo{ x1, m_ctx->root_height, x1, 0 });
 
 	// Make sure the cursor is somewhere in our jail
-	int rootX, rootY;
-	queryGlobalPosition(rootX, rootY);
+	int rootX = m_x, rootY = m_y;
 
 	if ( rootX >= x2 || rootY >= y2 || rootX < x1 || rootY < y1 ) {
 		if ( window_wants_no_focus_when_mouse_hidden( window ) && m_hideForMovement )
@@ -1863,14 +1837,6 @@ void MouseCursor::move(int x, int y)
 	}
 	m_hideForMovement = false;
 	updateCursorFeedback();
-}
-
-void MouseCursor::updatePosition()
-{
-	int x,y;
-	queryGlobalPosition(x, y);
-	move(x, y);
-	checkSuspension();
 }
 
 int MouseCursor::x() const
@@ -1987,11 +1953,14 @@ bool MouseCursor::getTexture()
 
 	m_dirty = false;
 	updateCursorFeedback();
+	UpdateXInputMotionMasks();
 
 	if (m_imageEmpty) {
 
 		return false;
 	}
+
+	UpdatePosition();
 
 	CVulkanTexture::createFlags texCreateFlags;
 	if ( BIsNested() == false )
@@ -2022,15 +1991,46 @@ void MouseCursor::GetDesiredSize( int& nWidth, int &nHeight )
 	nHeight = nSize;
 }
 
+void MouseCursor::UpdateXInputMotionMasks()
+{
+	bool bShouldMotionMask = !imageEmpty();
+
+	if ( m_bMotionMaskEnabled != bShouldMotionMask )
+	{
+		XIEventMask xi_eventmask;
+		unsigned char xi_mask[ ( XI_LASTEVENT + 7 ) / 8 ]{};
+		xi_eventmask.deviceid = XIAllDevices;
+		xi_eventmask.mask_len = sizeof( xi_mask );
+		xi_eventmask.mask = xi_mask;
+		if ( bShouldMotionMask )
+			XISetMask( xi_mask, XI_RawMotion );
+		XISelectEvents( m_ctx->dpy, m_ctx->root, &xi_eventmask, 1 );
+
+		m_bMotionMaskEnabled = bShouldMotionMask;
+	}
+}
+
+void MouseCursor::UpdatePosition()
+{
+	Window root_return, child_return;
+	int root_x_return, root_y_return;
+	int win_x_return, win_y_return;
+	unsigned int mask_return;
+	XQueryPointer(m_ctx->dpy, m_ctx->root, &root_return, &child_return,
+				&root_x_return, &root_y_return,
+				&win_x_return, &win_y_return,
+				&mask_return);
+
+	move(root_x_return, root_y_return);
+}
+
 void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, struct FrameInfo_t *frameInfo)
 {
 	if ( m_hideForMovement || m_imageEmpty ) {
 		return;
 	}
 
-	int rootX, rootY, winX, winY;
-	queryPositions(rootX, rootY, winX, winY);
-	move(rootX, rootY);
+	int winX = m_x, winY = m_y;
 
 	// Also need new texture
 	if (!getTexture()) {
@@ -6996,6 +6996,7 @@ void xwayland_ctx_t::Dispatch()
 	MouseCursor *cursor = ctx->cursor.get();
 	bool bShouldResetCursor = false;
 	bool bSetFocus = false;
+	bool bShouldUpdateCursor = false;
 
 	while (XPending(ctx->dpy))
 	{
@@ -7135,6 +7136,16 @@ void xwayland_ctx_t::Dispatch()
 			case SelectionRequest:
 				handle_selection_request(ctx, &ev.xselectionrequest);
 				break;
+			case GenericEvent:
+				if (ev.xcookie.extension == ctx->xinput_opcode)
+				{
+					if (ev.xcookie.evtype == XI_RawMotion)
+					{
+						bShouldUpdateCursor = true;
+					}
+				}
+				break;
+
 			default:
 				if (ev.type == ctx->damage_event + XDamageNotify)
 				{
@@ -7153,12 +7164,24 @@ void xwayland_ctx_t::Dispatch()
 		XFlush(ctx->dpy);
 	}
 
-	if ( bShouldResetCursor )
+	if ( bShouldUpdateCursor )
 	{
-		// This shouldn't happen due to our pointer barriers,
-		// but there is a known X server bug; warp to last good
-		// position.
-		cursor->resetPosition();
+		cursor->UpdatePosition();
+
+		if ( bShouldResetCursor )
+		{
+			// This shouldn't happen due to our pointer barriers,
+			// but there is a known X server bug; warp to last good
+			// position.
+			steamcompmgr_win_t *pInputWindow = ctx->focus.inputFocusWindow;
+			int nX = std::clamp<int>( cursor->x(), pInputWindow->xwayland().a.x, pInputWindow->xwayland().a.x + pInputWindow->xwayland().a.width );
+			int nY = std::clamp<int>( cursor->y(), pInputWindow->xwayland().a.y, pInputWindow->xwayland().a.y + pInputWindow->xwayland().a.height );
+
+			if ( cursor->x() != nX || cursor->y() != nY )
+			{
+				cursor->forcePosition( nX, nY );
+			}
+		}
 	}
 
 	if ( bSetFocus )
@@ -7319,6 +7342,18 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 		xwm_log.errorf("Unsupported XRes version: have %d.%d, want 1.2", xres_major, xres_minor);
 		exit(1);
 	}
+    if (!XQueryExtension(ctx->dpy,
+                        "XInputExtension",
+                        &ctx->xinput_opcode,
+                        &ctx->xinput_event,
+                        &ctx->xinput_error))
+	{
+		xwm_log.errorf("No XInput extension");
+		exit(1);
+	}
+	int xi_major = 2;
+	int xi_minor = 0;
+	XIQueryVersion(ctx->dpy, &xi_major, &xi_minor);
 
 	if (!register_cm(ctx))
 	{
@@ -7542,6 +7577,9 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 				xwm_log.errorf("Failed to load mouse cursor: left_ptr");
 		}
 	}
+
+	ctx->cursor->undirty();
+	ctx->cursor->UpdateXInputMotionMasks();
 
 	XFlush(ctx->dpy);
 }
@@ -8239,7 +8277,8 @@ steamcompmgr_main(int argc, char **argv)
 
 		if (global_focus.cursor)
 		{
-			global_focus.cursor->updatePosition();
+			global_focus.cursor->constrainPosition();
+			global_focus.cursor->checkSuspension();
 
 			if (global_focus.cursor->needs_server_flush())
 			{

@@ -70,6 +70,7 @@ struct xwayland_ctx_t final : public gamescope::IWaitable
 	int				render_event, render_error;
 	int				xshape_event, xshape_error;
 	int				composite_opcode;
+	int				xinput_opcode, xinput_event, xinput_error;
 	Window			ourWindow;
 
 	focus_t 		focus;
