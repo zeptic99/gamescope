@@ -342,7 +342,7 @@ bool CVulkanDevice::selectPhysDev(VkSurfaceKHR surface)
 				m_generalQueueFamily = generalIndex;
 				m_physDev = cphysDev;
 
-				if ( env_to_bool( "GAMESCOPE_FORCE_GENERAL_QUEUE" ) )
+				if ( env_to_bool( getenv( "GAMESCOPE_FORCE_GENERAL_QUEUE" ) ) )
 					m_queueFamily = generalIndex;
 			}
 		}
