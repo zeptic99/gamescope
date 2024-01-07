@@ -612,7 +612,7 @@ bool CVulkanDevice::createDevice()
 
 	vk.GetDeviceQueue(device(), m_queueFamily, 0, &m_queue);
 	if ( m_queueFamily == m_generalQueueFamily )
-		m_queue = m_generalQueue;
+		m_generalQueue = m_queue;
 	else
 		vk.GetDeviceQueue(device(), m_generalQueueFamily, 0, &m_generalQueue);
 
