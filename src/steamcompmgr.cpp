@@ -1864,8 +1864,12 @@ bool MouseCursor::getTexture()
 	m_hotspotX = image->xhot;
 	m_hotspotY = image->yhot;
 
-	int nDesiredWidth, nDesiredHeight;
-	GetDesiredSize( nDesiredWidth, nDesiredHeight );
+	int nDesiredWidth = image->width;
+	int nDesiredHeight = image->height;
+	if ( g_nCursorScaleHeight > 0 )
+	{
+		GetDesiredSize( nDesiredWidth, nDesiredHeight );
+	}
 
 	uint32_t surfaceWidth;
 	uint32_t surfaceHeight;
