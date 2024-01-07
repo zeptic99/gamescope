@@ -1104,7 +1104,7 @@ namespace gamescope
 
 static std::atomic<bool> g_bForceRepaint{false};
 
-static int g_nCursorScaleHeight = -1;
+extern int g_nCursorScaleHeight;
 
 // poor man's semaphore
 class sem
@@ -7797,8 +7797,6 @@ steamcompmgr_main(int argc, char **argv)
 					g_FadeOutDuration = atoi(optarg);
 				} else if (strcmp(opt_name, "force-windows-fullscreen") == 0) {
 					bForceWindowsFullscreen = true;
-				} else if (strcmp(opt_name, "cursor-scale-height") == 0) {
-					g_nCursorScaleHeight = atoi(optarg);
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
 					g_bHDREnabled = true;
 				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {

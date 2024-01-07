@@ -45,6 +45,8 @@ const char *gamescope_optstring = nullptr;
 const char *g_pOriginalDisplay = nullptr;
 const char *g_pOriginalWaylandDisplay = nullptr;
 
+int g_nCursorScaleHeight = -1;
+
 const struct option *gamescope_options = (struct option[]){
 	{ "help", no_argument, nullptr, 0 },
 	{ "nested-width", required_argument, nullptr, 'w' },
@@ -639,6 +641,8 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "headless") == 0) {
 					g_bHeadless = true;
 					g_bIsNested = true;
+				} else if (strcmp(opt_name, "cursor-scale-height") == 0) {
+					g_nCursorScaleHeight = atoi(optarg);
 				}
 #if HAVE_OPENVR
 				else if (strcmp(opt_name, "openvr") == 0) {
@@ -700,7 +704,11 @@ int main(int argc, char **argv)
 #endif
 
 	setenv( "XWAYLAND_FORCE_ENABLE_EXTRA_MODES", "1", 1 );
-	setenv( "XCURSOR_SIZE", "256", 1 );
+
+	if ( g_nCursorScaleHeight > 0 )
+	{
+		setenv( "XCURSOR_SIZE", "256", 1 );
+	}
 
 	raise_fd_limit();
 
