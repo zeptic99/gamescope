@@ -269,6 +269,8 @@ bool CVulkanDevice::BInit(VkInstance instance, VkSurfaceKHR surface)
 	return true;
 }
 
+extern bool env_to_bool(const char *env);
+
 bool CVulkanDevice::selectPhysDev(VkSurfaceKHR surface)
 {
 	uint32_t deviceCount = 0;
@@ -339,6 +341,9 @@ bool CVulkanDevice::selectPhysDev(VkSurfaceKHR surface)
 				m_queueFamily = computeOnlyIndex == ~0u ? generalIndex : computeOnlyIndex;
 				m_generalQueueFamily = generalIndex;
 				m_physDev = cphysDev;
+
+				if ( env_to_bool( "GAMESCOPE_FORCE_GENERAL_QUEUE" ) )
+					m_queueFamily = generalIndex;
 			}
 		}
 	}
@@ -552,7 +557,7 @@ bool CVulkanDevice::createDevice()
 	VkDeviceCreateInfo deviceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = &features2,
-		.queueCreateInfoCount = std::size(queueCreateInfos),
+		.queueCreateInfoCount = m_queueFamily == m_generalQueueFamily ? 1u : 2u,
 		.pQueueCreateInfos = queueCreateInfos,
 		.enabledExtensionCount = (uint32_t)enabledExtensions.size(),
 		.ppEnabledExtensionNames = enabledExtensions.data(),
@@ -606,7 +611,10 @@ bool CVulkanDevice::createDevice()
 	#undef VK_FUNC
 
 	vk.GetDeviceQueue(device(), m_queueFamily, 0, &m_queue);
-	vk.GetDeviceQueue(device(), m_generalQueueFamily, 0, &m_generalQueue);
+	if ( m_queueFamily == m_generalQueueFamily )
+		m_queue = m_generalQueue;
+	else
+		vk.GetDeviceQueue(device(), m_generalQueueFamily, 0, &m_generalQueue);
 
 	return true;
 }
