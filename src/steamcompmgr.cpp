@@ -1991,6 +1991,12 @@ void MouseCursor::GetDesiredSize( int& nWidth, int &nHeight )
 		nSize = std::clamp( nSize, g_nBaseCursorScale, 256 );
 	}
 
+	if ( BIsNested() == false && alwaysComposite == false )
+	{
+		nSize = std::min<int>( nSize, g_DRM.cursor_width );
+		nSize = std::min<int>( nSize, g_DRM.cursor_height );
+	}
+
 	nWidth = nSize;
 	nHeight = nSize;
 }
