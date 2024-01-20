@@ -1965,6 +1965,12 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 			.pDrmFormatModifiers = modifiers.data(),
 		};
 
+		externalImageCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+			.pNext = std::exchange(imageInfo.pNext, &externalImageCreateInfo),
+			.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+		};
+
 		imageInfo.tiling = tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
 	}
 
