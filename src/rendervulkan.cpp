@@ -253,6 +253,8 @@ bool CVulkanDevice::BInit(VkInstance instance, VkSurfaceKHR surface)
 	assert(instance);
 	assert(!m_bInitialized);
 
+	g_output.surface = surface;
+
 	m_instance = instance;
 	#define VK_FUNC(x) vk.x = (PFN_vk##x) vkGetInstanceProcAddr(instance, "vk"#x);
 	VULKAN_INSTANCE_FUNCTIONS
@@ -3129,7 +3131,7 @@ bool vulkan_remake_output_images()
 	return bRet;
 }
 
-bool vulkan_make_output( VkSurfaceKHR surface )
+bool vulkan_make_output()
 {
 	VulkanOutput_t *pOutput = &g_output;
 
@@ -3142,9 +3144,6 @@ bool vulkan_make_output( VkSurfaceKHR surface )
 	}
 	else if ( BIsSDLSession() )
 	{
-		assert(surface);
-		pOutput->surface = surface;
-
 		result = g_device.vk.GetPhysicalDeviceSurfaceCapabilitiesKHR( g_device.physDev(), pOutput->surface, &pOutput->surfaceCaps );
 		if ( result != VK_SUCCESS )
 		{
