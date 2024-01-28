@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <drm_fourcc.h>
 #include <drm_mode.h>
+#include <wayland-server-core.h>
 
 #include <span>
 
@@ -42,11 +43,6 @@ inline bool ColorspaceIsHDR( GamescopeAppTextureColorspace colorspace )
 {
 	return colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB ||
 		   colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ;
-}
-
-extern "C"
-{
-	struct wl_resource;
 }
 
 extern struct drm_t g_DRM;
@@ -111,13 +107,11 @@ struct wlserver_ctm : drm_blob
 	glm::mat3x4 matrix{};
 };
 
-#include <wayland-server-core.h>
-
-extern "C" {
+#include "wlr_begin.hpp"
 #include <libliftoff.h>
 #include <wlr/render/dmabuf.h>
 #include <wlr/render/drm_format_set.h>
-}
+#include "wlr_end.hpp"
 
 #include "rendervulkan.hpp"
 

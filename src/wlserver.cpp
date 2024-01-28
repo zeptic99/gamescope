@@ -14,11 +14,7 @@
 #include <X11/extensions/XTest.h>
 #include <xkbcommon/xkbcommon.h>
 
-#include <wayland-server-core.h>
-
-extern "C" {
-#define static
-#define class class_
+#include "wlr_begin.hpp"
 #include <wlr/backend.h>
 #include <wlr/backend/headless.h>
 #include <wlr/backend/libinput.h>
@@ -33,9 +29,7 @@ extern "C" {
 #include <wlr/util/log.h>
 #include <wlr/xwayland/server.h>
 #include <wlr/types/wlr_xdg_shell.h>
-#undef static
-#undef class
-}
+#include "wlr_end.hpp"
 
 #include "gamescope-xwayland-protocol.h"
 #include "gamescope-pipewire-protocol.h"

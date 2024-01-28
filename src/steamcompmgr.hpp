@@ -1,9 +1,10 @@
 #include <stdint.h>
 
-extern "C" {
+#include "wlr_begin.hpp"
 #include <wlr/types/wlr_buffer.h>
 #include <wlr/render/wlr_texture.h>
-}
+#include <wlr/render/dmabuf.h>
+#include "wlr_end.hpp"
 
 extern uint32_t currentOutputWidth;
 extern uint32_t currentOutputHeight;
@@ -22,8 +23,6 @@ void steamcompmgr_main(int argc, char **argv);
 
 #include <mutex>
 #include <vector>
-
-#include <wlr/render/dmabuf.h>
 
 #include <X11/extensions/Xfixes.h>
 

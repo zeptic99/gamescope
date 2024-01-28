@@ -64,12 +64,10 @@ enum EStreamColorspace : int
 #include <atomic>
 #include <wayland-server-core.h>
 
-extern "C" {
-#define static
+#include "wlr_begin.hpp"
 #include <wlr/render/dmabuf.h>
 #include <wlr/render/interface.h>
-#undef static
-}
+#include "wlr_end.hpp"
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>

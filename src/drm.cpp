@@ -14,9 +14,9 @@
 #include <stdlib.h>
 #include <poll.h>
 
-extern "C" {
+#include "wlr_begin.hpp"
 #include <wlr/types/wlr_buffer.h>
-}
+#include "wlr_end.hpp"
 
 #include "drm.hpp"
 #include "defer.hpp"
