@@ -1,49 +1,26 @@
-// DRM output stuff
-
 #pragma once
 
-#include <xf86drm.h>
-#include <xf86drmMode.h>
-#include <assert.h>
-#include <drm_fourcc.h>
-#include <drm_mode.h>
-#include <wayland-server-core.h>
-
-#include <span>
-
+#include "drm_include.h"
 #include "color_helpers.h"
 #include "gamescope_shared.h"
+#include "rendervulkan.hpp"
 
-// Josh: Okay whatever, this header isn't
-// available for whatever stupid reason. :v
-//#include <drm_color_mgmt.h>
-enum drm_color_encoding {
-	DRM_COLOR_YCBCR_BT601,
-	DRM_COLOR_YCBCR_BT709,
-	DRM_COLOR_YCBCR_BT2020,
-	DRM_COLOR_ENCODING_MAX,
-};
+#include "wlr_begin.hpp"
+#include <libliftoff.h>
+#include <wlr/render/dmabuf.h>
+#include <wlr/render/drm_format_set.h>
+#include "wlr_end.hpp"
 
-enum drm_color_range {
-	DRM_COLOR_YCBCR_LIMITED_RANGE,
-	DRM_COLOR_YCBCR_FULL_RANGE,
-	DRM_COLOR_RANGE_MAX,
-};
-
-enum GamescopeAppTextureColorspace {
-	GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR = 0,
-	GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB,
-	GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB,
-	GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ,
-	GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
-};
-const uint32_t GamescopeAppTextureColorspace_Bits = 3;
-
-inline bool ColorspaceIsHDR( GamescopeAppTextureColorspace colorspace )
-{
-	return colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB ||
-		   colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ;
-}
+#include <atomic>
+#include <cassert>
+#include <map>
+#include <mutex>
+#include <span>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+#include <optional>
 
 extern struct drm_t g_DRM;
 void drm_destroy_blob(struct drm_t *drm, uint32_t blob);
@@ -106,24 +83,6 @@ struct wlserver_ctm : drm_blob
 
 	glm::mat3x4 matrix{};
 };
-
-#include "wlr_begin.hpp"
-#include <libliftoff.h>
-#include <wlr/render/dmabuf.h>
-#include <wlr/render/drm_format_set.h>
-#include "wlr_end.hpp"
-
-#include "rendervulkan.hpp"
-
-#include <unordered_map>
-#include <utility>
-#include <atomic>
-#include <map>
-#include <unordered_map>
-#include <mutex>
-#include <vector>
-#include <string>
-
 namespace gamescope
 {
 	template <typename T>
@@ -407,21 +366,6 @@ struct fb {
 	std::atomic< uint32_t > n_refs;
 };
 
-enum drm_valve1_transfer_function {
-	DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT,
-
-	DRM_VALVE1_TRANSFER_FUNCTION_SRGB,
-	DRM_VALVE1_TRANSFER_FUNCTION_BT709,
-	DRM_VALVE1_TRANSFER_FUNCTION_PQ,
-	DRM_VALVE1_TRANSFER_FUNCTION_LINEAR,
-	DRM_VALVE1_TRANSFER_FUNCTION_UNITY,
-	DRM_VALVE1_TRANSFER_FUNCTION_HLG,
-	DRM_VALVE1_TRANSFER_FUNCTION_GAMMA22,
-	DRM_VALVE1_TRANSFER_FUNCTION_GAMMA24,
-	DRM_VALVE1_TRANSFER_FUNCTION_GAMMA26,
-	DRM_VALVE1_TRANSFER_FUNCTION_MAX,
-};
-
 struct drm_t {
 	bool bUseLiftoff;
 
@@ -571,42 +515,6 @@ void drm_get_native_colorimetry( struct drm_t *drm,
 std::span<const uint32_t> drm_get_valid_refresh_rates( struct drm_t *drm );
 
 extern bool g_bSupportsAsyncFlips;
-
-/* from CTA-861-G */
-#define HDMI_EOTF_SDR 0
-#define HDMI_EOTF_TRADITIONAL_HDR 1
-#define HDMI_EOTF_ST2084 2
-#define HDMI_EOTF_HLG 3
-
-/* For Default case, driver will set the colorspace */
-#define DRM_MODE_COLORIMETRY_DEFAULT			0
-/* CEA 861 Normal Colorimetry options */
-#define DRM_MODE_COLORIMETRY_NO_DATA			0
-#define DRM_MODE_COLORIMETRY_SMPTE_170M_YCC		1
-#define DRM_MODE_COLORIMETRY_BT709_YCC			2
-/* CEA 861 Extended Colorimetry Options */
-#define DRM_MODE_COLORIMETRY_XVYCC_601			3
-#define DRM_MODE_COLORIMETRY_XVYCC_709			4
-#define DRM_MODE_COLORIMETRY_SYCC_601			5
-#define DRM_MODE_COLORIMETRY_OPYCC_601			6
-#define DRM_MODE_COLORIMETRY_OPRGB			7
-#define DRM_MODE_COLORIMETRY_BT2020_CYCC		8
-#define DRM_MODE_COLORIMETRY_BT2020_RGB			9
-#define DRM_MODE_COLORIMETRY_BT2020_YCC			10
-/* Additional Colorimetry extension added as part of CTA 861.G */
-#define DRM_MODE_COLORIMETRY_DCI_P3_RGB_D65		11
-#define DRM_MODE_COLORIMETRY_DCI_P3_RGB_THEATER		12
-/* Additional Colorimetry Options added for DP 1.4a VSC Colorimetry Format */
-#define DRM_MODE_COLORIMETRY_RGB_WIDE_FIXED		13
-#define DRM_MODE_COLORIMETRY_RGB_WIDE_FLOAT		14
-#define DRM_MODE_COLORIMETRY_BT601_YCC			15
-
-/* Content type options */
-#define DRM_MODE_CONTENT_TYPE_NO_DATA		0
-#define DRM_MODE_CONTENT_TYPE_GRAPHICS		1
-#define DRM_MODE_CONTENT_TYPE_PHOTO		2
-#define DRM_MODE_CONTENT_TYPE_CINEMA		3
-#define DRM_MODE_CONTENT_TYPE_GAME		4
 
 const char* drm_get_patched_edid_path();
 void drm_update_patched_edid(drm_t *drm);
