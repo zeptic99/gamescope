@@ -270,6 +270,7 @@ struct FrameInfo_t
 	std::shared_ptr<CVulkanTexture> shaperLut[EOTF_Count];
 	std::shared_ptr<CVulkanTexture> lut3D[EOTF_Count];
 
+	bool allowVRR;
 	bool applyOutputColorMgmt; // drm only
 	EOTF outputEncodingEOTF;
 

@@ -405,11 +405,8 @@ struct drm_t {
 		uint32_t color_mgmt_serial;
 		std::shared_ptr<drm_blob> lut3d_id[ EOTF_Count ];
 		std::shared_ptr<drm_blob> shaperlut_id[ EOTF_Count ];
-		// TODO: Remove me, this should be some generic setting.
-		bool vrr_enabled = false;
 		drm_valve1_transfer_function output_tf = DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT;
 	} current, pending;
-	bool wants_vrr_enabled = false;
 
 	/* FBs in the atomic request, but not yet submitted to KMS */
 	std::vector < uint32_t > fbids_in_req;
@@ -474,7 +471,7 @@ extern std::atomic<uint64_t> g_drmEffectiveOrientation[gamescope::GAMESCOPE_SCRE
 
 extern bool g_bForceDisableColorMgmt;
 
-bool init_drm(struct drm_t *drm, int width, int height, int refresh, bool wants_adaptive_sync);
+bool init_drm(struct drm_t *drm, int width, int height, int refresh);
 void finish_drm(struct drm_t *drm);
 int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo );
 int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameInfo );
@@ -495,7 +492,6 @@ char *find_drm_node_by_devid(dev_t devid);
 int drm_get_default_refresh(struct drm_t *drm);
 bool drm_get_vrr_capable(struct drm_t *drm);
 bool drm_supports_hdr(struct drm_t *drm, uint16_t *maxCLL = nullptr, uint16_t *maxFALL = nullptr);
-void drm_set_vrr_enabled(struct drm_t *drm, bool enabled);
 bool drm_get_vrr_in_use(struct drm_t *drm);
 bool drm_supports_color_mgmt(struct drm_t *drm);
 std::shared_ptr<wlserver_hdr_metadata> drm_create_hdr_metadata_blob(struct drm_t *drm, hdr_output_metadata *metadata);
