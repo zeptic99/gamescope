@@ -89,7 +89,9 @@
 #include "mwm_hints.h"
 #include "edid.h"
 
+#if HAVE_AVIF
 #include "avif/avif.h"
+#endif
 
 static const int g_nBaseCursorScale = 36;
 
@@ -2908,6 +2910,8 @@ paint_all(bool async)
 						}
 					}
 
+					assert( HAVE_AVIF );
+#if HAVE_AVIF
 					avifResult avifResult = AVIF_RESULT_OK;
 
 					avifImage *pAvifImage = avifImageCreate( g_nOutputWidth, g_nOutputHeight, 10, AVIF_PIXEL_FORMAT_YUV444 );
@@ -2976,6 +2980,7 @@ paint_all(bool async)
 
 					xwm_log.infof( "Screenshot saved to %s", oScreenshotInfo->szScreenshotPath.c_str() );
 					bScreenshotSuccess = true;
+#endif
 				}
 				else if (pScreenshotTexture->format() == VK_FORMAT_B8G8R8A8_UNORM)
 				{

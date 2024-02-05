@@ -19,9 +19,9 @@ thread_dep = dependency('threads')
 cap_dep = dependency('libcap', required: false)
 epoll_dep = dependency('epoll-shim', required: false)
 glm_dep = dependency('glm')
-sdl_dep = dependency('SDL2')
+sdl_dep = dependency('SDL2', required: get_option('sdl2_backend'))
 stb_dep = dependency('stb')
-avif_dep = dependency('libavif', version: '>=1.0.0')
+avif_dep = dependency('libavif', version: '>=1.0.0', required: get_option('avif_screenshots'))
 
 wlroots_dep = dependency(
   'wlroots',
@@ -107,6 +107,14 @@ if drm_dep.found()
   gamescope_cpp_args += '-DHAVE_DRM=@0@'.format(drm_dep.found().to_int())
 endif
 
+if sdl_dep.found()
+  src += 'sdlwindow.cpp'
+  gamescope_cpp_args += '-DHAVE_SDL2=@0@'.format(sdl_dep.found().to_int())
+endif
+
+if avif_dep.found()
+  gamescope_cpp_args += '-DHAVE_AVIF=@0@'.format(avif_dep.found().to_int())
+endif
 
 src = [
   'steamcompmgr.cpp',
@@ -116,7 +124,6 @@ src = [
   'headless.cpp',
   'wlserver.cpp',
   'modegen.cpp',
-  'sdlwindow.cpp',
   'vblankmanager.cpp',
   'rendervulkan.cpp',
   'log.cpp',

@@ -783,9 +783,11 @@ int main(int argc, char **argv)
 			gamescope::IBackend::Set<gamescope::CDRMBackend>();
 			break;
 #endif
+#if HAVE_SDL2
 		case gamescope::GamescopeBackend::SDL:
 			gamescope::IBackend::Set<gamescope::CSDLBackend>();
 			break;
+#endif
 #if HAVE_OPENVR
 		case gamescope::GamescopeBackend::OpenVR:
 			gamescope::IBackend::Set<gamescope::COpenVRBackend>();
