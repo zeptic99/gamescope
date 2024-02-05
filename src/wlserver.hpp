@@ -13,7 +13,6 @@
 #include <optional>
 #include <vulkan/vulkan_core.h>
 
-#include "drm.hpp"
 #include "steamcompmgr_shared.hpp"
 
 #define WLSERVER_BUTTON_COUNT 7
@@ -31,7 +30,7 @@ struct wlserver_vk_swapchain_feedback
 	VkPresentModeKHR vk_present_mode;
 	VkBool32 vk_clipped;
 
-	std::shared_ptr<wlserver_hdr_metadata> hdr_metadata_blob;
+	std::shared_ptr<gamescope::BackendBlob> hdr_metadata_blob;
 };
 
 struct ResListEntry_t {
@@ -270,3 +269,8 @@ void wlserver_past_present_timing( struct wlr_surface *surface, uint32_t present
 void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle );
 
 void wlserver_force_shutdown();
+
+void wlserver_send_gamescope_control( wl_resource *control );
+
+bool wlsession_active();
+

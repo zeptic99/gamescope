@@ -21,14 +21,12 @@
 // NIS_Config needs to be included before the X11 headers because of conflicting defines introduced by X11
 #include "shaders/NVIDIAImageScaling/NIS/NIS_Config.h"
 
+#include "drm_include.h"
+
 #include "rendervulkan.hpp"
 #include "main.hpp"
 #include "steamcompmgr.hpp"
-#include "sdlwindow.hpp"
 #include "log.hpp"
-#if HAVE_OPENVR
-#include "vr_session.hpp"
-#endif
 
 #include "cs_composite_blit.h"
 #include "cs_composite_blur.h"
@@ -46,6 +44,9 @@
 #include "shaders/ffx_fsr1.h"
 
 #include "reshade_effect_manager.hpp"
+
+#include "SDL.h"
+#include "SDL_vulkan.h"
 
 extern bool g_bWasPartialComposite;
 
@@ -99,6 +100,12 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(
 VulkanOutput_t g_output;
 
 uint32_t g_uCompositeDebug = 0u;
+
+template <typename T>
+static bool Contains( const std::span<const T> x, T value )
+{
+	return std::ranges::any_of( x, std::bind_front(std::equal_to{}, value) );
+}
 
 static std::map< VkFormat, std::map< uint64_t, VkDrmFormatModifierPropertiesEXT > > DRMModifierProps = {};
 static std::vector< uint32_t > sampledShmFormats{};
@@ -409,6 +416,11 @@ bool CVulkanDevice::createDevice()
 
 	vk_log.infof( "physical device %s DRM format modifiers", m_bSupportsModifiers ? "supports" : "does not support" );
 
+	if ( !GetBackend()->ValidPhysicalDevice( physDev() ) )
+		return false;
+
+	// XXX(JoshA): Move this to ValidPhysicalDevice.
+	// We need to refactor some Vulkan stuff to do that though.
 	if ( hasDrmProps ) {
 		VkPhysicalDeviceDrmPropertiesEXT drmProps = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT,
@@ -419,7 +431,7 @@ bool CVulkanDevice::createDevice()
 		};
 		vk.GetPhysicalDeviceProperties2( physDev(), &props2 );
 
-		if ( !BIsNested() && !drmProps.hasPrimary ) {
+		if ( !GetBackend()->UsesVulkanSwapchain() && !drmProps.hasPrimary ) {
 			vk_log.errorf( "physical device has no primary node" );
 			return false;
 		}
@@ -500,7 +512,7 @@ bool CVulkanDevice::createDevice()
 
 	std::vector< const char * > enabledExtensions;
 
-	if ( BIsNested() == true )
+	if ( GetBackend()->UsesVulkanSwapchain() )
 	{
 		enabledExtensions.push_back( VK_KHR_SWAPCHAIN_EXTENSION_NAME );
 		enabledExtensions.push_back( VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME );
@@ -526,12 +538,8 @@ bool CVulkanDevice::createDevice()
 	if ( supportsHDRMetadata )
 		enabledExtensions.push_back( VK_EXT_HDR_METADATA_EXTENSION_NAME );
 
-	if ( BIsVRSession() )
-	{
-#if HAVE_OPENVR
-		vrsession_append_device_exts( physDev(), enabledExtensions );
-#endif
-	}
+	for ( auto& extension : GetBackend()->GetDeviceExtensions( physDev() ) )
+		enabledExtensions.push_back( extension );
 
 #if 0
 	VkPhysicalDeviceMaintenance5FeaturesKHR maintenance5 = {
@@ -1609,7 +1617,7 @@ void CVulkanCmdBuffer::prepareSrcImage(CVulkanTexture *image)
 	if (!result.second)
 		return;
 	// using the swapchain image as a source without writing to it doesn't make any sense
-	assert(image->swapchainImage() == false);
+	assert(image->outputImage() == false);
 	result.first->second.needsImport = image->externalImage();
 	result.first->second.needsExport = image->externalImage();
 }
@@ -1622,7 +1630,7 @@ void CVulkanCmdBuffer::prepareDestImage(CVulkanTexture *image)
 		return;
 	result.first->second.discarded = true;
 	result.first->second.needsExport = image->externalImage();
-	result.first->second.needsPresentLayout = image->swapchainImage();
+	result.first->second.needsPresentLayout = image->outputImage();
 }
 
 void CVulkanCmdBuffer::discardImage(CVulkanTexture *image)
@@ -1663,8 +1671,6 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 		bool isExport = flush && state.needsExport;
 		bool isPresent = flush && state.needsPresentLayout;
 
-		VkImageLayout presentLayout = BIsVRSession() ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
 		if (!state.discarded && !state.dirty && !state.needsImport && !isExport && !isPresent)
 			continue;
 
@@ -1680,7 +1686,7 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 			.srcAccessMask = state.dirty ? write_bits : 0u,
 			.dstAccessMask = flush ? 0u : read_bits | write_bits,
 			.oldLayout = (state.discarded || state.needsImport) ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL,
-			.newLayout = isPresent ? presentLayout : VK_IMAGE_LAYOUT_GENERAL,
+			.newLayout = isPresent ? GetBackend()->GetPresentLayout() : VK_IMAGE_LAYOUT_GENERAL,
 			.srcQueueFamilyIndex = isExport ? image->queueFamily : state.needsImport ? externalQueue : image->queueFamily,
 			.dstQueueFamilyIndex = isExport ? externalQueue : state.needsImport ? m_queueFamily : m_queueFamily,
 			.image = image->vkImage(),
@@ -1699,7 +1705,7 @@ void CVulkanCmdBuffer::insertBarrier(bool flush)
 									0, 0, nullptr, 0, nullptr, barriers.size(), barriers.data());
 }
 
-static CVulkanDevice g_device;
+CVulkanDevice g_device;
 
 static bool allDMABUFsEqual( wlr_dmabuf_attributes *pDMA )
 {
@@ -1827,9 +1833,9 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 		properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	}
 
-	if ( flags.bSwapchain == true )
+	if ( flags.bOutputImage == true )
 	{
-		m_bSwapchain = true;	
+		m_bOutputImage = true;	
 	}
 
 	m_bExternal = pDMA || flags.bExportable == true;
@@ -1916,7 +1922,8 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 	}
 
 	std::vector<uint64_t> modifiers = {};
-	if ( flags.bFlippable == true && g_device.supportsModifiers() && !pDMA )
+	// TODO(JoshA): Move this code to backend for making flippable image.
+	if ( GetBackend()->UsesModifiers() && flags.bFlippable && g_device.supportsModifiers() && !pDMA )
 	{
 		assert( drmFormat != DRM_FORMAT_INVALID );
 
@@ -1931,10 +1938,10 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 		}
 		else
 		{
-			const struct wlr_drm_format *drmFormatDesc = wlr_drm_format_set_get( &g_DRM.primary_formats, drmFormat );
-			assert( drmFormatDesc != nullptr );
-			possibleModifiers = drmFormatDesc->modifiers;
-			numPossibleModifiers = drmFormatDesc->len;
+			std::span<const uint64_t> modifiers = GetBackend()->GetSupportedModifiers( drmFormat );
+			assert( !modifiers.empty() );
+			possibleModifiers = modifiers.data();
+			numPossibleModifiers = modifiers.size();
 		}
 
 		for ( size_t i = 0; i < numPossibleModifiers; i++ )
@@ -1976,7 +1983,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 		imageInfo.tiling = tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
 	}
 
-	if ( flags.bFlippable == true && tiling != VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT )
+	if ( GetBackend()->UsesModifiers() && flags.bFlippable == true && tiling != VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT )
 	{
 		// We want to scan-out the image
 		wsiImageCreateInfo = {
@@ -2240,11 +2247,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 
 	if ( flags.bFlippable == true )
 	{
-		m_FBID = drm_fbid_from_dmabuf( &g_DRM, nullptr, &m_dmabuf );
-		if ( m_FBID == 0 ) {
-			vk_log.errorf( "drm_fbid_from_dmabuf failed" );
-			return false;
-		}
+		m_FBID = GetBackend()->ImportDmabufToBackend( nullptr, &m_dmabuf );
 	}
 
 	bool bHasAlpha = pDMA ? DRMFormatHasAlpha( pDMA->format ) : true;
@@ -2357,7 +2360,7 @@ bool CVulkanTexture::BInitFromSwapchain( VkImage image, uint32_t width, uint32_t
 	m_format = format;
 	m_contentWidth = width;
 	m_contentHeight = height;
-	m_bSwapchain = true;
+	m_bOutputImage = true;
 
 	VkImageViewCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -2430,7 +2433,7 @@ CVulkanTexture::~CVulkanTexture( void )
 
 	if ( m_FBID != 0 )
 	{
-		drm_drop_fbid( &g_DRM, m_FBID );
+		GetBackend()->DropBackendFb( m_FBID );
 		m_FBID = 0;
 	}
 
@@ -2560,10 +2563,12 @@ bool vulkan_init_format(VkFormat format, uint32_t drmFormat)
 
 	if ( !g_device.supportsModifiers() )
 	{
-		if ( BIsNested() == false && !wlr_drm_format_set_has( &g_DRM.formats, drmFormat, DRM_FORMAT_MOD_INVALID ) )
+		if ( GetBackend()->UsesModifiers() )
 		{
-			return false;
+			if ( !Contains<uint64_t>( GetBackend()->GetSupportedModifiers( drmFormat ), DRM_FORMAT_MOD_INVALID ) )
+				return false;
 		}
+
 		wlr_drm_format_set_add( &sampledDRMFormats, drmFormat, DRM_FORMAT_MOD_INVALID );
 		return false;
 	}
@@ -2604,18 +2609,13 @@ bool vulkan_init_format(VkFormat format, uint32_t drmFormat)
 		{
 			continue;
 		}
-		if ( BIsNested() == false && !wlr_drm_format_set_has( &g_DRM.formats, drmFormat, modifier ) )
+
+		if ( GetBackend()->UsesModifiers() )
 		{
-			continue;
+			if ( !Contains<uint64_t>( GetBackend()->GetSupportedModifiers( drmFormat ), modifier ) )
+				continue;
 		}
-		if ( BIsNested() == false && drmFormat == DRM_FORMAT_NV12 && modifier == DRM_FORMAT_MOD_LINEAR && g_bRotated )
-		{
-			// If embedded and rotated, blacklist NV12 LINEAR because
-			// amdgpu won't support direct scan-out. Since only pure
-			// Wayland clients can submit NV12 buffers, this should only
-			// affect streaming_client.
-			continue;
-		}
+
 		wlr_drm_format_set_add( &sampledDRMFormats, drmFormat, modifier );
 	}
 
@@ -2684,7 +2684,7 @@ static void present_wait_thread_func( void )
 			{
 				g_device.vk.WaitForPresentKHR( g_device.device(), g_output.swapChain, present_wait_id, 1'000'000'000lu );
 				uint64_t vblanktime = get_time_in_nanos();
-				g_VBlankTimer.MarkVBlank( vblanktime, true );
+				GetVBlankTimer().MarkVBlank( vblanktime, true );
 				mangoapp_output_update( vblanktime );
 			}
 		}
@@ -2707,7 +2707,7 @@ void vulkan_update_swapchain_hdr_metadata( VulkanOutput_t *pOutput )
 		return;
 	}
 
-	hdr_metadata_infoframe &infoframe = g_output.swapchainHDRMetadata->metadata.hdmi_metadata_type1;
+	const hdr_metadata_infoframe &infoframe = g_output.swapchainHDRMetadata->View<hdr_output_metadata>().hdmi_metadata_type1;
 	VkHdrMetadataEXT metadata =
 	{
 		.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT,
@@ -2830,7 +2830,7 @@ std::shared_ptr<CVulkanTexture> vulkan_get_hacky_blank_texture()
 std::shared_ptr<CVulkanTexture> vulkan_create_debug_blank_texture()
 {
 	CVulkanTexture::createFlags flags;
-	flags.bFlippable = !BIsNested();
+	flags.bFlippable = true;
 	flags.bSampled = true;
 	flags.bTransferDst = true;
 
@@ -2852,46 +2852,6 @@ std::shared_ptr<CVulkanTexture> vulkan_create_debug_blank_texture()
 
 	return texture;
 }
-
-#if HAVE_OPENVR
-std::shared_ptr<CVulkanTexture> vulkan_create_debug_white_texture()
-{
-	CVulkanTexture::createFlags flags;
-	flags.bMappable = true;
-	flags.bSampled = true;
-	flags.bTransferSrc = true;
-	flags.bLinear = true;
-
-	auto texture = std::make_shared<CVulkanTexture>();
-	bool bRes = texture->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM( VK_FORMAT_B8G8R8A8_UNORM ), flags);
-	assert( bRes );
-
-	memset( texture->mappedData(), 0xFF, texture->width() * texture->height() * 4 );
-
-	return texture;
-}
-
-void vulkan_present_to_openvr( void )
-{
-	//static auto texture = vulkan_create_debug_white_texture();
-	auto texture = vulkan_get_last_output_image( false, false );
-
-	vr::VRVulkanTextureData_t data =
-	{
-		.m_nImage            = (uint64_t)(uintptr_t)texture->vkImage(),
-		.m_pDevice           = g_device.device(),
-		.m_pPhysicalDevice   = g_device.physDev(),
-		.m_pInstance         = g_device.instance(),
-		.m_pQueue            = g_device.queue(),
-		.m_nQueueFamilyIndex = g_device.queueFamily(),
-		.m_nWidth            = texture->width(),
-		.m_nHeight           = texture->height(),
-		.m_nFormat           = texture->format(),
-		.m_nSampleCount      = 1,
-	};
-	vrsession_present(&data);
-}
-#endif
 
 bool vulkan_supports_hdr10()
 {
@@ -3038,11 +2998,11 @@ bool vulkan_remake_swapchain( void )
 static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 {
 	CVulkanTexture::createFlags outputImageflags;
-	outputImageflags.bFlippable = !BIsNested();
+	outputImageflags.bFlippable = true;
 	outputImageflags.bStorage = true;
 	outputImageflags.bTransferSrc = true; // for screenshots
 	outputImageflags.bSampled = true; // for pipewire blits
-	outputImageflags.bSwapchain = BIsVRSession();
+	outputImageflags.bOutputImage = true;
 
 	pOutput->outputImages.resize(3); // extra image for partial composition.
 	pOutput->outputImagesPartialOverlay.resize(3);
@@ -3137,12 +3097,7 @@ bool vulkan_make_output()
 
 	VkResult result;
 	
-	if ( BIsVRSession() || BIsHeadless() )
-	{
-		pOutput->outputFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-		vulkan_make_output_images( pOutput );
-	}
-	else if ( BIsSDLSession() )
+	if ( GetBackend()->UsesVulkanSwapchain() )
 	{
 		result = g_device.vk.GetPhysicalDeviceSurfaceCapabilitiesKHR( g_device.physDev(), pOutput->surface, &pOutput->surfaceCaps );
 		if ( result != VK_SUCCESS )
@@ -3195,9 +3150,8 @@ bool vulkan_make_output()
 	}
 	else
 	{
-		pOutput->outputFormat = DRMFormatToVulkan( g_nDRMFormat, false );
-		pOutput->outputFormatOverlay = DRMFormatToVulkan( g_nDRMFormatOverlay, false );
-		
+		GetBackend()->GetPreferredOutputFormat( &pOutput->outputFormat, &pOutput->outputFormatOverlay );
+
 		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
 		{
 			vk_log.errorf( "failed to find Vulkan format suitable for KMS" );
@@ -3261,55 +3215,41 @@ static bool init_nis_data()
 	return true;
 }
 
-VkInstance vulkan_create_instance( void )
+VkInstance vulkan_get_instance( void )
 {
-	VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+	static VkInstance s_pVkInstance = []() -> VkInstance
+	{
+		VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
-	std::vector< const char * > sdlExtensions;
-	if ( BIsVRSession() )
-	{
-#if HAVE_OPENVR
-		vrsession_append_instance_exts( sdlExtensions );
-#endif
-	}
-	else if ( BIsSDLSession() )
-	{
-		if ( SDL_Vulkan_LoadLibrary( nullptr ) != 0 )
+		auto instanceExtensions = GetBackend()->GetInstanceExtensions();
+
+		const VkApplicationInfo appInfo = {
+			.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+			.pApplicationName   = "gamescope",
+			.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+			.pEngineName        = "hopefully not just some code",
+			.engineVersion      = VK_MAKE_VERSION(1, 0, 0),
+			.apiVersion         = VK_API_VERSION_1_3,
+		};
+
+		const VkInstanceCreateInfo createInfo = {
+			.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+			.pApplicationInfo        = &appInfo,
+			.enabledExtensionCount   = (uint32_t)instanceExtensions.size(),
+			.ppEnabledExtensionNames = instanceExtensions.data(),
+		};
+
+		VkInstance instance = nullptr;
+		result = vkCreateInstance(&createInfo, 0, &instance);
+		if ( result != VK_SUCCESS )
 		{
-			fprintf(stderr, "SDL_Vulkan_LoadLibrary failed: %s\n", SDL_GetError());
-			return nullptr;
+			vk_errorf( result, "vkCreateInstance failed" );
 		}
 
-		unsigned int extCount = 0;
-		SDL_Vulkan_GetInstanceExtensions( nullptr, &extCount, nullptr );
-		sdlExtensions.resize( extCount );
-		SDL_Vulkan_GetInstanceExtensions( nullptr, &extCount, sdlExtensions.data() );
-	}
+		return instance;
+	}();
 
-	const VkApplicationInfo appInfo = {
-		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-		.pApplicationName = "gamescope",
-		.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-		.pEngineName = "hopefully not just some code",
-		.engineVersion = VK_MAKE_VERSION(1, 0, 0),
-		.apiVersion = VK_API_VERSION_1_3,
-	};
-
-	const VkInstanceCreateInfo createInfo = {
-		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-		.pApplicationInfo = &appInfo,
-		.enabledExtensionCount = (uint32_t)sdlExtensions.size(),
-		.ppEnabledExtensionNames = sdlExtensions.data(),
-	};
-
-	VkInstance instance = nullptr;
-	result = vkCreateInstance(&createInfo, 0, &instance);
-	if ( result != VK_SUCCESS )
-	{
-		vk_errorf( result, "vkCreateInstance failed" );
-	}
-
-	return instance;
+	return s_pVkInstance;
 }
 
 bool vulkan_init( VkInstance instance, VkSurfaceKHR surface )
@@ -3320,7 +3260,7 @@ bool vulkan_init( VkInstance instance, VkSurfaceKHR surface )
 	if (!init_nis_data())
 		return false;
 
-	if (BIsNested() && !BIsVRSession())
+	if ( GetBackend()->UsesVulkanSwapchain() )
 	{
 		std::thread present_wait_thread( present_wait_thread_func );
 		present_wait_thread.detach();
@@ -3451,7 +3391,7 @@ struct BlitPushData_t
 
 			if (layer->ctm)
 			{
-				ctm[i] = layer->ctm->matrix;
+				ctm[i] = layer->ctm->View<glm::mat3x4>();
 			}
 			else
 			{
@@ -3586,7 +3526,7 @@ struct RcasPushData_t
 
 			if (layer->ctm)
 			{
-				ctm[i] = layer->ctm->matrix;
+				ctm[i] = layer->ctm->View<glm::mat3x4>();
 			}
 			else
 			{
@@ -3903,7 +3843,7 @@ std::optional<uint64_t> vulkan_composite( struct FrameInfo_t *frameInfo, std::sh
 
 	uint64_t sequence = g_device.submit(std::move(cmdBuffer));
 
-	if ( !BIsSDLSession() && pOutputOverride == nullptr && increment )
+	if ( !GetBackend()->UsesVulkanSwapchain() && pOutputOverride == nullptr && increment )
 	{
 		g_output.nOutImage = ( g_output.nOutImage + 1 ) % 3;
 	}

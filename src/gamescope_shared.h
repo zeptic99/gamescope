@@ -2,6 +2,8 @@
 
 namespace gamescope
 {
+	class BackendBlob;
+
 	enum GamescopeKnownDisplays
 	{
 		GAMESCOPE_KNOWN_DISPLAY_UNKNOWN,
@@ -41,3 +43,25 @@ inline bool ColorspaceIsHDR( GamescopeAppTextureColorspace colorspace )
 		colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ;
 }
 
+enum GamescopeSelection
+{
+	GAMESCOPE_SELECTION_CLIPBOARD,
+	GAMESCOPE_SELECTION_PRIMARY,
+
+	GAMESCOPE_SELECTION_COUNT,
+};
+
+enum GamescopePanelOrientation
+{
+	GAMESCOPE_PANEL_ORIENTATION_0,   // normal
+	GAMESCOPE_PANEL_ORIENTATION_270, // right
+	GAMESCOPE_PANEL_ORIENTATION_90,  // left
+	GAMESCOPE_PANEL_ORIENTATION_180, // upside down
+
+	GAMESCOPE_PANEL_ORIENTATION_AUTO,
+};
+
+// Disable partial composition for now until we get
+// composite priorities working in libliftoff + also
+// use the proper libliftoff composite plane system.
+static constexpr bool kDisablePartialComposition = true;

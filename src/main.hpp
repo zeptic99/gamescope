@@ -17,14 +17,17 @@ extern int g_nNestedDisplayIndex;
 
 extern uint32_t g_nOutputWidth;
 extern uint32_t g_nOutputHeight;
+extern bool g_bForceRelativeMouse;
 extern int g_nOutputRefresh; // Hz
 extern bool g_bOutputHDREnabled;
+extern bool g_bForceInternal;
 
 extern bool g_bFullscreen;
 
 extern bool g_bGrabbed;
 
 extern float g_mouseSensitivity;
+extern const char *g_sOutputName;
 
 enum class GamescopeUpscaleFilter : uint32_t
 {
@@ -70,7 +73,3 @@ extern uint32_t g_preferVendorID;
 extern uint32_t g_preferDeviceID;
 
 void restore_fd_limit( void );
-bool BIsNested( void );
-bool BIsHeadless( void );
-bool BIsSDLSession( void );
-bool BIsVRSession( void );

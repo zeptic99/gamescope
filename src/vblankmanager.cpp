@@ -16,19 +16,11 @@
 
 #include "vblankmanager.hpp"
 #include "steamcompmgr.hpp"
-#include "wlserver.hpp"
 #include "main.hpp"
-#include "drm.hpp"
-
-#if HAVE_OPENVR
-#include "vr_session.hpp"
-#endif
 
 LogScope g_VBlankLog("vblank");
 
 // #define VBLANK_DEBUG
-
-extern bool env_to_bool(const char *env);
 
 namespace gamescope
 {
@@ -37,10 +29,10 @@ namespace gamescope
 		m_ulTargetVBlank = get_time_in_nanos();
 		m_ulLastVBlank = m_ulTargetVBlank;
 
-		const bool bShouldUseTimerFD = !BIsVRSession() || env_to_bool( "GAMESCOPE_DISABLE_TIMERFD" );
-
-		if ( bShouldUseTimerFD )
+		if ( !GetBackend()->NeedsFrameSync() )
 		{
+			// Majority of backends fall down this optimal
+			// timerfd path, vs nudge thread.
 			g_VBlankLog.infof( "Using timerfd." );
 		}
 		else
@@ -53,18 +45,8 @@ namespace gamescope
 				abort();
 			}
 
-#if HAVE_OPENVR
-			if ( BIsVRSession() )
-			{
-				std::thread vblankThread( [this]() { this->VRNudgeThread(); } );
-				vblankThread.detach();
-			}
-			else
-#endif
-			{
-				std::thread vblankThread( [this]() { this->NudgeThread(); } );
-				vblankThread.detach();
-			}
+			std::thread vblankThread( [this]() { this->NudgeThread(); } );
+			vblankThread.detach();
 		}
 	}
 
@@ -112,7 +94,7 @@ namespace gamescope
 
 	VBlankScheduleTime CVBlankTimer::CalcNextWakeupTime( bool bPreemptive )
 	{
-		const GamescopeScreenType eScreenType = drm_get_screen_type( &g_DRM );
+		const GamescopeScreenType eScreenType = GetBackend()->GetScreenType();
 
 		const int nRefreshRate = GetRefresh();
 		const uint64_t ulRefreshInterval = kSecInNanoSecs / nRefreshRate;
@@ -129,7 +111,7 @@ namespace gamescope
 			? m_ulVBlankDrawBufferRedZone
 			: ( m_ulVBlankDrawBufferRedZone * 60 * kSecInNanoSecs ) / ( nRefreshRate * kSecInNanoSecs );
 
-		bool bVRR = drm_get_vrr_in_use( &g_DRM );
+		bool bVRR = GetBackend()->IsVRRActive();
 		uint64_t ulOffset = 0;
 		if ( !bVRR )
 		{
@@ -368,43 +350,6 @@ namespace gamescope
 #endif
 	}
 
-#if HAVE_OPENVR
-	void CVBlankTimer::VRNudgeThread()
-	{
-		pthread_setname_np( pthread_self(), "gamescope-vblkvr" );
-
-		for ( ;; )
-		{
-			vrsession_wait_until_visible();
-
-			// Includes redzone.
-			vrsession_framesync( ~0u );
-
-			uint64_t ulWakeupTime = get_time_in_nanos();
-
-			VBlankTime timeInfo =
-			{
-				.schedule =
-				{
-					.ulTargetVBlank  = ulWakeupTime + 3'000'000, // Not right. just a stop-gap for now.
-					.ulScheduledWakeupPoint = ulWakeupTime,
-				},
-				.ulWakeupTime = ulWakeupTime,
-			};
-
-			ssize_t ret = write( m_nNudgePipe[ 1 ], &timeInfo, sizeof( timeInfo ) );
-			if ( ret <= 0 )
-			{
-				g_VBlankLog.errorf_errno( "Nudge write failed" );
-			}
-			else
-			{
-				gpuvis_trace_printf( "sent vblank (nudge thread)" );
-			}
-		}
-	}
-#endif
-
 	void CVBlankTimer::NudgeThread()
 	{
 		pthread_setname_np( pthread_self(), "gamescope-vblk" );
@@ -416,10 +361,9 @@ namespace gamescope
 			if ( !m_bRunning )
 				return;
 
-			VBlankScheduleTime schedule = CalcNextWakeupTime( false );
-			sleep_until_nanos( schedule.ulScheduledWakeupPoint );
-			const uint64_t ulWakeupTime = get_time_in_nanos();
+			VBlankScheduleTime schedule = GetBackend()->FrameSync();
 
+			const uint64_t ulWakeupTime = get_time_in_nanos();
 			{
 				std::unique_lock lock( m_ScheduleMutex );
 
@@ -446,5 +390,9 @@ namespace gamescope
 	}
 }
 
-gamescope::CVBlankTimer g_VBlankTimer{};
+gamescope::CVBlankTimer &GetVBlankTimer()
+{
+    static gamescope::CVBlankTimer s_VBlankTimer;
+    return s_VBlankTimer;
+}
 

@@ -7,6 +7,7 @@
 #include <sys/timerfd.h>
 
 #include <functional>
+#include <mutex>
 
 #include "log.hpp"
 

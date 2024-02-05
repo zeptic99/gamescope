@@ -128,11 +128,9 @@ namespace gamescope
         // 93% by default. (kDefaultVBlankRateOfDecayPercentage)
         uint64_t m_ulVBlankRateOfDecayPercentage = kDefaultVBlankRateOfDecayPercentage;
 
-#if HAVE_OPENVR
-        void VRNudgeThread();
-#endif
         void NudgeThread();
     };
 }
 
-extern gamescope::CVBlankTimer g_VBlankTimer;
+gamescope::CVBlankTimer &GetVBlankTimer();
+

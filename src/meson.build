@@ -105,6 +105,8 @@ src = [
   'steamcompmgr.cpp',
   'color_helpers.cpp',
   'main.cpp',
+  'edid.cpp',
+  'headless.cpp',
   'wlserver.cpp',
   'drm.cpp',
   'modegen.cpp',
@@ -115,6 +117,7 @@ src = [
   'ime.cpp',
   'mangoapp.cpp',
   'reshade_effect_manager.cpp',
+  'backend.cpp',
 ]
 
 src += spirv_shaders

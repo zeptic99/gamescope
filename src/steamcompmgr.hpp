@@ -43,11 +43,6 @@ extern bool g_bForceHDRSupportDebug;
 
 extern EStreamColorspace g_ForcedNV12ColorSpace;
 
-// Disable partial composition for now until we get
-// composite priorities working in libliftoff + also
-// use the proper libliftoff composite plane system.
-static constexpr bool kDisablePartialComposition = true;
-
 struct CursorBarrierInfo
 {
 	int x1 = 0;
@@ -164,7 +159,7 @@ extern gamescope::VBlankTime g_SteamCompMgrVBlankTime;
 extern pid_t focusWindow_pid;
 
 void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_server);
-void gamescope_set_selection(std::string contents, int selection);
+void gamescope_set_selection(std::string contents, GamescopeSelection eSelection);
 
 MouseCursor *steamcompmgr_get_current_cursor();
 MouseCursor *steamcompmgr_get_server_cursor(uint32_t serverId);

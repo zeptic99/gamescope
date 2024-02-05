@@ -1,8 +1,10 @@
 #pragma once
 
-#include "xwayland_ctx.hpp"
 #include <variant>
 #include <string>
+#include <utility>
+
+#include "xwayland_ctx.hpp"
 #include "gamescope-control-protocol.h"
 
 struct commit_t;

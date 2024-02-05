@@ -5,6 +5,13 @@
 #include <drm_fourcc.h>
 #include <drm_mode.h>
 
+#include "wlr_begin.hpp"
+#include <wlr/render/dmabuf.h>
+#include <wlr/render/drm_format_set.h>
+#include "wlr_end.hpp"
+
+#include "hdmi.h"
+
 // Josh: Okay whatever, this header isn't
 // available for whatever stupid reason. :v
 //#include <drm_color_mgmt.h>
@@ -36,11 +43,13 @@ enum drm_valve1_transfer_function {
 	DRM_VALVE1_TRANSFER_FUNCTION_MAX,
 };
 
-/* from CTA-861-G */
-#define HDMI_EOTF_SDR 0
-#define HDMI_EOTF_TRADITIONAL_HDR 1
-#define HDMI_EOTF_ST2084 2
-#define HDMI_EOTF_HLG 3
+enum drm_panel_orientation {
+	DRM_MODE_PANEL_ORIENTATION_UNKNOWN = -1,
+	DRM_MODE_PANEL_ORIENTATION_NORMAL = 0,
+	DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP,
+	DRM_MODE_PANEL_ORIENTATION_LEFT_UP,
+	DRM_MODE_PANEL_ORIENTATION_RIGHT_UP,
+};
 
 /* For Default case, driver will set the colorspace */
 #define DRM_MODE_COLORIMETRY_DEFAULT			0

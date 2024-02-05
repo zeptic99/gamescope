@@ -20,9 +20,6 @@
 
 class CVulkanCmdBuffer;
 
-struct wlserver_ctm;
-struct wlserver_hdr_metadata;
-
 // 1: Fade Plane (Fade outs between switching focus)
 // 2: Video Underlay (The actual video)
 // 3: Video Streaming UI (Game, App)
@@ -141,7 +138,7 @@ public:
 			bTransferDst = false;
 			bLinear = false;
 			bExportable = false;
-			bSwapchain = false;
+			bOutputImage = false;
 			bColorAttachment = false;
 			imageType = VK_IMAGE_TYPE_2D;
 		}
@@ -154,7 +151,7 @@ public:
 		bool bTransferDst : 1;
 		bool bLinear : 1;
 		bool bExportable : 1;
-		bool bSwapchain : 1;
+		bool bOutputImage : 1;
 		bool bColorAttachment : 1;
 		VkImageType imageType;
 	};
@@ -178,7 +175,7 @@ public:
 	inline VkFormat format() const { return m_format; }
 	inline const struct wlr_dmabuf_attributes& dmabuf() { return m_dmabuf; }
 	inline VkImage vkImage() { return m_vkImage; }
-	inline bool swapchainImage() { return m_bSwapchain; }
+	inline bool outputImage() { return m_bOutputImage; }
 	inline bool externalImage() { return m_bExternal; }
 	inline VkDeviceSize totalSize() const { return m_size; }
 	inline uint32_t drmFormat() const { return m_drmFormat; }
@@ -206,7 +203,7 @@ public:
 private:
 	bool m_bInitialized = false;
 	bool m_bExternal = false;
-	bool m_bSwapchain = false;
+	bool m_bOutputImage = false;
 
 	uint32_t m_drmFormat = DRM_FORMAT_INVALID;
 
@@ -264,6 +261,7 @@ struct FrameInfo_t
 {
 	bool useFSRLayer0;
 	bool useNISLayer0;
+	bool bFadingOut;
 	BlurMode blurLayer0;
 	int blurRadius;
 
@@ -291,7 +289,7 @@ struct FrameInfo_t
 		bool blackBorder;
 		bool applyColorMgmt; // drm only
 
-		std::shared_ptr<wlserver_ctm> ctm;
+		std::shared_ptr<gamescope::BackendBlob> ctm;
 
 		GamescopeAppTextureColorspace colorspace;
 
@@ -367,7 +365,7 @@ namespace CompositeDebugFlag
 	static constexpr uint32_t Tonemap_Reinhard = 1u << 7;
 };
 
-VkInstance vulkan_create_instance(void);
+VkInstance vulkan_get_instance(void);
 bool vulkan_init(VkInstance instance, VkSurfaceKHR surface);
 bool vulkan_init_formats(void);
 bool vulkan_make_output();
@@ -382,9 +380,6 @@ std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial, bool
 std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
 
 void vulkan_present_to_window( void );
-#if HAVE_OPENVR
-void vulkan_present_to_openvr( void );
-#endif
 
 void vulkan_garbage_collect( void );
 bool vulkan_remake_swapchain( void );
@@ -438,7 +433,7 @@ struct gamescope_color_mgmt_t
 	glm::vec2 outputVirtualWhite = { 0.f, 0.f };
 	EChromaticAdaptationMethod chromaticAdaptationMode = k_EChromaticAdapatationMethod_Bradford;
 
-	std::shared_ptr<wlserver_hdr_metadata> appHDRMetadata = nullptr;
+	std::shared_ptr<gamescope::BackendBlob> appHDRMetadata;
 
 	bool operator == (const gamescope_color_mgmt_t&) const = default;
 	bool operator != (const gamescope_color_mgmt_t&) const = default;
@@ -487,7 +482,7 @@ struct VulkanOutput_t
 	std::vector< VkPresentModeKHR > presentModes;
 
 
-	std::shared_ptr<wlserver_hdr_metadata> swapchainHDRMetadata;
+	std::shared_ptr<gamescope::BackendBlob> swapchainHDRMetadata;
 	VkSwapchainKHR swapChain;
 	VkFence acquireFence;
 
@@ -918,3 +913,5 @@ uint32_t DRMFormatGetBPP( uint32_t nDRMFormat );
 bool vulkan_supports_hdr10();
 
 void vulkan_wait_idle();
+
+extern CVulkanDevice g_device;

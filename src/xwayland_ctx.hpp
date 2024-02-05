@@ -1,6 +1,6 @@
 #pragma once
 
-#include "drm.hpp"
+#include "backend.h"
 #include "waitable.h"
 
 #include <mutex>
@@ -192,7 +192,6 @@ struct xwayland_ctx_t final : public gamescope::IWaitable
 		Atom gamescopeDebugHDRHeatmap_MSWCG;
 		Atom gamescopeHDROutputFeedback;
 		Atom gamescopeSDROnHDRContentBrightness;
-		Atom gamescopeInternalDisplayBrightness;
 		Atom gamescopeHDRInputGain;
 		Atom gamescopeSDRInputGain;
 		Atom gamescopeHDRItmEnable;
