@@ -16,7 +16,7 @@ wayland_server = dependency('wayland-server', version: '>=1.21')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
 xkbcommon = dependency('xkbcommon')
 thread_dep = dependency('threads')
-cap_dep = dependency('libcap', required: false)
+cap_dep = dependency('libcap', required: get_option('rt_cap'))
 epoll_dep = dependency('epoll-shim', required: false)
 glm_dep = dependency('glm')
 sdl_dep = dependency('SDL2', required: get_option('sdl2_backend'))
@@ -128,6 +128,10 @@ endif
 
 if avif_dep.found()
   gamescope_cpp_args += '-DHAVE_AVIF=@0@'.format(avif_dep.found().to_int())
+endif
+
+if cap_dep.found()
+  gamescope_cpp_args += '-DHAVE_LIBCAP=@0@'.format(avif_dep.found().to_int())
 endif
 
 src += spirv_shaders

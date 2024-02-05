@@ -1,4 +1,5 @@
 option('pipewire', type: 'feature', description: 'Screen capture via PipeWire')
+option('rt_cap',                     type: 'feature', description: 'Support for creating real-time threads + compute queues')
 option('drm_backend',                type: 'feature', description: 'DRM Atomic Backend')
 option('sdl2_backend',               type: 'feature', description: 'SDL2 Window Backend')
 option('avif_screenshots',           type: 'feature', description: 'Support for saving .AVIF HDR screenshots')
