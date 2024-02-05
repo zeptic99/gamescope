@@ -347,7 +347,7 @@ update_color_mgmt()
 		return;
 
 	GetBackend()->GetCurrentConnector()->GetNativeColorimetry(
-		g_bHDREnabled,
+		g_bOutputHDREnabled,
 		&g_ColorMgmt.pending.displayColorimetry, &g_ColorMgmt.pending.displayEOTF,
 		&g_ColorMgmt.pending.outputEncodingColorimetry, &g_ColorMgmt.pending.outputEncodingEOTF );
 
