@@ -10,7 +10,7 @@ dep_xres = dependency('xres')
 dep_xmu = dependency('xmu')
 dep_xi = dependency('xi')
 
-drm_dep = dependency('libdrm', version: '>= 2.4.113')
+drm_dep = dependency('libdrm', version: '>= 2.4.113', required: get_option('drm_backend'))
 
 wayland_server = dependency('wayland-server', version: '>=1.21')
 wayland_protos = dependency('wayland-protocols', version: '>=1.17')
@@ -101,6 +101,13 @@ reshade_include = include_directories([
   '../thirdparty/SPIRV-Headers/include/spirv/unified1'
 ])
 
+gamescope_cpp_args = []
+if drm_dep.found()
+  src += 'drm.cpp'
+  gamescope_cpp_args += '-DHAVE_DRM=@0@'.format(drm_dep.found().to_int())
+endif
+
+
 src = [
   'steamcompmgr.cpp',
   'color_helpers.cpp',
@@ -108,7 +115,6 @@ src = [
   'edid.cpp',
   'headless.cpp',
   'wlserver.cpp',
-  'drm.cpp',
   'modegen.cpp',
   'sdlwindow.cpp',
   'vblankmanager.cpp',
@@ -143,6 +149,7 @@ endif
       stb_dep, displayinfo_dep, openvr_dep, dep_xcursor, avif_dep, dep_xi
     ],
     install: true,
+    cpp_args: gamescope_cpp_args,
   )
 
 

@@ -778,9 +778,11 @@ int main(int argc, char **argv)
 
 	switch ( eCurrentBackend )
 	{
+#if HAVE_DRM
 		case gamescope::GamescopeBackend::DRM:
 			gamescope::IBackend::Set<gamescope::CDRMBackend>();
 			break;
+#endif
 		case gamescope::GamescopeBackend::SDL:
 			gamescope::IBackend::Set<gamescope::CSDLBackend>();
 			break;
