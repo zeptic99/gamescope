@@ -45,9 +45,6 @@
 
 #include "reshade_effect_manager.hpp"
 
-#include "SDL.h"
-#include "SDL_vulkan.h"
-
 extern bool g_bWasPartialComposite;
 
 static constexpr mat3x4 g_rgb2yuv_srgb_to_bt601_limited = {{
