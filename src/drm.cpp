@@ -1031,6 +1031,7 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 
 void load_pnps(void)
 {
+#ifdef HWDATA_PNP_IDS
 	const char *filename = HWDATA_PNP_IDS;
 	FILE *f = fopen(filename, "r");
 	if (!f) {
@@ -1059,6 +1060,7 @@ void load_pnps(void)
 
 	free(line);
 	fclose(f);
+#endif
 }
 
 bool env_to_bool(const char *env)
