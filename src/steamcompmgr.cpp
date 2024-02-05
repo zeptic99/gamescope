@@ -88,6 +88,7 @@
 #include "mwm_hints.h"
 #include "edid.h"
 #include "hdmi.h"
+#include "convar.h"
 
 #if HAVE_AVIF
 #include "avif/avif.h"
@@ -336,7 +337,7 @@ bool g_bVRRCapable_CachedValue = false;
 bool g_bVRRInUse_CachedValue = false;
 bool g_bSupportsHDR_CachedValue = false;
 bool g_bForceHDR10OutputDebug = false;
-bool g_bHDREnabled = false;
+gamescope::ConVar<bool> cv_hdr_enabled{ "hdr_enabled", false, "Whether or not HDR is enabled if it is available." };
 bool g_bHDRItmEnable = false;
 int g_nCurrentRefreshRate_CachedValue = 0;
 
@@ -5657,7 +5658,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDisplayHDREnabled )
 	{
-		g_bHDREnabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayHDREnabled, 0 );
+		cv_hdr_enabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayHDREnabled, 0 );
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeDebugForceHDR10Output )
@@ -7466,7 +7467,7 @@ steamcompmgr_main(int argc, char **argv)
 				} else if (strcmp(opt_name, "force-windows-fullscreen") == 0) {
 					bForceWindowsFullscreen = true;
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
-					g_bHDREnabled = true;
+					cv_hdr_enabled = true;
 				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {
 					g_bForceHDRSupportDebug = true;
  				} else if (strcmp(opt_name, "hdr-debug-force-output") == 0) {
@@ -7638,7 +7639,7 @@ steamcompmgr_main(int argc, char **argv)
 			update_mode_atoms(root_ctx, &flush_root);
 		}
 
-		g_bOutputHDREnabled = (g_bSupportsHDR_CachedValue || g_bForceHDR10OutputDebug) && g_bHDREnabled;
+		g_bOutputHDREnabled = (g_bSupportsHDR_CachedValue || g_bForceHDR10OutputDebug) && cv_hdr_enabled;
 
 		// Pick our width/height for this potential frame, regardless of how it might change later
 		// At some point we might even add proper locking so we get real updates atomically instead
