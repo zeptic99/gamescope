@@ -101,21 +101,6 @@ reshade_include = include_directories([
   '../thirdparty/SPIRV-Headers/include/spirv/unified1'
 ])
 
-gamescope_cpp_args = []
-if drm_dep.found()
-  src += 'drm.cpp'
-  gamescope_cpp_args += '-DHAVE_DRM=@0@'.format(drm_dep.found().to_int())
-endif
-
-if sdl_dep.found()
-  src += 'sdlwindow.cpp'
-  gamescope_cpp_args += '-DHAVE_SDL2=@0@'.format(sdl_dep.found().to_int())
-endif
-
-if avif_dep.found()
-  gamescope_cpp_args += '-DHAVE_AVIF=@0@'.format(avif_dep.found().to_int())
-endif
-
 src = [
   'steamcompmgr.cpp',
   'color_helpers.cpp',
@@ -132,6 +117,21 @@ src = [
   'reshade_effect_manager.cpp',
   'backend.cpp',
 ]
+
+gamescope_cpp_args = []
+if drm_dep.found()
+  src += 'drm.cpp'
+  gamescope_cpp_args += '-DHAVE_DRM=@0@'.format(drm_dep.found().to_int())
+endif
+
+if sdl_dep.found()
+  src += 'sdlwindow.cpp'
+  gamescope_cpp_args += '-DHAVE_SDL2=@0@'.format(sdl_dep.found().to_int())
+endif
+
+if avif_dep.found()
+  gamescope_cpp_args += '-DHAVE_AVIF=@0@'.format(avif_dep.found().to_int())
+endif
 
 src += spirv_shaders
 src += protocols_server_src
