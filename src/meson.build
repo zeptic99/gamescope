@@ -110,7 +110,6 @@ if drm_dep.found()
   src += 'drm.cpp'
   src += 'modegen.cpp'
   required_wlroots_features += 'libinput_backend'
-  gamescope_cpp_args += '-DHAVE_DRM=@0@'.format(drm_dep.found().to_int())
   liftoff_dep = dependency(
     'libliftoff',
     version: ['>= 0.4.0', '< 0.5.0'],
@@ -123,16 +122,12 @@ endif
 
 if sdl_dep.found()
   src += 'sdlwindow.cpp'
-  gamescope_cpp_args += '-DHAVE_SDL2=@0@'.format(sdl_dep.found().to_int())
 endif
 
-if avif_dep.found()
-  gamescope_cpp_args += '-DHAVE_AVIF=@0@'.format(avif_dep.found().to_int())
-endif
-
-if cap_dep.found()
-  gamescope_cpp_args += '-DHAVE_LIBCAP=@0@'.format(avif_dep.found().to_int())
-endif
+gamescope_cpp_args += '-DHAVE_DRM=@0@'.format(drm_dep.found().to_int())
+gamescope_cpp_args += '-DHAVE_SDL2=@0@'.format(sdl_dep.found().to_int())
+gamescope_cpp_args += '-DHAVE_AVIF=@0@'.format(avif_dep.found().to_int())
+gamescope_cpp_args += '-DHAVE_LIBCAP=@0@'.format(avif_dep.found().to_int())
 
 src += spirv_shaders
 src += protocols_server_src
