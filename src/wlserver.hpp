@@ -15,6 +15,10 @@
 
 #include "steamcompmgr_shared.hpp"
 
+#if HAVE_DRM
+#define HAVE_SESSION 1
+#endif
+
 #define WLSERVER_BUTTON_COUNT 7
 
 struct _XDisplay;

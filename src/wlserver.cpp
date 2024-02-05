@@ -229,11 +229,13 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 	xkb_keycode_t keycode = event->keycode + 8;
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym(keyboard->wlr->xkb_state, keycode);
 
+#if HAVE_SESSION
 	if (wlserver.wlr.session && event->state == WL_KEYBOARD_KEY_STATE_PRESSED && keysym >= XKB_KEY_XF86Switch_VT_1 && keysym <= XKB_KEY_XF86Switch_VT_12) {
 		unsigned vt = keysym - XKB_KEY_XF86Switch_VT_1 + 1;
 		wlr_session_change_vt(wlserver.wlr.session, vt);
 		return;
 	}
+#endif
 
 	bool forbidden_key =
 		keysym == XKB_KEY_XF86AudioLowerVolume ||
@@ -1286,6 +1288,7 @@ void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle
 
 ///////////////////////
 
+#if HAVE_SESSION
 bool wlsession_active()
 {
 	return wlserver.wlr.session->active;
@@ -1297,6 +1300,7 @@ static void handle_session_active( struct wl_listener *listener, void *data )
 		GetBackend()->DirtyState( true, true );
 	wl_log.infof( "Session %s", wlserver.wlr.session->active ? "resumed" : "paused" );
 }
+#endif
 
 static void handle_wlr_log(enum wlr_log_importance importance, const char *fmt, va_list args)
 {
@@ -1375,6 +1379,7 @@ bool wlsession_init( void ) {
 	};
 	wlserver_set_output_info( &output_info );
 
+#if HAVE_SESSION
 	if ( !GetBackend()->IsSessionBased() )
 		return true;
 
@@ -1387,9 +1392,12 @@ bool wlsession_init( void ) {
 
 	wlserver.session_active.notify = handle_session_active;
 	wl_signal_add( &wlserver.wlr.session->events.active, &wlserver.session_active );
+#endif
 
 	return true;
 }
+
+#if HAVE_SESSION
 
 static void kms_device_handle_change( struct wl_listener *listener, void *data )
 {
@@ -1432,6 +1440,8 @@ void wlsession_close_kms()
 {
 	wlr_session_close_file( wlserver.wlr.session, wlserver.wlr.device );
 }
+
+#endif
 
 gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 {
