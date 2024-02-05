@@ -22,6 +22,7 @@
 #include "shaders/NVIDIAImageScaling/NIS/NIS_Config.h"
 
 #include <drm_fourcc.h>
+#include "hdmi.h"
 #if HAVE_DRM
 #include "drm_include.h"
 #endif
