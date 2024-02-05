@@ -87,6 +87,7 @@
 #include "win32_styles.h"
 #include "mwm_hints.h"
 #include "edid.h"
+#include "hdmi.h"
 
 #if HAVE_AVIF
 #include "avif/avif.h"
@@ -148,6 +149,14 @@ uint32_t g_reshade_technique_idx = 0;
 
 bool g_bSteamIsActiveWindow = false;
 bool g_bForceInternal = false;
+
+bool env_to_bool(const char *env)
+{
+	if (!env || !*env)
+		return false;
+
+	return !!atoi(env);
+}
 
 uint64_t timespec_to_nanos(struct timespec& spec)
 {

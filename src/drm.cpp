@@ -1063,13 +1063,7 @@ void load_pnps(void)
 #endif
 }
 
-bool env_to_bool(const char *env)
-{
-	if (!env || !*env)
-		return false;
-
-	return !!atoi(env);
-}
+extern bool env_to_bool(const char *env);
 
 bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 {
