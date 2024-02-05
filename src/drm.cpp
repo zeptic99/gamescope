@@ -1022,7 +1022,7 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 	wlserver_unlock();
 
 	if (!initial)
-		WritePatchedEdid( best->GetRawEDID(), best->GetHDRInfo() );
+		WritePatchedEdid( best->GetRawEDID(), best->GetHDRInfo(), g_bRotated );
 
 	update_connector_display_info_wl( drm );
 
@@ -3005,7 +3005,7 @@ namespace gamescope
 		virtual bool PostInit() override
 		{
 			if ( g_DRM.pConnector )
-				WritePatchedEdid( g_DRM.pConnector->GetRawEDID(), g_DRM.pConnector->GetHDRInfo() );
+				WritePatchedEdid( g_DRM.pConnector->GetRawEDID(), g_DRM.pConnector->GetHDRInfo(), g_bRotated );
 			return true;
 		}
 
@@ -3429,7 +3429,7 @@ namespace gamescope
 			if ( !GetCurrentConnector() )
 				return;
 
-			WritePatchedEdid( GetCurrentConnector()->GetRawEDID(), GetCurrentConnector()->GetHDRInfo() );
+			WritePatchedEdid( GetCurrentConnector()->GetRawEDID(), GetCurrentConnector()->GetHDRInfo(), g_bRotated );
 		}
 
 	protected:

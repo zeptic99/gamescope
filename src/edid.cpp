@@ -15,8 +15,6 @@ extern "C"
 #include "libdisplay-info/cta.h"
 }
 
-extern bool g_bRotated;
-
 static LogScope edid_log("josh edid");
 
 namespace gamescope
@@ -89,7 +87,7 @@ namespace gamescope
         return ceilf((logf(nits / 50.0f) / logf(2.0f)) * 32.0f);
     }
 
-    std::optional<std::vector<uint8_t>> PatchEdid( std::span<const uint8_t> pEdid, const BackendConnectorHDRInfo &hdrInfo )
+    std::optional<std::vector<uint8_t>> PatchEdid( std::span<const uint8_t> pEdid, const BackendConnectorHDRInfo &hdrInfo, bool bRotate )
     {
         // A zero length indicates that the edid parsing failed.
         if ( pEdid.empty() )
@@ -97,7 +95,7 @@ namespace gamescope
 
         std::vector<uint8_t> edid( pEdid.begin(), pEdid.end() );
 
-        if ( g_bRotated )
+        if ( bRotate )
         {
             // Patch width, height.
             edid_log.infof("Patching dims %ux%u -> %ux%u", edid[0x15], edid[0x16], edid[0x16], edid[0x15]);
@@ -263,7 +261,7 @@ namespace gamescope
         return pszPatchedEdidPath;
     }
 
-    void WritePatchedEdid( std::span<const uint8_t> pEdid, const BackendConnectorHDRInfo &hdrInfo )
+    void WritePatchedEdid( std::span<const uint8_t> pEdid, const BackendConnectorHDRInfo &hdrInfo, bool bRotate )
     {
         const char *pszPatchedEdidPath = GetPatchedEdidPath();
         if ( !pszPatchedEdidPath )
@@ -271,7 +269,7 @@ namespace gamescope
 
         std::span<const uint8_t> pEdidToWrite = pEdid;
 
-        auto oPatchedEdid = PatchEdid( pEdid, hdrInfo );
+        auto oPatchedEdid = PatchEdid( pEdid, hdrInfo, bRotate );
         if ( oPatchedEdid )
             pEdidToWrite = std::span<const uint8_t>{ oPatchedEdid->begin(), oPatchedEdid->end() };
 
