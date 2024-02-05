@@ -676,7 +676,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-#if defined(__linux__)
+#if defined(__linux__) && HAVE_LIBCAP
 	cap_t caps = cap_get_proc();
 	if ( caps != nullptr )
 	{
