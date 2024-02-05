@@ -110,6 +110,8 @@ struct wlserver_t {
 		// Used to simulate key events and set the keymap
 		struct wlr_keyboard *virtual_keyboard_device;
 
+		struct wlr_device *device;
+
 		std::vector<std::unique_ptr<gamescope_xwayland_server_t>> xwayland_servers;
 	} wlr;
 	
@@ -185,6 +187,7 @@ void xwayland_surface_commit(struct wlr_surface *wlr_surface);
 
 bool wlsession_init( void );
 int wlsession_open_kms( const char *device_name );
+void wlsession_close_kms();
 
 bool wlserver_init( void );
 

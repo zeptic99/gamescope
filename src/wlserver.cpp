@@ -40,7 +40,7 @@
 #include "presentation-time-protocol.h"
 
 #include "wlserver.hpp"
-#include "drm_include.h"
+#include "hdmi.h"
 #include "main.hpp"
 #include "steamcompmgr.hpp"
 #include "log.hpp"
@@ -1398,22 +1398,15 @@ static void kms_device_handle_change( struct wl_listener *listener, void *data )
 }
 
 int wlsession_open_kms( const char *device_name ) {
-	struct wlr_device *device = nullptr;
 	if ( device_name != nullptr )
 	{
-		device = wlr_session_open_file( wlserver.wlr.session, device_name );
-		if ( device == nullptr )
+		wlserver.wlr.device = wlr_session_open_file( wlserver.wlr.session, device_name );
+		if ( wlserver.wlr.device == nullptr )
 			return -1;
-		if ( !drmIsKMS( device->fd ) )
-		{
-			wl_log.errorf( "'%s' is not a KMS device", device_name );
-			wlr_session_close_file( wlserver.wlr.session, device );
-			return -1;
-		}
 	}
 	else
 	{
-		ssize_t n = wlr_session_find_gpus( wlserver.wlr.session, 1, &device );
+		ssize_t n = wlr_session_find_gpus( wlserver.wlr.session, 1, &wlserver.wlr.device );
 		if ( n < 0 )
 		{
 			wl_log.errorf( "Failed to list GPUs" );
@@ -1428,9 +1421,14 @@ int wlsession_open_kms( const char *device_name ) {
 
 	struct wl_listener *listener = new wl_listener();
 	listener->notify = kms_device_handle_change;
-	wl_signal_add( &device->events.change, listener );
+	wl_signal_add( &wlserver.wlr.device->events.change, listener );
 
-	return device->fd;
+	return wlserver.wlr.device->fd;
+}
+
+void wlsession_close_kms()
+{
+	wlr_session_close_file( wlserver.wlr.session, wlserver.wlr.device );
 }
 
 gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
