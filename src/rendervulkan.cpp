@@ -10,6 +10,7 @@
 #include <array>
 #include <bitset>
 #include <thread>
+#include <dlfcn.h>
 #include "vulkan_include.h"
 
 #if defined(__linux__)
@@ -88,18 +89,32 @@ static const mat3x4& colorspace_to_conversion_from_srgb_matrix(EStreamColorspace
 	}
 }
 
-extern "C"
+PFN_vkGetInstanceProcAddr g_pfn_vkGetInstanceProcAddr;
+PFN_vkCreateInstance g_pfn_vkCreateInstance;
+
+static VkResult vulkan_load_module()
 {
-VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(
-	const VkInstanceCreateInfo*                 pCreateInfo,
-	const VkAllocationCallbacks*                pAllocator,
-	VkInstance*                                 pInstance);
+	static VkResult s_result = []()
+	{
+		void* pModule = dlopen( "libvulkan.so.1", RTLD_NOW | RTLD_LOCAL );
+		if ( !pModule )
+			pModule = dlopen( "libvulkan.so", RTLD_NOW | RTLD_LOCAL );
+		if ( !pModule )
+			return VK_ERROR_INITIALIZATION_FAILED;
 
-VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(
-	VkInstance                                  instance,
-	const char*                                 pName);
+		g_pfn_vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym( pModule, "vkGetInstanceProcAddr" );
+		if ( !g_pfn_vkGetInstanceProcAddr )
+			return VK_ERROR_INITIALIZATION_FAILED;
+
+		g_pfn_vkCreateInstance = (PFN_vkCreateInstance) g_pfn_vkGetInstanceProcAddr( nullptr, "vkCreateInstance" );
+		if ( !g_pfn_vkCreateInstance )
+			return VK_ERROR_INITIALIZATION_FAILED;
+
+		return VK_SUCCESS;
+	}();
+
+	return s_result;
 }
-
 
 VulkanOutput_t g_output;
 
@@ -267,7 +282,7 @@ bool CVulkanDevice::BInit(VkInstance instance, VkSurfaceKHR surface)
 	g_output.surface = surface;
 
 	m_instance = instance;
-	#define VK_FUNC(x) vk.x = (PFN_vk##x) vkGetInstanceProcAddr(instance, "vk"#x);
+	#define VK_FUNC(x) vk.x = (PFN_vk##x) g_pfn_vkGetInstanceProcAddr(instance, "vk"#x);
 	VULKAN_INSTANCE_FUNCTIONS
 	#undef VK_FUNC
 
@@ -3232,6 +3247,12 @@ VkInstance vulkan_get_instance( void )
 	{
 		VkResult result = VK_ERROR_INITIALIZATION_FAILED;
 
+		if ( ( result = vulkan_load_module() ) != VK_SUCCESS )
+		{
+			vk_errorf( result, "Failed to load vulkan module." );
+			return nullptr;
+		}
+
 		auto instanceExtensions = GetBackend()->GetInstanceExtensions();
 
 		const VkApplicationInfo appInfo = {
@@ -3251,7 +3272,7 @@ VkInstance vulkan_get_instance( void )
 		};
 
 		VkInstance instance = nullptr;
-		result = vkCreateInstance(&createInfo, 0, &instance);
+		result = g_pfn_vkCreateInstance(&createInfo, 0, &instance);
 		if ( result != VK_SUCCESS )
 		{
 			vk_errorf( result, "vkCreateInstance failed" );
