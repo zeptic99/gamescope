@@ -2,8 +2,8 @@
 
 #include "color_helpers.h"
 #include "gamescope_shared.h"
+#include "vulkan_include.h"
 
-#include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <span>
 #include <vector>

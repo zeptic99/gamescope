@@ -11,7 +11,8 @@
 #include <set>
 #include <list>
 #include <optional>
-#include <vulkan/vulkan_core.h>
+
+#include "vulkan_include.h"
 
 #include "steamcompmgr_shared.hpp"
 

@@ -10,7 +10,7 @@
 #include <array>
 #include <bitset>
 #include <thread>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 #if defined(__linux__)
 #include <sys/sysmacros.h>
@@ -2315,7 +2315,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 			createInfo.format = VK_FORMAT_R8_UNORM;
 
 			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
-			res = vkCreateImageView(g_device.device(), &createInfo, nullptr, &m_lumaView);
+			res = g_device.vk.CreateImageView(g_device.device(), &createInfo, nullptr, &m_lumaView);
 			if ( res != VK_SUCCESS ) {
 				vk_errorf( res, "vkCreateImageView failed" );
 				return false;
@@ -2324,7 +2324,7 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 			createInfo.pNext = NULL;
 			createInfo.format = VK_FORMAT_R8G8_UNORM;
 			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-			res = vkCreateImageView(g_device.device(), &createInfo, nullptr, &m_chromaView);
+			res = g_device.vk.CreateImageView(g_device.device(), &createInfo, nullptr, &m_chromaView);
 			if ( res != VK_SUCCESS ) {
 				vk_errorf( res, "vkCreateImageView failed" );
 				return false;
