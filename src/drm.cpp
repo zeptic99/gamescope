@@ -2484,6 +2484,39 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 
 bool g_bForceAsyncFlips = false;
 
+void drm_rollback( struct drm_t *drm )
+{
+	drm->pending = drm->current;
+
+	for ( std::unique_ptr< gamescope::CDRMCRTC > &pCRTC : drm->crtcs )
+	{
+		for ( std::optional<gamescope::CDRMAtomicProperty> &oProperty : pCRTC->GetProperties() )
+		{
+			if ( oProperty )
+				oProperty->Rollback();
+		}
+	}
+
+	for ( std::unique_ptr< gamescope::CDRMPlane > &pPlane : drm->planes )
+	{
+		for ( std::optional<gamescope::CDRMAtomicProperty> &oProperty : pPlane->GetProperties() )
+		{
+			if ( oProperty )
+				oProperty->Rollback();
+		}
+	}
+
+	for ( auto &iter : drm->connectors )
+	{
+		gamescope::CDRMConnector *pConnector = &iter.second;
+		for ( std::optional<gamescope::CDRMAtomicProperty> &oProperty : pConnector->GetProperties() )
+		{
+			if ( oProperty )
+				oProperty->Rollback();
+		}
+	}
+}
+
 /* Prepares an atomic commit for the provided scene-graph. Returns 0 on success,
  * negative errno on failure or if the scene-graph can't be presented directly. */
 int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameInfo )
@@ -2661,6 +2694,8 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	}
 
 	if ( ret != 0 ) {
+		drm_rollback( drm );
+
 		drmModeAtomicFree( drm->req );
 		drm->req = nullptr;
 
@@ -3503,35 +3538,7 @@ namespace gamescope
 					abort();
 				}
 
-				drm->pending = drm->current;
-
-				for ( std::unique_ptr< gamescope::CDRMCRTC > &pCRTC : drm->crtcs )
-				{
-					for ( std::optional<gamescope::CDRMAtomicProperty> &oProperty : pCRTC->GetProperties() )
-					{
-						if ( oProperty )
-							oProperty->Rollback();
-					}
-				}
-
-				for ( std::unique_ptr< gamescope::CDRMPlane > &pPlane : drm->planes )
-				{
-					for ( std::optional<gamescope::CDRMAtomicProperty> &oProperty : pPlane->GetProperties() )
-					{
-						if ( oProperty )
-							oProperty->Rollback();
-					}
-				}
-
-				for ( auto &iter : drm->connectors )
-				{
-					gamescope::CDRMConnector *pConnector = &iter.second;
-					for ( std::optional<gamescope::CDRMAtomicProperty> &oProperty : pConnector->GetProperties() )
-					{
-						if ( oProperty )
-							oProperty->Rollback();
-					}
-				}
+				drm_rollback( drm );
 
 				// Undo refcount if the commit didn't actually work
 				for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
