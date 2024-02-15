@@ -352,6 +352,9 @@ update_color_mgmt()
 		&g_ColorMgmt.pending.displayColorimetry, &g_ColorMgmt.pending.displayEOTF,
 		&g_ColorMgmt.pending.outputEncodingColorimetry, &g_ColorMgmt.pending.outputEncodingEOTF );
 
+	g_ColorMgmt.pending.flInternalDisplayBrightness =
+		GetBackend()->GetCurrentConnector()->GetHDRInfo().uMaxContentLightLevel;
+
 #ifdef COLOR_MGMT_MICROBENCH
 	struct timespec t0, t1;
 #else
