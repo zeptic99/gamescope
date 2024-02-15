@@ -3353,11 +3353,27 @@ namespace gamescope
 			return drm_poll_state( &g_DRM );
 		}
 
-		virtual std::shared_ptr<BackendBlob> CreateBackendBlob( std::span<const uint8_t> data ) override
+		virtual std::shared_ptr<BackendBlob> CreateBackendBlob( const std::type_info &type, std::span<const uint8_t> data ) override
 		{
 			uint32_t uBlob = 0;
-			if ( drmModeCreatePropertyBlob( g_DRM.fd, data.data(), data.size(), &uBlob ) != 0 )
-				return nullptr;
+			if ( type == typeid( glm::mat3x4 ) )
+			{
+				assert( data.size() == sizeof( glm::mat3x4 ) );
+
+				drm_color_ctm2 ctm2;
+				const float *pData = reinterpret_cast<const float *>( data.data() );
+				for ( uint32_t i = 0; i < 12; i++ )
+					ctm2.matrix[i] = drm_calc_s31_32( pData[i] );
+
+				fprintf( stderr, " !!!! MAKING CTM BLOB!!!!!!\n ");
+				if ( drmModeCreatePropertyBlob( g_DRM.fd, reinterpret_cast<const void *>( &ctm2 ), sizeof( ctm2 ), &uBlob ) != 0 )
+					return nullptr;
+			}
+			else
+			{
+				if ( drmModeCreatePropertyBlob( g_DRM.fd, data.data(), data.size(), &uBlob ) != 0 )
+					return nullptr;
+			}
 
 			return std::make_shared<BackendBlob>( data, uBlob, true );
 		}

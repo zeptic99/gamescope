@@ -127,7 +127,7 @@ namespace gamescope
         virtual void DirtyState( bool bForce = false, bool bForceModeset = false ) override;
         virtual bool PollState() override;
 
-		virtual std::shared_ptr<BackendBlob> CreateBackendBlob( std::span<const uint8_t> data ) override;
+		virtual std::shared_ptr<BackendBlob> CreateBackendBlob( const std::type_info &type, std::span<const uint8_t> data ) override;
 
         virtual uint32_t ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
         virtual void LockBackendFb( uint32_t uFbId ) override;
@@ -390,7 +390,7 @@ namespace gamescope
 		return false;
 	}
 
-	std::shared_ptr<BackendBlob> CSDLBackend::CreateBackendBlob( std::span<const uint8_t> data )
+	std::shared_ptr<BackendBlob> CSDLBackend::CreateBackendBlob( const std::type_info &type, std::span<const uint8_t> data )
 	{
 		return std::make_shared<BackendBlob>( data );
 	}
