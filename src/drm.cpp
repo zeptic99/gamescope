@@ -3217,6 +3217,8 @@ namespace gamescope
 			vulkan_wait( *oCompositeResult, true );
 
 			FrameInfo_t presentCompFrameInfo = {};
+			presentCompFrameInfo.allowVRR = pFrameInfo->allowVRR;
+			presentCompFrameInfo.outputEncodingEOTF = pFrameInfo->outputEncodingEOTF;
 
 			if ( bNeedsFullComposite )
 			{
