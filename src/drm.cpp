@@ -50,6 +50,7 @@
 
 #include "gamescope-control-protocol.h"
 
+static constexpr bool k_bUseCursorPlane = false;
 
 namespace gamescope
 {
@@ -3098,7 +3099,7 @@ namespace gamescope
 			bNeedsFullComposite |= pFrameInfo->useNISLayer0;
 			bNeedsFullComposite |= pFrameInfo->blurLayer0;
 			bNeedsFullComposite |= bNeedsCompositeFromFilter;
-			bNeedsFullComposite |= bDrewCursor;
+			bNeedsFullComposite |= !k_bUseCursorPlane && bDrewCursor;
 			bNeedsFullComposite |= g_bColorSliderInUse;
 			bNeedsFullComposite |= pFrameInfo->bFadingOut;
 			bNeedsFullComposite |= !g_reshade_effect.empty();
@@ -3469,6 +3470,9 @@ namespace gamescope
 
 		virtual glm::uvec2 CursorSurfaceSize( glm::uvec2 uvecSize ) const override
 		{
+			if ( !k_bUseCursorPlane )
+				return uvecSize;
+
 			return glm::uvec2{ g_DRM.cursor_width, g_DRM.cursor_height };
 		}
 
