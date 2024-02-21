@@ -1924,9 +1924,9 @@ bool MouseCursor::getTexture()
 		}
 	}
 
-	for (int i = 0; i < surfaceHeight; i++)
+	for (uint32_t i = 0; i < surfaceHeight; i++)
 	{
-		for (int j = 0; j < surfaceWidth; j++)
+		for (uint32_t j = 0; j < surfaceWidth; j++)
 		{
 			if ( cursorBuffer[i * surfaceWidth + j] & 0xff000000 )
 			{
