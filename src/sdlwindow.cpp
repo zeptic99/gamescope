@@ -613,11 +613,10 @@ namespace gamescope
 			g_nOutputHeight = height;
 		}
 
-		bool bRelativeMouse = false;
 		if ( g_bForceRelativeMouse )
 		{
 			SDL_SetRelativeMouseMode( SDL_TRUE );
-			bRelativeMouse = true;
+			m_bApplicationGrabbed = true;
 		}
 
 		SDL_SetHint( SDL_HINT_TOUCH_MOUSE_EVENTS, "0" );
@@ -651,7 +650,7 @@ namespace gamescope
 
 				case SDL_MOUSEMOTION:
 				{
-					if ( bRelativeMouse )
+					if ( m_bApplicationGrabbed )
 					{
 						if ( g_bWindowFocused )
 						{
