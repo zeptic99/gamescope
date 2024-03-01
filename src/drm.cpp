@@ -3110,6 +3110,11 @@ namespace gamescope
 				if ( !SupportsColorManagement() )
 					bNeedsFullComposite |= ( pFrameInfo->layerCount > 1 || pFrameInfo->layers[0].colorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ );
 			}
+			else
+			{
+				if ( !SupportsColorManagement() )
+					bNeedsFullComposite |= ColorspaceIsHDR( pFrameInfo->layers[0].colorspace );
+			}
 
 			bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
 
@@ -3238,7 +3243,7 @@ namespace gamescope
 
 				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
 				baseLayer->ctm = nullptr;
-				baseLayer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+				baseLayer->colorspace = pFrameInfo->outputEncodingEOTF == EOTF_PQ ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
 				m_bWasPartialCompsiting = false;
 			}

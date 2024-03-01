@@ -1943,7 +1943,7 @@ bool MouseCursor::getTexture()
 
 	m_imageEmpty = bNoCursor;
 
-	if ( !GetBackend()->GetNestedHints() || !g_bForceRelativeMouse )
+	if ( GetBackend()->GetNestedHints() && !g_bForceRelativeMouse )
 	{
 		if ( GetBackend()->GetNestedHints() )
 			GetBackend()->GetNestedHints()->SetRelativeMouseMode( m_imageEmpty );
@@ -2578,10 +2578,10 @@ paint_all(bool async)
 		if ( overlay == global_focus.inputFocusWindow )
 			update_touch_scaling( &frameInfo );
 	}
-	else
+	else if ( !GetBackend()->UsesVulkanSwapchain() && GetBackend()->IsSessionBased() )
 	{
 		auto tex = vulkan_get_hacky_blank_texture();
-		if ( !GetBackend()->UsesVulkanSwapchain() && tex != nullptr )
+		if ( tex != nullptr )
 		{
 			// HACK! HACK HACK HACK
 			// To avoid stutter when toggling the overlay on 
@@ -7549,11 +7549,6 @@ steamcompmgr_main(int argc, char **argv)
 		readyPipeFD = -1;
 	}
 
-	if ( subCommandArg >= 0 )
-	{
-		spawn_client( &argv[ subCommandArg ] );
-	}
-
 	bool vblank = false;
 	g_SteamCompMgrWaiter.AddWaitable( &GetVBlankTimer() );
 	GetVBlankTimer().ArmNextVBlank( true );
@@ -7573,11 +7568,17 @@ steamcompmgr_main(int argc, char **argv)
 	update_mode_atoms(root_ctx);
 	XFlush(root_ctx->dpy);
 
-	GetBackend()->PostInit();
+	if ( !GetBackend()->PostInit() )
+		return;
 
 	update_edid_prop();
 
 	update_screenshot_color_mgmt();
+
+	if ( subCommandArg >= 0 )
+	{
+		spawn_client( &argv[ subCommandArg ] );
+	}
 
 	// Transpose to get this 3x3 matrix into the right state for applying as a 3x4
 	// on DRM + the Vulkan side.

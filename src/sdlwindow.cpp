@@ -503,7 +503,7 @@ namespace gamescope
 		PushUserEvent( GAMESCOPE_SDL_EVENT_ICON );
 	}
 
-	std::optional<INestedHints::CursorInfo> CSDLBackend::GetHostCursor()
+	std::optional<INestedHints::CursorInfo> GetX11HostCursor()
 	{
 		if ( !g_pOriginalDisplay )
 			return std::nullopt;
@@ -536,7 +536,7 @@ namespace gamescope
 			}
 		}
 
-		return CursorInfo
+		return INestedHints::CursorInfo
 		{
 			.pPixels   = std::move( cursorData ),
 			.uWidth    = image->width,
@@ -544,6 +544,11 @@ namespace gamescope
 			.uXHotspot = image->xhot,
 			.uYHotspot = image->yhot,
 		};
+	}
+
+	std::optional<INestedHints::CursorInfo> CSDLBackend::GetHostCursor()
+	{
+		return GetX11HostCursor();
 	}
 
 	void CSDLBackend::OnBackendBlobDestroyed( BackendBlob *pBlob )

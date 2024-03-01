@@ -104,6 +104,7 @@ src = [
   'mangoapp.cpp',
   'reshade_effect_manager.cpp',
   'backend.cpp',
+  'wayland_backend.cpp',
 ]
 
 gamescope_cpp_args = []

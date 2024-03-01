@@ -1920,7 +1920,7 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y
 	wlr_seat_pointer_notify_enter( wlserver.wlr.seat, wlrsurface, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 }
 
-void wlserver_mousemotion( int x, int y, uint32_t time )
+void wlserver_mousemotion( double x, double y, uint32_t time )
 {
 	wlserver_perform_rel_pointer_motion( x, y );
 }
