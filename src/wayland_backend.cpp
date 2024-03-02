@@ -42,9 +42,10 @@ static LogScope xdg_log( "xdg_backend" );
 #define WAYLAND_NULL() []<typename... Args> ( void *pData, Args... args ) { }
 #define WAYLAND_USERDATA_TO_THIS(type, name) []<typename... Args> ( void *pData, Args... args ) { type *pThing = (type *)pData; pThing->name( std::forward<Args>(args)... ); }
 
+extern gamescope::ConVar<bool> cv_hdr_enabled;
+
 namespace gamescope
 {
-    extern ConVar<bool> cv_hdr_enabled;
 
     class CWaylandConnector;
     class CWaylandPlane;
