@@ -5,6 +5,7 @@
 #include "steamcompmgr.hpp"
 #include "edid.h"
 #include "defer.hpp"
+#include "convar.h"
 
 #include <cstring>
 #include <unordered_map>
@@ -43,6 +44,8 @@ static LogScope xdg_log( "xdg_backend" );
 
 namespace gamescope
 {
+    extern ConVar<bool> cv_hdr_enabled;
+
     class CWaylandConnector;
     class CWaylandPlane;
     class CWaylandBackend;
@@ -670,8 +673,8 @@ namespace gamescope
         uint32_t uMaxFullFrameLuminance )
     {
         auto *pHDRInfo = &m_pBackend->m_Connector.m_HDRInfo;
-        pHDRInfo->bExposeHDRSupport         = uTransferFunction == FROG_COLOR_MANAGED_SURFACE_TRANSFER_FUNCTION_ST2084_PQ;
-        pHDRInfo->eOutputEncodingEOTF       = uTransferFunction == FROG_COLOR_MANAGED_SURFACE_TRANSFER_FUNCTION_ST2084_PQ ? EOTF_PQ : EOTF_Gamma22;
+        pHDRInfo->bExposeHDRSupport         = ( cv_hdr_enabled && uTransferFunction == FROG_COLOR_MANAGED_SURFACE_TRANSFER_FUNCTION_ST2084_PQ );
+        pHDRInfo->eOutputEncodingEOTF       = ( cv_hdr_enabled && uTransferFunction == FROG_COLOR_MANAGED_SURFACE_TRANSFER_FUNCTION_ST2084_PQ ) ? EOTF_PQ : EOTF_Gamma22;
         pHDRInfo->uMaxContentLightLevel     = uMaxLuminance;
         pHDRInfo->uMaxFrameAverageLuminance = uMaxFullFrameLuminance;
         pHDRInfo->uMinContentLightLevel     = uMinLuminance;
@@ -778,7 +781,7 @@ namespace gamescope
         m_Connector.UpdateEdid();
         this->HackUpdatePatchedEdid();
 
-        if ( m_Connector.GetHDRInfo().bExposeHDRSupport )
+        if ( cv_hdr_enabled && m_Connector.GetHDRInfo().bExposeHDRSupport )
         {
             setenv( "DXVK_HDR", "1", false );
         }
