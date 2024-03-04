@@ -641,12 +641,15 @@ namespace gamescope
         uint64_t ulTime = ( ( ( uint64_t( uTVSecHi ) << 32ul ) | uTVSecLo ) * 1'000'000'000lu ) +
                           ( uint64_t( uTVNSec ) );
 
-        // TODO: Someday move g_nOutputRefresh to MHz...
-        int nRefresh = ( 1'000'000'000 + uRefresh - 1 ) / uRefresh;
-        if ( nRefresh && nRefresh != g_nOutputRefresh )
+        if ( uRefresh )
         {
-            xdg_log.infof( "Changed refresh to: %d", nRefresh );
-            g_nOutputRefresh = nRefresh;
+            // TODO: Someday move g_nOutputRefresh to MHz...
+            int nRefresh = ( 1'000'000'000 + uRefresh - 1 ) / uRefresh;
+            if ( nRefresh && nRefresh != g_nOutputRefresh )
+            {
+                xdg_log.infof( "Changed refresh to: %d", nRefresh );
+                g_nOutputRefresh = nRefresh;
+            }
         }
 
         GetVBlankTimer().MarkVBlank( ulTime, true );
