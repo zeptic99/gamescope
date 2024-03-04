@@ -31,6 +31,7 @@
 #include <wlr/util/log.h>
 #include <wlr/xwayland/server.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
 #include "wlr_end.hpp"
 
 #include "gamescope-xwayland-protocol.h"
@@ -261,22 +262,11 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 
 static void wlserver_perform_rel_pointer_motion(double unaccel_dx, double unaccel_dy)
 {
-	auto server = steamcompmgr_get_focused_server();
-	if ( server != NULL )
-	{
-		unaccel_dx *= g_mouseSensitivity;
-		unaccel_dy *= g_mouseSensitivity;
+	assert( wlserver_is_lock_held() );
+	unaccel_dx *= g_mouseSensitivity;
+	unaccel_dy *= g_mouseSensitivity;
 
-		server->ctx->accum_x += unaccel_dx;
-		server->ctx->accum_y += unaccel_dy;
-
-		float dx, dy;
-		server->ctx->accum_x = modf(server->ctx->accum_x, &dx);
-		server->ctx->accum_y = modf(server->ctx->accum_y, &dy);
-
-		XTestFakeRelativeMotionEvent( server->get_xdisplay(), int(dx), int(dy), CurrentTime );
-		XFlush( server->get_xdisplay() );
-	}
+	wlr_relative_pointer_manager_v1_send_relative_motion( wlserver.relative_pointer_manager, wlserver.wlr.seat, 0, unaccel_dx, unaccel_dy, unaccel_dx, unaccel_dy );
 }
 
 static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *data)
@@ -1699,6 +1689,13 @@ bool wlserver_init( void ) {
 
 	commit_queue_manager_v1_create(wlserver.display);
 
+	wlserver.relative_pointer_manager = wlr_relative_pointer_manager_v1_create(wlserver.display);
+	if ( !wlserver.relative_pointer_manager )
+	{
+		wl_log.errorf( "Failed to create relative pointer manager" );
+		return false;
+	}
+
 	wlserver.xdg_shell = wlr_xdg_shell_create(wlserver.display, 3);
 	if (!wlserver.xdg_shell)
 	{
@@ -1929,22 +1926,57 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y
 	wlr_seat_pointer_notify_enter( wlserver.wlr.seat, wlrsurface, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 }
 
-void wlserver_mousemotion( double x, double y, uint32_t time )
+static void wlserver_movecursor( double x, double y )
 {
-	wlserver_perform_rel_pointer_motion( x, y );
+	wlserver.mouse_surface_cursorx += x;
+
+	if ( wlserver.mouse_surface_cursorx > wlserver.mouse_focus_surface->current.width - 1 )
+	{
+		wlserver.mouse_surface_cursorx = wlserver.mouse_focus_surface->current.width - 1;
+	}
+
+	if ( wlserver.mouse_surface_cursorx < 0 )
+	{
+		wlserver.mouse_surface_cursorx = 0;
+	}
+
+	wlserver.mouse_surface_cursory += y;
+
+	if ( wlserver.mouse_surface_cursory > wlserver.mouse_focus_surface->current.height - 1 )
+	{
+		wlserver.mouse_surface_cursory = wlserver.mouse_focus_surface->current.height - 1;
+	}
+
+	if ( wlserver.mouse_surface_cursory < 0 )
+	{
+		wlserver.mouse_surface_cursory = 0;
+	}
+
+	wlserver.ulLastMovedCursorTime = get_time_in_nanos();
 }
 
-void wlserver_mousewarp( int x, int y, uint32_t time )
+void wlserver_mousehide()
+{
+	wlserver.ulLastMovedCursorTime = 0;
+}
+
+void wlserver_mousemotion( double x, double y, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
 
-	// TODO: Pick the xwayland_server with active focus
-	auto server = steamcompmgr_get_focused_server();
-	if ( server != NULL )
-	{
-		XTestFakeMotionEvent( server->get_xdisplay(), 0, x, y, CurrentTime );
-		XFlush( server->get_xdisplay() );
-	}
+	wlserver_perform_rel_pointer_motion( x, y );
+	wlserver_movecursor( x, y );
+	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+}
+
+void wlserver_mousewarp( double x, double y, uint32_t time )
+{
+	assert( wlserver_is_lock_held() );
+
+	wlserver_movecursor( x, y );
+	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
 
 void wlserver_mousebutton( int button, bool press, uint32_t time )

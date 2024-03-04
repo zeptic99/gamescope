@@ -1591,18 +1591,20 @@ void MouseCursor::checkSuspension()
 	{
 		if (buttonMask & ( Button1Mask | Button2Mask | Button3Mask | Button4Mask | Button5Mask )) {
 			m_hideForMovement = false;
-			m_lastMovedTime = get_time_in_milliseconds();
 
 			// Move the cursor back to where we left it if the window didn't want us to give
 			// it hover/focus where we left it and we moved it before.
 			if (window_wants_no_focus_when_mouse_hidden(window) && bWasHidden)
 			{
+				wlserver_lock();
+				wlserver_mousewarp( m_lastX, m_lastY, 0 );
+				wlserver_unlock();
 				XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, m_lastX, m_lastY);
 			}
 		}
 	}
 
-	const bool suspended = get_time_in_milliseconds() - m_lastMovedTime > cursorHideTime;
+	const bool suspended = get_time_in_nanos() - wlserver.ulLastMovedCursorTime > cursorHideTime;
 	if (!m_hideForMovement && suspended) {
 		m_hideForMovement = true;
 
@@ -1616,7 +1618,10 @@ void MouseCursor::checkSuspension()
 			{
 				m_lastX = m_x;
 				m_lastY = m_y;
-				XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, window->xwayland().a.width - 1, window->xwayland().a.height - 1);
+				wlserver_lock();
+				wlserver_mousewarp( window->xwayland().a.width - 1, window->xwayland().a.height - 1, 0 );
+				wlserver_mousehide();
+				wlserver_unlock();
 			}
 		}
 
@@ -1790,49 +1795,6 @@ void MouseCursor::constrainPosition()
 	}
 }
 
-
-void MouseCursor::move(int x, int y)
-{
-	// Some stuff likes to warp in-place
-	if (m_x == x && m_y == y) {
-		return;
-	}
-	m_x = x;
-	m_y = y;
-
-	steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
-
-	if (window) {
-		// If mouse moved and we're on the hook for showing the cursor, repaint
-		if (!m_hideForMovement && !m_imageEmpty) {
-			hasRepaintNonBasePlane = true;
-		}
-
-		// If mouse moved and screen is magnified, repaint
-		if ( zoomScaleRatio != 1.0 )
-		{
-			hasRepaintNonBasePlane = true;
-		}
-	}
-
-	// Ignore the first events as it's likely to be non-user-initiated warps
-	if (!window )
-		return;
-
-	if ( ( window != global_focus.inputFocusWindow || !g_bPendingTouchMovement.exchange(false) ) && window->mouseMoved++ < 5 )
-		return;
-
-	m_lastMovedTime = get_time_in_milliseconds();
-	// Move the cursor back to centre if the window didn't want us to give
-	// it hover/focus where we left it.
-	if ( m_hideForMovement && window_wants_no_focus_when_mouse_hidden(window) )
-	{
-		XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, m_lastX, m_lastY);
-	}
-	m_hideForMovement = false;
-	updateCursorFeedback();
-}
-
 int MouseCursor::x() const
 {
 	return m_x;
@@ -1952,14 +1914,11 @@ bool MouseCursor::getTexture()
 
 	m_dirty = false;
 	updateCursorFeedback();
-	UpdateXInputMotionMasks();
 
 	if (m_imageEmpty) {
 
 		return false;
 	}
-
-	UpdatePosition();
 
 	CVulkanTexture::createFlags texCreateFlags;
 	texCreateFlags.bFlippable = true;
@@ -2005,46 +1964,18 @@ void MouseCursor::GetDesiredSize( int& nWidth, int &nHeight )
 	nHeight = nSize;
 }
 
-void MouseCursor::UpdateXInputMotionMasks()
-{
-	bool bShouldMotionMask = !imageEmpty();
-
-	if ( m_bMotionMaskEnabled != bShouldMotionMask )
-	{
-		XIEventMask xi_eventmask;
-		unsigned char xi_mask[ ( XI_LASTEVENT + 7 ) / 8 ]{};
-		xi_eventmask.deviceid = XIAllDevices;
-		xi_eventmask.mask_len = sizeof( xi_mask );
-		xi_eventmask.mask = xi_mask;
-		if ( bShouldMotionMask )
-			XISetMask( xi_mask, XI_RawMotion );
-		XISelectEvents( m_ctx->dpy, m_ctx->root, &xi_eventmask, 1 );
-
-		m_bMotionMaskEnabled = bShouldMotionMask;
-	}
-}
-
-void MouseCursor::UpdatePosition()
-{
-	Window root_return, child_return;
-	int root_x_return, root_y_return;
-	int win_x_return, win_y_return;
-	unsigned int mask_return;
-	XQueryPointer(m_ctx->dpy, m_ctx->root, &root_return, &child_return,
-				&root_x_return, &root_y_return,
-				&win_x_return, &win_y_return,
-				&mask_return);
-
-	move(root_x_return, root_y_return);
-}
-
 void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, struct FrameInfo_t *frameInfo)
 {
+#if 0
 	if ( m_hideForMovement || m_imageEmpty ) {
 		return;
 	}
 
 	int winX = m_x, winY = m_y;
+#else
+	int winX = wlserver.mouse_surface_cursorx;
+	int winY = wlserver.mouse_surface_cursory;
+#endif
 
 	// Also need new texture
 	if (!getTexture()) {
@@ -6711,9 +6642,7 @@ void xwayland_ctx_t::Dispatch()
 	xwayland_ctx_t *ctx = this;
 
 	MouseCursor *cursor = ctx->cursor.get();
-	bool bShouldResetCursor = false;
 	bool bSetFocus = false;
-	bool bShouldUpdateCursor = false;
 
 	while (XPending(ctx->dpy))
 	{
@@ -6839,28 +6768,12 @@ void xwayland_ctx_t::Dispatch()
 				handle_client_message(ctx, &ev.xclient);
 				break;
 			case LeaveNotify:
-				if (ev.xcrossing.window == x11_win(ctx->focus.inputFocusWindow) &&
-					!ctx->focus.overrideWindow)
-				{
-					// Josh: need to defer this as we could have a destroy later on
-					// and end up submitting commands with the currentInputFocusWIndow
-					bShouldResetCursor = true;
-				}
 				break;
 			case SelectionNotify:
 				handle_selection_notify(ctx, &ev.xselection);
 				break;
 			case SelectionRequest:
 				handle_selection_request(ctx, &ev.xselectionrequest);
-				break;
-			case GenericEvent:
-				if (ev.xcookie.extension == ctx->xinput_opcode)
-				{
-					if (ev.xcookie.evtype == XI_RawMotion)
-					{
-						bShouldUpdateCursor = true;
-					}
-				}
 				break;
 
 			default:
@@ -6879,26 +6792,6 @@ void xwayland_ctx_t::Dispatch()
 				break;
 		}
 		XFlush(ctx->dpy);
-	}
-
-	if ( bShouldUpdateCursor )
-	{
-		cursor->UpdatePosition();
-
-		if ( bShouldResetCursor )
-		{
-			// This shouldn't happen due to our pointer barriers,
-			// but there is a known X server bug; warp to last good
-			// position.
-			steamcompmgr_win_t *pInputWindow = ctx->focus.inputFocusWindow;
-			int nX = std::clamp<int>( cursor->x(), pInputWindow->xwayland().a.x, pInputWindow->xwayland().a.x + pInputWindow->xwayland().a.width );
-			int nY = std::clamp<int>( cursor->y(), pInputWindow->xwayland().a.y, pInputWindow->xwayland().a.y + pInputWindow->xwayland().a.height );
-
-			if ( cursor->x() != nX || cursor->y() != nY )
-			{
-				cursor->forcePosition( nX, nY );
-			}
-		}
 	}
 
 	if ( bSetFocus )
@@ -7257,7 +7150,6 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	}
 
 	ctx->cursor->undirty();
-	ctx->cursor->UpdateXInputMotionMasks();
 
 	XFlush(ctx->dpy);
 }

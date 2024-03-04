@@ -124,6 +124,7 @@ struct wlserver_t {
 	struct wlr_surface *kb_focus_surface;
 	double mouse_surface_cursorx = 0.0f;
 	double mouse_surface_cursory = 0.0f;
+	uint64_t ulLastMovedCursorTime = 0;
 	
 	bool button_held[ WLSERVER_BUTTON_COUNT ];
 	std::set <uint32_t> touch_down_ids;
@@ -138,6 +139,7 @@ struct wlserver_t {
 	struct wl_listener new_input_method;
 
 	struct wlr_xdg_shell *xdg_shell;
+	struct wlr_relative_pointer_manager_v1 *relative_pointer_manager;
 	struct wl_listener new_xdg_surface;
 	std::vector<std::shared_ptr<steamcompmgr_win_t>> xdg_wins;
 	std::atomic<bool> xdg_dirty;
@@ -194,7 +196,8 @@ void wlserver_key( uint32_t key, bool press, uint32_t time );
 
 void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x = 0, int y = 0 );
 void wlserver_mousemotion( double x, double y, uint32_t time );
-void wlserver_mousewarp( int x, int y, uint32_t time );
+void wlserver_mousehide();
+void wlserver_mousewarp( double x, double y, uint32_t time );
 void wlserver_mousebutton( int button, bool press, uint32_t time );
 void wlserver_mousewheel( double x, double y, uint32_t time );
 
@@ -268,5 +271,7 @@ void wlserver_force_shutdown();
 void wlserver_send_gamescope_control( wl_resource *control );
 
 bool wlsession_active();
+
+void wlserver_mousewarp( double x, double y, uint32_t time );
 
 void wlserver_mousewheel2( int32_t nDiscreteX, int32_t nDiscreteY, double flX, double flY, uint32_t uTime );

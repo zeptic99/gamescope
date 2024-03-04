@@ -65,7 +65,6 @@ public:
 	int x() const;
 	int y() const;
 
-	void move(int x, int y);
 	void constrainPosition();
 
 	void paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, FrameInfo_t *frameInfo);
@@ -75,7 +74,13 @@ public:
 	bool setCursorImage(char *data, int w, int h, int hx, int hy);
 	bool setCursorImageByName(const char *name);
 
-	void hide() { m_lastMovedTime = 0; checkSuspension(); }
+	void hide()
+	{
+		wlserver_lock();
+		wlserver_mousehide();
+		wlserver_unlock( false );
+		checkSuspension();
+	}
 
 	bool isHidden() { return m_hideForMovement || m_imageEmpty; }
 	bool imageEmpty() const { return m_imageEmpty; }
@@ -96,9 +101,6 @@ public:
 
 	void GetDesiredSize( int& nWidth, int &nHeight );
 
-	void UpdateXInputMotionMasks();
-	void UpdatePosition();
-
 	void checkSuspension();
 private:
 	void warp(int x, int y);
@@ -114,10 +116,7 @@ private:
 	bool m_dirty;
 	bool m_imageEmpty;
 
-	unsigned int m_lastMovedTime = 0;
 	bool m_hideForMovement;
-
-	bool m_bMotionMaskEnabled = false;
 
 	CursorBarrier m_barriers[4] = {};
 
