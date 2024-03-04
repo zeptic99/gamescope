@@ -390,7 +390,8 @@ namespace gamescope
 
         double m_flScrollAccum[2] = { 0.0, 0.0 };
         uint32_t m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
-        uint32_t m_uScrollTime = 0;
+
+        uint32_t m_uFakeTimestamp = 0;
     };
     const wl_seat_listener CWaylandBackend::s_SeatListener =
     {
@@ -1460,7 +1461,7 @@ namespace gamescope
             return;
 
         wlserver_lock();
-        wlserver_touchmotion( wl_fixed_to_double( fSurfaceX ) / double( m_uSurfaceSize.x ), wl_fixed_to_double( fSurfaceY ) / double( m_uSurfaceSize.y ), 0, uTime );
+        wlserver_touchmotion( wl_fixed_to_double( fSurfaceX ) / double( m_uSurfaceSize.x ), wl_fixed_to_double( fSurfaceY ) / double( m_uSurfaceSize.y ), 0, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
     void CWaylandBackend::Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState )
@@ -1470,7 +1471,7 @@ namespace gamescope
             return;
 
         wlserver_lock();
-        wlserver_mousebutton( uButton, uState == WL_POINTER_BUTTON_STATE_PRESSED, uTime );
+        wlserver_mousebutton( uButton, uState == WL_POINTER_BUTTON_STATE_PRESSED, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
     void CWaylandBackend::Wayland_Pointer_Axis( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis, wl_fixed_t fValue )
@@ -1513,7 +1514,7 @@ namespace gamescope
 
         wlserver_lock();
         xdg_log.infof( "m_flScrollAccum[1]: %g ", m_flScrollAccum[1] );
-        wlserver_mousewheel( m_flScrollAccum[0], m_flScrollAccum[1], m_uScrollTime );
+        wlserver_mousewheel( m_flScrollAccum[0], m_flScrollAccum[1], ++m_uFakeTimestamp );
         wlserver_unlock();
     }
 
@@ -1650,7 +1651,7 @@ namespace gamescope
         }
 
         wlserver_lock();
-        wlserver_key( uKey, uState == WL_KEYBOARD_KEY_STATE_PRESSED, uTime );
+        wlserver_key( uKey, uState == WL_KEYBOARD_KEY_STATE_PRESSED, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
     void CWaylandBackend::Wayland_Keyboard_Modifiers( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uModsDepressed, uint32_t uModsLatched, uint32_t uModsLocked, uint32_t uGroup )
@@ -1670,7 +1671,7 @@ namespace gamescope
             return;
 
         wlserver_lock();
-        wlserver_mousemotion( wl_fixed_to_double( fDxUnaccel ), wl_fixed_to_double( fDyUnaccel ), uTimeLo );
+        wlserver_mousemotion( wl_fixed_to_double( fDxUnaccel ), wl_fixed_to_double( fDyUnaccel ), ++m_uFakeTimestamp );
         wlserver_unlock();
     }
 
