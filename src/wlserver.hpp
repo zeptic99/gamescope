@@ -250,7 +250,7 @@ struct wlserver_wl_surface_info
 	uint64_t sequence = 0;
 	std::vector<struct wl_resource*> pending_presentation_feedbacks;
 
-	std::atomic<struct wl_resource *> gamescope_swapchain = { nullptr };
+	std::vector<struct wl_resource *> gamescope_swapchains;
 	std::optional<uint32_t> present_id = std::nullopt;
 	uint64_t desired_present_time = 0;
 

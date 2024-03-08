@@ -70,6 +70,7 @@ struct wlserver_content_override {
 	struct wlr_surface *surface;
 	uint32_t x11_window;
 	struct wl_listener surface_destroy_listener;
+	struct wl_resource *gamescope_swapchain;
 };
 
 enum wlserver_touch_click_mode g_nDefaultTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
@@ -532,6 +533,10 @@ static struct wl_listener new_surface_listener = { .notify = wlserver_new_surfac
 
 void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_content_override *co )
 {
+	if ( co->gamescope_swapchain )
+	{
+		gamescope_swapchain_send_retired(co->gamescope_swapchain);
+	}
 	wl_list_remove( &co->surface_destroy_listener.link );
 	content_overrides.erase( co->x11_window );
 	free( co );
@@ -546,6 +551,7 @@ void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_x11_
 		x11_surface->override_surface = nullptr;
 
 	struct wlserver_content_override *co = iter->second;
+	co->gamescope_swapchain = nullptr;
 	if (co->surface == surf)
 		destroy_content_override(iter->second);
 }
@@ -561,18 +567,22 @@ static void content_override_handle_surface_destroy( struct wl_listener *listene
 
 void gamescope_xwayland_server_t::handle_override_window_content( struct wl_client *client, struct wl_resource *resource, struct wlr_surface *surface, uint32_t x11_window )
 {
-	if ( content_overrides.count( x11_window ) ) {
-		destroy_content_override( content_overrides[ x11_window ] );
-	}
 	wlserver_x11_surface_info *x11_surface = lookup_x11_surface_info_from_xid( this, x11_window );
 	// If we found an x11_surface, go back up to our parent.
 	if ( x11_surface )
 		x11_window = x11_surface->x11_id;
 
+	if ( content_overrides.count( x11_window ) ) {
+		if ( content_overrides[x11_window]->gamescope_swapchain == resource )
+			return;
+		destroy_content_override( content_overrides[ x11_window ] );
+	}
+
 	struct wlserver_content_override *co = (struct wlserver_content_override *)calloc(1, sizeof(*co));
 	co->server = this;
 	co->surface = surface;
 	co->x11_window = x11_window;
+	co->gamescope_swapchain = resource;
 	co->surface_destroy_listener.notify = content_override_handle_surface_destroy;
 	wl_signal_add( &surface->events.destroy, &co->surface_destroy_listener );
 	content_overrides[ x11_window ] = co;
@@ -682,8 +692,7 @@ static void gamescope_swapchain_destroy( struct wl_client *client, struct wl_res
 	if (x11_surface)
 		x11_surface->xwayland_server->destroy_content_override( x11_surface, wl_surface_info->wlr );
 
-	if (wl_surface_info->gamescope_swapchain == resource)
-		wl_surface_info->gamescope_swapchain = nullptr;
+	std::erase(wl_surface_info->gamescope_swapchains, resource);
 
 	wl_resource_destroy( resource );
 }
@@ -810,10 +819,10 @@ static void gamescope_swapchain_factory_create_swapchain( struct wl_client *clie
 		= wl_resource_create( client, &gamescope_swapchain_interface, wl_resource_get_version( resource ), id );
 	wl_resource_set_implementation( gamescope_swapchain_resource, &gamescope_swapchain_impl, wl_surface_info, NULL );
 
-	if (wl_surface_info->gamescope_swapchain != nullptr)
-		wl_log.errorf("create_swapchain: Surface already had a gamescope_swapchain! Overriding.");
+	if (wl_surface_info->gamescope_swapchains.size())
+		wl_log.errorf("create_swapchain: Surface already had a gamescope_swapchain! Warning!");
 
-	wl_surface_info->gamescope_swapchain = gamescope_swapchain_resource;
+	wl_surface_info->gamescope_swapchains.emplace_back( gamescope_swapchain_resource );
 }
 
 static const struct gamescope_swapchain_factory_interface gamescope_swapchain_factory_impl = {
@@ -1278,17 +1287,19 @@ void wlserver_past_present_timing( struct wlr_surface *surface, uint32_t present
 	if ( !wl_info )
 		return;
 
-	gamescope_swapchain_send_past_present_timing(
-		wl_info->gamescope_swapchain,
-		present_id,
-		desired_present_time >> 32,
-		desired_present_time & 0xffffffff,
-		actual_present_time >> 32,
-		actual_present_time & 0xffffffff,
-		earliest_present_time >> 32,
-		earliest_present_time & 0xffffffff,
-		present_margin >> 32,
-		present_margin & 0xffffffff);
+	for (auto& swapchain : wl_info->gamescope_swapchains) {
+		gamescope_swapchain_send_past_present_timing(
+			swapchain,
+			present_id,
+			desired_present_time >> 32,
+			desired_present_time & 0xffffffff,
+			actual_present_time >> 32,
+			actual_present_time & 0xffffffff,
+			earliest_present_time >> 32,
+			earliest_present_time & 0xffffffff,
+			present_margin >> 32,
+			present_margin & 0xffffffff);
+	}
 }
 
 void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle )
@@ -1297,10 +1308,12 @@ void wlserver_refresh_cycle( struct wlr_surface *surface, uint64_t refresh_cycle
 	if ( !wl_info )
 		return;
 
-	gamescope_swapchain_send_refresh_cycle(
-		wl_info->gamescope_swapchain,
-		refresh_cycle >> 32,
-		refresh_cycle & 0xffffffff);
+	for (auto& swapchain : wl_info->gamescope_swapchains) {
+		gamescope_swapchain_send_refresh_cycle(
+			swapchain,
+			refresh_cycle >> 32,
+			refresh_cycle & 0xffffffff);
+	}
 }
 
 ///////////////////////

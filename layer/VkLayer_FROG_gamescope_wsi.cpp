@@ -241,6 +241,8 @@ namespace GamescopeWSILayer {
     bool isBypassingXWayland;
     bool forceFifo;
     VkPresentModeKHR presentMode;
+    uint32_t serverId = 0;
+    bool retired = false;
 
     std::unique_ptr<std::mutex> presentTimingMutex = std::make_unique<std::mutex>();
     std::vector<VkPastPresentationTimingGOOGLE> pastPresentTimings;
@@ -285,7 +287,17 @@ namespace GamescopeWSILayer {
         swapchain->refreshCycle = (uint64_t(refresh_cycle_hi) << 32) | refresh_cycle_lo;
       }
       fprintf(stderr, "[Gamescope WSI] Swapchain recieved new refresh cycle: %.2fms\n", swapchain->refreshCycle / 1'000'000.0);
-    }
+    },
+
+    .retired = [](
+            void *data,
+            gamescope_swapchain *object) {
+      GamescopeSwapchainData *swapchain = reinterpret_cast<GamescopeSwapchainData*>(data);
+      {
+        swapchain->retired = true;
+      }
+      fprintf(stderr, "[Gamescope WSI] Swapchain retired\n");
+    },
   };
 
   class VkInstanceOverrides {
@@ -944,9 +956,6 @@ namespace GamescopeWSILayer {
         gamescopeInstance->gamescopeSwapchainFactory,
         gamescopeSurface->surface);
 
-      if (canBypass)
-        gamescope_swapchain_override_window_content(gamescopeSwapchainObject, *serverId, gamescopeSurface->window);
-
       {
         auto gamescopeSwapchain = GamescopeSwapchain::create(*pSwapchain, GamescopeSwapchainData{
           .object              = gamescopeSwapchainObject,
@@ -955,6 +964,7 @@ namespace GamescopeWSILayer {
           .isBypassingXWayland = canBypass,
           .forceFifo           = gamescopeIsForcingFifo(), // Were we forcing fifo when this swapchain was made?
           .presentMode         = swapchainInfo.presentMode, // The new present mode.
+          .serverId            = *serverId,
         });
         gamescopeSwapchain->pastPresentTimings.reserve(MaxPastPresentationTimes);
 
@@ -1053,6 +1063,16 @@ namespace GamescopeWSILayer {
           if (messageId == 0) // Cancel
             abort();
           s_warned = true;
+        }
+      }
+
+      for (uint32_t i = 0; i < presentInfo.swapchainCount; i++) {
+        if (auto gamescopeSwapchain = GamescopeSwapchain::get(presentInfo.pSwapchains[i])) {
+          auto gamescopeSurface = GamescopeSurface::get(gamescopeSwapchain->surface);
+          if (gamescopeSwapchain->retired)
+            return VK_ERROR_OUT_OF_DATE_KHR;
+          else if (gamescopeSurface->canBypassXWayland())
+            gamescope_swapchain_override_window_content(gamescopeSwapchain->object, gamescopeSwapchain->serverId, gamescopeSurface->window);
         }
       }
 

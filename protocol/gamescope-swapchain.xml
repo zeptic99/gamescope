@@ -181,5 +181,9 @@
       <arg name="refresh_cycle_hi" type="uint" summary="high part of the refresh cycle in nanos"/>
       <arg name="refresh_cycle_lo" type="uint" summary="low part of the refresh cycle in nanos"/>
     </event>
+
+    <event name="retired">
+      <description summary="Swapchain was remotely retired"></description>
+    </event>
   </interface>
 </protocol>
