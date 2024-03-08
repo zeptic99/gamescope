@@ -816,9 +816,6 @@ namespace gamescope
         // Grab stuff from any extra bindings/listeners we set up, eg. format/modifiers.
         wl_display_roundtrip( m_pDisplay );
 
-        for ( uint32_t i = 0; i < 8; i++ )
-            m_Planes[i].Init( i == 0 ? nullptr : &m_Planes[0], i == 0 ? nullptr : &m_Planes[ i - 1 ] );
-
         if ( !vulkan_init( vulkan_get_instance(), VK_NULL_HANDLE ) )
         {
             return false;
@@ -835,6 +832,9 @@ namespace gamescope
 
     bool CWaylandBackend::PostInit()
     {
+        for ( uint32_t i = 0; i < 8; i++ )
+            m_Planes[i].Init( i == 0 ? nullptr : &m_Planes[0], i == 0 ? nullptr : &m_Planes[ i - 1 ] );
+
         m_Connector.UpdateEdid();
         this->HackUpdatePatchedEdid();
 
