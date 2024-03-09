@@ -702,6 +702,7 @@ namespace gamescope
     }
     void CWaylandPlane::LibDecor_Frame_Commit( libdecor_frame *pFrame )
     {
+        force_repaint();
     }
     void CWaylandPlane::LibDecor_Frame_DismissPopup( libdecor_frame *pFrame, const char *pSeatName )
     {
