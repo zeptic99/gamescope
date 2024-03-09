@@ -130,6 +130,7 @@ namespace gamescope
         void Present( wl_buffer *pBuffer, int32_t nDestX, int32_t nDestY, double flSrcX, double flSrcY, double flSrcWidth, double flSrcHeight, int32_t nDstWidth, int32_t nDstHeight, GamescopeAppTextureColorspace eColorspace );
         void Present( const FrameInfo_t::Layer_t *pLayer );
 
+        void CommitLibDecor( libdecor_configuration *pConfiguration );
         void Commit();
 
         wl_surface *GetSurface() const { return m_pSurface; }
@@ -172,6 +173,7 @@ namespace gamescope
         wl_subsurface *m_pSubsurface = nullptr;
         frog_color_managed_surface *m_pFrogColorManagedSurface = nullptr;
         libdecor_window_state m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
+        bool m_bNeedsDecorCommit = false;
     };
     // Can't be const, libdecor api bad...
     libdecor_frame_interface CWaylandPlane::s_LibDecorFrameInterface =
@@ -649,8 +651,21 @@ namespace gamescope
         }
     }
 
+    void CWaylandPlane::CommitLibDecor( libdecor_configuration *pConfiguration )
+    {
+        libdecor_state *pState = libdecor_state_new( g_nOutputWidth, g_nOutputHeight );
+        libdecor_frame_commit( m_pFrame, pState, pConfiguration );
+        libdecor_state_free( pState );
+    }
+
     void CWaylandPlane::Commit()
     {
+        if ( m_bNeedsDecorCommit )
+        {
+            CommitLibDecor( nullptr );
+            m_bNeedsDecorCommit = false;
+        }
+
         wl_surface_commit( m_pSurface );
     }
 
@@ -692,9 +707,7 @@ namespace gamescope
         g_nOutputWidth  = nWidth;
         g_nOutputHeight = nHeight;
 
-        libdecor_state *pState = libdecor_state_new( g_nOutputWidth, g_nOutputHeight );
-        libdecor_frame_commit( m_pFrame, pState, pConfiguration );
-        libdecor_state_free( pState );
+        CommitLibDecor( pConfiguration );
 	}
     void CWaylandPlane::LibDecor_Frame_Close( libdecor_frame *pFrame )
     {
@@ -702,6 +715,7 @@ namespace gamescope
     }
     void CWaylandPlane::LibDecor_Frame_Commit( libdecor_frame *pFrame )
     {
+        m_bNeedsDecorCommit = true;
         force_repaint();
     }
     void CWaylandPlane::LibDecor_Frame_DismissPopup( libdecor_frame *pFrame, const char *pSeatName )
