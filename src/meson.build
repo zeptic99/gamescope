@@ -37,6 +37,8 @@ displayinfo_dep = dependency(
   default_options: ['default_library=static'],
 )
 
+libdecor_dep = dependency('libdecor-0')
+
 glsl_compiler = find_program('glslang', 'glslangValidator', native: true)
 
 # Use --depfile to rebuild shaders when included files have changed. Sadly debian based
@@ -158,7 +160,8 @@ endforeach
       dep_xxf86vm, dep_xres, glm_dep, drm_dep, wayland_server,
       xkbcommon, thread_dep, sdl_dep, wlroots_dep,
       vulkan_dep, liftoff_dep, dep_xtst, dep_xmu, cap_dep, epoll_dep, pipewire_dep, librt_dep,
-      stb_dep, displayinfo_dep, openvr_dep, dep_xcursor, avif_dep, dep_xi
+      stb_dep, displayinfo_dep, openvr_dep, dep_xcursor, avif_dep, dep_xi,
+      libdecor_dep,
     ],
     install: true,
     cpp_args: gamescope_cpp_args,

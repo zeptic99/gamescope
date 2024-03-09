@@ -13,6 +13,7 @@
 #include <sys/mman.h>
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
+#include <libdecor.h>
 
 #include "wlr_begin.hpp"
 #include <wayland-client.h>
@@ -31,6 +32,7 @@
 extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
 extern bool g_bForceHDR10OutputDebug;
+extern bool g_bBorderlessOutputWindow;
 
 extern bool alwaysComposite;
 extern bool g_bColorSliderInUse;
@@ -41,8 +43,21 @@ using namespace std::literals;
 
 static LogScope xdg_log( "xdg_backend" );
 
+template <typename Func, typename... Args>
+auto CallWithAllButLast(Func pFunc, Args&&... args)
+{
+    auto Forwarder = [&] <typename Tuple, size_t... idx> (Tuple&& tuple, std::index_sequence<idx...>)
+    {
+        return pFunc(std::get<idx>(std::forward<Tuple>(tuple))...);
+    };
+    return Forwarder(std::forward_as_tuple(args...), std::make_index_sequence<sizeof...(Args) - 1>());
+}
+
 #define WAYLAND_NULL() []<typename... Args> ( void *pData, Args... args ) { }
 #define WAYLAND_USERDATA_TO_THIS(type, name) []<typename... Args> ( void *pData, Args... args ) { type *pThing = (type *)pData; pThing->name( std::forward<Args>(args)... ); }
+
+// Libdecor puts its userdata ptr at the end... how fun! I shouldn't have spent so long writing this total atrocity to mankind.
+#define LIBDECOR_USERDATA_TO_THIS(type, name) []<typename... Args> ( Args... args ) { type *pThing = (type *)std::get<sizeof...(Args)-1>(std::forward_as_tuple(args...)); CallWithAllButLast([&]<typename... Args2>(Args2... args2){ pThing->name(std::forward<Args2>(args2)...); }, std::forward<Args>(args)...); }
 
 extern gamescope::ConVar<bool> cv_hdr_enabled;
 
@@ -118,17 +133,15 @@ namespace gamescope
         void Commit();
 
         wl_surface *GetSurface() const { return m_pSurface; }
-        xdg_surface *GetXdgSurface() const { return m_pXdgSurface; }
-        xdg_toplevel *GetXdgTopLevel() const { return m_pXdgToplevel; }
+        libdecor_frame *GetFrame() const { return m_pFrame; }
 
     private:
 
-        void Wayland_XDGSurface_Configure( xdg_surface *pXDGSurface, uint32_t uSerial );
-        static const xdg_surface_listener s_XDGSurfaceListener;
-
-        void Wayland_XDGToplevel_Configure( xdg_toplevel *pXDGTopLevel, int32_t nWidth, int32_t nHeight, wl_array *pStates );
-        void Wayland_XDGToplevel_Close( xdg_toplevel *pXDGTopLevel );
-        static const xdg_toplevel_listener s_XDGToplevelListener;
+        void LibDecor_Frame_Configure( libdecor_frame *pFrame, libdecor_configuration *pConfiguration );
+        void LibDecor_Frame_Close( libdecor_frame *pFrame );
+        void LibDecor_Frame_Commit( libdecor_frame *pFrame );
+        void LibDecor_Frame_DismissPopup( libdecor_frame *pFrame, const char *pSeatName );
+        static libdecor_frame_interface s_LibDecorFrameInterface;
 
         void Wayland_PresentationFeedback_SyncOutput( struct wp_presentation_feedback *pFeedback, wl_output *pOutput );
         void Wayland_PresentationFeedback_Presented( struct wp_presentation_feedback *pFeedback, uint32_t uTVSecHi, uint32_t uTVSecLo, uint32_t uTVNSec, uint32_t uRefresh, uint32_t uSeqHi, uint32_t uSeqLo, uint32_t uFlags );
@@ -155,19 +168,18 @@ namespace gamescope
 
         wl_surface *m_pSurface = nullptr;
         wp_viewport *m_pViewport = nullptr;
-        xdg_surface *m_pXdgSurface = nullptr;
-        xdg_toplevel *m_pXdgToplevel = nullptr;
+        libdecor_frame *m_pFrame = nullptr;
         wl_subsurface *m_pSubsurface = nullptr;
         frog_color_managed_surface *m_pFrogColorManagedSurface = nullptr;
+        libdecor_window_state m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
     };
-    const xdg_surface_listener CWaylandPlane::s_XDGSurfaceListener =
+    // Can't be const, libdecor api bad...
+    libdecor_frame_interface CWaylandPlane::s_LibDecorFrameInterface =
     {
-        .configure = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_XDGSurface_Configure ),
-    };
-    const xdg_toplevel_listener CWaylandPlane::s_XDGToplevelListener =
-    {
-        .configure = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_XDGToplevel_Configure ),
-        .close     = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_XDGToplevel_Close ),
+	    .configure     = LIBDECOR_USERDATA_TO_THIS( CWaylandPlane, LibDecor_Frame_Configure ),
+        .close         = LIBDECOR_USERDATA_TO_THIS( CWaylandPlane, LibDecor_Frame_Close ),
+        .commit        = LIBDECOR_USERDATA_TO_THIS( CWaylandPlane, LibDecor_Frame_Commit ),
+        .dismiss_popup = LIBDECOR_USERDATA_TO_THIS( CWaylandPlane, LibDecor_Frame_DismissPopup ),
     };
     const wp_presentation_feedback_listener CWaylandPlane::s_PresentationFeedbackListener =
     {
@@ -298,6 +310,7 @@ namespace gamescope
         frog_color_management_factory_v1 *GetFrogColorManagementFactory() const { return m_pFrogColorMgmtFactory; }
         zwp_pointer_constraints_v1 *GetPointerConstraints() const { return m_pPointerConstraints; }
         zwp_relative_pointer_manager_v1 *GetRelativePointerManager() const { return m_pRelativePointerManager; }
+        libdecor *GetLibDecor() const { return m_pLibDecor; }
 
         uint32_t ImportWlBuffer( wl_buffer *pBuffer );
         wl_buffer *FbIdToBuffer( uint32_t uFbId );
@@ -361,6 +374,8 @@ namespace gamescope
         zwp_pointer_constraints_v1 *m_pPointerConstraints = nullptr;
         zwp_relative_pointer_manager_v1 *m_pRelativePointerManager = nullptr;
         std::unordered_map<wl_output *, WaylandOutputInfo> m_pOutputs;
+
+        libdecor *m_pLibDecor = nullptr;
 
         wl_seat *m_pSeat = nullptr;
         wl_keyboard *m_pKeyboard = nullptr;
@@ -544,12 +559,14 @@ namespace gamescope
 
         if ( !pParent )
         {
-            m_pXdgSurface = xdg_wm_base_get_xdg_surface( m_pBackend->GetXDGWMBase(), m_pSurface );
-            xdg_surface_add_listener( m_pXdgSurface, &s_XDGSurfaceListener, this );
-            m_pXdgToplevel = xdg_surface_get_toplevel( m_pXdgSurface );
-            xdg_toplevel_add_listener( m_pXdgToplevel, &s_XDGToplevelListener, this );
-            xdg_toplevel_set_title( m_pXdgToplevel, "Gamescope" );
-            xdg_toplevel_set_app_id( m_pXdgToplevel, "gamescope" );
+            m_pFrame = libdecor_decorate( m_pBackend->GetLibDecor(), m_pSurface, &s_LibDecorFrameInterface, this );
+
+            libdecor_frame_set_title( m_pFrame, "Gamescope" );
+            libdecor_frame_set_app_id( m_pFrame, "gamescope" );
+            // !!! Health Warning: This below call doesn't work on Plasma for borderless, and just makes the window not show up....
+            // Why? I don't know. Doesn't work in the demo app either. /shrug
+            libdecor_frame_set_visibility( m_pFrame, !g_bBorderlessOutputWindow );
+            libdecor_frame_map( m_pFrame );
         }
         else
         {
@@ -568,7 +585,7 @@ namespace gamescope
     {
         if ( pBuffer )
         {
-            if ( m_pXdgToplevel )
+            if ( m_pFrame )
             {
                 struct wp_presentation_feedback *pFeedback = wp_presentation_feedback( m_pBackend->GetPresentation(), m_pSurface );
                 wp_presentation_feedback_add_listener( pFeedback, &s_PresentationFeedbackListener, this );
@@ -624,7 +641,7 @@ namespace gamescope
         }
         else
         {
-            if ( !m_pXdgToplevel )
+            if ( !m_pFrame )
             {
                 wl_surface_attach( m_pSurface, nullptr, 0, 0 );
                 wl_surface_damage( m_pSurface, 0, 0, INT32_MAX, INT32_MAX );
@@ -661,24 +678,33 @@ namespace gamescope
         }
     }
 
-    void CWaylandPlane::Wayland_XDGSurface_Configure( xdg_surface *pXDGSurface, uint32_t uSerial )
+    void CWaylandPlane::LibDecor_Frame_Configure( libdecor_frame *pFrame, libdecor_configuration *pConfiguration )
     {
-        xdg_surface_ack_configure( pXDGSurface, uSerial );
-    }
+	    if ( !libdecor_configuration_get_window_state( pConfiguration, &m_eWindowState ) )
+		    m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
 
-    void CWaylandPlane::Wayland_XDGToplevel_Configure( xdg_toplevel *pXDGTopLevel, int32_t nWidth, int32_t nHeight, wl_array *pStates )
-    {
-        // Compositor is deferring to us.
-        if ( nWidth == 0 || nHeight == 0 )
-            return;
+        int nWidth, nHeight;
+        if ( !libdecor_configuration_get_content_size( pConfiguration, m_pFrame, &nWidth, &nHeight ) )
+        {
+            nWidth  = g_nOutputWidth;
+            nHeight = g_nOutputHeight;
+        }
+        g_nOutputWidth  = nWidth;
+        g_nOutputHeight = nHeight;
 
-        g_nOutputWidth = std::max( nWidth, 1 );
-        g_nOutputHeight = std::max( nHeight, 1 );
-    }
-
-    void CWaylandPlane::Wayland_XDGToplevel_Close( xdg_toplevel *pXDGTopLevel )
+        libdecor_state *pState = libdecor_state_new( g_nOutputWidth, g_nOutputHeight );
+        libdecor_frame_commit( m_pFrame, pState, pConfiguration );
+        libdecor_state_free( pState );
+	}
+    void CWaylandPlane::LibDecor_Frame_Close( libdecor_frame *pFrame )
     {
         raise( SIGTERM );
+    }
+    void CWaylandPlane::LibDecor_Frame_Commit( libdecor_frame *pFrame )
+    {
+    }
+    void CWaylandPlane::LibDecor_Frame_DismissPopup( libdecor_frame *pFrame, const char *pSeatName )
+    {
     }
 
     void CWaylandPlane::Wayland_PresentationFeedback_SyncOutput( struct wp_presentation_feedback *pFeedback, wl_output *pOutput )
@@ -743,6 +769,15 @@ namespace gamescope
     ////////////////
     // CWaylandBackend
     ////////////////
+
+    // Not const... weird.
+    static libdecor_interface s_LibDecorInterface =
+    {
+        .error = []( libdecor *pContext, libdecor_error eError, const char *pMessage )
+        {
+            xdg_log.errorf( "libdecor: %s", pMessage );
+        },
+    };
 
     CWaylandBackend::CWaylandBackend()
         : m_Connector( this )
@@ -816,6 +851,13 @@ namespace gamescope
         // Grab stuff from any extra bindings/listeners we set up, eg. format/modifiers.
         wl_display_roundtrip( m_pDisplay );
 
+        m_pLibDecor = libdecor_new( m_pDisplay, &s_LibDecorInterface );
+        if ( !m_pLibDecor )
+        {
+            xdg_log.errorf( "Failed to init libdecor." );
+            return false;
+        }
+
         if ( !vulkan_init( vulkan_get_instance(), VK_NULL_HANDLE ) )
         {
             return false;
@@ -845,7 +887,7 @@ namespace gamescope
 
         if ( g_bFullscreen )
         {
-            xdg_toplevel_set_fullscreen( m_Planes[0].GetXdgTopLevel(), nullptr );
+            libdecor_frame_set_fullscreen( m_Planes[0].GetFrame(), nullptr );
         }
 
         if ( m_pSinglePixelBufferManager )
@@ -1234,7 +1276,7 @@ namespace gamescope
         std::string szTitle = pAppTitle ? *pAppTitle : "gamescope";
         if ( g_bGrabbed )
             szTitle += " (grabbed)";
-        xdg_toplevel_set_title( m_Planes[0].GetXdgTopLevel(), szTitle.c_str() );
+        libdecor_frame_set_title( m_Planes[0].GetFrame(), szTitle.c_str() );
     }
     void CWaylandBackend::SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels )
     {
@@ -1571,9 +1613,9 @@ namespace gamescope
                     if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
                     {
                         if ( !g_bFullscreen )
-                            xdg_toplevel_set_fullscreen( m_Planes[0].GetXdgTopLevel(), nullptr );
+                            libdecor_frame_set_fullscreen( m_Planes[0].GetFrame(), nullptr );
                         else
-                            xdg_toplevel_unset_fullscreen( m_Planes[0].GetXdgTopLevel() );
+                            libdecor_frame_unset_fullscreen( m_Planes[0].GetFrame() );
 
                         g_bFullscreen = !g_bFullscreen;
                     }
