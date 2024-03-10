@@ -562,16 +562,8 @@ namespace gamescope
         if ( !pParent )
         {
             m_pFrame = libdecor_decorate( m_pBackend->GetLibDecor(), m_pSurface, &s_LibDecorFrameInterface, this );
-
-            // We have to commit some libdecor state before calling libdecor_frame_set_visibility or it crashes.
-            // Oh great there's two bugs in this already.
-            CommitLibDecor( nullptr );
-
             libdecor_frame_set_title( m_pFrame, "Gamescope" );
             libdecor_frame_set_app_id( m_pFrame, "gamescope" );
-            // !!! Health Warning: This below call doesn't work on Plasma for borderless, and just makes the window not show up....
-            // Why? I don't know. Doesn't work in the demo app either. /shrug
-            libdecor_frame_set_visibility( m_pFrame, !g_bBorderlessOutputWindow );
             libdecor_frame_map( m_pFrame );
         }
         else
@@ -583,6 +575,9 @@ namespace gamescope
 
         wl_surface_commit( m_pSurface );
         wl_display_roundtrip( m_pBackend->GetDisplay() );
+
+        if ( m_pFrame )
+            libdecor_frame_set_visibility( m_pFrame, !g_bBorderlessOutputWindow );
 
         return true;
     }
