@@ -801,6 +801,8 @@ int main(int argc, char **argv)
 
 		case gamescope::GamescopeBackend::Wayland:
 			gamescope::IBackend::Set<gamescope::CWaylandBackend>();
+			if ( !GetBackend() )
+				gamescope::IBackend::Set<gamescope::CSDLBackend>();
 			break;
 		default:
 			abort();
