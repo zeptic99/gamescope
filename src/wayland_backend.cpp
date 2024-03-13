@@ -249,7 +249,7 @@ namespace gamescope
         template <typename T>
         std::shared_ptr<T> QueueLaunder( T* pObject );
 
-        void SetRelativePointer( std::shared_ptr<zwp_relative_pointer_v1> pWrappedPointer );
+        void SetRelativePointer( bool bRelative );
 
     private:
 
@@ -271,6 +271,7 @@ namespace gamescope
         wl_keyboard *m_pKeyboard = nullptr;
         wl_pointer *m_pPointer = nullptr;
         wl_touch *m_pTouch = nullptr;
+        zwp_relative_pointer_manager_v1 *m_pRelativePointerManager = nullptr;
 
         uint32_t m_uFakeTimestamp = 0;
 
@@ -283,7 +284,7 @@ namespace gamescope
         double m_flScrollAccum[2] = { 0.0, 0.0 };
         uint32_t m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
 
-        std::atomic<std::shared_ptr<zwp_relative_pointer_v1>> m_pRelativePointer;
+        std::atomic<std::shared_ptr<zwp_relative_pointer_v1>> m_pRelativePointer = nullptr;
 
         void Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion );
         static const wl_registry_listener s_RegistryListener;
@@ -1387,7 +1388,7 @@ namespace gamescope
                 m_pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
             }
 
-            m_InputThread.SetRelativePointer( m_InputThread.QueueLaunder( m_pRelativePointer ) );
+            m_InputThread.SetRelativePointer( bRelative );
 
             UpdateCursor();
         }
@@ -1673,7 +1674,7 @@ namespace gamescope
         wl_registry_destroy( pRegistry );
         pRegistry = nullptr;
 
-        if ( !m_pSeat )
+        if ( !m_pSeat || !m_pRelativePointerManager )
         {
             xdg_log.errorf( "Couldn't create Wayland input objects." );
             return false;
@@ -1747,10 +1748,19 @@ namespace gamescope
         return std::shared_ptr<T>{ pObjectWrapper, []( T *pThing ){ wl_proxy_wrapper_destroy( (void *)pThing ); } };
     }
 
-    void CWaylandInputThread::SetRelativePointer( std::shared_ptr<zwp_relative_pointer_v1> pWrappedPointer )
+    void CWaylandInputThread::SetRelativePointer( bool bRelative )
     {
-        m_pRelativePointer = pWrappedPointer;
-        zwp_relative_pointer_v1_add_listener( m_pRelativePointer.load().get(), &s_RelativePointerListener, this );
+        // This constructors/destructors the display's mutex, so should be safe to do across threads.
+        if ( !bRelative )
+        {
+            m_pRelativePointer = nullptr;
+        }
+        else
+        {
+            zwp_relative_pointer_v1 *pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
+            m_pRelativePointer = std::shared_ptr<zwp_relative_pointer_v1>{ pRelativePointer, []( zwp_relative_pointer_v1 *pObject ){ zwp_relative_pointer_v1_destroy( pObject ); } };
+            zwp_relative_pointer_v1_add_listener( pRelativePointer, &s_RelativePointerListener, this );
+        }
     }
 
     // Registry
@@ -1761,6 +1771,10 @@ namespace gamescope
         {
             m_pSeat = (wl_seat *)wl_registry_bind( pRegistry, uName, &wl_seat_interface, 8u );
             wl_seat_add_listener( m_pSeat, &s_SeatListener, this );
+        }
+        else if ( !strcmp( pInterface, zwp_relative_pointer_manager_v1_interface.name ) )
+        {
+            m_pRelativePointerManager = (zwp_relative_pointer_manager_v1 *)wl_registry_bind( pRegistry, uName, &zwp_relative_pointer_manager_v1_interface, 1u );
         }
     }
 
