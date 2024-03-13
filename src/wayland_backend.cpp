@@ -9,6 +9,7 @@
 
 #include <cstring>
 #include <unordered_map>
+#include <unordered_set>
 #include <csignal>
 #include <sys/mman.h>
 #include <poll.h>
@@ -253,7 +254,7 @@ namespace gamescope
 
     private:
 
-        void UpdateCursor();
+        void HandleKey( uint32_t uKey, bool bPressed );
 
         CWaylandBackend *m_pBackend = nullptr;
 
@@ -285,6 +286,7 @@ namespace gamescope
         uint32_t m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
 
         std::atomic<std::shared_ptr<zwp_relative_pointer_v1>> m_pRelativePointer = nullptr;
+        std::unordered_set<uint32_t> m_uScancodesHeld;
 
         void Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion );
         static const wl_registry_listener s_RegistryListener;
@@ -1763,6 +1765,96 @@ namespace gamescope
         }
     }
 
+    void CWaylandInputThread::HandleKey( uint32_t uKey, bool bPressed )
+    {
+        if ( m_uKeyModifiers & m_uModMask[ GAMESCOPE_WAYLAND_MOD_META ] )
+        {
+            switch ( uKey )
+            {
+                case KEY_F:
+                {
+                    if ( !bPressed )
+                    {
+                        m_pBackend->SetFullscreen( !g_bFullscreen );
+                    }
+                    return;
+                }
+
+                case KEY_N:
+                {
+                    if ( !bPressed )
+                    {
+                        g_wantedUpscaleFilter = GamescopeUpscaleFilter::PIXEL;
+                    }
+                    return;
+                }
+
+                case KEY_B:
+                {
+                    if ( !bPressed )
+                    {
+                        g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;
+                    }
+                    return;
+                }
+
+                case KEY_U:
+                {
+                    if ( !bPressed )
+                    {
+                        g_wantedUpscaleFilter = ( g_wantedUpscaleFilter == GamescopeUpscaleFilter::FSR ) ?
+                            GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::FSR;
+                    }
+                    return;
+                }
+
+                case KEY_Y:
+                {
+                    if ( !bPressed )
+                    {
+                        g_wantedUpscaleFilter = ( g_wantedUpscaleFilter == GamescopeUpscaleFilter::NIS ) ?
+                            GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NIS;
+                    }
+                    return;
+                }
+
+                case KEY_I:
+                {
+                    if ( !bPressed )
+                    {
+                        g_upscaleFilterSharpness = std::min( 20, g_upscaleFilterSharpness + 1 );
+                    }
+                    return;
+                }
+
+                case KEY_O:
+                {
+                    if ( !bPressed )
+                    {
+                        g_upscaleFilterSharpness = std::max( 0, g_upscaleFilterSharpness - 1 );
+                    }
+                    return;
+                }
+
+                case KEY_S:
+                {
+                    if ( !bPressed )
+                    {
+                        gamescope::CScreenshotManager::Get().TakeScreenshot( true );
+                    }
+                    return;
+                }
+
+                default:
+                    break;
+            }
+        }
+
+        wlserver_lock();
+        wlserver_key( uKey, bPressed, ++m_uFakeTimestamp );
+        wlserver_unlock();
+    }
+
     // Registry
 
     void CWaylandInputThread::Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion )
@@ -1928,102 +2020,43 @@ namespace gamescope
     void CWaylandInputThread::Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys )
     {
         m_bKeyboardEntered = true;
+        m_uScancodesHeld.clear();
+
+        const uint32_t *pBegin = (uint32_t *)pKeys->data;
+        const uint32_t *pEnd = pBegin + ( pKeys->size / sizeof(uint32_t) );
+        std::span<const uint32_t> keys{ pBegin, pEnd };
+        for ( uint32_t uKey : keys )
+        {
+            HandleKey( uKey, true );
+            m_uScancodesHeld.insert( uKey );
+        }
     }
     void CWaylandInputThread::Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface )
     {
         m_bKeyboardEntered = false;
+        m_uKeyModifiers = 0;
+
+        for ( uint32_t uKey : m_uScancodesHeld )
+            HandleKey( uKey, false );
+
+        m_uScancodesHeld.clear();
     }
     void CWaylandInputThread::Wayland_Keyboard_Key( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uTime, uint32_t uKey, uint32_t uState )
     {
         if ( !m_bKeyboardEntered )
             return;
 
-        if ( m_uKeyModifiers & m_uModMask[ GAMESCOPE_WAYLAND_MOD_META ] )
-        {
-            switch ( uKey )
-            {
-                case KEY_F:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        m_pBackend->SetFullscreen( !g_bFullscreen );
-                    }
-                    return;
-                }
+        const bool bPressed = uState == WL_KEYBOARD_KEY_STATE_PRESSED;
+        const bool bWasPressed = m_uScancodesHeld.contains( uKey );
+        if ( bWasPressed == bPressed )
+            return;
 
-                case KEY_N:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        g_wantedUpscaleFilter = GamescopeUpscaleFilter::PIXEL;
-                    }
-                    return;
-                }
+        HandleKey( uKey, bPressed );
 
-                case KEY_B:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;
-                    }
-                    return;
-                }
-
-                case KEY_U:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        g_wantedUpscaleFilter = ( g_wantedUpscaleFilter == GamescopeUpscaleFilter::FSR ) ?
-                            GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::FSR;
-                    }
-                    return;
-                }
-
-                case KEY_Y:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        g_wantedUpscaleFilter = ( g_wantedUpscaleFilter == GamescopeUpscaleFilter::NIS ) ?
-                            GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NIS;
-                    }
-                    return;
-                }
-
-                case KEY_I:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        g_upscaleFilterSharpness = std::min( 20, g_upscaleFilterSharpness + 1 );
-                    }
-                    return;
-                }
-
-                case KEY_O:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        g_upscaleFilterSharpness = std::max( 0, g_upscaleFilterSharpness - 1 );
-                    }
-                    return;
-                }
-
-                case KEY_S:
-                {
-                    if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
-                    {
-                        gamescope::CScreenshotManager::Get().TakeScreenshot( true );
-                    }
-                    return;
-                }
-
-                default:
-                    break;
-            }
-        }
-
-        wlserver_lock();
-        wlserver_key( uKey, uState == WL_KEYBOARD_KEY_STATE_PRESSED, ++m_uFakeTimestamp );
-        wlserver_unlock();
+        if ( bWasPressed )
+            m_uScancodesHeld.erase( uKey );
+        else
+            m_uScancodesHeld.emplace( uKey );
     }
     void CWaylandInputThread::Wayland_Keyboard_Modifiers( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uModsDepressed, uint32_t uModsLatched, uint32_t uModsLocked, uint32_t uGroup )
     {
