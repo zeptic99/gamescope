@@ -1981,7 +1981,6 @@ namespace gamescope
             return;
 
         wlserver_lock();
-        xdg_log.infof( "m_flScrollAccum[1]: %g ", m_flScrollAccum[1] );
         wlserver_mousewheel( m_flScrollAccum[0], m_flScrollAccum[1], ++m_uFakeTimestamp );
         wlserver_unlock();
     }
