@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <csignal>
 #include <sys/mman.h>
+#include <poll.h>
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
 #include <libdecor.h>
@@ -63,7 +64,6 @@ extern gamescope::ConVar<bool> cv_hdr_enabled;
 
 namespace gamescope
 {
-
     class CWaylandConnector;
     class CWaylandPlane;
     class CWaylandBackend;
@@ -232,6 +232,126 @@ namespace gamescope
         int32_t nRefresh = 60;
     };
 
+    class CWaylandInputThread
+    {
+    public:
+        CWaylandInputThread();
+
+        bool Init( CWaylandBackend *pBackend );
+
+        void ThreadFunc();
+
+        // This is only shared_ptr because it works nicely
+        // with std::atomic, std::any and such and makes it very easy.
+        //
+        // It could be a std::unique_ptr if you added a mutex,
+        // but I didn't seem it worth it.
+        template <typename T>
+        std::shared_ptr<T> QueueLaunder( T* pObject );
+
+        void SetRelativePointer( std::shared_ptr<zwp_relative_pointer_v1> pWrappedPointer );
+
+    private:
+
+        void UpdateCursor();
+
+        CWaylandBackend *m_pBackend = nullptr;
+
+        std::thread m_Thread;
+        std::atomic<bool> m_bInitted = { false };
+
+        uint32_t m_uPointerEnterSerial = 0;
+        bool m_bMouseEntered = false;
+        bool m_bKeyboardEntered = false;
+
+        wl_event_queue *m_pQueue = nullptr;
+        std::shared_ptr<wl_display> m_pDisplayWrapper;
+
+        wl_seat *m_pSeat = nullptr;
+        wl_keyboard *m_pKeyboard = nullptr;
+        wl_pointer *m_pPointer = nullptr;
+        wl_touch *m_pTouch = nullptr;
+
+        uint32_t m_uFakeTimestamp = 0;
+
+        xkb_context *m_pXkbContext = nullptr;
+        xkb_keymap *m_pXkbKeymap = nullptr;
+
+        uint32_t m_uKeyModifiers = 0;
+        uint32_t m_uModMask[ GAMESCOPE_WAYLAND_MOD_COUNT ];
+
+        double m_flScrollAccum[2] = { 0.0, 0.0 };
+        uint32_t m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
+
+        std::atomic<std::shared_ptr<zwp_relative_pointer_v1>> m_pRelativePointer;
+
+        void Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion );
+        static const wl_registry_listener s_RegistryListener;
+
+        void Wayland_Seat_Capabilities( wl_seat *pSeat, uint32_t uCapabilities );
+        void Wayland_Seat_Name( wl_seat *pSeat, const char *pName );
+        static const wl_seat_listener s_SeatListener;
+
+        void Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY );
+        void Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface );
+        void Wayland_Pointer_Motion( wl_pointer *pPointer, uint32_t uTime, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY );
+        void Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState );
+        void Wayland_Pointer_Axis( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis, wl_fixed_t fValue );
+        void Wayland_Pointer_Axis_Source( wl_pointer *pPointer, uint32_t uAxisSource );
+        void Wayland_Pointer_Axis_Stop( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis );
+        void Wayland_Pointer_Axis_Discrete( wl_pointer *pPointer, uint32_t uAxis, int32_t nDiscrete );
+        void Wayland_Pointer_Axis_Value120( wl_pointer *pPointer, uint32_t uAxis, int32_t nValue120 );
+        void Wayland_Pointer_Frame( wl_pointer *pPointer );
+        static const wl_pointer_listener s_PointerListener;
+
+        void Wayland_Keyboard_Keymap( wl_keyboard *pKeyboard, uint32_t uFormat, int32_t nFd, uint32_t uSize );
+        void Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys );
+        void Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface );
+        void Wayland_Keyboard_Key( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uTime, uint32_t uKey, uint32_t uState );
+        void Wayland_Keyboard_Modifiers( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uModsDepressed, uint32_t uModsLatched, uint32_t uModsLocked, uint32_t uGroup );
+        void Wayland_Keyboard_RepeatInfo( wl_keyboard *pKeyboard, int32_t nRate, int32_t nDelay );
+        static const wl_keyboard_listener s_KeyboardListener;
+
+	    void Wayland_RelativePointer_RelativeMotion( zwp_relative_pointer_v1 *pRelativePointer, uint32_t uTimeHi, uint32_t uTimeLo, wl_fixed_t fDx, wl_fixed_t fDy, wl_fixed_t fDxUnaccel, wl_fixed_t fDyUnaccel );
+        static const zwp_relative_pointer_v1_listener s_RelativePointerListener;
+    };
+    const wl_registry_listener CWaylandInputThread::s_RegistryListener =
+    {
+        .global        = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Registry_Global ),
+        .global_remove = WAYLAND_NULL(),
+    };
+    const wl_seat_listener CWaylandInputThread::s_SeatListener =
+    {
+        .capabilities = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Seat_Capabilities ),
+        .name         = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Seat_Name ),
+    };
+    const wl_pointer_listener CWaylandInputThread::s_PointerListener =
+    {
+        .enter         = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Enter ),
+        .leave         = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Leave ),
+        .motion        = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Motion ),
+        .button        = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Button ),
+        .axis          = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Axis ),
+        .frame         = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Frame ),
+        .axis_source   = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Axis_Source ),
+        .axis_stop     = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Axis_Stop ),
+        .axis_discrete = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Axis_Discrete ),
+        .axis_value120 = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Pointer_Axis_Value120 ),
+    };
+    const wl_keyboard_listener CWaylandInputThread::s_KeyboardListener =
+    {
+        .keymap        = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Keyboard_Keymap ),
+        .enter         = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Keyboard_Enter ),
+        .leave         = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Keyboard_Leave ),
+        .key           = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Keyboard_Key ),
+        .modifiers     = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Keyboard_Modifiers ),
+        .repeat_info   = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_Keyboard_RepeatInfo ),
+    };
+    const zwp_relative_pointer_v1_listener CWaylandInputThread::s_RelativePointerListener =
+    {
+        .relative_motion = WAYLAND_USERDATA_TO_THIS( CWaylandInputThread, Wayland_RelativePointer_RelativeMotion ),
+    };
+
     class CWaylandBackend : public CBaseBackend, public INestedHints
     {
     public:
@@ -298,9 +418,9 @@ namespace gamescope
 
         friend CWaylandConnector;
         friend CWaylandPlane;
+        friend CWaylandInputThread;
 
         wl_display *GetDisplay() const { return m_pDisplay; }
-        wl_registry *GetRegistry() const { return m_pRegistry; }
         wl_shm *GetShm() const { return m_pShm; }
         wl_compositor *GetCompositor() const { return m_pCompositor; }
         wp_single_pixel_buffer_manager_v1 *GetSinglePixelBufferManager() const { return m_pSinglePixelBufferManager; }
@@ -310,16 +430,20 @@ namespace gamescope
         wp_viewporter *GetViewporter() const { return m_pViewporter; }
         wp_presentation *GetPresentation() const { return m_pPresentation; }
         frog_color_management_factory_v1 *GetFrogColorManagementFactory() const { return m_pFrogColorMgmtFactory; }
-        zwp_pointer_constraints_v1 *GetPointerConstraints() const { return m_pPointerConstraints; }
-        zwp_relative_pointer_manager_v1 *GetRelativePointerManager() const { return m_pRelativePointerManager; }
         libdecor *GetLibDecor() const { return m_pLibDecor; }
+        glm::uvec2 GetSurfaceSize() const { return m_uSurfaceSize; }
 
         uint32_t ImportWlBuffer( wl_buffer *pBuffer );
         wl_buffer *FbIdToBuffer( uint32_t uFbId );
 
+        void SetFullscreen( bool bFullscreen ); // Thread safe, can be called from the input thread.
+        void UpdateFullscreenState();
+
     private:
 
-        void Wayland_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion );
+        void Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion );
+        static const wl_registry_listener s_RegistryListener;
+
         void Wayland_Modifier( zwp_linux_dmabuf_v1 *pDmabuf, uint32_t uFormat, uint32_t uModifierHi, uint32_t uModifierLo );
 
         void Wayland_Output_Geometry( wl_output *pOutput, int32_t nX, int32_t nY, int32_t nPhysicalWidth, int32_t nPhysicalHeight, int32_t nSubpixel, const char *pMake, const char *pModel, int32_t nTransform );
@@ -331,37 +455,18 @@ namespace gamescope
         static const wl_output_listener s_OutputListener;
 
         void Wayland_Seat_Capabilities( wl_seat *pSeat, uint32_t uCapabilities );
-        void Wayland_Seat_Name( wl_seat *pSeat, const char *pName );
         static const wl_seat_listener s_SeatListener;
 
         void Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY );
         void Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface );
-        void Wayland_Pointer_Motion( wl_pointer *pPointer, uint32_t uTime, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY );
-        void Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState );
-        void Wayland_Pointer_Axis( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis, wl_fixed_t fValue );
-        void Wayland_Pointer_Axis_Source( wl_pointer *pPointer, uint32_t uAxisSource );
-        void Wayland_Pointer_Axis_Stop( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis );
-        void Wayland_Pointer_Axis_Discrete( wl_pointer *pPointer, uint32_t uAxis, int32_t nDiscrete );
-        void Wayland_Pointer_Axis_Value120( wl_pointer *pPointer, uint32_t uAxis, int32_t nValue120 );
-        void Wayland_Pointer_Frame( wl_pointer *pPointer );
         static const wl_pointer_listener s_PointerListener;
 
-        void Wayland_Keyboard_Keymap( wl_keyboard *pKeyboard, uint32_t uFormat, int32_t nFd, uint32_t uSize );
-        void Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys );
-        void Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface );
-        void Wayland_Keyboard_Key( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uTime, uint32_t uKey, uint32_t uState );
-        void Wayland_Keyboard_Modifiers( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uModsDepressed, uint32_t uModsLatched, uint32_t uModsLocked, uint32_t uGroup );
-        void Wayland_Keyboard_RepeatInfo( wl_keyboard *pKeyboard, int32_t nRate, int32_t nDelay );
-        static const wl_keyboard_listener s_KeyboardListener;
-
-	    void Wayland_RelativePointer_RelativeMotion( zwp_relative_pointer_v1 *pRelativePointer, uint32_t uTimeHi, uint32_t uTimeLo, wl_fixed_t fDx, wl_fixed_t fDy, wl_fixed_t fDxUnaccel, wl_fixed_t fDyUnaccel );
-        static const zwp_relative_pointer_v1_listener s_RelativePointerListener;
+        CWaylandInputThread m_InputThread;
 
         CWaylandConnector m_Connector;
         CWaylandPlane m_Planes[8];
 
         wl_display *m_pDisplay = nullptr;
-        wl_registry *m_pRegistry = nullptr;
         wl_shm *m_pShm = nullptr;
         wl_compositor *m_pCompositor = nullptr;
         wp_single_pixel_buffer_manager_v1 *m_pSinglePixelBufferManager = nullptr;
@@ -375,6 +480,7 @@ namespace gamescope
         frog_color_management_factory_v1 *m_pFrogColorMgmtFactory = nullptr;
         zwp_pointer_constraints_v1 *m_pPointerConstraints = nullptr;
         zwp_relative_pointer_manager_v1 *m_pRelativePointerManager = nullptr;
+
         std::unordered_map<wl_output *, WaylandOutputInfo> m_pOutputs;
 
         libdecor *m_pLibDecor = nullptr;
@@ -394,48 +500,15 @@ namespace gamescope
         glm::uvec2 m_uSurfaceSize = { 1280, 720 };
 
         uint32_t m_uPointerEnterSerial = 0;
-        bool m_bMouseEntered = false;
-        bool m_bKeyboardEntered = false;
         std::shared_ptr<INestedHints::CursorInfo> m_pCursorInfo;
         wl_surface *m_pCursorSurface = nullptr;
 
-        xkb_context *m_pXkbContext = nullptr;
-        xkb_keymap *m_pXkbKeymap = nullptr;
-
-        uint32_t m_uKeyModifiers = 0;
-        uint32_t m_uModMask[ GAMESCOPE_WAYLAND_MOD_COUNT ];
-
-        double m_flScrollAccum[2] = { 0.0, 0.0 };
-        uint32_t m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
-
-        uint32_t m_uFakeTimestamp = 0;
+        std::atomic<bool> m_bDesiredFullscreenState = { false };
     };
-    const wl_seat_listener CWaylandBackend::s_SeatListener =
+    const wl_registry_listener CWaylandBackend::s_RegistryListener =
     {
-        .capabilities = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Seat_Capabilities ),
-        .name         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Seat_Name ),
-    };
-    const wl_pointer_listener CWaylandBackend::s_PointerListener =
-    {
-        .enter         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Enter ),
-        .leave         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Leave ),
-        .motion        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Motion ),
-        .button        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Button ),
-        .axis          = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Axis ),
-        .frame         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Frame ),
-        .axis_source   = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Axis_Source ),
-        .axis_stop     = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Axis_Stop ),
-        .axis_discrete = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Axis_Discrete ),
-        .axis_value120 = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Axis_Value120 ),
-    };
-    const wl_keyboard_listener CWaylandBackend::s_KeyboardListener =
-    {
-        .keymap        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Keymap ),
-        .enter         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Enter ),
-        .leave         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Leave ),
-        .key           = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Key ),
-        .modifiers     = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Modifiers ),
-        .repeat_info   = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_RepeatInfo ),
+        .global        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Registry_Global ),
+        .global_remove = WAYLAND_NULL(),
     };
     const wl_output_listener CWaylandBackend::s_OutputListener =
     {
@@ -446,9 +519,23 @@ namespace gamescope
         .name        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Output_Name ),
         .description = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Output_Description ),
     };
-    const zwp_relative_pointer_v1_listener CWaylandBackend::s_RelativePointerListener =
+    const wl_seat_listener CWaylandBackend::s_SeatListener =
     {
-        .relative_motion = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_RelativePointer_RelativeMotion ),
+        .capabilities = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Seat_Capabilities ),
+        .name         = WAYLAND_NULL(),
+    };
+    const wl_pointer_listener CWaylandBackend::s_PointerListener =
+    {
+        .enter         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Enter ),
+        .leave         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Pointer_Leave ),
+        .motion        = WAYLAND_NULL(),
+        .button        = WAYLAND_NULL(),
+        .axis          = WAYLAND_NULL(),
+        .frame         = WAYLAND_NULL(),
+        .axis_source   = WAYLAND_NULL(),
+        .axis_stop     = WAYLAND_NULL(),
+        .axis_discrete = WAYLAND_NULL(),
+        .axis_value120 = WAYLAND_NULL(),
     };
 
     //////////////////
@@ -824,36 +911,20 @@ namespace gamescope
         m_uSurfaceSize.x = g_nOutputWidth;
         m_uSurfaceSize.y = g_nOutputHeight;
 
-        if ( !( m_pXkbContext = xkb_context_new( XKB_CONTEXT_NO_FLAGS ) ) )
-        {
-            xdg_log.errorf( "Couldn't create xkb context." );
-            return false;
-        }
-
         if ( !( m_pDisplay = wl_display_connect( nullptr ) ) )
         {
             xdg_log.errorf( "Couldn't connect to Wayland display." );
             return false;
         }
 
-        if ( !( m_pRegistry = wl_display_get_registry( m_pDisplay ) ) )
+        wl_registry *pRegistry;
+        if ( !( pRegistry = wl_display_get_registry( m_pDisplay ) ) )
         {
             xdg_log.errorf( "Couldn't create Wayland registry." );
             return false;
         }
 
-        static constexpr wl_registry_listener s_RegistryListener =
-        {
-            .global = []( void *pData, wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion )
-            {
-                CWaylandBackend *pState = (CWaylandBackend *)pData;
-                pState->Wayland_Global( pRegistry, uName, pInterface, uVersion );
-            },
-            .global_remove = []( void *pData, wl_registry *pRegistry, uint32_t uName )
-            {
-            },
-        };
-        wl_registry_add_listener( m_pRegistry, &s_RegistryListener, this );
+        wl_registry_add_listener( pRegistry, &s_RegistryListener, this );
         wl_display_roundtrip( m_pDisplay );
 
         if ( !m_pCompositor || !m_pSubcompositor || !m_pXdgWmBase || !m_pLinuxDmabuf || !m_pViewporter || !m_pPresentation || !m_pRelativePointerManager || !m_pPointerConstraints || !m_pShm )
@@ -864,6 +935,9 @@ namespace gamescope
 
         // Grab stuff from any extra bindings/listeners we set up, eg. format/modifiers.
         wl_display_roundtrip( m_pDisplay );
+
+        wl_registry_destroy( pRegistry );
+        pRegistry = nullptr;
 
         m_pLibDecor = libdecor_new( m_pDisplay, &s_LibDecorInterface );
         if ( !m_pLibDecor )
@@ -879,7 +953,13 @@ namespace gamescope
 
         if ( !wlsession_init() )
         {
-            fprintf( stderr, "Failed to initialize Wayland session\n" );
+            xdg_log.errorf( "Failed to initialize Wayland session" );
+            return false;
+        }
+
+        if ( !m_InputThread.Init( this ) )
+        {
+            xdg_log.errorf( "Failed to initialize input thread" );
             return false;
         }
 
@@ -901,7 +981,9 @@ namespace gamescope
 
         if ( g_bFullscreen )
         {
-            libdecor_frame_set_fullscreen( m_Planes[0].GetFrame(), nullptr );
+            m_bDesiredFullscreenState = true;
+            g_bFullscreen = false;
+            UpdateFullscreenState();
         }
 
         if ( m_pSinglePixelBufferManager )
@@ -959,6 +1041,8 @@ namespace gamescope
 
     int CWaylandBackend::Present( const FrameInfo_t *pFrameInfo, bool bAsync )
     {
+        UpdateFullscreenState();
+
         // TODO: Dedupe some of this composite check code between us and drm.cpp
         bool bLayer0ScreenSize = close_enough(pFrameInfo->layers[0].scale.x, 1.0f) && close_enough(pFrameInfo->layers[0].scale.y, 1.0f);
 
@@ -1052,9 +1136,28 @@ namespace gamescope
     }
     bool CWaylandBackend::PollState()
     {
-        wl_display_dispatch_pending( m_pDisplay );
-        wl_display_prepare_read( m_pDisplay );
-        wl_display_read_events( m_pDisplay );
+        wl_display_flush( m_pDisplay );
+
+        if ( wl_display_prepare_read( m_pDisplay ) == 0 )
+        {
+            int nRet = 0;
+            pollfd pollfd =
+            {
+                .fd     = wl_display_get_fd( m_pDisplay ),
+                .events = POLLIN,
+            };
+
+            do
+            {
+                nRet = poll( &pollfd, 1, 0 );
+            } while ( nRet < 0 && ( errno == EINTR || errno == EAGAIN ) );
+
+            if ( nRet > 0 )
+                wl_display_read_events( m_pDisplay );
+            else
+                wl_display_cancel_read( m_pDisplay );
+        }
+
         wl_display_dispatch_pending( m_pDisplay );
 
         return false;
@@ -1223,8 +1326,6 @@ namespace gamescope
     void CWaylandBackend::SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info )
     {
         m_pCursorInfo = info;
-        if ( !m_pPointer )
-            return;
 
         uint32_t uStride = info->uWidth * 4;
         uint32_t uSize = uStride * info->uHeight;
@@ -1246,10 +1347,18 @@ namespace gamescope
         wl_buffer *pBuffer = wl_shm_pool_create_buffer( pPool, 0, info->uWidth, info->uHeight, uStride, WL_SHM_FORMAT_ARGB8888 );
         defer( wl_buffer_destroy( pBuffer ) );
 
-        m_pCursorSurface = wl_compositor_create_surface( m_pCompositor );
-        wl_surface_attach( m_pCursorSurface, pBuffer, 0, 0 );
-        wl_surface_damage( m_pCursorSurface, 0, 0, INT32_MAX, INT32_MAX );
-        wl_surface_commit( m_pCursorSurface );
+        wl_surface *pCursorSurface = wl_compositor_create_surface( m_pCompositor );
+        wl_surface_attach( pCursorSurface, pBuffer, 0, 0 );
+        wl_surface_damage( pCursorSurface, 0, 0, INT32_MAX, INT32_MAX );
+        wl_surface_commit( pCursorSurface );
+
+        if ( m_pCursorSurface )
+        {
+            wl_surface_destroy( m_pCursorSurface );
+            m_pCursorSurface = nullptr;
+        }
+
+        m_pCursorSurface = pCursorSurface;
 
         UpdateCursor();
     }
@@ -1276,8 +1385,9 @@ namespace gamescope
 
                 m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, m_Planes[0].GetSurface(), m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
                 m_pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
-                zwp_relative_pointer_v1_add_listener( m_pRelativePointer, &s_RelativePointerListener, this );
             }
+
+            m_InputThread.SetRelativePointer( m_InputThread.QueueLaunder( m_pRelativePointer ) );
 
             UpdateCursor();
         }
@@ -1350,11 +1460,29 @@ namespace gamescope
         return m_ImportedFbs[uFbId];
     }
 
+    void CWaylandBackend::SetFullscreen( bool bFullscreen )
+    {
+        m_bDesiredFullscreenState = bFullscreen;
+    }
+
+    void CWaylandBackend::UpdateFullscreenState()
+    {
+        if ( m_bDesiredFullscreenState != g_bFullscreen )
+        {
+            if ( m_bDesiredFullscreenState )
+                libdecor_frame_set_fullscreen( m_Planes[0].GetFrame(), nullptr );
+            else
+                libdecor_frame_unset_fullscreen( m_Planes[0].GetFrame() );
+
+            g_bFullscreen = m_bDesiredFullscreenState;
+        }
+    }
+
     /////////////////////
     // Wayland Callbacks
     /////////////////////
 
-    void CWaylandBackend::Wayland_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion )
+    void CWaylandBackend::Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion )
     {
         if ( !strcmp( pInterface, wl_compositor_interface.name ) && uVersion >= 4u )
         {
@@ -1396,34 +1524,34 @@ namespace gamescope
         }
         else if ( !strcmp( pInterface, wl_seat_interface.name ) && uVersion >= 8u )
         {
-            m_pSeat = (wl_seat *)wl_registry_bind( m_pRegistry, uName, &wl_seat_interface, 8u );
+            m_pSeat = (wl_seat *)wl_registry_bind( pRegistry, uName, &wl_seat_interface, 8u );
             wl_seat_add_listener( m_pSeat, &s_SeatListener, this );
         }
         else if ( !strcmp( pInterface, wp_presentation_interface.name ) )
         {
-            m_pPresentation = (wp_presentation *)wl_registry_bind( m_pRegistry, uName, &wp_presentation_interface, 1u );
+            m_pPresentation = (wp_presentation *)wl_registry_bind( pRegistry, uName, &wp_presentation_interface, 1u );
         }
         else if ( !strcmp( pInterface, wl_output_interface.name ) )
         {
-            wl_output *pOutput  = (wl_output *)wl_registry_bind( m_pRegistry, uName, &wl_output_interface, 4u );
+            wl_output *pOutput  = (wl_output *)wl_registry_bind( pRegistry, uName, &wl_output_interface, 4u );
             wl_output_add_listener( pOutput , &s_OutputListener, this );
             m_pOutputs.emplace( std::make_pair<struct wl_output *, WaylandOutputInfo>( std::move( pOutput ), WaylandOutputInfo{} ) );
         }
         else if ( !strcmp( pInterface, frog_color_management_factory_v1_interface.name ) )
         {
-            m_pFrogColorMgmtFactory = (frog_color_management_factory_v1 *)wl_registry_bind( m_pRegistry, uName, &frog_color_management_factory_v1_interface, 1u );
+            m_pFrogColorMgmtFactory = (frog_color_management_factory_v1 *)wl_registry_bind( pRegistry, uName, &frog_color_management_factory_v1_interface, 1u );
         }
         else if ( !strcmp( pInterface, zwp_pointer_constraints_v1_interface.name ) )
         {
-            m_pPointerConstraints = (zwp_pointer_constraints_v1 *)wl_registry_bind( m_pRegistry, uName, &zwp_pointer_constraints_v1_interface, 1u );
+            m_pPointerConstraints = (zwp_pointer_constraints_v1 *)wl_registry_bind( pRegistry, uName, &zwp_pointer_constraints_v1_interface, 1u );
         }
         else if ( !strcmp( pInterface, zwp_relative_pointer_manager_v1_interface.name ) )
         {
-            m_pRelativePointerManager = (zwp_relative_pointer_manager_v1 *)wl_registry_bind( m_pRegistry, uName, &zwp_relative_pointer_manager_v1_interface, 1u );
+            m_pRelativePointerManager = (zwp_relative_pointer_manager_v1 *)wl_registry_bind( pRegistry, uName, &zwp_relative_pointer_manager_v1_interface, 1u );
         }
         else if ( !strcmp( pInterface, wl_shm_interface.name ) )
         {
-            m_pShm = (wl_shm *)wl_registry_bind( m_pRegistry, uName, &wl_shm_interface, 1u );
+            m_pShm = (wl_shm *)wl_registry_bind( pRegistry, uName, &wl_shm_interface, 1u );
         }
     }
 
@@ -1485,31 +1613,209 @@ namespace gamescope
             else
             {
                 m_pKeyboard = wl_seat_get_keyboard( m_pSeat );
-                wl_keyboard_add_listener( m_pKeyboard, &s_KeyboardListener, this );
             }
         }
-    }
-
-    void CWaylandBackend::Wayland_Seat_Name( wl_seat *pSeat, const char *pName )
-    {
-        xdg_log.infof( "Seat name: %s", pName );
     }
 
     // Pointer
 
     void CWaylandBackend::Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
     {
-        m_bMouseEntered = true;
         m_uPointerEnterSerial = uSerial;
         UpdateCursor();
     }
     void CWaylandBackend::Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface )
     {
+    }
+
+    ///////////////////////
+    // CWaylandInputThread
+    ///////////////////////
+
+    CWaylandInputThread::CWaylandInputThread()
+        : m_Thread{ [this](){ this->ThreadFunc(); } }
+    {
+    }
+
+    bool CWaylandInputThread::Init( CWaylandBackend *pBackend )
+    {
+        m_pBackend = pBackend;
+
+        if ( !( m_pXkbContext = xkb_context_new( XKB_CONTEXT_NO_FLAGS ) ) )
+        {
+            xdg_log.errorf( "Couldn't create xkb context." );
+            return false;
+        }
+
+        if ( !( m_pQueue = wl_display_create_queue( m_pBackend->GetDisplay() ) ) )
+        {
+            xdg_log.errorf( "Couldn't create input thread queue." );
+            return false;
+        }
+
+        if ( !( m_pDisplayWrapper = QueueLaunder( m_pBackend->GetDisplay() ) ) )
+        {
+            xdg_log.errorf( "Couldn't create display proxy for input thread" );
+            return false;
+        }
+
+        wl_registry *pRegistry;
+        if ( !( pRegistry = wl_display_get_registry( m_pDisplayWrapper.get() ) ) )
+        {
+            xdg_log.errorf( "Couldn't create registry for input thread" );
+            return false;
+        }
+        wl_registry_add_listener( pRegistry, &s_RegistryListener, this );
+
+        wl_display_roundtrip_queue( pBackend->GetDisplay(), m_pQueue );
+        wl_display_roundtrip_queue( pBackend->GetDisplay(), m_pQueue );
+
+        wl_registry_destroy( pRegistry );
+        pRegistry = nullptr;
+
+        if ( !m_pSeat )
+        {
+            xdg_log.errorf( "Couldn't create Wayland input objects." );
+            return false;
+        }
+
+        m_bInitted = true;
+        m_bInitted.notify_all();
+        return true;
+    }
+
+    void CWaylandInputThread::ThreadFunc()
+    {
+        m_bInitted.wait( false );
+
+        int nFD = wl_display_get_fd( m_pBackend->GetDisplay() );
+        int nRet = 0;
+        for ( ;; )
+        {
+            if ( ( nRet = wl_display_dispatch_queue_pending( m_pBackend->GetDisplay(), m_pQueue ) ) < 0 )
+            {
+                abort();
+            }
+
+            if ( ( nRet = wl_display_prepare_read_queue( m_pBackend->GetDisplay(), m_pQueue ) ) < 0 )
+            {
+                if ( errno == EAGAIN || errno == EINTR )
+                    continue;
+
+                abort();
+            }
+
+            pollfd pollfd =
+            {
+                .fd     = nFD,
+                .events = POLLIN,
+            };
+            if ( ( nRet = poll( &pollfd, 1, -1 ) ) <= 0 )
+            {
+                int nErrno = errno;
+                wl_display_cancel_read( m_pBackend->GetDisplay() );
+                if ( nRet < 0 )
+                {
+                    if ( nErrno == EINTR || nErrno == EAGAIN )
+                        continue;
+
+                    abort();
+                }
+
+                assert( nRet == 0 );
+                continue;
+            }
+
+            if ( ( nRet = wl_display_read_events( m_pBackend->GetDisplay() ) ) < 0 )
+            {
+                abort();
+            }
+        }
+    }
+
+    template <typename T>
+    std::shared_ptr<T> CWaylandInputThread::QueueLaunder( T* pObject )
+    {
+        if ( !pObject )
+            return nullptr;
+
+        T *pObjectWrapper = (T*)wl_proxy_create_wrapper( (void *)pObject );
+        if ( !pObjectWrapper )
+            return nullptr;
+        wl_proxy_set_queue( (wl_proxy *)pObjectWrapper, m_pQueue );
+
+        return std::shared_ptr<T>{ pObjectWrapper, []( T *pThing ){ wl_proxy_wrapper_destroy( (void *)pThing ); } };
+    }
+
+    void CWaylandInputThread::SetRelativePointer( std::shared_ptr<zwp_relative_pointer_v1> pWrappedPointer )
+    {
+        m_pRelativePointer = pWrappedPointer;
+        zwp_relative_pointer_v1_add_listener( m_pRelativePointer.load().get(), &s_RelativePointerListener, this );
+    }
+
+    // Registry
+
+    void CWaylandInputThread::Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion )
+    {
+        if ( !strcmp( pInterface, wl_seat_interface.name ) && uVersion >= 8u )
+        {
+            m_pSeat = (wl_seat *)wl_registry_bind( pRegistry, uName, &wl_seat_interface, 8u );
+            wl_seat_add_listener( m_pSeat, &s_SeatListener, this );
+        }
+    }
+
+    // Seat
+
+    void CWaylandInputThread::Wayland_Seat_Capabilities( wl_seat *pSeat, uint32_t uCapabilities )
+    {
+        if ( !!( uCapabilities & WL_SEAT_CAPABILITY_POINTER ) != !!m_pPointer )
+        {
+            if ( m_pPointer )
+            {
+                wl_pointer_release( m_pPointer );
+                m_pPointer = nullptr;
+            }
+            else
+            {
+                m_pPointer = wl_seat_get_pointer( m_pSeat );
+                wl_pointer_add_listener( m_pPointer, &s_PointerListener, this );
+            }
+        }
+
+        if ( !!( uCapabilities & WL_SEAT_CAPABILITY_KEYBOARD ) != !!m_pKeyboard )
+        {
+            if ( m_pKeyboard )
+            {
+                wl_keyboard_release( m_pKeyboard );
+                m_pKeyboard = nullptr;
+            }
+            else
+            {
+                m_pKeyboard = wl_seat_get_keyboard( m_pSeat );
+                wl_keyboard_add_listener( m_pKeyboard, &s_KeyboardListener, this );
+            }
+        }
+    }
+
+    void CWaylandInputThread::Wayland_Seat_Name( wl_seat *pSeat, const char *pName )
+    {
+        xdg_log.infof( "Seat name: %s", pName );
+    }
+
+    // Pointer
+
+    void CWaylandInputThread::Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
+    {
+        m_bMouseEntered = true;
+        m_uPointerEnterSerial = uSerial;
+    }
+    void CWaylandInputThread::Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface )
+    {
         m_bMouseEntered = false;
     }
-    void CWaylandBackend::Wayland_Pointer_Motion( wl_pointer *pPointer, uint32_t uTime, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
+    void CWaylandInputThread::Wayland_Pointer_Motion( wl_pointer *pPointer, uint32_t uTime, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
     {
-        if ( m_pRelativePointer )
+        if ( m_pRelativePointer.load() != nullptr )
             return;
 
         // Don't do any motion/movement stuff if we don't have kb focus
@@ -1517,10 +1823,10 @@ namespace gamescope
             return;
 
         wlserver_lock();
-        wlserver_touchmotion( wl_fixed_to_double( fSurfaceX ) / double( m_uSurfaceSize.x ), wl_fixed_to_double( fSurfaceY ) / double( m_uSurfaceSize.y ), 0, ++m_uFakeTimestamp );
+        wlserver_touchmotion( wl_fixed_to_double( fSurfaceX ) / double( m_pBackend->GetSurfaceSize().x ), wl_fixed_to_double( fSurfaceY ) / double( m_pBackend->GetSurfaceSize().y ), 0, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
-    void CWaylandBackend::Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState )
+    void CWaylandInputThread::Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState )
     {
         // Don't do any motion/movement stuff if we don't have kb focus
         if ( !m_bKeyboardEntered )
@@ -1530,20 +1836,20 @@ namespace gamescope
         wlserver_mousebutton( uButton, uState == WL_POINTER_BUTTON_STATE_PRESSED, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
-    void CWaylandBackend::Wayland_Pointer_Axis( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis, wl_fixed_t fValue )
+    void CWaylandInputThread::Wayland_Pointer_Axis( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis, wl_fixed_t fValue )
     {
     }
-    void CWaylandBackend::Wayland_Pointer_Axis_Source( wl_pointer *pPointer, uint32_t uAxisSource )
+    void CWaylandInputThread::Wayland_Pointer_Axis_Source( wl_pointer *pPointer, uint32_t uAxisSource )
     {
         m_uAxisSource = uAxisSource;
     }
-    void CWaylandBackend::Wayland_Pointer_Axis_Stop( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis )
+    void CWaylandInputThread::Wayland_Pointer_Axis_Stop( wl_pointer *pPointer, uint32_t uTime, uint32_t uAxis )
     {
     }
-    void CWaylandBackend::Wayland_Pointer_Axis_Discrete( wl_pointer *pPointer, uint32_t uAxis, int32_t nDiscrete )
+    void CWaylandInputThread::Wayland_Pointer_Axis_Discrete( wl_pointer *pPointer, uint32_t uAxis, int32_t nDiscrete )
     {
     }
-    void CWaylandBackend::Wayland_Pointer_Axis_Value120( wl_pointer *pPointer, uint32_t uAxis, int32_t nValue120 )
+    void CWaylandInputThread::Wayland_Pointer_Axis_Value120( wl_pointer *pPointer, uint32_t uAxis, int32_t nValue120 )
     {
         if ( !m_bKeyboardEntered )
             return;
@@ -1553,7 +1859,7 @@ namespace gamescope
         // Vertical is first in the wl_pointer_axis enum, flip y,x -> x,y
         m_flScrollAccum[ !uAxis ] += nValue120 / 120.0f;
     }
-    void CWaylandBackend::Wayland_Pointer_Frame( wl_pointer *pPointer )
+    void CWaylandInputThread::Wayland_Pointer_Frame( wl_pointer *pPointer )
     {
         defer( m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL );
         defer( m_flScrollAccum[0] = 0.0 );
@@ -1576,7 +1882,7 @@ namespace gamescope
 
     // Keyboard
 
-    void CWaylandBackend::Wayland_Keyboard_Keymap( wl_keyboard *pKeyboard, uint32_t uFormat, int32_t nFd, uint32_t uSize )
+    void CWaylandInputThread::Wayland_Keyboard_Keymap( wl_keyboard *pKeyboard, uint32_t uFormat, int32_t nFd, uint32_t uSize )
     {
         // We are not doing much with the keymap, we pass keycodes thru.
         // Ideally we'd use this to influence our keymap to clients, eg. x server.
@@ -1605,15 +1911,15 @@ namespace gamescope
         for ( uint32_t i = 0; i < GAMESCOPE_WAYLAND_MOD_COUNT; i++ )
             m_uModMask[ i ] = 1u << xkb_keymap_mod_get_index( m_pXkbKeymap, WaylandModifierToXkbModifierName( ( WaylandModifierIndex ) i ) );
     }
-    void CWaylandBackend::Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys )
+    void CWaylandInputThread::Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys )
     {
         m_bKeyboardEntered = true;
     }
-    void CWaylandBackend::Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface )
+    void CWaylandInputThread::Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface )
     {
         m_bKeyboardEntered = false;
     }
-    void CWaylandBackend::Wayland_Keyboard_Key( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uTime, uint32_t uKey, uint32_t uState )
+    void CWaylandInputThread::Wayland_Keyboard_Key( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uTime, uint32_t uKey, uint32_t uState )
     {
         if ( !m_bKeyboardEntered )
             return;
@@ -1626,12 +1932,7 @@ namespace gamescope
                 {
                     if ( uState == WL_KEYBOARD_KEY_STATE_RELEASED )
                     {
-                        if ( !g_bFullscreen )
-                            libdecor_frame_set_fullscreen( m_Planes[0].GetFrame(), nullptr );
-                        else
-                            libdecor_frame_unset_fullscreen( m_Planes[0].GetFrame() );
-
-                        g_bFullscreen = !g_bFullscreen;
+                        m_pBackend->SetFullscreen( !g_bFullscreen );
                     }
                     return;
                 }
@@ -1710,17 +2011,17 @@ namespace gamescope
         wlserver_key( uKey, uState == WL_KEYBOARD_KEY_STATE_PRESSED, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
-    void CWaylandBackend::Wayland_Keyboard_Modifiers( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uModsDepressed, uint32_t uModsLatched, uint32_t uModsLocked, uint32_t uGroup )
+    void CWaylandInputThread::Wayland_Keyboard_Modifiers( wl_keyboard *pKeyboard, uint32_t uSerial, uint32_t uModsDepressed, uint32_t uModsLatched, uint32_t uModsLocked, uint32_t uGroup )
     {
         m_uKeyModifiers = uModsDepressed | uModsLatched | uModsLocked;
     }
-    void CWaylandBackend::Wayland_Keyboard_RepeatInfo( wl_keyboard *pKeyboard, int32_t nRate, int32_t nDelay )
+    void CWaylandInputThread::Wayland_Keyboard_RepeatInfo( wl_keyboard *pKeyboard, int32_t nRate, int32_t nDelay )
     {
     }
 
     // Relative Pointer
 
-    void CWaylandBackend::Wayland_RelativePointer_RelativeMotion( zwp_relative_pointer_v1 *pRelativePointer, uint32_t uTimeHi, uint32_t uTimeLo, wl_fixed_t fDx, wl_fixed_t fDy, wl_fixed_t fDxUnaccel, wl_fixed_t fDyUnaccel )
+    void CWaylandInputThread::Wayland_RelativePointer_RelativeMotion( zwp_relative_pointer_v1 *pRelativePointer, uint32_t uTimeHi, uint32_t uTimeLo, wl_fixed_t fDx, wl_fixed_t fDy, wl_fixed_t fDxUnaccel, wl_fixed_t fDyUnaccel )
     {
         // Don't do any motion/movement stuff if we don't have kb focus
         if ( !m_bKeyboardEntered )
