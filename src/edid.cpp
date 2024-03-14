@@ -323,6 +323,9 @@ namespace gamescope
     };
     std::vector<uint8_t> GenerateSimpleEdid( uint32_t uWidth, uint32_t uHeight )
     {
+        uWidth  = std::min<uint32_t>( uWidth,  3840 );
+        uHeight = std::min<uint32_t>( uHeight, 3840 );
+
         // Does not patch refresh, nothing has cared about this yet.
         std::vector<uint8_t> edid( s_GamescopeBaseEdid, s_GamescopeBaseEdid + std::size( s_GamescopeBaseEdid ) );
 
