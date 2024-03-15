@@ -1130,6 +1130,9 @@ namespace gamescope
 
         wl_display_flush( m_pDisplay );
 
+        GetVBlankTimer().UpdateWasCompositing( bNeedsFullComposite );
+        GetVBlankTimer().UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
+
         this->PollState();
 
         return 0;
