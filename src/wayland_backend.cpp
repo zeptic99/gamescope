@@ -1994,8 +1994,6 @@ namespace gamescope
         if ( !m_pCurrentCursorPlane )
             return;
 
-        return;
-
         auto oState = m_pCurrentCursorPlane->GetCurrentState();
         if ( !oState )
             return;
