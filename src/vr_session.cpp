@@ -56,6 +56,7 @@ static bool GetVulkanInstanceExtensionsRequired( std::vector< std::string > &out
 {
     if ( !vr::VRCompositor() )
     {
+        openvr_log.errorf( "GetVulkanInstanceExtensionsRequired: Failed to get VRCompositor" );
         return false;
     }
 
@@ -98,6 +99,7 @@ static bool GetVulkanDeviceExtensionsRequired( VkPhysicalDevice pPhysicalDevice,
 {
     if ( !vr::VRCompositor() )
     {
+        openvr_log.errorf( "GetVulkanDeviceExtensionsRequired: Failed to get VRCompositor" );
         return false;
     }
 
@@ -254,6 +256,15 @@ namespace gamescope
 			if ( g_nOutputWidth == 0 )
 				g_nOutputWidth = g_nOutputHeight * 16 / 9;
 
+            vr::EVRInitError error = vr::VRInitError_None;
+            VR_Init( &error, vr::VRApplication_Background );
+
+            if ( error != vr::VRInitError_None )
+            {
+                openvr_log.errorf("Unable to init VR runtime: %s\n", vr::VR_GetVRInitErrorAsEnglishDescription( error ));
+                return false;
+            }
+
 			if ( !vulkan_init( vulkan_get_instance(), VK_NULL_HANDLE ) )
 			{
 				return false;
@@ -264,16 +275,6 @@ namespace gamescope
 				fprintf( stderr, "Failed to initialize Wayland session\n" );
 				return false;
 			}
-
-            //
-            vr::EVRInitError error = vr::VRInitError_None;
-            VR_Init(&error, vr::VRApplication_Background);
-
-            if ( error != vr::VRInitError_None )
-            {
-                openvr_log.errorf("Unable to init VR runtime: %s\n", vr::VR_GetVRInitErrorAsEnglishDescription( error ));
-                return false;
-            }
 
             // Reset getopt() state
             optind = 1;
@@ -322,10 +323,10 @@ namespace gamescope
                 }
             }
 
-            if ( m_pchOverlayKey )
+            if ( !m_pchOverlayKey )
                 m_pchOverlayKey = wlserver_get_wl_display_name();
 
-            if ( m_pchOverlayName )
+            if ( !m_pchOverlayName )
                 m_pchOverlayName = "Gamescope";
 
             if ( !vr::VROverlay() )
@@ -422,6 +423,8 @@ namespace gamescope
             if ( !oCompositeResult )
                 return -EINVAL;
 
+            vulkan_wait( *oCompositeResult, true );
+
             UpdateTouchMode();
 
             auto outputImage = vulkan_get_last_output_image( false, false );
@@ -442,10 +445,6 @@ namespace gamescope
 
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_EnableControlBarSteamUI, steamMode );
 
-            // Wait for the composite result on our side *after* we
-            // commit the buffer to the compositor to avoid a bubble.
-            vulkan_wait( *oCompositeResult, true );
-
             vr::Texture_t texture = { &data, vr::TextureType_Vulkan, vr::ColorSpace_Gamma };
             vr::VROverlay()->SetOverlayTexture( m_hOverlay, &texture );
             if ( m_bNudgeToVisible )
@@ -453,6 +452,9 @@ namespace gamescope
                 vr::VROverlay()->ShowDashboard( m_pchOverlayKey );
                 m_bNudgeToVisible = false;
             }
+
+            GetVBlankTimer().UpdateWasCompositing( true );
+            GetVBlankTimer().UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
 
             return 0;
 		}
