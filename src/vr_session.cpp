@@ -457,22 +457,6 @@ namespace gamescope
             GetVBlankTimer().UpdateWasCompositing( true );
             GetVBlankTimer().UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
 
-            // Forward accumulated scroll events now.
-            {
-                std::unique_lock lock( m_ScrollMutex );
-                float flX, flY;
-                m_flScrollAccum[0] = modf( m_flScrollAccum[0], &flX );
-                m_flScrollAccum[1] = modf( m_flScrollAccum[1], &flY );
-
-                if ( flX != 0.0f || flY != 0.0f )
-                {
-                    openvr_log.infof( "scroll: %f %f", flX, flY );
-                    wlserver_lock();
-                    wlserver_mousewheel( flX, flY, ++m_uFakeTimestamp );
-                    wlserver_unlock();
-                }
-            }
-
             return 0;
 		}
 
@@ -730,9 +714,11 @@ namespace gamescope
 
                         case vr::VREvent_ScrollSmooth:
                         {
-                            std::unique_lock lock( m_ScrollMutex );
-                            m_flScrollAccum[0] += -vrEvent.data.scroll.xdelta * m_flScrollSpeed;
-                            m_flScrollAccum[1] += -vrEvent.data.scroll.ydelta * m_flScrollSpeed;
+                            float flX = -vrEvent.data.scroll.xdelta * m_flScrollSpeed;
+                            float flY = -vrEvent.data.scroll.ydelta * m_flScrollSpeed;
+                            wlserver_lock();
+                            wlserver_mousewheel( flX, flY, ++m_uFakeTimestamp );
+                            wlserver_unlock();
                             break;
                         }
 
@@ -782,8 +768,6 @@ namespace gamescope
         float m_flPhysicalCurvature = 0.0f;
         float m_flPhysicalPreCurvePitch = 0.0f;
         float m_flScrollSpeed = 1.0f;
-        std::mutex m_ScrollMutex;
-        float m_flScrollAccum[2] = { 0.0f, 0.0f };
         vr::VROverlayHandle_t m_hOverlay = vr::k_ulOverlayHandleInvalid;
         vr::VROverlayHandle_t m_hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
         wlserver_input_method *m_pIME = nullptr;
