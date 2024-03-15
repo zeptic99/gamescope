@@ -116,8 +116,6 @@ private:
 	bool m_dirty;
 	bool m_imageEmpty;
 
-	bool m_hideForMovement;
-
 	CursorBarrier m_barriers[4] = {};
 
 	xwayland_ctx_t *m_ctx;

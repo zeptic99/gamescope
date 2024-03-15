@@ -263,6 +263,7 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 static void wlserver_perform_rel_pointer_motion(double unaccel_dx, double unaccel_dy)
 {
 	assert( wlserver_is_lock_held() );
+
 	unaccel_dx *= g_mouseSensitivity;
 	unaccel_dy *= g_mouseSensitivity;
 
@@ -273,7 +274,7 @@ static void wlserver_handle_pointer_motion(struct wl_listener *listener, void *d
 {
 	struct wlr_pointer_motion_event *event = (struct wlr_pointer_motion_event *) data;
 
-	wlserver_perform_rel_pointer_motion(event->unaccel_dx, event->unaccel_dy);
+	wlserver_mousemotion(event->unaccel_dx, event->unaccel_dy, event->time_msec);
 }
 
 void wlserver_open_steam_menu( bool qam )
@@ -1926,31 +1927,18 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y
 	wlr_seat_pointer_notify_enter( wlserver.wlr.seat, wlrsurface, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 }
 
-static void wlserver_movecursor( double x, double y )
+static void wlserver_clampcursor()
 {
-	wlserver.mouse_surface_cursorx += x;
+	wlserver.mouse_surface_cursorx = std::clamp( wlserver.mouse_surface_cursorx, 0.0, wlserver.mouse_focus_surface->current.width - 1.0 );
+	wlserver.mouse_surface_cursory = std::clamp( wlserver.mouse_surface_cursory, 0.0, wlserver.mouse_focus_surface->current.height - 1.0 );
+}
 
-	if ( wlserver.mouse_surface_cursorx > wlserver.mouse_focus_surface->current.width - 1 )
-	{
-		wlserver.mouse_surface_cursorx = wlserver.mouse_focus_surface->current.width - 1;
-	}
+static void wlserver_warpcursor( double x, double y )
+{
+	wlserver.mouse_surface_cursorx = x;
+	wlserver.mouse_surface_cursory = y;
 
-	if ( wlserver.mouse_surface_cursorx < 0 )
-	{
-		wlserver.mouse_surface_cursorx = 0;
-	}
-
-	wlserver.mouse_surface_cursory += y;
-
-	if ( wlserver.mouse_surface_cursory > wlserver.mouse_focus_surface->current.height - 1 )
-	{
-		wlserver.mouse_surface_cursory = wlserver.mouse_focus_surface->current.height - 1;
-	}
-
-	if ( wlserver.mouse_surface_cursory < 0 )
-	{
-		wlserver.mouse_surface_cursory = 0;
-	}
+	wlserver_clampcursor();
 
 	wlserver.ulLastMovedCursorTime = get_time_in_nanos();
 	wlserver.bCursorHidden = false;
@@ -1966,8 +1954,15 @@ void wlserver_mousemotion( double x, double y, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
 
+	wlserver.mouse_surface_cursorx += x;
+	wlserver.mouse_surface_cursory += y;
+
+	wlserver_clampcursor();
+
+	wlserver.ulLastMovedCursorTime = get_time_in_nanos();
+	wlserver.bCursorHidden = false;
+
 	wlserver_perform_rel_pointer_motion( x, y );
-	wlserver_movecursor( x, y );
 	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
@@ -1976,7 +1971,14 @@ void wlserver_mousewarp( double x, double y, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
 
-	wlserver_movecursor( x, y );
+	wlserver.mouse_surface_cursorx = x;
+	wlserver.mouse_surface_cursory = y;
+
+	wlserver_clampcursor();
+
+	wlserver.ulLastMovedCursorTime = get_time_in_nanos();
+	wlserver.bCursorHidden = false;
+
 	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
@@ -2098,13 +2100,15 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 		trackpad_dx = tx - wlserver.mouse_surface_cursorx;
 		trackpad_dy = ty - wlserver.mouse_surface_cursory;
 
-		wlserver.mouse_surface_cursorx = tx;
-		wlserver.mouse_surface_cursory = ty;
-
 		gamescope::TouchClickMode eMode = GetBackend()->GetTouchClickMode();
 
 		if ( eMode == gamescope::TouchClickModes::Passthrough )
 		{
+			wlserver.mouse_surface_cursorx = tx;
+			wlserver.mouse_surface_cursory = ty;
+
+			wlserver_clampcursor();
+
 			wlr_seat_touch_notify_motion( wlserver.wlr.seat, time, touch_id, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		}
 		else if ( eMode == gamescope::TouchClickModes::Disabled )
@@ -2113,14 +2117,13 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 		}
 		else if ( eMode == gamescope::TouchClickModes::Trackpad )
 		{
-			wlserver_perform_rel_pointer_motion(trackpad_dx, trackpad_dy);
+			wlserver_mousemotion( trackpad_dx, trackpad_dy );
 		}
 		else
 		{
 			g_bPendingTouchMovement = true;
 
-			wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-			wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+			wlserver_mousewarp( tx, ty, time );
 		}
 	}
 
@@ -2145,13 +2148,15 @@ void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 		tx *= focusedWindowScaleX;
 		ty *= focusedWindowScaleY;
 
-		wlserver.mouse_surface_cursorx = tx;
-		wlserver.mouse_surface_cursory = ty;
-
 		gamescope::TouchClickMode eMode = GetBackend()->GetTouchClickMode();
 
 		if ( eMode == gamescope::TouchClickModes::Passthrough )
 		{
+			wlserver.mouse_surface_cursorx = tx;
+			wlserver.mouse_surface_cursory = ty;
+
+			wlserver_clampcursor();
+
 			wlr_seat_touch_notify_down( wlserver.wlr.seat, wlserver.mouse_focus_surface, time, touch_id,
 										wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 
@@ -2167,8 +2172,7 @@ void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 
 			if ( eMode != gamescope::TouchClickModes::Trackpad )
 			{
-				wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
-				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
+				wlserver_warpcursor( tx, ty );
 			}
 
 			uint32_t button = TouchClickModeToLinuxButton( eMode );
