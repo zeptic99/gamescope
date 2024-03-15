@@ -1955,59 +1955,13 @@ void wlserver_mousebutton( int button, bool press, uint32_t time )
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
 
-#define USE_JANKY_XTEST_MOUSEWHEEL
-
 void wlserver_mousewheel( double flX, double flY, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
 
-	// wlr_seat_pointer_notify_axis is woefully unreliable for
-	// XWayland applications for some reason...
-	// Use the JANKY as FROG xtest method below...
-#ifndef USE_JANKY_XTEST_MOUSEWHEEL
-	if ( x != 0 )
-	{
-		wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_HORIZONTAL, flX, flX * WLR_POINTER_AXIS_DISCRETE_STEP, WLR_AXIS_SOURCE_WHEEL );
-	}
-	if ( y != 0 )
-	{
-		wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_VERTICAL, flY, flY * WLR_POINTER_AXIS_DISCRETE_STEP, WLR_AXIS_SOURCE_WHEEL );
-	}
+	wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_HORIZONTAL, flX, flX * WLR_POINTER_AXIS_DISCRETE_STEP, WLR_AXIS_SOURCE_WHEEL );
+	wlr_seat_pointer_notify_axis( wlserver.wlr.seat, time, WLR_AXIS_ORIENTATION_VERTICAL, flY, flY * WLR_POINTER_AXIS_DISCRETE_STEP, WLR_AXIS_SOURCE_WHEEL );
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
-#else
-	static float s_flScrollAccum[2] = { 0.0f, 0.0f };
-
-	s_flScrollAccum[0] += flX;
-	s_flScrollAccum[1] += flY;
-
-	float flIntX, flIntY;
-	s_flScrollAccum[0] = modf( s_flScrollAccum[0], &flIntX );
-	s_flScrollAccum[1] = modf( s_flScrollAccum[1], &flIntY );
-	int x = int( flIntX );
-	int y = int( flIntY );
-
-	auto server = steamcompmgr_get_focused_server();
-	if ( server != NULL )
-	{
-		if ( y >= 0 )
-		{
-			for ( int i = 0; i < y; i++ )
-			{
-				XTestFakeButtonEvent( server->get_xdisplay(), 5, True, CurrentTime );
-				XTestFakeButtonEvent( server->get_xdisplay(), 5, False, CurrentTime );
-			}
-		}
-		else
-		{
-			for ( int i = 0; i < -y; i++ )
-			{
-				XTestFakeButtonEvent( server->get_xdisplay(), 4, True, CurrentTime );
-				XTestFakeButtonEvent( server->get_xdisplay(), 4, False, CurrentTime );
-			}
-		}
-		XFlush( server->get_xdisplay() );
-	}
-#endif
 }
 
 void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when )

@@ -1971,8 +1971,8 @@ namespace gamescope
     void CWaylandInputThread::Wayland_Pointer_Frame( wl_pointer *pPointer )
     {
         defer( m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL );
-        float x = m_flScrollAccum[0];
-        float y = m_flScrollAccum[1];
+        double x = m_flScrollAccum[0];
+        double y = m_flScrollAccum[1];
         m_flScrollAccum[0] = 0.0;
         m_flScrollAccum[1] = 0.0;
 
@@ -1980,9 +1980,6 @@ namespace gamescope
             return;
 
         if ( m_uAxisSource != WL_POINTER_AXIS_SOURCE_WHEEL )
-            return;
-
-        if ( x == 0 && y == 0 )
             return;
 
         wlserver_lock();
