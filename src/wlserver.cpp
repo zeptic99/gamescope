@@ -73,10 +73,6 @@ struct wlserver_content_override {
 	struct wl_resource *gamescope_swapchain;
 };
 
-enum wlserver_touch_click_mode g_nDefaultTouchClickMode = WLSERVER_TOUCH_CLICK_LEFT;
-enum wlserver_touch_click_mode g_nTouchClickMode = g_nDefaultTouchClickMode;
-
-
 std::mutex g_wlserver_xdg_shell_windows_lock;
 
 static struct wl_list pending_surfaces = {0};
@@ -328,19 +324,19 @@ static void wlserver_handle_pointer_frame(struct wl_listener *listener, void *da
 	bump_input_counter();
 }
 
-static inline uint32_t steamcompmgr_button_to_wlserver_button( int button )
+static inline uint32_t TouchClickModeToLinuxButton( gamescope::TouchClickMode eTouchClickMode )
 {
-	switch ( button )
+	switch ( eTouchClickMode )
 	{
 		default:
-		case WLSERVER_TOUCH_CLICK_HOVER:
+		case gamescope::TouchClickModes::Hover:
 			return 0;
-		case WLSERVER_TOUCH_CLICK_TRACKPAD:
-		case WLSERVER_TOUCH_CLICK_LEFT:
+		case gamescope::TouchClickModes::Trackpad:
+		case gamescope::TouchClickModes::Left:
 			return BTN_LEFT;
-		case WLSERVER_TOUCH_CLICK_RIGHT:
+		case gamescope::TouchClickModes::Right:
 			return BTN_RIGHT;
-		case WLSERVER_TOUCH_CLICK_MIDDLE:
+		case gamescope::TouchClickModes::Middle:
 			return BTN_MIDDLE;
 	}
 }
@@ -2048,20 +2044,6 @@ static void apply_touchscreen_orientation(double *x, double *y )
 	*y = ty;
 }
 
-bool g_bTrackpadTouchExternalDisplay = false;
-
-int get_effective_touch_mode()
-{
-	if ( !GetBackend() || !GetBackend()->GetCurrentConnector() )
-		return g_nTouchClickMode;
-
-	gamescope::GamescopeScreenType screenType = GetBackend()->GetCurrentConnector()->GetScreenType();
-	if ( screenType == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL && g_nTouchClickMode == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
-		return WLSERVER_TOUCH_CLICK_TRACKPAD;
-
-	return g_nTouchClickMode;
-}
-
 void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
@@ -2088,15 +2070,17 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 		wlserver.mouse_surface_cursorx = tx;
 		wlserver.mouse_surface_cursory = ty;
 
-		if ( get_effective_touch_mode() == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
+		gamescope::TouchClickMode eMode = GetBackend()->GetTouchClickMode();
+
+		if ( eMode == gamescope::TouchClickModes::Passthrough )
 		{
 			wlr_seat_touch_notify_motion( wlserver.wlr.seat, time, touch_id, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 		}
-		else if ( get_effective_touch_mode() == WLSERVER_TOUCH_CLICK_DISABLED )
+		else if ( eMode == gamescope::TouchClickModes::Disabled )
 		{
 			return;
 		}
-		else if ( get_effective_touch_mode() == WLSERVER_TOUCH_CLICK_TRACKPAD )
+		else if ( eMode == gamescope::TouchClickModes::Trackpad )
 		{
 			wlserver_perform_rel_pointer_motion(trackpad_dx, trackpad_dy);
 		}
@@ -2133,14 +2117,16 @@ void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 		wlserver.mouse_surface_cursorx = tx;
 		wlserver.mouse_surface_cursory = ty;
 
-		if ( get_effective_touch_mode() == WLSERVER_TOUCH_CLICK_PASSTHROUGH )
+		gamescope::TouchClickMode eMode = GetBackend()->GetTouchClickMode();
+
+		if ( eMode == gamescope::TouchClickModes::Passthrough )
 		{
 			wlr_seat_touch_notify_down( wlserver.wlr.seat, wlserver.mouse_focus_surface, time, touch_id,
 										wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 
 			wlserver.touch_down_ids.insert( touch_id );
 		}
-		else if ( get_effective_touch_mode() == WLSERVER_TOUCH_CLICK_DISABLED )
+		else if ( eMode == gamescope::TouchClickModes::Disabled )
 		{
 			return;
 		}
@@ -2148,20 +2134,20 @@ void wlserver_touchdown( double x, double y, int touch_id, uint32_t time )
 		{
 			g_bPendingTouchMovement = true;
 
-			if ( get_effective_touch_mode() != WLSERVER_TOUCH_CLICK_TRACKPAD )
+			if ( eMode != gamescope::TouchClickModes::Trackpad )
 			{
 				wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 			}
 
-			uint32_t button = steamcompmgr_button_to_wlserver_button( get_effective_touch_mode() );
+			uint32_t button = TouchClickModeToLinuxButton( eMode );
 
-			if ( button != 0 && get_effective_touch_mode() < WLSERVER_BUTTON_COUNT )
+			if ( button != 0 && eMode < WLSERVER_BUTTON_COUNT )
 			{
 				wlr_seat_pointer_notify_button( wlserver.wlr.seat, time, button, WLR_BUTTON_PRESSED );
 				wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 
-				wlserver.button_held[ get_effective_touch_mode() ] = true;
+				wlserver.button_held[ eMode ] = true;
 			}
 		}
 	}
@@ -2180,7 +2166,7 @@ void wlserver_touchup( int touch_id, uint32_t time )
 		{
 			if ( wlserver.button_held[ i ] == true )
 			{
-				uint32_t button = steamcompmgr_button_to_wlserver_button( i );
+				uint32_t button = TouchClickModeToLinuxButton( (gamescope::TouchClickMode) i );
 
 				if ( button != 0 )
 				{

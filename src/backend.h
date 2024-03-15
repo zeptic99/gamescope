@@ -3,6 +3,7 @@
 #include "color_helpers.h"
 #include "gamescope_shared.h"
 #include "vulkan_include.h"
+#include "convar.h"
 
 #include <cassert>
 #include <span>
@@ -20,6 +21,21 @@ namespace gamescope
 {
     struct VBlankScheduleTime;
     class BackendBlob;
+
+    namespace TouchClickModes
+    {
+        enum TouchClickMode : uint32_t
+        {
+            Hover,
+            Left,
+            Right,
+            Middle,
+            Passthrough,
+            Disabled,
+            Trackpad,
+        };
+    }
+    using TouchClickMode = TouchClickModes::TouchClickMode;
 
     struct BackendConnectorHDRInfo
     {
@@ -197,6 +213,8 @@ namespace gamescope
         // TODO: Make me const someday.
         virtual BackendPresentFeedback& PresentationFeedback() = 0;
 
+        virtual TouchClickMode GetTouchClickMode() = 0;
+
         static IBackend *Get();
         template <typename T>
         static bool Set();
@@ -221,6 +239,8 @@ namespace gamescope
         virtual VBlankScheduleTime FrameSync() override;
 
         virtual BackendPresentFeedback& PresentationFeedback() override { return m_PresentFeedback; }
+
+        virtual TouchClickMode GetTouchClickMode() override;
     protected:
         BackendPresentFeedback m_PresentFeedback{};
     };
@@ -275,6 +295,8 @@ namespace gamescope
         uint32_t m_uBlob = 0;
         bool m_bOwned = false;
     };
+
+    extern ConVar<TouchClickMode> cv_touch_click_mode;
 }
 
 inline gamescope::IBackend *GetBackend()

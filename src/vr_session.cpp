@@ -465,6 +465,8 @@ namespace gamescope
 
 		virtual bool PollState() override
 		{
+            g_bForceHideCursor = cv_touch_click_mode == TouchClickModes::Passthrough;
+
 			return false;
 		}
 
@@ -645,7 +647,7 @@ namespace gamescope
 
         void UpdateTouchMode()
         {
-            const bool bHideLaserIntersection = g_nTouchClickMode != WLSERVER_TOUCH_CLICK_PASSTHROUGH;
+            const bool bHideLaserIntersection = cv_touch_click_mode != TouchClickModes::Passthrough;
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_HideLaserIntersection, bHideLaserIntersection );
         }
 

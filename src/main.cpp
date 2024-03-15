@@ -22,6 +22,7 @@
 #include "steamcompmgr.hpp"
 #include "rendervulkan.hpp"
 #include "wlserver.hpp"
+#include "convar.h"
 #include "gpuvis_trace_utils.h"
 
 #include "backends.h"
@@ -632,8 +633,7 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "hdr-debug-heatmap") == 0) {
 					g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
 				} else if (strcmp(opt_name, "default-touch-mode") == 0) {
-					g_nDefaultTouchClickMode = (enum wlserver_touch_click_mode) atoi( optarg );
-					g_nTouchClickMode = g_nDefaultTouchClickMode;
+					gamescope::cv_touch_click_mode = (gamescope::TouchClickMode) atoi( optarg );
 				} else if (strcmp(opt_name, "generate-drm-mode") == 0) {
 					g_eGamescopeModeGeneration = parse_gamescope_mode_generation( optarg );
 				} else if (strcmp(opt_name, "force-orientation") == 0) {

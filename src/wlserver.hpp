@@ -175,19 +175,6 @@ struct wlserver_touch {
 	struct wl_listener motion;
 };
 
-enum wlserver_touch_click_mode {
-	WLSERVER_TOUCH_CLICK_HOVER = 0,
-	WLSERVER_TOUCH_CLICK_LEFT = 1,
-	WLSERVER_TOUCH_CLICK_RIGHT = 2,
-	WLSERVER_TOUCH_CLICK_MIDDLE = 3,
-	WLSERVER_TOUCH_CLICK_PASSTHROUGH = 4,
-	WLSERVER_TOUCH_CLICK_DISABLED = 5,
-	WLSERVER_TOUCH_CLICK_TRACKPAD = 6,
-};
-
-extern enum wlserver_touch_click_mode g_nDefaultTouchClickMode;
-extern enum wlserver_touch_click_mode g_nTouchClickMode;
-
 void xwayland_surface_commit(struct wlr_surface *wlr_surface);
 
 bool wlsession_init( void );
