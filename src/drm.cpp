@@ -3373,7 +3373,6 @@ namespace gamescope
 				for ( uint32_t i = 0; i < 12; i++ )
 					ctm2.matrix[i] = drm_calc_s31_32( pData[i] );
 
-				fprintf( stderr, " !!!! MAKING CTM BLOB!!!!!!\n ");
 				if ( drmModeCreatePropertyBlob( g_DRM.fd, reinterpret_cast<const void *>( &ctm2 ), sizeof( ctm2 ), &uBlob ) != 0 )
 					return nullptr;
 			}
