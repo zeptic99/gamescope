@@ -892,7 +892,7 @@ bool			hasRepaintNonBasePlane = false;
 
 unsigned long	damageSequence = 0;
 
-unsigned int	cursorHideTime = 10'000;
+uint64_t		cursorHideTime = 10'000ul * 1'000'000ul;
 
 bool			gotXError = false;
 
@@ -1566,7 +1566,6 @@ MouseCursor::MouseCursor(xwayland_ctx_t *ctx)
 	: m_texture(0)
 	, m_dirty(true)
 	, m_imageEmpty(false)
-	, m_hideForMovement(true)
 	, m_ctx(ctx)
 {
 	m_lastX = g_nNestedWidth / 2;
@@ -1578,19 +1577,19 @@ void MouseCursor::checkSuspension()
 {
 	unsigned int buttonMask = 0;
 
-	bool bWasHidden = m_hideForMovement;
+	bool bWasHidden = wlserver.bCursorHidden;
 
 	steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
 	if (window && window->ignoreNextClickForVisibility)
 	{
 		window->ignoreNextClickForVisibility--;
-		m_hideForMovement = true;
+		wlserver.bCursorHidden = true;
 		return;
 	}
 	else
 	{
 		if (buttonMask & ( Button1Mask | Button2Mask | Button3Mask | Button4Mask | Button5Mask )) {
-			m_hideForMovement = false;
+			wlserver.bCursorHidden = false;
 
 			// Move the cursor back to where we left it if the window didn't want us to give
 			// it hover/focus where we left it and we moved it before.
@@ -1604,9 +1603,9 @@ void MouseCursor::checkSuspension()
 		}
 	}
 
-	const bool suspended = get_time_in_nanos() - wlserver.ulLastMovedCursorTime > cursorHideTime;
-	if (!m_hideForMovement && suspended) {
-		m_hideForMovement = true;
+	const bool suspended = int64_t( get_time_in_nanos() ) - int64_t( wlserver.ulLastMovedCursorTime ) > int64_t( cursorHideTime );
+	if (!wlserver.bCursorHidden && suspended) {
+		wlserver.bCursorHidden = true;
 
 		// Rearm warp count
 		if (window) {
@@ -1785,7 +1784,7 @@ void MouseCursor::constrainPosition()
 	int rootX = m_x, rootY = m_y;
 
 	if ( rootX >= x2 || rootY >= y2 || rootX < x1 || rootY < y1 ) {
-		if ( window_wants_no_focus_when_mouse_hidden( window ) && m_hideForMovement )
+		if ( window_wants_no_focus_when_mouse_hidden( window ) && wlserver.bCursorHidden )
 			warp(window->xwayland().a.width - 1, window->xwayland().a.height - 1);
 		else
 			warp(window->xwayland().a.width / 2, window->xwayland().a.height / 2);
@@ -1966,16 +1965,11 @@ void MouseCursor::GetDesiredSize( int& nWidth, int &nHeight )
 
 void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, struct FrameInfo_t *frameInfo)
 {
-#if 0
-	if ( m_hideForMovement || m_imageEmpty ) {
+	if ( m_imageEmpty || wlserver.bCursorHidden )
 		return;
-	}
 
-	int winX = m_x, winY = m_y;
-#else
 	int winX = wlserver.mouse_surface_cursorx;
 	int winY = wlserver.mouse_surface_cursory;
-#endif
 
 	// Also need new texture
 	if (!getTexture()) {
@@ -7330,7 +7324,7 @@ steamcompmgr_main(int argc, char **argv)
 				}
 				break;
 			case 'C':
-				cursorHideTime = atoi( optarg );
+				cursorHideTime = uint64_t( atoi( optarg ) ) * 1'000'000ul;
 				break;
 			case 'v':
 				drawDebugInfo = true;

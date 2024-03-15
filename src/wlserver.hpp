@@ -125,6 +125,7 @@ struct wlserver_t {
 	double mouse_surface_cursorx = 0.0f;
 	double mouse_surface_cursory = 0.0f;
 	uint64_t ulLastMovedCursorTime = 0;
+	bool bCursorHidden = true;
 	
 	bool button_held[ WLSERVER_BUTTON_COUNT ];
 	std::set <uint32_t> touch_down_ids;

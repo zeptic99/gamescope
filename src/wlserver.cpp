@@ -1953,11 +1953,13 @@ static void wlserver_movecursor( double x, double y )
 	}
 
 	wlserver.ulLastMovedCursorTime = get_time_in_nanos();
+	wlserver.bCursorHidden = false;
 }
 
 void wlserver_mousehide()
 {
 	wlserver.ulLastMovedCursorTime = 0;
+	wlserver.bCursorHidden = true;
 }
 
 void wlserver_mousemotion( double x, double y, uint32_t time )
