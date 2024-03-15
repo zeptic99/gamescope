@@ -687,11 +687,9 @@ namespace gamescope
                             float x = vrEvent.data.mouse.x;
                             float y = g_nOutputHeight - vrEvent.data.mouse.y;
 
-                            //x /= (float)g_nOutputWidth;
-                            //y /= (float)g_nOutputHeight;
-
                             wlserver_lock();
-                            wlserver_mousewarp( x, y, ++m_uFakeTimestamp );
+                            wlserver_touchmotion( x / float( g_nOutputWidth ), y / float( g_nOutputHeight ), 0, ++m_uFakeTimestamp );
+                            wlserver_mousewarp( x, y, m_uFakeTimestamp );
                             wlserver_unlock();
                             break;
                         }
@@ -705,7 +703,10 @@ namespace gamescope
                             y /= (float)g_nOutputHeight;
 
                             wlserver_lock();
-                            wlserver_mousebutton( BTN_LEFT, vrEvent.eventType == vr::VREvent_MouseButtonDown, ++m_uFakeTimestamp );
+                            if ( vrEvent.eventType == vr::VREvent_MouseButtonDown )
+                                wlserver_touchdown( x, y, 0, ++m_uFakeTimestamp );
+                            else
+                                wlserver_touchup( 0, ++m_uFakeTimestamp );
                             wlserver_unlock();
                             break;
                         }
