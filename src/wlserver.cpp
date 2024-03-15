@@ -2056,6 +2056,9 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 		tx *= focusedWindowScaleX;
 		ty *= focusedWindowScaleY;
 
+		tx = clamp( tx, 0.0, wlserver.mouse_focus_surface ? wlserver.mouse_focus_surface->current.width - 0.1  : g_nOutputWidth );
+		ty = clamp( ty, 0.0, wlserver.mouse_focus_surface ? wlserver.mouse_focus_surface->current.height - 0.1 : g_nOutputHeight );
+
 		double trackpad_dx, trackpad_dy;
 
 		trackpad_dx = tx - wlserver.mouse_surface_cursorx;

@@ -120,6 +120,35 @@ namespace gamescope
         CWaylandBackend *m_pBackend = nullptr;
     };
 
+    struct WaylandPlaneState
+    {
+        wl_buffer *pBuffer;
+        int32_t nDestX;
+        int32_t nDestY;
+        double flSrcX;
+        double flSrcY;
+        double flSrcWidth;
+        double flSrcHeight;
+        int32_t nDstWidth;
+        int32_t nDstHeight;
+        GamescopeAppTextureColorspace eColorspace;
+    };
+
+    inline WaylandPlaneState ClipPlane( const WaylandPlaneState &state )
+    {
+        int32_t nClippedDstWidth  = std::min<int32_t>( g_nOutputWidth,  state.nDstWidth  + state.nDestX ) - state.nDestX;
+        int32_t nClippedDstHeight = std::min<int32_t>( g_nOutputHeight, state.nDstHeight + state.nDestY ) - state.nDestY;
+        double flClippedSrcWidth  = state.flSrcWidth  * ( nClippedDstWidth  / double( state.nDstWidth ) );
+        double flClippedSrcHeight = state.flSrcHeight * ( nClippedDstHeight / double( state.nDstHeight ) );
+
+        WaylandPlaneState outState = state;
+        outState.nDstWidth   = nClippedDstWidth;
+        outState.nDstHeight  = nClippedDstHeight;
+        outState.flSrcWidth  = flClippedSrcWidth;
+        outState.flSrcHeight = flClippedSrcHeight;
+        return outState;
+    }
+
     class CWaylandPlane
     {
     public:
@@ -128,7 +157,7 @@ namespace gamescope
 
         bool Init( CWaylandPlane *pParent, CWaylandPlane *pSiblingBelow );
 
-        void Present( wl_buffer *pBuffer, int32_t nDestX, int32_t nDestY, double flSrcX, double flSrcY, double flSrcWidth, double flSrcHeight, int32_t nDstWidth, int32_t nDstHeight, GamescopeAppTextureColorspace eColorspace );
+        void Present( std::optional<WaylandPlaneState> oState );
         void Present( const FrameInfo_t::Layer_t *pLayer );
 
         void CommitLibDecor( libdecor_configuration *pConfiguration );
@@ -136,6 +165,8 @@ namespace gamescope
 
         wl_surface *GetSurface() const { return m_pSurface; }
         libdecor_frame *GetFrame() const { return m_pFrame; }
+
+        std::optional<WaylandPlaneState> GetCurrentState() { std::unique_lock lock( m_PlaneStateLock ); return m_oCurrentPlaneState; }
 
     private:
 
@@ -175,6 +206,9 @@ namespace gamescope
         frog_color_managed_surface *m_pFrogColorManagedSurface = nullptr;
         libdecor_window_state m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
         bool m_bNeedsDecorCommit = false;
+
+        std::mutex m_PlaneStateLock;
+        std::optional<WaylandPlaneState> m_oCurrentPlaneState;
     };
     // Can't be const, libdecor api bad...
     libdecor_frame_interface CWaylandPlane::s_LibDecorFrameInterface =
@@ -284,6 +318,8 @@ namespace gamescope
 
         double m_flScrollAccum[2] = { 0.0, 0.0 };
         uint32_t m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
+
+        CWaylandPlane *m_pCurrentCursorPlane = nullptr;
 
         std::atomic<std::shared_ptr<zwp_relative_pointer_v1>> m_pRelativePointer = nullptr;
         std::unordered_set<uint32_t> m_uScancodesHeld;
@@ -434,7 +470,6 @@ namespace gamescope
         wp_presentation *GetPresentation() const { return m_pPresentation; }
         frog_color_management_factory_v1 *GetFrogColorManagementFactory() const { return m_pFrogColorMgmtFactory; }
         libdecor *GetLibDecor() const { return m_pLibDecor; }
-        glm::uvec2 GetSurfaceSize() const { return m_uSurfaceSize; }
 
         uint32_t ImportWlBuffer( wl_buffer *pBuffer );
         wl_buffer *FbIdToBuffer( uint32_t uFbId );
@@ -497,10 +532,6 @@ namespace gamescope
 
         std::unordered_map<uint32_t, std::vector<uint64_t>> m_FormatModifiers;
         std::unordered_map<uint32_t, wl_buffer *> m_ImportedFbs;
-
-        // Track base plane surface size with last commit
-        // so we are in the right scale for resizing + mouse location, etc.
-        glm::uvec2 m_uSurfaceSize = { 1280, 720 };
 
         uint32_t m_uPointerEnterSerial = 0;
         std::shared_ptr<INestedHints::CursorInfo> m_pCursorInfo;
@@ -638,6 +669,8 @@ namespace gamescope
     bool CWaylandPlane::Init( CWaylandPlane *pParent, CWaylandPlane *pSiblingBelow )
     {
         m_pSurface = wl_compositor_create_surface( m_pBackend->GetCompositor() );
+        wl_surface_set_user_data( m_pSurface, this );
+
         m_pViewport = wp_viewporter_get_viewport( m_pBackend->GetViewporter(), m_pSurface );
 
         if ( m_pBackend->GetFrogColorManagementFactory() )
@@ -672,10 +705,17 @@ namespace gamescope
         return true;
     }
 
-    void CWaylandPlane::Present( wl_buffer *pBuffer, int32_t nDestX, int32_t nDestY, double flSrcX, double flSrcY, double flSrcWidth, double flSrcHeight, int32_t nDstWidth, int32_t nDstHeight, GamescopeAppTextureColorspace eColorspace )
+    void CWaylandPlane::Present( std::optional<WaylandPlaneState> oState )
     {
-        if ( pBuffer )
         {
+            std::unique_lock lock( m_PlaneStateLock );
+            m_oCurrentPlaneState = oState;
+        }
+
+        if ( oState )
+        {
+            assert( oState->pBuffer );
+
             if ( m_pFrame )
             {
                 struct wp_presentation_feedback *pFeedback = wp_presentation_feedback( m_pBackend->GetPresentation(), m_pSurface );
@@ -685,7 +725,7 @@ namespace gamescope
             if ( m_pFrogColorManagedSurface )
             {
                 frog_color_managed_surface_set_render_intent( m_pFrogColorManagedSurface, FROG_COLOR_MANAGED_SURFACE_RENDER_INTENT_PERCEPTUAL );
-                switch ( eColorspace )
+                switch ( oState->eColorspace )
                 {
                     default:
                     case GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU:
@@ -708,35 +748,27 @@ namespace gamescope
                 }
             }
 
-            int32_t nClippedDstWidth  = std::min<int32_t>( g_nOutputWidth,  nDstWidth   + nDestX ) - nDestX;
-            int32_t nClippedDstHeight = std::min<int32_t>( g_nOutputHeight, nDstHeight  + nDestY ) - nDestY;
-            double flClippedSrcWidth  = flSrcWidth * ( nClippedDstWidth / double( nDstWidth ) );
-            double flClippedSrcHeight = flSrcHeight * ( nClippedDstHeight / double( nDstHeight ) );
-
             wp_viewport_set_source(
                 m_pViewport,
-                wl_fixed_from_double( flSrcX ),
-                wl_fixed_from_double( flSrcY ),
-                wl_fixed_from_double( flClippedSrcWidth ),
-                wl_fixed_from_double( flClippedSrcHeight ) );
+                wl_fixed_from_double( oState->flSrcX ),
+                wl_fixed_from_double( oState->flSrcY ),
+                wl_fixed_from_double( oState->flSrcWidth ),
+                wl_fixed_from_double( oState->flSrcHeight ) );
             wp_viewport_set_destination(
                 m_pViewport,
-                nClippedDstWidth,
-                nClippedDstHeight );
+                oState->nDstWidth,
+                oState->nDstHeight );
             if ( m_pSubsurface )
-                wl_subsurface_set_position( m_pSubsurface, nDestX, nDestY );
+                wl_subsurface_set_position( m_pSubsurface, oState->nDestX, oState->nDestY );
             // The x/y here does nothing? Why? What is it for...
             // Use the subsurface set_position thing instead.
-            wl_surface_attach( m_pSurface, pBuffer, 0, 0 );
+            wl_surface_attach( m_pSurface, oState->pBuffer, 0, 0 );
             wl_surface_damage( m_pSurface, 0, 0, INT32_MAX, INT32_MAX );
         }
         else
         {
-            if ( !m_pFrame )
-            {
-                wl_surface_attach( m_pSurface, nullptr, 0, 0 );
-                wl_surface_damage( m_pSurface, 0, 0, INT32_MAX, INT32_MAX );
-            }
+            wl_surface_attach( m_pSurface, nullptr, 0, 0 );
+            wl_surface_damage( m_pSurface, 0, 0, INT32_MAX, INT32_MAX );
         }
     }
 
@@ -765,20 +797,23 @@ namespace gamescope
         if ( pBuffer )
         {
             Present(
-                pBuffer,
-                -pLayer->offset.x,
-                -pLayer->offset.y,
-                0.0,
-                0.0,
-                pLayer->tex->width(),
-                pLayer->tex->height(),
-                pLayer->tex->width() / double( pLayer->scale.x ),
-                pLayer->tex->height() / double( pLayer->scale.y ),
-                pLayer->colorspace );
+                ClipPlane( WaylandPlaneState
+                {
+                    .pBuffer     = pBuffer,
+                    .nDestX      = int32_t( -pLayer->offset.x ),
+                    .nDestY      = int32_t( -pLayer->offset.y ),
+                    .flSrcX      = 0.0,
+                    .flSrcY      = 0.0,
+                    .flSrcWidth  = double( pLayer->tex->width() ),
+                    .flSrcHeight = double( pLayer->tex->height() ),
+                    .nDstWidth   = int32_t( pLayer->tex->width() / double( pLayer->scale.x ) ),
+                    .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
+                    .eColorspace = pLayer->colorspace,
+                } ) );
         }
         else
         {
-            Present( nullptr, 0, 0, -1.0, -1.0, -1.0, -1.0, -1, -1, GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU );
+            Present( std::nullopt );
         }
     }
 
@@ -910,9 +945,6 @@ namespace gamescope
             g_nOutputWidth = g_nOutputHeight * 16 / 9;
         if ( g_nOutputRefresh == 0 )
             g_nOutputRefresh = 60;
-
-        m_uSurfaceSize.x = g_nOutputWidth;
-        m_uSurfaceSize.y = g_nOutputHeight;
 
         if ( !( m_pDisplay = wl_display_connect( nullptr ) ) )
         {
@@ -1080,19 +1112,21 @@ namespace gamescope
 
             uint32_t uCurrentPlane = 0;
             if ( bNeedsBacking )
-                m_Planes[uCurrentPlane++].Present( m_pBlackBuffer, 0, 0, 0.0, 0.0, 1.0, 1.0, g_nOutputWidth, g_nOutputHeight, GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU );
+            {
+                m_Planes[uCurrentPlane++].Present(
+                    WaylandPlaneState
+                    {
+                        .pBuffer     = m_pBlackBuffer,
+                        .flSrcWidth  = 1.0,
+                        .flSrcHeight = 1.0,
+                        .nDstWidth   = int32_t( g_nOutputWidth ),
+                        .nDstHeight  = int32_t( g_nOutputHeight ),
+                        .eColorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
+                    } );
+            }
 
             for ( int i = 0; i < 8 && uCurrentPlane < 8; i++ )
                 m_Planes[uCurrentPlane++].Present( i < pFrameInfo->layerCount ? &pFrameInfo->layers[i] : nullptr );
-
-            if ( bNeedsBacking )
-            {
-                m_uSurfaceSize = glm::uvec2{ g_nOutputWidth, g_nOutputHeight };
-            }
-            else
-            {
-                m_uSurfaceSize = glm::uvec2{ pFrameInfo->layers[0].tex->width(), pFrameInfo->layers[0].tex->height() };
-            }
         }
         else
         {
@@ -1121,8 +1155,6 @@ namespace gamescope
             compositeLayer.colorspace = pFrameInfo->outputEncodingEOTF == EOTF_PQ ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
             m_Planes[0].Present( &compositeLayer );
-
-            m_uSurfaceSize = glm::uvec2{ g_nOutputWidth, g_nOutputHeight };
         }
 
         for ( int i = 7; i >= 0; i-- )
@@ -1915,11 +1947,21 @@ namespace gamescope
 
     void CWaylandInputThread::Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
     {
+        CWaylandPlane *pPlane = (CWaylandPlane *)wl_surface_get_user_data( pSurface );
+        if ( !pPlane )
+            return;
+        m_pCurrentCursorPlane = pPlane;
         m_bMouseEntered = true;
         m_uPointerEnterSerial = uSerial;
     }
     void CWaylandInputThread::Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface )
     {
+        CWaylandPlane *pPlane = (CWaylandPlane *)wl_surface_get_user_data( pSurface );
+        if ( !pPlane )
+            return;
+        if ( pPlane != m_pCurrentCursorPlane )
+            return;
+        m_pCurrentCursorPlane = nullptr;
         m_bMouseEntered = false;
     }
     void CWaylandInputThread::Wayland_Pointer_Motion( wl_pointer *pPointer, uint32_t uTime, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
@@ -1931,8 +1973,20 @@ namespace gamescope
         if ( !m_bKeyboardEntered )
             return;
 
+        if ( !m_pCurrentCursorPlane )
+            return;
+
+        return;
+
+        auto oState = m_pCurrentCursorPlane->GetCurrentState();
+        if ( !oState )
+            return;
+
+        double flX = ( wl_fixed_to_double( fSurfaceX ) + oState->nDestX ) / g_nOutputWidth;
+        double flY = ( wl_fixed_to_double( fSurfaceY ) + oState->nDestY ) / g_nOutputHeight;
+
         wlserver_lock();
-        wlserver_touchmotion( wl_fixed_to_double( fSurfaceX ) / double( m_pBackend->GetSurfaceSize().x ), wl_fixed_to_double( fSurfaceY ) / double( m_pBackend->GetSurfaceSize().y ), 0, ++m_uFakeTimestamp );
+        wlserver_touchmotion( flX, flY, 0, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
     void CWaylandInputThread::Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState )
