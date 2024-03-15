@@ -688,7 +688,8 @@ namespace gamescope
                             float y = g_nOutputHeight - vrEvent.data.mouse.y;
 
                             wlserver_lock();
-                            wlserver_touchmotion( x / float( g_nOutputWidth ), y / float( g_nOutputHeight ), 0, ++m_uFakeTimestamp );
+                            if ( GetTouchClickMode() == TouchClickModes::Passthrough )
+                                wlserver_touchmotion( x / float( g_nOutputWidth ), y / float( g_nOutputHeight ), 0, ++m_uFakeTimestamp );
                             wlserver_mousewarp( x, y, m_uFakeTimestamp );
                             wlserver_unlock();
                             break;
