@@ -2,6 +2,7 @@
 #include <memory>
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
+#include <linux/input-event-codes.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -465,8 +466,6 @@ namespace gamescope
 
 		virtual bool PollState() override
 		{
-            g_bForceHideCursor = cv_touch_click_mode == TouchClickModes::Passthrough;
-
 			return false;
 		}
 
@@ -667,8 +666,6 @@ namespace gamescope
                 vr::VREvent_t vrEvent;
                 while( vr::VROverlay()->PollNextOverlayEvent( m_hOverlay, &vrEvent, sizeof( vrEvent ) ) )
                 {
-                    uint32_t timestamp = vrEvent.eventAgeSeconds * 1'000'000;
-
                     switch( vrEvent.eventType )
                     {
                         case vr::VREvent_OverlayClosed:
@@ -690,11 +687,11 @@ namespace gamescope
                             float x = vrEvent.data.mouse.x;
                             float y = g_nOutputHeight - vrEvent.data.mouse.y;
 
-                            x /= (float)g_nOutputWidth;
-                            y /= (float)g_nOutputHeight;
+                            //x /= (float)g_nOutputWidth;
+                            //y /= (float)g_nOutputHeight;
 
                             wlserver_lock();
-                            wlserver_touchmotion( x, y, 0, timestamp );
+                            wlserver_mousewarp( x, y, ++m_uFakeTimestamp );
                             wlserver_unlock();
                             break;
                         }
@@ -708,10 +705,7 @@ namespace gamescope
                             y /= (float)g_nOutputHeight;
 
                             wlserver_lock();
-                            if ( vrEvent.eventType == vr::VREvent_MouseButtonDown )
-                                wlserver_touchdown( x, y, 0, timestamp );
-                            else
-                                wlserver_touchup( 0, timestamp );
+                            wlserver_mousebutton( BTN_LEFT, vrEvent.eventType == vr::VREvent_MouseButtonDown, ++m_uFakeTimestamp );
                             wlserver_unlock();
                             break;
                         }
@@ -727,7 +721,7 @@ namespace gamescope
                             m_flScrollAccum[0] = modf( m_flScrollAccum[0], &dx );
                             m_flScrollAccum[1] = modf( m_flScrollAccum[1], &dy );
 
-                            wlserver_mousewheel( dx, dy, timestamp );
+                            wlserver_mousewheel( dx, dy, ++m_uFakeTimestamp );
                             wlserver_unlock();
                             break;
                         }
@@ -783,6 +777,8 @@ namespace gamescope
         vr::VROverlayHandle_t m_hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
         wlserver_input_method *m_pIME = nullptr;
         std::atomic<bool> m_bOverlayVisible = { false };
+
+        uint32_t m_uFakeTimestamp = 0;
 	};
 
 	/////////////////////////
