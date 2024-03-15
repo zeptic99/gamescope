@@ -1971,8 +1971,18 @@ namespace gamescope
     void CWaylandInputThread::Wayland_Pointer_Frame( wl_pointer *pPointer )
     {
         defer( m_uAxisSource = WL_POINTER_AXIS_SOURCE_WHEEL );
-        defer( m_flScrollAccum[0] = 0.0 );
-        defer( m_flScrollAccum[1] = 0.0 );
+#ifndef USE_JANKY_XTEST_MOUSEWHEEL
+        float x = m_flScrollAccum[0];
+        float y = m_flScrollAccum[1];
+        m_flScrollAccum[0] = 0.0;
+        m_flScrollAccum[1] = 0.0;
+#else
+        float flX, flY;
+        m_flScrollAccum[0] = modf( m_flScrollAccum[0], &flX );
+        m_flScrollAccum[1] = modf( m_flScrollAccum[1], &flY );
+        int x = int( flX );
+        int y = int( flY );
+#endif
 
         if ( !m_bKeyboardEntered )
             return;
@@ -1980,11 +1990,14 @@ namespace gamescope
         if ( m_uAxisSource != WL_POINTER_AXIS_SOURCE_WHEEL )
             return;
 
-        if ( m_flScrollAccum[0] == 0.0 && m_flScrollAccum[1] == 0.0 )
+        if ( x == 0 && y == 0 )
             return;
 
+        printf("%d %d\n", x, y);
+        fflush(stdout);
+
         wlserver_lock();
-        wlserver_mousewheel( m_flScrollAccum[0], m_flScrollAccum[1], ++m_uFakeTimestamp );
+        wlserver_mousewheel( x, y, ++m_uFakeTimestamp );
         wlserver_unlock();
     }
 

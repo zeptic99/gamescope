@@ -468,7 +468,7 @@ namespace gamescope
                 {
                     openvr_log.infof( "scroll: %f %f", flX, flY );
                     wlserver_lock();
-                    wlserver_mousewheel( flX * m_flScrollSpeed, flY * m_flScrollSpeed, ++m_uFakeTimestamp );
+                    wlserver_mousewheel( flX, flY, ++m_uFakeTimestamp );
                     wlserver_unlock();
                 }
             }
@@ -731,8 +731,8 @@ namespace gamescope
                         case vr::VREvent_ScrollSmooth:
                         {
                             std::unique_lock lock( m_ScrollMutex );
-                            m_flScrollAccum[0] += -vrEvent.data.scroll.xdelta;
-                            m_flScrollAccum[1] += -vrEvent.data.scroll.ydelta;
+                            m_flScrollAccum[0] += -vrEvent.data.scroll.xdelta * m_flScrollSpeed;
+                            m_flScrollAccum[1] += -vrEvent.data.scroll.ydelta * m_flScrollSpeed;
                             break;
                         }
 
@@ -781,7 +781,7 @@ namespace gamescope
         float m_flPhysicalWidth = 2.0f;
         float m_flPhysicalCurvature = 0.0f;
         float m_flPhysicalPreCurvePitch = 0.0f;
-        float m_flScrollSpeed = 8.0f;
+        float m_flScrollSpeed = 1.0f;
         std::mutex m_ScrollMutex;
         float m_flScrollAccum[2] = { 0.0f, 0.0f };
         vr::VROverlayHandle_t m_hOverlay = vr::k_ulOverlayHandleInvalid;
