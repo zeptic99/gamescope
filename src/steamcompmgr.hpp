@@ -82,7 +82,7 @@ public:
 		checkSuspension();
 	}
 
-	bool isHidden() { return m_hideForMovement || m_imageEmpty; }
+	bool isHidden() { return wlserver.bCursorHidden || m_imageEmpty; }
 	bool imageEmpty() const { return m_imageEmpty; }
 
 	void forcePosition(int x, int y)

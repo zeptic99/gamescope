@@ -2117,7 +2117,7 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 		}
 		else if ( eMode == gamescope::TouchClickModes::Trackpad )
 		{
-			wlserver_mousemotion( trackpad_dx, trackpad_dy );
+			wlserver_mousemotion( trackpad_dx, trackpad_dy, time );
 		}
 		else
 		{
