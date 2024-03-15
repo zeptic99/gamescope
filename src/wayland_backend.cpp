@@ -832,6 +832,8 @@ namespace gamescope
         g_nOutputHeight = nHeight;
 
         CommitLibDecor( pConfiguration );
+
+        force_repaint();
 	}
     void CWaylandPlane::LibDecor_Frame_Close( libdecor_frame *pFrame )
     {
