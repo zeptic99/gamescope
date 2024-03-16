@@ -353,6 +353,7 @@ namespace gamescope
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_WantsModalBehavior,	    m_bModal );
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_SendVRSmoothScrollEvents, true );
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_VisibleInDashboard,       false );
+            vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_HideLaserIntersection,    m_bRelativeMouse );
 
             vr::VROverlay()->SetOverlayWidthInMeters( m_hOverlay,  m_flPhysicalWidth );
             vr::VROverlay()->SetOverlayCurvature	( m_hOverlay,  m_flPhysicalCurvature );
@@ -425,8 +426,6 @@ namespace gamescope
                 return -EINVAL;
 
             vulkan_wait( *oCompositeResult, true );
-
-            UpdateTouchMode();
 
             auto outputImage = vulkan_get_last_output_image( false, false );
 
@@ -590,6 +589,11 @@ namespace gamescope
         }
         virtual void SetRelativeMouseMode( bool bRelative ) override
         {
+            if ( bRelative != m_bRelativeMouse )
+            {
+                vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_HideLaserIntersection, bRelative );
+                m_bRelativeMouse = bRelative;
+            }
         }
         virtual void SetVisible( bool bVisible ) override
         {
@@ -643,12 +647,6 @@ namespace gamescope
 		}
 
 	private:
-
-        void UpdateTouchMode()
-        {
-            const bool bHideLaserIntersection = cv_touch_click_mode != TouchClickModes::Passthrough;
-            vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_HideLaserIntersection, bHideLaserIntersection );
-        }
 
         void WaitUntilVisible()
         {
@@ -764,6 +762,7 @@ namespace gamescope
         bool m_bEnableControlBarKeyboard = false;
         bool m_bEnableControlBarClose = false;
         bool m_bModal = false;
+        bool m_bRelativeMouse = false;
         float m_flPhysicalWidth = 2.0f;
         float m_flPhysicalCurvature = 0.0f;
         float m_flPhysicalPreCurvePitch = 0.0f;
