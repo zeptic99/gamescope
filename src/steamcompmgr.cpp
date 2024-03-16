@@ -918,6 +918,8 @@ static int g_nDynamicRefreshRate[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT] = { 0, 
 static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
 static int g_nCombinedAppRefreshCycleOverride[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT] = { 0, 0 };
+bool g_nCombinedAppRefreshCycleChangeRefresh[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT] = { true, true };
+bool g_nCombinedAppRefreshCycleChangeFPS[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT] = { true, true };
 
 static void _update_app_target_refresh_cycle()
 {
@@ -950,16 +952,22 @@ static void _update_app_target_refresh_cycle()
 	auto rates = GetBackend()->GetCurrentConnector()->GetValidDynamicRefreshRates();
 
 	g_nDynamicRefreshRate[ type ] = 0;
-	g_nSteamCompMgrTargetFPS = target_fps;
 
-	// Find highest mode to do refresh doubling with.
-	for ( auto rate = rates.rbegin(); rate != rates.rend(); rate++ )
+	if ( g_nCombinedAppRefreshCycleChangeFPS[ type ] )
 	{
-		if (*rate % target_fps == 0)
+		g_nSteamCompMgrTargetFPS = target_fps;
+	}
+
+	if ( g_nCombinedAppRefreshCycleChangeRefresh[ type ] )
+	{
+		// Find highest mode to do refresh doubling with.
+		for ( auto rate = rates.rbegin(); rate != rates.rend(); rate++ )
 		{
-			g_nDynamicRefreshRate[ type ] = *rate;
-			g_nSteamCompMgrTargetFPS = target_fps;
-			return;
+			if (*rate % target_fps == 0)
+			{
+				g_nDynamicRefreshRate[ type ] = *rate;
+				return;
+			}
 		}
 	}
 }
@@ -972,9 +980,11 @@ static void update_app_target_refresh_cycle()
 		update_runtime_info();
 }
 
-void steamcompmgr_set_app_refresh_cycle_override( gamescope::GamescopeScreenType type, int override_fps )
+void steamcompmgr_set_app_refresh_cycle_override( gamescope::GamescopeScreenType type, int override_fps, bool change_refresh, bool change_fps_cap )
 {
 	g_nCombinedAppRefreshCycleOverride[ type ] = override_fps;
+	g_nCombinedAppRefreshCycleChangeRefresh[ type ] = change_refresh;
+	g_nCombinedAppRefreshCycleChangeFPS[ type ] = change_fps_cap;
 	update_app_target_refresh_cycle();
 }
 
