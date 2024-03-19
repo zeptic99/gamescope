@@ -158,6 +158,8 @@ namespace gamescope
 
         bool Init( CWaylandPlane *pParent, CWaylandPlane *pSiblingBelow );
 
+        uint32_t GetScale() const;
+
         void Present( std::optional<WaylandPlaneState> oState );
         void Present( const FrameInfo_t::Layer_t *pLayer );
 
@@ -203,6 +205,7 @@ namespace gamescope
 
         CWaylandBackend *m_pBackend = nullptr;
 
+        CWaylandPlane *m_pParent = nullptr;
         wl_surface *m_pSurface = nullptr;
         wp_viewport *m_pViewport = nullptr;
         libdecor_frame *m_pFrame = nullptr;
@@ -682,6 +685,7 @@ namespace gamescope
 
     bool CWaylandPlane::Init( CWaylandPlane *pParent, CWaylandPlane *pSiblingBelow )
     {
+        m_pParent = pParent;
         m_pSurface = wl_compositor_create_surface( m_pBackend->GetCompositor() );
         wl_surface_set_user_data( m_pSurface, this );
 
@@ -727,6 +731,14 @@ namespace gamescope
         return true;
     }
 
+    uint32_t CWaylandPlane::GetScale() const
+    {
+        if ( m_pParent )
+            return m_pParent->GetScale();
+
+        return m_uFractionalScale;
+    }
+
     void CWaylandPlane::Present( std::optional<WaylandPlaneState> oState )
     {
         {
@@ -770,6 +782,9 @@ namespace gamescope
                 }
             }
 
+            // Fraction with denominator of 120 per. spec
+            const uint32_t uScale = GetScale();
+
             wp_viewport_set_source(
                 m_pViewport,
                 wl_fixed_from_double( oState->flSrcX ),
@@ -778,14 +793,20 @@ namespace gamescope
                 wl_fixed_from_double( oState->flSrcHeight ) );
             wp_viewport_set_destination(
                 m_pViewport,
-                oState->nDstWidth,
-                oState->nDstHeight );
+                oState->nDstWidth  * 120 / uScale,
+                oState->nDstHeight * 120 / uScale);
             if ( m_pSubsurface )
-                wl_subsurface_set_position( m_pSubsurface, oState->nDestX, oState->nDestY );
+            {
+                wl_subsurface_set_position(
+                    m_pSubsurface,
+                    oState->nDestX * 120 / uScale,
+                    oState->nDestY * 120 / uScale );
+            }
             // The x/y here does nothing? Why? What is it for...
             // Use the subsurface set_position thing instead.
             wl_surface_attach( m_pSurface, oState->pBuffer, 0, 0 );
             wl_surface_damage( m_pSurface, 0, 0, INT32_MAX, INT32_MAX );
+            wl_surface_set_buffer_scale( m_pSurface, 1 );
         }
         else
         {
@@ -844,14 +865,16 @@ namespace gamescope
 	    if ( !libdecor_configuration_get_window_state( pConfiguration, &m_eWindowState ) )
 		    m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
 
+        int32_t uScale = GetScale();
+
         int nWidth, nHeight;
         if ( !libdecor_configuration_get_content_size( pConfiguration, m_pFrame, &nWidth, &nHeight ) )
         {
-            nWidth  = g_nOutputWidth;
-            nHeight = g_nOutputHeight;
+            nWidth  = g_nOutputWidth  * 120 / uScale;
+            nHeight = g_nOutputHeight * 120 / uScale;
         }
-        g_nOutputWidth  = nWidth;
-        g_nOutputHeight = nHeight;
+        g_nOutputWidth  = nWidth  * uScale / 120;
+        g_nOutputHeight = nHeight * uScale / 120;
 
         CommitLibDecor( pConfiguration );
 
@@ -931,7 +954,11 @@ namespace gamescope
 
     void CWaylandPlane::Wayland_FractionalScale_PreferredScale( wp_fractional_scale_v1 *pFractionalScale, uint32_t uScale )
     {
-        m_uFractionalScale = uScale;
+        if ( m_uFractionalScale != uScale )
+        {
+            m_uFractionalScale = uScale;
+            force_repaint();
+        }
     }
 
     ////////////////
