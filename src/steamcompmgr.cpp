@@ -7305,6 +7305,8 @@ void update_edid_prop()
 	}
 }
 
+bool g_bLaunchMangoapp = false;
+
 void
 steamcompmgr_main(int argc, char **argv)
 {
@@ -7388,6 +7390,8 @@ steamcompmgr_main(int argc, char **argv)
 					g_reshade_technique_idx = atoi(optarg);
 				} else if (strcmp(opt_name, "mura-map") == 0) {
 					set_mura_overlay(optarg);
+				} else if (strcmp(opt_name, "mangoapp") == 0) {
+					g_bLaunchMangoapp = true;
 				}
 				break;
 			case '?':
@@ -7471,6 +7475,12 @@ steamcompmgr_main(int argc, char **argv)
 	if ( subCommandArg >= 0 )
 	{
 		spawn_client( &argv[ subCommandArg ] );
+	}
+
+	if ( g_bLaunchMangoapp )
+	{
+		char *pMangoappArgv[] = { strdup( "mangoapp" ), nullptr };
+		spawn_client( pMangoappArgv );
 	}
 
 	// Transpose to get this 3x3 matrix into the right state for applying as a 3x4
