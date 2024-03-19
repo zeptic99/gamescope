@@ -956,6 +956,9 @@ namespace gamescope
     {
         if ( m_uFractionalScale != uScale )
         {
+            g_nOutputWidth  = ( g_nOutputWidth  * uScale ) / m_uFractionalScale;
+            g_nOutputHeight = ( g_nOutputHeight * uScale ) / m_uFractionalScale;
+
             m_uFractionalScale = uScale;
             force_repaint();
         }
