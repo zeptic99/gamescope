@@ -27,6 +27,7 @@
 #include <frog-color-management-v1-client-protocol.h>
 #include <pointer-constraints-unstable-v1-client-protocol.h>
 #include <relative-pointer-unstable-v1-client-protocol.h>
+#include <fractional-scale-v1-client-protocol.h>
 #include "wlr_end.hpp"
 
 #include "drm_include.h"
@@ -197,6 +198,9 @@ namespace gamescope
             uint32_t uMaxFullFrameLuminance );
         static const frog_color_managed_surface_listener s_FrogColorManagedSurfaceListener;
 
+        void Wayland_FractionalScale_PreferredScale( wp_fractional_scale_v1 *pFractionalScale, uint32_t uScale );
+        static const wp_fractional_scale_v1_listener s_FractionalScaleListener;
+
         CWaylandBackend *m_pBackend = nullptr;
 
         wl_surface *m_pSurface = nullptr;
@@ -204,8 +208,10 @@ namespace gamescope
         libdecor_frame *m_pFrame = nullptr;
         wl_subsurface *m_pSubsurface = nullptr;
         frog_color_managed_surface *m_pFrogColorManagedSurface = nullptr;
+        wp_fractional_scale_v1 *m_pFractionalScale = nullptr;
         libdecor_window_state m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
         bool m_bNeedsDecorCommit = false;
+        uint32_t m_uFractionalScale = 120;
 
         std::mutex m_PlaneStateLock;
         std::optional<WaylandPlaneState> m_oCurrentPlaneState;
@@ -227,6 +233,10 @@ namespace gamescope
     const frog_color_managed_surface_listener CWaylandPlane::s_FrogColorManagedSurfaceListener =
     {
         .preferred_metadata = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_FrogColorManagedSurface_PreferredMetadata ),
+    };
+    const wp_fractional_scale_v1_listener CWaylandPlane::s_FractionalScaleListener =
+    {
+        .preferred_scale = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_FractionalScale_PreferredScale ),
     };
 
     enum WaylandModifierIndex
@@ -265,6 +275,7 @@ namespace gamescope
     struct WaylandOutputInfo
     {
         int32_t nRefresh = 60;
+        int32_t nScale = 1;
     };
 
     class CWaylandInputThread
@@ -469,6 +480,7 @@ namespace gamescope
         wp_viewporter *GetViewporter() const { return m_pViewporter; }
         wp_presentation *GetPresentation() const { return m_pPresentation; }
         frog_color_management_factory_v1 *GetFrogColorManagementFactory() const { return m_pFrogColorMgmtFactory; }
+        wp_fractional_scale_manager_v1 *GetFractionalScaleManager() const { return m_pFractionalScaleManager; }
         libdecor *GetLibDecor() const { return m_pLibDecor; }
 
         uint32_t ImportWlBuffer( wl_buffer *pBuffer );
@@ -518,6 +530,7 @@ namespace gamescope
         frog_color_management_factory_v1 *m_pFrogColorMgmtFactory = nullptr;
         zwp_pointer_constraints_v1 *m_pPointerConstraints = nullptr;
         zwp_relative_pointer_manager_v1 *m_pRelativePointerManager = nullptr;
+        wp_fractional_scale_manager_v1 *m_pFractionalScaleManager = nullptr;
 
         std::unordered_map<wl_output *, WaylandOutputInfo> m_pOutputs;
 
@@ -681,6 +694,14 @@ namespace gamescope
             // Only add the listener for the toplevel to avoid useless spam.
             if ( !pParent )
                 frog_color_managed_surface_add_listener( m_pFrogColorManagedSurface, &s_FrogColorManagedSurfaceListener, this );
+        }
+
+        if ( m_pBackend->GetFractionalScaleManager() )
+        {
+            m_pFractionalScale = wp_fractional_scale_manager_v1_get_fractional_scale( m_pBackend->GetFractionalScaleManager(), m_pSurface );
+
+            if ( !pParent )
+                wp_fractional_scale_v1_add_listener( m_pFractionalScale, &s_FractionalScaleListener, this );
         }
 
         if ( !pParent )
@@ -906,6 +927,11 @@ namespace gamescope
             uint32_t( uMaxLuminance ),
             uMinLuminance * 0.0001,
             uint32_t( uMaxFullFrameLuminance ) );
+    }
+
+    void CWaylandPlane::Wayland_FractionalScale_PreferredScale( wp_fractional_scale_v1 *pFractionalScale, uint32_t uScale )
+    {
+        m_uFractionalScale = uScale;
     }
 
     ////////////////
@@ -1605,6 +1631,10 @@ namespace gamescope
         {
             m_pRelativePointerManager = (zwp_relative_pointer_manager_v1 *)wl_registry_bind( pRegistry, uName, &zwp_relative_pointer_manager_v1_interface, 1u );
         }
+        else if ( !strcmp( pInterface, wp_fractional_scale_manager_v1_interface.name ) )
+        {
+            m_pFractionalScaleManager = (wp_fractional_scale_manager_v1 *)wl_registry_bind( pRegistry, uName, &wp_fractional_scale_manager_v1_interface, 1u );
+        }
         else if ( !strcmp( pInterface, wl_shm_interface.name ) )
         {
             m_pShm = (wl_shm *)wl_registry_bind( pRegistry, uName, &wl_shm_interface, 1u );
@@ -1633,6 +1663,7 @@ namespace gamescope
     }
     void CWaylandBackend::Wayland_Output_Scale( wl_output *pOutput, int32_t nFactor )
     {
+        m_pOutputs[ pOutput ].nScale = nFactor;
     }
     void CWaylandBackend::Wayland_Output_Name( wl_output *pOutput, const char *pName )
     {
