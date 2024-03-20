@@ -537,6 +537,12 @@ namespace gamescope
 			return false;
 		}
 
+        virtual bool SupportsExplicitSync() const override
+        {
+            // We always composite right now, so yes.
+            return true;
+        }
+
 		virtual bool IsVisible() const override
 		{
             return m_bOverlayVisible.load();

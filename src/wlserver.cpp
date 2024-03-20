@@ -8,6 +8,8 @@
 #include <string.h>
 #include <poll.h>
 #include <fcntl.h>
+#include <xf86drm.h>
+#include <sys/eventfd.h>
 
 #include <linux/input-event-codes.h>
 
@@ -23,6 +25,7 @@
 #include <wlr/backend/multi.h>
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/render/wlr_renderer.h>
+#include <wlr/render/timeline.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
@@ -32,6 +35,7 @@
 #include <wlr/xwayland/server.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
+#include <wlr/types/wlr_linux_drm_syncobj_v1.h>
 #include "wlr_end.hpp"
 
 #include "gamescope-xwayland-protocol.h"
@@ -92,31 +96,125 @@ std::vector<ResListEntry_t>& gamescope_xwayland_server_t::retrieve_commits()
 	return commits;
 }
 
+void GamescopeTimelinePoint::Release()
+{
+	assert( wlserver_is_lock_held() );
+
+	//fprintf( stderr, "Release: %lu\n", ulPoint );
+	drmSyncobjTimelineSignal( pTimeline->drm_fd, &pTimeline->handle, &ulPoint, 1 );
+	wlr_render_timeline_unref( pTimeline );
+}
+
+//
+// Fence flags tl;dr
+// 0                                      -> Wait for signal on a materialized fence, -ENOENT if not materialized
+// DRM_SYNCOBJ_WAIT_FLAGS_WAIT_AVAILABLE  -> Wait only for materialization
+// DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT -> Wait for materialization + signal
+//
+
+static std::optional<GamescopeAcquireTimelineState> TimelinePointToEventFd( const GamescopeTimelinePoint &point )
+{
+	uint64_t uSignalledPoint = 0;
+	int nRet = drmSyncobjQuery( point.pTimeline->drm_fd, &point.pTimeline->handle, &uSignalledPoint, 1u );
+	if ( nRet != 0 )
+	{
+		wl_log.errorf( "Failed to query syncobj" );
+		return std::nullopt;
+	}
+
+	if ( uSignalledPoint >= point.ulPoint )
+	{
+		return GamescopeAcquireTimelineState{ -1, true };
+	}
+	else
+	{
+		int32_t nExplicitSyncEventFd = eventfd( 0, EFD_CLOEXEC );
+		if ( nExplicitSyncEventFd < 0 )
+		{
+			wl_log.errorf( "Failed to create eventfd" );
+			return std::nullopt;
+		}
+
+		drm_syncobj_eventfd syncobjEventFd =
+		{
+			.handle = point.pTimeline->handle,
+			// Only valid flags are: DRM_SYNCOBJ_WAIT_FLAGS_WAIT_AVAILABLE
+			// -> Wait for fence materialization rather than signal.
+			.flags  = 0u,
+			.point  = point.ulPoint,
+			.fd     = nExplicitSyncEventFd,
+		};
+
+		if ( drmIoctl( point.pTimeline->drm_fd, DRM_IOCTL_SYNCOBJ_EVENTFD, &syncobjEventFd ) != 0 )
+		{
+			wl_log.errorf_errno( "DRM_IOCTL_SYNCOBJ_EVENTFD failed" );
+			close( nExplicitSyncEventFd );
+			return std::nullopt;
+		}
+
+		return GamescopeAcquireTimelineState{ nExplicitSyncEventFd, false };
+	}
+}
+
+std::optional<ResListEntry_t> PrepareCommit( struct wlr_surface *surf, struct wlr_buffer *buf )
+{
+	auto wl_surf = get_wl_surface_info( surf );
+
+	const auto& pFeedback = wlserver_surface_swapchain_feedback(surf);
+
+	wlr_linux_drm_syncobj_surface_v1_state *pSyncState =
+		wlr_linux_drm_syncobj_v1_get_surface_state( wlserver.wlr.drm_syncobj_manager_v1, surf );
+
+	std::optional<GamescopeAcquireTimelineState> oAcquireState;
+	std::optional<GamescopeTimelinePoint> oReleasePoint;
+	if ( pSyncState )
+	{
+		GamescopeTimelinePoint acquirePoint =
+		{
+			.pTimeline = pSyncState->acquire_timeline,
+			.ulPoint   = pSyncState->acquire_point,
+		};
+		oAcquireState = TimelinePointToEventFd( acquirePoint );
+		if ( !oAcquireState )
+		{
+			return std::nullopt;
+		}
+
+		oReleasePoint = GamescopeTimelinePoint
+		{
+			.pTimeline = wlr_render_timeline_ref( pSyncState->release_timeline ),
+			.ulPoint   = pSyncState->release_point,
+		};
+	}
+
+	ResListEntry_t newEntry = {
+		.surf = surf,
+		.buf = buf,
+		.async = wlserver_surface_is_async(surf),
+		.fifo = wlserver_surface_is_fifo(surf),
+		.feedback = pFeedback,
+		.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
+		.present_id = wl_surf->present_id,
+		.desired_present_time = wl_surf->desired_present_time,
+		.oAcquireState = oAcquireState,
+		.oReleasePoint = oReleasePoint,
+	};
+	wl_surf->present_id = std::nullopt;
+	wl_surf->desired_present_time = 0;
+	wl_surf->pending_presentation_feedbacks.clear();
+	wl_surf->oCurrentPresentMode = std::nullopt;
+	return newEntry;
+}
+
 void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struct wlr_buffer *buf)
 {
+	std::optional<ResListEntry_t> oEntry = PrepareCommit( surf, buf );
+	if ( !oEntry )
+		return;
+
 	{
 		std::lock_guard<std::mutex> lock( wayland_commit_lock );
-
-		auto wl_surf = get_wl_surface_info( surf );
-
-		const auto& pFeedback = wlserver_surface_swapchain_feedback(surf);
-
-		ResListEntry_t newEntry = {
-			.surf = surf,
-			.buf = buf,
-			.async = wlserver_surface_is_async(surf),
-			.fifo = wlserver_surface_is_fifo(surf),
-			.feedback = pFeedback,
-			.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
-			.present_id = wl_surf->present_id,
-			.desired_present_time = wl_surf->desired_present_time,
-		};
-		wl_surf->present_id = std::nullopt;
-		wl_surf->desired_present_time = 0;
-		wl_surf->pending_presentation_feedbacks.clear();
-		wl_surf->oCurrentPresentMode = std::nullopt;
-
-		wayland_commit_queue.push_back( newEntry );
+		wayland_commit_queue.emplace_back( std::move( *oEntry ) );
 	}
 
 	nudge_steamcompmgr();
@@ -132,20 +230,13 @@ std::list<PendingCommit_t> g_PendingCommits;
 
 void wlserver_xdg_commit(struct wlr_surface *surf, struct wlr_buffer *buf)
 {
+	std::optional<ResListEntry_t> oEntry = PrepareCommit( surf, buf );
+	if ( !oEntry )
+		return;
+
 	{
 		std::lock_guard<std::mutex> lock( wlserver.xdg_commit_lock );
-
-		auto wl_surf = get_wl_surface_info( surf );
-
-		ResListEntry_t newEntry = {
-			.surf = surf,
-			.buf = buf,
-			.async = wlserver_surface_is_async(surf),
-			.feedback = wlserver_surface_swapchain_feedback(surf),
-			.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
-		};
-		wl_surf->pending_presentation_feedbacks.clear();
-		wlserver.xdg_commit_queue.push_back( newEntry );
+		wlserver.xdg_commit_queue.push_back( std::move( *oEntry ) );
 	}
 
 	nudge_steamcompmgr();
@@ -1513,6 +1604,12 @@ bool wlserver_init( void ) {
 	create_gamescope_control();
 
 	create_presentation_time();
+
+	if ( GetBackend()->SupportsExplicitSync() )
+	{
+		int drm_fd = wlr_renderer_get_drm_fd( wlserver.wlr.renderer );
+		wlserver.wlr.drm_syncobj_manager_v1 = wlr_linux_drm_syncobj_manager_v1_create( wlserver.display, 1, drm_fd );
+	}
 
 	wlserver.relative_pointer_manager = wlr_relative_pointer_manager_v1_create(wlserver.display);
 	if ( !wlserver.relative_pointer_manager )

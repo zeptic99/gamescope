@@ -3467,6 +3467,11 @@ namespace gamescope
 			return true;
 		}
 
+		virtual bool SupportsExplicitSync() const override
+		{
+			return true;
+		}
+
 		virtual bool IsVisible() const override
 		{
 			return !g_DRM.paused;

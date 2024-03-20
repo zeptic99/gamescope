@@ -146,6 +146,7 @@ namespace gamescope
 		virtual bool UsesVulkanSwapchain() const override;
 
 		virtual bool IsSessionBased() const override;
+		virtual bool SupportsExplicitSync() const override;
 
 		virtual bool IsVisible() const override;
 
@@ -456,6 +457,12 @@ namespace gamescope
 	bool CSDLBackend::IsSessionBased() const
 	{
 		return false;
+	}
+
+	bool CSDLBackend::SupportsExplicitSync() const
+	{
+		// We use a Vulkan swapchain, so yes.
+		return true;
 	}
 
 	bool CSDLBackend::IsVisible() const

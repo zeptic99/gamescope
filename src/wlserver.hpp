@@ -37,6 +37,21 @@ struct wlserver_vk_swapchain_feedback
 	std::shared_ptr<gamescope::BackendBlob> hdr_metadata_blob;
 };
 
+
+struct GamescopeTimelinePoint
+{
+	struct wlr_render_timeline *pTimeline = nullptr;
+	uint64_t ulPoint = 0;
+
+	void Release();
+};
+
+struct GamescopeAcquireTimelineState
+{
+	int32_t nEventFd = -1;
+	bool bKnownReady = false;
+};
+
 struct ResListEntry_t {
 	struct wlr_surface *surf;
 	struct wlr_buffer *buf;
@@ -46,6 +61,8 @@ struct ResListEntry_t {
 	std::vector<struct wl_resource*> presentation_feedbacks;
 	std::optional<uint32_t> present_id;
 	uint64_t desired_present_time;
+	std::optional<GamescopeAcquireTimelineState> oAcquireState;
+	std::optional<GamescopeTimelinePoint> oReleasePoint;
 };
 
 struct wlserver_content_override;
@@ -112,6 +129,7 @@ struct wlserver_t {
 		struct wlr_compositor *compositor;
 		struct wlr_session *session;
 		struct wlr_seat *seat;
+		struct wlr_linux_drm_syncobj_manager_v1 *drm_syncobj_manager_v1;
 
 		// Used to simulate key events and set the keymap
 		struct wlr_keyboard *virtual_keyboard_device;

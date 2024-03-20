@@ -713,6 +713,8 @@ struct commit_t : public gamescope::IWaitable
 			// presentation_feedbacks cleared by wlserver_presentation_feedback_discard
 		}
 		wlr_buffer_unlock( buf );
+		if ( m_oReleasePoint )
+			m_oReleasePoint->Release();
 		wlserver_unlock();
     }
 
@@ -763,6 +765,13 @@ struct commit_t : public gamescope::IWaitable
 				return;
 		}
 
+		Signal();
+
+		nudge_steamcompmgr();
+	}
+
+	void Signal()
+	{
 		uint64_t frametime;
 		if ( m_bMangoNudge )
 		{
@@ -787,8 +796,6 @@ struct commit_t : public gamescope::IWaitable
 
 		if ( m_bMangoNudge )
 			mangoapp_update( IsPerfOverlayFIFO() ? uint64_t(~0ull) : frametime, frametime, uint64_t(~0ull) );
-
-		nudge_steamcompmgr();
 	}
 
 	void OnPollHangUp() final
@@ -825,10 +832,16 @@ struct commit_t : public gamescope::IWaitable
 		m_pDoneCommits = pDoneCommits;
 	}
 
+	void SetReleasePoint( const std::optional<GamescopeTimelinePoint>& oReleasePoint )
+	{
+		m_oReleasePoint = oReleasePoint;
+	}
+
 	std::mutex m_WaitableCommitStateMutex;
 	int m_nCommitFence = -1;
 	bool m_bMangoNudge = false;
 	CommitDoneList_t *m_pDoneCommits = nullptr; // I hate this
+	std::optional<GamescopeTimelinePoint> m_oReleasePoint;
 };
 
 static inline void GarbageCollectWaitableCommit( std::shared_ptr<commit_t> &commit )
@@ -6439,24 +6452,44 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 	int fence = -1;
 	if ( newCommit )
 	{
-		struct wlr_dmabuf_attributes dmabuf = {0};
-		if ( wlr_buffer_get_dmabuf( buf, &dmabuf ) )
-		{
-			fence = dup( dmabuf.fd[0] );
-		}
-		else
-		{
-			fence = newCommit->vulkanTex->memoryFence();
-		}
-
 		// Whether or not to nudge mango app when this commit is done.
 		const bool mango_nudge = ( w == global_focus.focusWindow && !w->isSteamStreamingClient ) ||
 									( global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient && w->isSteamStreamingClientVideo );
 
+		bool bKnownReady = false;
+		if ( reslistentry.oAcquireState )
+		{
+			if ( reslistentry.oAcquireState->bKnownReady )
+			{
+				fence = -1;
+				bKnownReady = true;
+			}
+			else
+			{
+				fence = reslistentry.oAcquireState->nEventFd;
+			}
+		}
+		else
+		{
+			struct wlr_dmabuf_attributes dmabuf = {0};
+			if ( wlr_buffer_get_dmabuf( buf, &dmabuf ) )
+			{
+				fence = dup( dmabuf.fd[0] );
+			}
+			else
+			{
+				fence = newCommit->vulkanTex->memoryFence();
+			}
+		}
+
 		gpuvis_trace_printf( "pushing wait for commit %lu win %lx", newCommit->commitID, w->type == steamcompmgr_win_type_t::XWAYLAND ? w->xwayland().id : 0 );
 		{
 			newCommit->SetFence( fence, mango_nudge, doneCommits );
-			g_ImageWaiter.AddWaitable( newCommit.get() );
+			newCommit->SetReleasePoint( reslistentry.oReleasePoint );
+			if ( bKnownReady )
+				newCommit->Signal();
+			else
+				g_ImageWaiter.AddWaitable( newCommit.get() );
 		}
 
 		w->commit_queue.push_back( std::move(newCommit) );

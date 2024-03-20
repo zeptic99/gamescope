@@ -189,6 +189,8 @@ namespace gamescope
         virtual bool UsesVulkanSwapchain() const = 0;
         virtual bool IsSessionBased() const = 0;
 
+        virtual bool SupportsExplicitSync() const = 0;
+
         // Dumb helper we should remove to support multi display someday.
         gamescope::GamescopeScreenType GetScreenType()
         {

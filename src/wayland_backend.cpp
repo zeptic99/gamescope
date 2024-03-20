@@ -453,6 +453,7 @@ namespace gamescope
         virtual bool UsesVulkanSwapchain() const override;
 
         virtual bool IsSessionBased() const override;
+        virtual bool SupportsExplicitSync() const override;
 
         virtual bool IsVisible() const override;
 
@@ -1421,6 +1422,16 @@ namespace gamescope
 
     bool CWaylandBackend::IsSessionBased() const
     {
+        return false;
+    }
+
+    bool CWaylandBackend::SupportsExplicitSync() const
+    {
+        // Not right now, we need guarantee that no implicit
+        // sync is going to happen somehow.
+        //
+        // TODO: Perhaps we can check for host compositor
+        // syncobj stuff here and make that work?
         return false;
     }
 
