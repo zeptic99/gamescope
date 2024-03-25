@@ -1124,8 +1124,22 @@ namespace gamescope
 
     void CWaylandBackend::GetPreferredOutputFormat( VkFormat *pPrimaryPlaneFormat, VkFormat *pOverlayPlaneFormat ) const
     {
-        *pPrimaryPlaneFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-        *pOverlayPlaneFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        VkFormat u8BitFormat = VK_FORMAT_UNDEFINED;
+        if ( m_FormatModifiers.contains( DRM_FORMAT_ARGB8888 ) )
+            u8BitFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        else if ( m_FormatModifiers.contains( DRM_FORMAT_ABGR8888 ) )
+            u8BitFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
+        VkFormat u10BitFormat = VK_FORMAT_UNDEFINED;
+        if ( m_FormatModifiers.contains( DRM_FORMAT_ABGR2101010 ) )
+            u10BitFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+        else if ( m_FormatModifiers.contains( DRM_FORMAT_ARGB2101010 ) )
+            u10BitFormat = VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+
+        assert( u8BitFormat != VK_FORMAT_UNDEFINED );
+
+        *pPrimaryPlaneFormat = u10BitFormat != VK_FORMAT_UNDEFINED ? u10BitFormat : u8BitFormat;
+        *pOverlayPlaneFormat = u8BitFormat;
     }
 
     bool CWaylandBackend::ValidPhysicalDevice( VkPhysicalDevice pVkPhysicalDevice ) const
