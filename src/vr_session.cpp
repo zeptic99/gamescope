@@ -626,7 +626,7 @@ namespace gamescope
 
                 vr::VROverlay()->SetOverlayRaw( m_hOverlayThumbnail, &(*uIconPixels)[2], uWidth, uHeight, sizeof(uint32_t) );
             }
-            else if ( m_pchOverlayName )
+            else if ( m_pchOverlayIcon )
             {
                 vr::VROverlay()->SetOverlayFromFile( m_hOverlayThumbnail, m_pchOverlayIcon );
             }
