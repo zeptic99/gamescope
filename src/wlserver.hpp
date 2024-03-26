@@ -234,8 +234,6 @@ struct wlserver_wl_surface_info
 	struct wl_listener commit;
 	struct wl_listener destroy;
 
-	uint32_t presentation_hint = 0;
-
 	std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback = {};
 	std::optional<VkPresentModeKHR> oCurrentPresentMode;
 
