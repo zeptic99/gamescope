@@ -31,7 +31,6 @@ protocols = [
 	'gamescope-tearing-control-unstable-v1.xml',
 	'gamescope-control.xml',
 	'gamescope-swapchain.xml',
-	'gamescope-commit-queue-v1.xml',
 ]
 
 protocols_client_src = []

@@ -68,6 +68,9 @@ namespace gamescope
 {
     extern std::shared_ptr<INestedHints::CursorInfo> GetX11HostCursor();
 
+    gamescope::ConVar<bool> cv_wayland_mouse_warp_without_keyboard_focus( "wayland_mouse_warp_without_keyboard_focus", true, "Should we only forward mouse warps to the app when we have keyboard focus?" );
+    gamescope::ConVar<bool> cv_wayland_mouse_relmotion_without_keyboard_focus( "wayland_mouse_relmotion_without_keyboard_focus", false, "Should we only forward mouse relative motion to the app when we have keyboard focus?" );
+
     class CWaylandConnector;
     class CWaylandPlane;
     class CWaylandBackend;
@@ -1589,7 +1592,12 @@ namespace gamescope
 
     void CWaylandBackend::UpdateCursor()
     {
-        bool bUseHostCursor = !m_bKeyboardEntered && m_pDefaultCursorSurface;
+        bool bUseHostCursor = false;
+
+        if ( cv_wayland_mouse_warp_without_keyboard_focus )
+            bUseHostCursor = m_pRelativePointer && !m_bKeyboardEntered && m_pDefaultCursorSurface;
+        else
+            bUseHostCursor = !m_bKeyboardEntered && m_pDefaultCursorSurface;
 
         if ( bUseHostCursor )
         {
@@ -2126,9 +2134,9 @@ namespace gamescope
         if ( m_pRelativePointer.load() != nullptr )
             return;
 
-        // Don't do any motion/movement stuff if we don't have kb focus
-        if ( !m_bKeyboardEntered )
+        if ( !cv_wayland_mouse_warp_without_keyboard_focus && !m_bKeyboardEntered )
         {
+            // Don't do any motion/movement stuff if we don't have kb focus
             m_ofPendingCursorX = fSurfaceX;
             m_ofPendingCursorY = fSurfaceY;
             return;
@@ -2151,7 +2159,7 @@ namespace gamescope
     void CWaylandInputThread::Wayland_Pointer_Button( wl_pointer *pPointer, uint32_t uSerial, uint32_t uTime, uint32_t uButton, uint32_t uState )
     {
         // Don't do any motion/movement stuff if we don't have kb focus
-        if ( !m_bKeyboardEntered )
+        if ( !cv_wayland_mouse_warp_without_keyboard_focus && !m_bKeyboardEntered )
             return;
 
         wlserver_lock();
@@ -2173,7 +2181,7 @@ namespace gamescope
     }
     void CWaylandInputThread::Wayland_Pointer_Axis_Value120( wl_pointer *pPointer, uint32_t uAxis, int32_t nValue120 )
     {
-        if ( !m_bKeyboardEntered )
+        if ( !cv_wayland_mouse_warp_without_keyboard_focus && !m_bKeyboardEntered )
             return;
 
         assert( uAxis == WL_POINTER_AXIS_VERTICAL_SCROLL || uAxis == WL_POINTER_AXIS_HORIZONTAL_SCROLL );
@@ -2189,7 +2197,7 @@ namespace gamescope
         m_flScrollAccum[0] = 0.0;
         m_flScrollAccum[1] = 0.0;
 
-        if ( !m_bKeyboardEntered )
+        if ( !cv_wayland_mouse_warp_without_keyboard_focus && !m_bKeyboardEntered )
             return;
 
         if ( m_uAxisSource != WL_POINTER_AXIS_SOURCE_WHEEL )
@@ -2294,7 +2302,7 @@ namespace gamescope
     void CWaylandInputThread::Wayland_RelativePointer_RelativeMotion( zwp_relative_pointer_v1 *pRelativePointer, uint32_t uTimeHi, uint32_t uTimeLo, wl_fixed_t fDx, wl_fixed_t fDy, wl_fixed_t fDxUnaccel, wl_fixed_t fDyUnaccel )
     {
         // Don't do any motion/movement stuff if we don't have kb focus
-        if ( !m_bKeyboardEntered )
+        if ( !cv_wayland_mouse_relmotion_without_keyboard_focus && !m_bKeyboardEntered )
             return;
 
         wlserver_lock();

@@ -39,7 +39,6 @@
 #include "gamescope-control-protocol.h"
 #include "gamescope-swapchain-protocol.h"
 #include "gamescope-tearing-control-unstable-v1-protocol.h"
-#include "gamescope-commit-queue-v1-protocol.h"
 #include "presentation-time-protocol.h"
 
 #include "wlserver.hpp"
@@ -80,7 +79,6 @@ static struct wl_list pending_surfaces = {0};
 
 static void wlserver_x11_surface_info_set_wlr( struct wlserver_x11_surface_info *surf, struct wlr_surface *wlr_surf, bool override );
 wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
-static enum gamescope_commit_queue_v1_queue_mode gamescope_commit_queue_v1_get_surface_mode(struct wlr_surface *surface);
 
 std::vector<ResListEntry_t>& gamescope_xwayland_server_t::retrieve_commits()
 {
@@ -102,14 +100,14 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 
 		auto wl_surf = get_wl_surface_info( surf );
 
-		auto queue_mode = gamescope_commit_queue_v1_get_surface_mode(surf);
+		const auto& pFeedback = wlserver_surface_swapchain_feedback(surf);
 
 		ResListEntry_t newEntry = {
 			.surf = surf,
 			.buf = buf,
 			.async = wlserver_surface_is_async(surf),
-			.fifo = queue_mode == GAMESCOPE_COMMIT_QUEUE_V1_QUEUE_MODE_FIFO,
-			.feedback = wlserver_surface_swapchain_feedback(surf),
+			.fifo = wlserver_surface_is_fifo(surf),
+			.feedback = pFeedback,
 			.presentation_feedbacks = std::move(wl_surf->pending_presentation_feedbacks),
 			.present_id = wl_surf->present_id,
 			.desired_present_time = wl_surf->desired_present_time,
@@ -117,6 +115,7 @@ void gamescope_xwayland_server_t::wayland_commit(struct wlr_surface *surf, struc
 		wl_surf->present_id = std::nullopt;
 		wl_surf->desired_present_time = 0;
 		wl_surf->pending_presentation_feedbacks.clear();
+		wl_surf->oCurrentPresentMode = std::nullopt;
 
 		wayland_commit_queue.push_back( newEntry );
 	}
@@ -699,7 +698,6 @@ static void gamescope_swapchain_swapchain_feedback( struct wl_client *client, st
 	uint32_t vk_colorspace,
 	uint32_t vk_composite_alpha,
 	uint32_t vk_pre_transform,
-	uint32_t vk_present_mode,
 	uint32_t vk_clipped)
 {
 	wlserver_wl_surface_info *wl_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
@@ -711,7 +709,6 @@ static void gamescope_swapchain_swapchain_feedback( struct wl_client *client, st
 			.vk_colorspace = VkColorSpaceKHR(vk_colorspace),
 			.vk_composite_alpha = VkCompositeAlphaFlagBitsKHR(vk_composite_alpha),
 			.vk_pre_transform = VkSurfaceTransformFlagBitsKHR(vk_pre_transform),
-			.vk_present_mode = VkPresentModeKHR(vk_present_mode),
 			.vk_clipped = VkBool32(vk_clipped),
 			.hdr_metadata_blob = nullptr,
 		});
@@ -783,20 +780,31 @@ static void gamescope_swapchain_set_present_time( struct wl_client *client, stru
 	}
 }
 
+static void gamescope_swapchain_set_present_mode( struct wl_client *client, struct wl_resource *resource, uint32_t present_mode )
+{
+	wlserver_wl_surface_info *wl_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
+
+	if ( wl_info )
+	{
+		wl_info->oCurrentPresentMode = VkPresentModeKHR( present_mode );
+	}
+}
+
 static const struct gamescope_swapchain_interface gamescope_swapchain_impl = {
 	.destroy = gamescope_swapchain_destroy,
 	.override_window_content = gamescope_swapchain_override_window_content,
 	.swapchain_feedback = gamescope_swapchain_swapchain_feedback,
+	.set_present_mode = gamescope_swapchain_set_present_mode,
 	.set_hdr_metadata = gamescope_swapchain_set_hdr_metadata,
 	.set_present_time = gamescope_swapchain_set_present_time,
 };
 
-static void gamescope_swapchain_factory_destroy( struct wl_client *client, struct wl_resource *resource )
+static void gamescope_swapchain_factory_v2_destroy( struct wl_client *client, struct wl_resource *resource )
 {
 	wl_resource_destroy( resource );
 }
 
-static void gamescope_swapchain_factory_create_swapchain( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t id )
+static void gamescope_swapchain_factory_v2_create_swapchain( struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t id )
 {
 	struct wlr_surface *surface = wlr_surface_from_resource( surface_resource );
 
@@ -812,21 +820,21 @@ static void gamescope_swapchain_factory_create_swapchain( struct wl_client *clie
 	wl_surface_info->gamescope_swapchains.emplace_back( gamescope_swapchain_resource );
 }
 
-static const struct gamescope_swapchain_factory_interface gamescope_swapchain_factory_impl = {
-	.destroy = gamescope_swapchain_factory_destroy,
-	.create_swapchain = gamescope_swapchain_factory_create_swapchain,
+static const struct gamescope_swapchain_factory_v2_interface gamescope_swapchain_factory_v2_impl = {
+	.destroy = gamescope_swapchain_factory_v2_destroy,
+	.create_swapchain = gamescope_swapchain_factory_v2_create_swapchain,
 };
 
-static void gamescope_swapchain_factory_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
+static void gamescope_swapchain_factory_v2_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
 {
-	struct wl_resource *resource = wl_resource_create( client, &gamescope_swapchain_factory_interface, version, id );
-	wl_resource_set_implementation( resource, &gamescope_swapchain_factory_impl, NULL, NULL );
+	struct wl_resource *resource = wl_resource_create( client, &gamescope_swapchain_factory_v2_interface, version, id );
+	wl_resource_set_implementation( resource, &gamescope_swapchain_factory_v2_impl, NULL, NULL );
 }
 
-static void create_gamescope_swapchain_factory( void )
+static void create_gamescope_swapchain_factory_v2( void )
 {
 	uint32_t version = 1;
-	wl_global_create( wlserver.display, &gamescope_swapchain_factory_interface, version, NULL, gamescope_swapchain_factory_bind );
+	wl_global_create( wlserver.display, &gamescope_swapchain_factory_v2_interface, version, NULL, gamescope_swapchain_factory_v2_bind );
 }
 
 
@@ -1023,147 +1031,6 @@ static void create_gamescope_tearing( void )
 {
 	uint32_t version = 1;
 	wl_global_create( wlserver.display, &gamescope_tearing_control_v1_interface, version, NULL, gamescope_tearing_bind );
-}
-
-
-struct gamescope_commit_queue_v1 {
-	struct wl_resource *resource;
-	struct wlr_surface *surface;
-
-	struct {
-		enum gamescope_commit_queue_v1_queue_mode mode;
-	} current, pending;
-
-	struct wlr_addon surface_addon;
-	struct wl_listener surface_commit;
-};
-
-extern const struct gamescope_commit_queue_v1_interface queue_impl;
-
-// Returns NULL if inert
-static struct gamescope_commit_queue_v1 *queue_from_resource(struct wl_resource *resource) {
-	assert(wl_resource_instance_of(resource,
-		&gamescope_commit_queue_v1_interface, &queue_impl));
-	return (struct gamescope_commit_queue_v1 *) wl_resource_get_user_data(resource);
-}
-
-static void resource_handle_destroy(struct wl_client *client, struct wl_resource *resource) {
-	wl_resource_destroy(resource);
-}
-
-static void queue_destroy(struct gamescope_commit_queue_v1 *queue) {
-	if (queue == NULL) {
-		return;
-	}
-	wl_list_remove(&queue->surface_commit.link);
-	wlr_addon_finish(&queue->surface_addon);
-	wl_resource_set_user_data(queue->resource, NULL); // make inert
-	free(queue);
-}
-
-static void surface_addon_handle_destroy(struct wlr_addon *addon) {
-	struct gamescope_commit_queue_v1 *queue = wl_container_of(addon, queue, surface_addon);
-	queue_destroy(queue);
-}
-
-static const struct wlr_addon_interface surface_addon_impl = {
-	.name = "gamescope_commit_queue_v1",
-	.destroy = surface_addon_handle_destroy,
-};
-
-static void queue_handle_set_queue_mode(struct wl_client *client,
-		struct wl_resource *resource, uint32_t mode) {
-	struct gamescope_commit_queue_v1 *queue = queue_from_resource(resource);
-
-	if (mode > GAMESCOPE_COMMIT_QUEUE_V1_QUEUE_MODE_FIFO) {
-		wl_resource_post_error(resource, GAMESCOPE_COMMIT_QUEUE_V1_ERROR_INVALID_QUEUE_MODE,
-			"Invalid queue mode");
-		return;
-	}
-
-	queue->pending.mode = (enum gamescope_commit_queue_v1_queue_mode) mode;
-}
-
-const struct gamescope_commit_queue_v1_interface queue_impl = {
-	.set_queue_mode = queue_handle_set_queue_mode,
-	.destroy = resource_handle_destroy,
-};
-
-static void queue_handle_surface_commit(struct wl_listener *listener, void *data) {
-	struct gamescope_commit_queue_v1 *queue = wl_container_of(listener, queue, surface_commit);
-	queue->current = queue->pending;
-}
-
-static void queue_handle_resource_destroy(struct wl_resource *resource) {
-	struct gamescope_commit_queue_v1 *queue = queue_from_resource(resource);
-	queue_destroy(queue);
-}
-
-static void manager_handle_get_queue_controller(struct wl_client *client,
-		struct wl_resource *manager_resource, uint32_t id,
-		struct wl_resource *surface_resource) {
-	struct wlr_surface *surface = wlr_surface_from_resource(surface_resource);
-
-	if (wlr_addon_find(&surface->addons, NULL, &surface_addon_impl) != NULL) {
-		wl_resource_post_error(manager_resource,
-			GAMESCOPE_COMMIT_QUEUE_MANAGER_V1_ERROR_QUEUE_CONTROLLER_ALREADY_EXISTS,
-			"A gamescope_commit_queue_v1 object already exists for this surface");
-		return;
-	}
-
-	struct gamescope_commit_queue_v1 *queue = (struct gamescope_commit_queue_v1 *) calloc(1, sizeof(*queue));
-	if (queue == NULL) {
-		wl_resource_post_no_memory(manager_resource);
-		return;
-	}
-
-	queue->surface = surface;
-
-	uint32_t version = wl_resource_get_version(manager_resource);
-	queue->resource = wl_resource_create(client,
-		&gamescope_commit_queue_v1_interface, version, id);
-	if (queue->resource == NULL) {
-		free(queue);
-		wl_resource_post_no_memory(manager_resource);
-		return;
-	}
-	wl_resource_set_implementation(queue->resource,
-		&queue_impl, queue, queue_handle_resource_destroy);
-
-	wlr_addon_init(&queue->surface_addon, &surface->addons, NULL, &surface_addon_impl);
-
-	queue->surface_commit.notify = queue_handle_surface_commit;
-	wl_signal_add(&surface->events.commit, &queue->surface_commit);
-}
-
-static const struct gamescope_commit_queue_manager_v1_interface manager_impl = {
-	.destroy = resource_handle_destroy,
-	.get_queue_controller = manager_handle_get_queue_controller,
-};
-
-static void commit_queue_manager_bind(struct wl_client *client, void *data,
-		uint32_t version, uint32_t id) {
-	struct wl_resource *resource = wl_resource_create(client,
-		&gamescope_commit_queue_manager_v1_interface, version, id);
-	if (resource == NULL) {
-		wl_client_post_no_memory(client);
-		return;
-	}
-	wl_resource_set_implementation(resource, &manager_impl, NULL, NULL);
-}
-
-static void commit_queue_manager_v1_create(struct wl_display *display) {
-	wl_global_create(display, &gamescope_commit_queue_manager_v1_interface, 1, NULL, commit_queue_manager_bind);
-}
-
-static enum gamescope_commit_queue_v1_queue_mode gamescope_commit_queue_v1_get_surface_mode(struct wlr_surface *surface) {
-	struct wlr_addon *addon =
-		wlr_addon_find(&surface->addons, NULL, &surface_addon_impl);
-	if (addon == NULL) {
-		return GAMESCOPE_COMMIT_QUEUE_V1_QUEUE_MODE_MAILBOX;
-	}
-	struct gamescope_commit_queue_v1 *queue = wl_container_of(addon, queue, surface_addon);
-	return queue->current.mode;
 }
 
 
@@ -1681,7 +1548,7 @@ bool wlserver_init( void ) {
 
 	create_gamescope_xwayland();
 
-	create_gamescope_swapchain_factory();
+	create_gamescope_swapchain_factory_v2();
 
 #if HAVE_PIPEWIRE
 	create_gamescope_pipewire();
@@ -1692,8 +1559,6 @@ bool wlserver_init( void ) {
 	create_gamescope_tearing();
 
 	create_presentation_time();
-
-	commit_queue_manager_v1_create(wlserver.display);
 
 	wlserver.relative_pointer_manager = wlr_relative_pointer_manager_v1_create(wlserver.display);
 	if ( !wlserver.relative_pointer_manager )
@@ -2024,13 +1889,29 @@ bool wlserver_surface_is_async( struct wlr_surface *surf )
 	// "async", this is because we have a global tearing override for games.
 	// When that is enabled we want anything not FIFO or explicitly vsynced to
 	// have tearing.
-	if ( wl_surf->swapchain_feedback )
+	if ( wl_surf->oCurrentPresentMode )
 	{
-		return wl_surf->swapchain_feedback->vk_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR ||
-			   wl_surf->swapchain_feedback->vk_present_mode == VK_PRESENT_MODE_MAILBOX_KHR;
+		return wl_surf->oCurrentPresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR ||
+			   wl_surf->oCurrentPresentMode == VK_PRESENT_MODE_MAILBOX_KHR;
 	}
 
 	return wl_surf->presentation_hint != 0;
+}
+
+bool wlserver_surface_is_fifo( struct wlr_surface *surf )
+{
+	assert( wlserver_is_lock_held() );
+
+	auto wl_surf = get_wl_surface_info( surf );
+	if ( !wl_surf )
+		return false;
+
+	if ( wl_surf->oCurrentPresentMode )
+	{
+		return wl_surf->oCurrentPresentMode == VK_PRESENT_MODE_FIFO_KHR;
+	}
+
+	return false;
 }
 
 static std::shared_ptr<wlserver_vk_swapchain_feedback> s_NullFeedback;

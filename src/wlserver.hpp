@@ -32,7 +32,6 @@ struct wlserver_vk_swapchain_feedback
 	VkColorSpaceKHR vk_colorspace;
 	VkCompositeAlphaFlagBitsKHR vk_composite_alpha;
 	VkSurfaceTransformFlagBitsKHR vk_pre_transform;
-	VkPresentModeKHR vk_present_mode;
 	VkBool32 vk_clipped;
 
 	std::shared_ptr<gamescope::BackendBlob> hdr_metadata_blob;
@@ -209,6 +208,7 @@ void wlserver_touchup( int touch_id, uint32_t time );
 void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when );
 
 bool wlserver_surface_is_async( struct wlr_surface *surf );
+bool wlserver_surface_is_fifo( struct wlr_surface *surf );
 const std::shared_ptr<wlserver_vk_swapchain_feedback>& wlserver_surface_swapchain_feedback( struct wlr_surface *surf );
 
 std::vector<std::shared_ptr<steamcompmgr_win_t>> wlserver_get_xdg_shell_windows();
@@ -237,6 +237,7 @@ struct wlserver_wl_surface_info
 	uint32_t presentation_hint = 0;
 
 	std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback = {};
+	std::optional<VkPresentModeKHR> oCurrentPresentMode;
 
 	uint64_t sequence = 0;
 	std::vector<struct wl_resource*> pending_presentation_feedbacks;
