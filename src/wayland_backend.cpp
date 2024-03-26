@@ -337,6 +337,9 @@ namespace gamescope
 
         CWaylandPlane *m_pCurrentCursorPlane = nullptr;
 
+        std::optional<wl_fixed_t> m_ofPendingCursorX;
+        std::optional<wl_fixed_t> m_ofPendingCursorY;
+
         std::atomic<std::shared_ptr<zwp_relative_pointer_v1>> m_pRelativePointer = nullptr;
         std::unordered_set<uint32_t> m_uScancodesHeld;
 
@@ -2105,6 +2108,8 @@ namespace gamescope
         m_pCurrentCursorPlane = pPlane;
         m_bMouseEntered = true;
         m_uPointerEnterSerial = uSerial;
+
+        Wayland_Pointer_Motion( pPointer, 0, fSurfaceX, fSurfaceY );
     }
     void CWaylandInputThread::Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface )
     {
@@ -2123,7 +2128,11 @@ namespace gamescope
 
         // Don't do any motion/movement stuff if we don't have kb focus
         if ( !m_bKeyboardEntered )
+        {
+            m_ofPendingCursorX = fSurfaceX;
+            m_ofPendingCursorY = fSurfaceY;
             return;
+        }
 
         if ( !m_pCurrentCursorPlane )
             return;
@@ -2234,6 +2243,15 @@ namespace gamescope
         {
             HandleKey( uKey, true );
             m_uScancodesHeld.insert( uKey );
+        }
+
+        if ( m_ofPendingCursorX )
+        {
+            assert( m_ofPendingCursorY.has_value() );
+
+            Wayland_Pointer_Motion( m_pPointer, 0, *m_ofPendingCursorX, *m_ofPendingCursorY );
+            m_ofPendingCursorX = std::nullopt;
+            m_ofPendingCursorY = std::nullopt;
         }
     }
     void CWaylandInputThread::Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface )
