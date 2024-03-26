@@ -162,7 +162,7 @@ namespace gamescope
         virtual void SetVisible( bool bVisible ) override;
         virtual void SetTitle( std::shared_ptr<std::string> szTitle ) override;
         virtual void SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels ) override;
-		virtual std::optional<INestedHints::CursorInfo> GetHostCursor() override;
+		virtual std::shared_ptr<INestedHints::CursorInfo> GetHostCursor() override;
 	protected:
 		virtual void OnBackendBlobDestroyed( BackendBlob *pBlob ) override;
 	private:
@@ -503,26 +503,26 @@ namespace gamescope
 		PushUserEvent( GAMESCOPE_SDL_EVENT_ICON );
 	}
 
-	std::optional<INestedHints::CursorInfo> GetX11HostCursor()
+	std::shared_ptr<INestedHints::CursorInfo> GetX11HostCursor()
 	{
 		if ( !g_pOriginalDisplay )
-			return std::nullopt;
+			return nullptr;
 
 		Display *display = XOpenDisplay( g_pOriginalDisplay );
 		if ( !display )
-			return std::nullopt;
+			return nullptr;
 		defer( XCloseDisplay( display ) );
 
 		int xfixes_event, xfixes_error;
 		if ( !XFixesQueryExtension( display, &xfixes_event, &xfixes_error ) )
 		{
 			xwm_log.errorf("No XFixes extension on current compositor");
-			return std::nullopt;
+			return nullptr;
 		}
 
 		XFixesCursorImage *image = XFixesGetCursorImage( display );
 		if ( !image )
-			return std::nullopt;
+			return nullptr;
 		defer( XFree( image ) );
 
 		// image->pixels is `unsigned long*` :/
@@ -536,17 +536,17 @@ namespace gamescope
 			}
 		}
 
-		return INestedHints::CursorInfo
+		return std::make_shared<INestedHints::CursorInfo>(INestedHints::CursorInfo
 		{
 			.pPixels   = std::move( cursorData ),
 			.uWidth    = image->width,
 			.uHeight   = image->height,
 			.uXHotspot = image->xhot,
 			.uYHotspot = image->yhot,
-		};
+		});
 	}
 
-	std::optional<INestedHints::CursorInfo> CSDLBackend::GetHostCursor()
+	std::shared_ptr<INestedHints::CursorInfo> CSDLBackend::GetHostCursor()
 	{
 		return GetX11HostCursor();
 	}

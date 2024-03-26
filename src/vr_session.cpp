@@ -635,9 +635,9 @@ namespace gamescope
                 vr::VROverlay()->ClearOverlayTexture( m_hOverlayThumbnail );
             }
         }
-		virtual std::optional<INestedHints::CursorInfo> GetHostCursor() override
+		virtual std::shared_ptr<INestedHints::CursorInfo> GetHostCursor() override
         {
-            return std::nullopt;
+            return nullptr;
         }
 
 	protected:

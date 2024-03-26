@@ -66,6 +66,8 @@ extern gamescope::ConVar<bool> cv_hdr_enabled;
 
 namespace gamescope
 {
+    extern std::shared_ptr<INestedHints::CursorInfo> GetX11HostCursor();
+
     class CWaylandConnector;
     class CWaylandPlane;
     class CWaylandBackend;
@@ -462,9 +464,11 @@ namespace gamescope
         virtual void SetVisible( bool bVisible ) override;
         virtual void SetTitle( std::shared_ptr<std::string> szTitle ) override;
         virtual void SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels ) override;
-        virtual std::optional<INestedHints::CursorInfo> GetHostCursor() override;
+        virtual std::shared_ptr<INestedHints::CursorInfo> GetHostCursor() override;
     protected:
         virtual void OnBackendBlobDestroyed( BackendBlob *pBlob ) override;
+
+        wl_surface *CursorInfoToSurface( const std::shared_ptr<INestedHints::CursorInfo> &info );
 
         bool SupportsColorManagement() const;
         void UpdateCursor();
@@ -514,6 +518,10 @@ namespace gamescope
         void Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface );
         static const wl_pointer_listener s_PointerListener;
 
+        void Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys );
+        void Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface );
+        static const wl_keyboard_listener s_KeyboardListener;
+
         CWaylandInputThread m_InputThread;
 
         CWaylandConnector m_Connector;
@@ -550,8 +558,13 @@ namespace gamescope
         std::unordered_map<uint32_t, wl_buffer *> m_ImportedFbs;
 
         uint32_t m_uPointerEnterSerial = 0;
+        bool m_bMouseEntered = false;
+        bool m_bKeyboardEntered = false;
+
         std::shared_ptr<INestedHints::CursorInfo> m_pCursorInfo;
         wl_surface *m_pCursorSurface = nullptr;
+        std::shared_ptr<INestedHints::CursorInfo> m_pDefaultCursorInfo;
+        wl_surface *m_pDefaultCursorSurface = nullptr;
 
         bool m_bVisible = true;
         std::atomic<bool> m_bDesiredFullscreenState = { false };
@@ -587,6 +600,15 @@ namespace gamescope
         .axis_stop     = WAYLAND_NULL(),
         .axis_discrete = WAYLAND_NULL(),
         .axis_value120 = WAYLAND_NULL(),
+    };
+    const wl_keyboard_listener CWaylandBackend::s_KeyboardListener =
+    {
+        .keymap        = WAYLAND_NULL(),
+        .enter         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Enter ),
+        .leave         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_Keyboard_Leave ),
+        .key           = WAYLAND_NULL(),
+        .modifiers     = WAYLAND_NULL(),
+        .repeat_info   = WAYLAND_NULL(),
     };
 
     //////////////////
@@ -1101,6 +1123,9 @@ namespace gamescope
             return false;
         }
 
+        m_pDefaultCursorInfo = GetX11HostCursor();
+        m_pDefaultCursorSurface = CursorInfoToSurface( m_pDefaultCursorInfo );
+
         if ( g_bForceRelativeMouse )
             this->SetRelativeMouseMode( true );
 
@@ -1448,38 +1473,13 @@ namespace gamescope
     {
         m_pCursorInfo = info;
 
-        uint32_t uStride = info->uWidth * 4;
-        uint32_t uSize = uStride * info->uHeight;
-
-        int32_t nFd = CreateShmBuffer( uSize );
-        if ( nFd < 0 )
-            return;
-        defer( close( nFd ) );
-
-        void *pData = mmap( nullptr, uSize, PROT_READ | PROT_WRITE, MAP_SHARED, nFd, 0 );
-        if ( pData == MAP_FAILED )
-            return;
-
-        memcpy( pData, info->pPixels.data(), uSize );
-
-        wl_shm_pool *pPool = wl_shm_create_pool( m_pShm, nFd, uSize );
-        defer( wl_shm_pool_destroy( pPool ) );
-
-        wl_buffer *pBuffer = wl_shm_pool_create_buffer( pPool, 0, info->uWidth, info->uHeight, uStride, WL_SHM_FORMAT_ARGB8888 );
-        defer( wl_buffer_destroy( pBuffer ) );
-
-        wl_surface *pCursorSurface = wl_compositor_create_surface( m_pCompositor );
-        wl_surface_attach( pCursorSurface, pBuffer, 0, 0 );
-        wl_surface_damage( pCursorSurface, 0, 0, INT32_MAX, INT32_MAX );
-        wl_surface_commit( pCursorSurface );
-
         if ( m_pCursorSurface )
         {
             wl_surface_destroy( m_pCursorSurface );
             m_pCursorSurface = nullptr;
         }
 
-        m_pCursorSurface = pCursorSurface;
+        m_pCursorSurface = CursorInfoToSurface( info );
 
         UpdateCursor();
     }
@@ -1536,16 +1536,47 @@ namespace gamescope
         // @_@ c'mon guys
     }
 
-    extern std::optional<INestedHints::CursorInfo> GetX11HostCursor();
-
-    std::optional<INestedHints::CursorInfo> CWaylandBackend::GetHostCursor()
+    std::shared_ptr<INestedHints::CursorInfo> CWaylandBackend::GetHostCursor()
     {
-        return GetX11HostCursor();
+        return m_pDefaultCursorInfo;
     }
 
     void CWaylandBackend::OnBackendBlobDestroyed( BackendBlob *pBlob )
     {
         // Do nothing.
+    }
+
+    wl_surface *CWaylandBackend::CursorInfoToSurface( const std::shared_ptr<INestedHints::CursorInfo> &info )
+    {
+        if ( !info )
+            return nullptr;
+
+        uint32_t uStride = info->uWidth * 4;
+        uint32_t uSize = uStride * info->uHeight;
+
+        int32_t nFd = CreateShmBuffer( uSize );
+        if ( nFd < 0 )
+            return nullptr;
+        defer( close( nFd ) );
+
+        void *pData = mmap( nullptr, uSize, PROT_READ | PROT_WRITE, MAP_SHARED, nFd, 0 );
+        if ( pData == MAP_FAILED )
+            return nullptr;
+
+        memcpy( pData, info->pPixels.data(), uSize );
+
+        wl_shm_pool *pPool = wl_shm_create_pool( m_pShm, nFd, uSize );
+        defer( wl_shm_pool_destroy( pPool ) );
+
+        wl_buffer *pBuffer = wl_shm_pool_create_buffer( pPool, 0, info->uWidth, info->uHeight, uStride, WL_SHM_FORMAT_ARGB8888 );
+        defer( wl_buffer_destroy( pBuffer ) );
+
+        wl_surface *pCursorSurface = wl_compositor_create_surface( m_pCompositor );
+        wl_surface_attach( pCursorSurface, pBuffer, 0, 0 );
+        wl_surface_damage( pCursorSurface, 0, 0, INT32_MAX, INT32_MAX );
+        wl_surface_commit( pCursorSurface );
+
+        return pCursorSurface;
     }
 
     bool CWaylandBackend::SupportsColorManagement() const
@@ -1555,12 +1586,21 @@ namespace gamescope
 
     void CWaylandBackend::UpdateCursor()
     {
-        bool bHideCursor = m_pLockedPointer || !m_pCursorSurface;
+        bool bUseHostCursor = !m_bKeyboardEntered && m_pDefaultCursorSurface;
 
-        if ( bHideCursor )
-            wl_pointer_set_cursor( m_pPointer, m_uPointerEnterSerial, nullptr, 0, 0 );
+        if ( bUseHostCursor )
+        {
+            wl_pointer_set_cursor( m_pPointer, m_uPointerEnterSerial, m_pDefaultCursorSurface, m_pDefaultCursorInfo->uXHotspot, m_pDefaultCursorInfo->uYHotspot );
+        }
         else
-            wl_pointer_set_cursor( m_pPointer, m_uPointerEnterSerial, m_pCursorSurface, m_pCursorInfo->uXHotspot, m_pCursorInfo->uYHotspot );
+        {
+            bool bHideCursor = m_pLockedPointer || !m_pCursorSurface;
+
+            if ( bHideCursor )
+                wl_pointer_set_cursor( m_pPointer, m_uPointerEnterSerial, nullptr, 0, 0 );
+            else
+                wl_pointer_set_cursor( m_pPointer, m_uPointerEnterSerial, m_pCursorSurface, m_pCursorInfo->uXHotspot, m_pCursorInfo->uYHotspot );
+        }
     }
 
     //
@@ -1744,6 +1784,7 @@ namespace gamescope
             else
             {
                 m_pKeyboard = wl_seat_get_keyboard( m_pSeat );
+                wl_keyboard_add_listener( m_pKeyboard, &s_KeyboardListener, this );
             }
         }
     }
@@ -1753,10 +1794,28 @@ namespace gamescope
     void CWaylandBackend::Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
     {
         m_uPointerEnterSerial = uSerial;
+        m_bMouseEntered = true;
+
         UpdateCursor();
     }
     void CWaylandBackend::Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface )
     {
+        m_bMouseEntered = false;
+    }
+
+    // Keyboard
+
+    void CWaylandBackend::Wayland_Keyboard_Enter( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface, wl_array *pKeys )
+    {
+        m_bKeyboardEntered = true;
+        
+        UpdateCursor();
+    }
+    void CWaylandBackend::Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface )
+    {
+        m_bKeyboardEntered = false;
+        
+        UpdateCursor();
     }
 
     ///////////////////////

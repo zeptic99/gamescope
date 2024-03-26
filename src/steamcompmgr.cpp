@@ -7135,15 +7135,15 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	}
 	else
 	{
-		std::optional<gamescope::INestedHints::CursorInfo> oHostCursor = std::nullopt;
-		if ( GetBackend()->GetNestedHints() && ( oHostCursor = GetBackend()->GetNestedHints()->GetHostCursor() ) )
+		std::shared_ptr<gamescope::INestedHints::CursorInfo> pHostCursor;
+		if ( GetBackend()->GetNestedHints() && ( pHostCursor = GetBackend()->GetNestedHints()->GetHostCursor() ) )
 		{
 			ctx->cursor->setCursorImage(
-				reinterpret_cast<char *>( oHostCursor->pPixels.data() ),
-				oHostCursor->uWidth,
-				oHostCursor->uHeight,
-				oHostCursor->uXHotspot,
-				oHostCursor->uYHotspot );
+				reinterpret_cast<char *>( pHostCursor->pPixels.data() ),
+				pHostCursor->uWidth,
+				pHostCursor->uHeight,
+				pHostCursor->uXHotspot,
+				pHostCursor->uYHotspot );
 		}
 		else
 		{
