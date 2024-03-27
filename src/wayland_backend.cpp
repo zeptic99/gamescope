@@ -943,10 +943,16 @@ namespace gamescope
 
         GetVBlankTimer().MarkVBlank( ulTime, true );
         wp_presentation_feedback_destroy( pFeedback );
+
+        // Nudge so that steamcompmgr releases commits.
+        nudge_steamcompmgr();
     }
     void CWaylandPlane::Wayland_PresentationFeedback_Discarded( struct wp_presentation_feedback *pFeedback )
     {
         wp_presentation_feedback_destroy( pFeedback );
+
+        // Nudge so that steamcompmgr releases commits.
+        nudge_steamcompmgr();
     }
 
     void CWaylandPlane::Wayland_FrogColorManagedSurface_PreferredMetadata(
