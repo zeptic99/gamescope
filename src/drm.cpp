@@ -52,6 +52,9 @@
 
 static constexpr bool k_bUseCursorPlane = false;
 
+extern int g_nPreferredOutputWidth;
+extern int g_nPreferredOutputHeight;
+
 namespace gamescope
 {
 	template <typename T>
@@ -3038,7 +3041,7 @@ namespace gamescope
 				return false;
 			}
 
-			return init_drm( &g_DRM, 0, 0, 0 );
+			return init_drm( &g_DRM, g_nPreferredOutputWidth, g_nPreferredOutputHeight, g_nNestedRefresh );
 		}
 
 		virtual bool PostInit() override
