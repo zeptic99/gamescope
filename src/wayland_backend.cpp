@@ -36,6 +36,7 @@ extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
 extern bool g_bForceHDR10OutputDebug;
 extern bool g_bBorderlessOutputWindow;
+extern bool g_bAllowVRR;
 
 extern bool alwaysComposite;
 extern bool g_bColorSliderInUse;
@@ -503,6 +504,10 @@ namespace gamescope
         void SetFullscreen( bool bFullscreen ); // Thread safe, can be called from the input thread.
         void UpdateFullscreenState();
 
+        void SetHostCompositorIsCurrentlyVRR( bool bActive ) { m_bHostCompositorIsCurrentlyVRR = bActive; }
+
+        bool CurrentDisplaySupportsVRR() const { return m_bHostCompositorIsCurrentlyVRR; }
+
     private:
 
         void Wayland_Registry_Global( wl_registry *pRegistry, uint32_t uName, const char *pInterface, uint32_t uVersion );
@@ -575,6 +580,8 @@ namespace gamescope
 
         bool m_bVisible = true;
         std::atomic<bool> m_bDesiredFullscreenState = { false };
+
+        bool m_bHostCompositorIsCurrentlyVRR = false;
     };
     const wl_registry_listener CWaylandBackend::s_RegistryListener =
     {
@@ -666,7 +673,7 @@ namespace gamescope
 
     bool CWaylandConnector::SupportsVRR() const
     {
-        return false;
+        return m_pBackend->CurrentDisplaySupportsVRR();
     }
 
     std::span<const uint8_t> CWaylandConnector::GetRawEDID() const
@@ -939,6 +946,12 @@ namespace gamescope
                 xdg_log.infof( "Changed refresh to: %d", nRefresh );
                 g_nOutputRefresh = nRefresh;
             }
+
+            m_pBackend->SetHostCompositorIsCurrentlyVRR( false );
+        }
+        else
+        {
+            m_pBackend->SetHostCompositorIsCurrentlyVRR( true );
         }
 
         GetVBlankTimer().MarkVBlank( ulTime, true );
@@ -1407,7 +1420,7 @@ namespace gamescope
     }
     bool CWaylandBackend::IsVRRActive() const
     {
-        return false;
+        return g_bAllowVRR && m_bHostCompositorIsCurrentlyVRR;
     }
 
     bool CWaylandBackend::SupportsPlaneHardwareCursor() const
