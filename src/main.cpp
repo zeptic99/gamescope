@@ -389,7 +389,8 @@ static enum GamescopeUpscaleFilter parse_upscaler_filter(const char *str)
 }
 
 struct sigaction handle_signal_action = {};
-extern pid_t child_pid;
+extern std::mutex g_ChildPidMutex;
+extern std::vector<pid_t> g_ChildPids;
 
 static void handle_signal( int sig )
 {
@@ -401,10 +402,16 @@ static void handle_signal( int sig )
 	case SIGQUIT:
 	case SIGTERM:
 	case SIGINT:
-		if (child_pid != 0)
 		{
-			fprintf( stderr, "gamescope: Received %s signal, forwarding to child!\n", strsignal(sig) );
-			kill(child_pid, sig);
+			std::unique_lock lock( g_ChildPidMutex );
+			for ( auto& child_pid : g_ChildPids )
+			{
+				if (child_pid != 0)
+				{
+					fprintf( stderr, "gamescope: Received %s signal, forwarding to child!\n", strsignal(sig) );
+					kill(child_pid, sig);
+				}
+			}
 		}
 
 		fprintf( stderr, "gamescope: Received %s signal, attempting shutdown!\n", strsignal(sig) );
