@@ -6610,6 +6610,12 @@ spawn_client( char **argv )
 		// Restore prior rlimit in case child uses select()
 		restore_fd_limit();
 
+		// Reset signal stuff
+		setsid();
+		sigset_t set;
+		sigemptyset(&set);
+		sigprocmask(SIG_SETMASK, &set, NULL);
+
 		// Set modified LD_PRELOAD if needed
 		if ( pchCurrentPreload != nullptr )
 		{
