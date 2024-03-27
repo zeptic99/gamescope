@@ -31,6 +31,7 @@
 #include <wlr/types/wlr_pointer.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_touch.h>
+#include <wlr/types/wlr_drm.h>
 #include <wlr/util/log.h>
 #include <wlr/xwayland/server.h>
 #include <wlr/types/wlr_xdg_shell.h>
@@ -1604,6 +1605,10 @@ bool wlserver_init( void ) {
 	create_gamescope_control();
 
 	create_presentation_time();
+
+	// Have to make this old ancient thing for compat with older XWayland.
+	// Someday, he will be purged.
+	wlr_drm_create(wlserver.display, wlserver.wlr.renderer);
 
 	if ( GetBackend()->SupportsExplicitSync() )
 	{
