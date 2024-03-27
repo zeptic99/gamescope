@@ -694,6 +694,9 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 	g_DRM.flip_lock.unlock();
 
 	mangoapp_output_update( vblanktime );
+
+	// Nudge so that steamcompmgr releases commits.
+	nudge_steamcompmgr();
 }
 
 void flip_handler_thread_run(void)
