@@ -52,6 +52,7 @@
 #include "log.hpp"
 #include "ime.hpp"
 #include "xwayland_ctx.hpp"
+#include "refresh_rate.h"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
@@ -1038,14 +1039,16 @@ void wlserver_send_gamescope_control( wl_resource *control )
 	wl_array_init(&display_rates);
 	if ( pConn->GetValidDynamicRefreshRates().size() )
 	{
-		size_t size = pConn->GetValidDynamicRefreshRates().size() * sizeof(uint32_t);
-		uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, size );
-		memcpy( ptr, pConn->GetValidDynamicRefreshRates().data(), size );
+		for ( uint32_t uRatemHz : pConn->GetValidDynamicRefreshRates() )
+		{
+			uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, 1 );
+			*ptr = gamescope::ConvertmHzToHz( uRatemHz );
+		}
 	}
 	else if ( g_nOutputRefresh > 0 )
 	{
 		uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, sizeof(uint32_t) );
-		*ptr = (uint32_t)g_nOutputRefresh;
+		*ptr = (uint32_t)gamescope::ConvertmHzToHz( g_nOutputRefresh );
 	}
 	gamescope_control_send_active_display_info( control, pConn->GetName(), pConn->GetMake(), pConn->GetModel(), flags, &display_rates );
 	wl_array_release(&display_rates);
@@ -1403,7 +1406,7 @@ gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 	}
 
 	wlr_output_state_set_enabled(output_state, true);
-	wlr_output_state_set_custom_mode(output_state, g_nNestedWidth, g_nNestedHeight, refresh * 1000);
+	wlr_output_state_set_custom_mode(output_state, g_nNestedWidth, g_nNestedHeight, refresh);
 	if (!wlr_output_commit_state(output, output_state))
 	{
 		wl_log.errorf("Failed to commit headless output");
@@ -2342,7 +2345,7 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 	wl_list_remove( &surf->pending_link );
 }
 
-void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh )
+void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int nRefreshmHz )
 {
 	assert( wlserver_is_lock_held() );
 
@@ -2352,14 +2355,14 @@ void wlserver_set_xwayland_server_mode( size_t idx, int w, int h, int refresh )
 
 	struct wlr_output *output = server->get_output();
 	struct wlr_output_state *output_state = server->get_output_state();
-	wlr_output_state_set_custom_mode(output_state, w, h, refresh * 1000);
+	wlr_output_state_set_custom_mode(output_state, w, h, nRefreshmHz );
 	if (!wlr_output_commit_state(output, output_state))
 	{
 		wl_log.errorf("Failed to commit headless output");
 		abort();
 	}
 
-	wl_log.infof("Updating mode for xwayland server #%zu: %dx%d@%d", idx, w, h, refresh);
+	wl_log.infof("Updating mode for xwayland server #%zu: %dx%d@%d", idx, w, h, gamescope::ConvertmHzToHz( nRefreshmHz ) );
 }
 
 // Definitely not very efficient if we end up with

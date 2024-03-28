@@ -26,6 +26,7 @@
 #include "gpuvis_trace_utils.h"
 
 #include "backends.h"
+#include "refresh_rate.h"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
@@ -590,7 +591,7 @@ int main(int argc, char **argv)
 				g_nNestedHeight = atoi( optarg );
 				break;
 			case 'r':
-				g_nNestedRefresh = atoi( optarg );
+				g_nNestedRefresh = gamescope::ConvertHztomHz( atoi( optarg ) );
 				break;
 			case 'W':
 				g_nPreferredOutputWidth = atoi( optarg );
@@ -599,7 +600,7 @@ int main(int argc, char **argv)
 				g_nPreferredOutputHeight = atoi( optarg );
 				break;
 			case 'o':
-				g_nNestedUnfocusedRefresh = atoi( optarg );
+				g_nNestedUnfocusedRefresh = gamescope::ConvertHztomHz( atoi( optarg ) );
 				break;
 			case 'm':
 				g_flMaxWindowScale = atof( optarg );

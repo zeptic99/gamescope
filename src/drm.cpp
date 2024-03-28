@@ -39,6 +39,7 @@
 #include "steamcompmgr.hpp"
 #include "vblankmanager.hpp"
 #include "wlserver.hpp"
+#include "refresh_rate.h"
 
 #include "wlr_begin.hpp"
 #include <libliftoff.h>
@@ -57,6 +58,25 @@ extern int g_nPreferredOutputHeight;
 
 namespace gamescope
 {
+	// Get a DRM mode in mHz
+	// Taken from wlroots, but we can't access it as we don't
+	// use the drm backend.
+	static int32_t GetModeRefresh(const drmModeModeInfo *mode)
+	{
+		int32_t nRefresh = (mode->clock * 1'000'000ll / mode->htotal + mode->vtotal / 2) / mode->vtotal;
+
+		if (mode->flags & DRM_MODE_FLAG_INTERLACE)
+			nRefresh *= 2;
+
+		if (mode->flags & DRM_MODE_FLAG_DBLSCAN)
+			nRefresh /= 2;
+
+		if (mode->vscan > 1)
+			nRefresh /= mode->vscan;
+
+		return nRefresh;
+	}
+
 	template <typename T>
 	using CAutoDeletePtr = std::unique_ptr<T, void(*)(T*)>;
 
@@ -488,19 +508,19 @@ static void drm_unset_connector( struct drm_t *drm );
 
 static constexpr uint32_t s_kSteamDeckLCDRates[] =
 {
-	40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-	50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
-	60,
+	40'000, 41'000, 42'000, 43'000, 44'000, 45'000, 46'000, 47'000, 48'000, 49'000,
+	50'000, 51'000, 52'000, 53'000, 54'000, 55'000, 56'000, 57'000, 58'000, 59'000,
+	60'000,
 };
 
 static constexpr uint32_t s_kSteamDeckOLEDRates[] =
 {
-	45,47,48,49,
-	50,51,53,55,56,59,
-	60,62,64,65,66,68,
-	72,73,76,77,78,
-	80,81,82,84,85,86,87,88,
-	90,
+	45'000, 47'000, 48'000, 49'000, 
+	50'000, 51'000, 53'000, 55'000, 56'000, 59'000, 
+	60'000, 62'000, 64'000, 65'000, 66'000, 68'000, 
+	72'000, 73'000, 76'000, 77'000, 78'000, 
+	80'000, 81'000, 82'000, 84'000, 85'000, 86'000, 87'000, 88'000, 
+	90'000, 
 };
 
 static void update_connector_display_info_wl(struct drm_t *drm)
@@ -997,7 +1017,7 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 	const drmModeModeInfo *mode = nullptr;
 	if ( drm->preferred_width != 0 || drm->preferred_height != 0 || drm->preferred_refresh != 0 )
 	{
-		mode = find_mode(best->GetModeConnector(), drm->preferred_width, drm->preferred_height, drm->preferred_refresh);
+		mode = find_mode(best->GetModeConnector(), drm->preferred_width, drm->preferred_height, gamescope::ConvertmHzToHz( drm->preferred_refresh ));
 	}
 
 	if (!mode && best->GetScreenType() == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL) {
@@ -2854,7 +2874,7 @@ static void drm_unset_mode( struct drm_t *drm )
 
 	g_nOutputRefresh = drm->preferred_refresh;
 	if (g_nOutputRefresh == 0)
-		g_nOutputRefresh = 60;
+		g_nOutputRefresh = gamescope::ConvertHztomHz( 60 );
 
 	g_bRotated = false;
 }
@@ -2869,7 +2889,7 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 	drm->pending.mode_id = GetBackend()->CreateBackendBlob( *mode );
 	drm->needs_modeset = true;
 
-	g_nOutputRefresh = mode->vrefresh;
+	g_nOutputRefresh = gamescope::GetModeRefresh( mode );
 
 	update_drm_effective_orientations(drm, mode);
 
@@ -3493,7 +3513,7 @@ namespace gamescope
 
 		virtual bool HackTemporarySetDynamicRefresh( int nRefresh ) override
 		{
-			return drm_set_refresh( &g_DRM, nRefresh );
+			return drm_set_refresh( &g_DRM, ConvertmHzToHz( nRefresh ) );
 		}
 
 		virtual void HackUpdatePatchedEdid() override

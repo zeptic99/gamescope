@@ -89,6 +89,7 @@
 #include "edid.h"
 #include "hdmi.h"
 #include "convar.h"
+#include "refresh_rate.h"
 
 #if HAVE_AVIF
 #include "avif/avif.h"
@@ -5136,11 +5137,11 @@ static bool steamcompmgr_should_vblank_window( bool bShouldLimitFPS, uint64_t vb
 {
 	bool bSendCallback = true;
 
-	int nRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+	int nRefreshHz = gamescope::ConvertmHzToHz( g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh );
 	int nTargetFPS = g_nSteamCompMgrTargetFPS;
-	if ( g_nSteamCompMgrTargetFPS && bShouldLimitFPS && nRefresh > nTargetFPS )
+	if ( g_nSteamCompMgrTargetFPS && bShouldLimitFPS && nRefreshHz > nTargetFPS )
 	{
-		int nVblankDivisor = nRefresh / nTargetFPS;
+		int nVblankDivisor = nRefreshHz / nTargetFPS;
 
 		if ( vblank_idx % nVblankDivisor != 0 )
 			bSendCallback = false;
@@ -7246,8 +7247,9 @@ void update_vrr_atoms(xwayland_ctx_t *root_ctx, bool force, bool* needs_flush = 
 
 	if ( g_nOutputRefresh != g_nCurrentRefreshRate_CachedValue || force )
 	{
+		int32_t nRefresh = gamescope::ConvertmHzToHz( g_nOutputRefresh );
 		XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayRefreshRateFeedback, XA_CARDINAL, 32, PropModeReplace,
-			(unsigned char *)&g_nOutputRefresh, 1 );
+			(unsigned char *)&nRefresh, 1 );
 		g_nCurrentRefreshRate_CachedValue = g_nOutputRefresh;
 		if (needs_flush)
 			*needs_flush = true;
@@ -7709,13 +7711,14 @@ steamcompmgr_main(int argc, char **argv)
 		{
 			vblank_idx++;
 
-			int nRealRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
-			int nTargetFPS = g_nSteamCompMgrTargetFPS ? g_nSteamCompMgrTargetFPS : nRealRefresh;
-			nTargetFPS = std::min<int>( nTargetFPS, nRealRefresh );
-			int nVblankDivisor = nRealRefresh / nTargetFPS;
+			int nRealRefreshmHz = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
+			int nRealRefreshHz = gamescope::ConvertmHzToHz( nRealRefreshmHz );
+			int nTargetFPS = g_nSteamCompMgrTargetFPS ? g_nSteamCompMgrTargetFPS : nRealRefreshHz;
+			nTargetFPS = std::min<int>( nTargetFPS, nRealRefreshHz );
+			int nVblankDivisor = nRealRefreshHz / nTargetFPS;
 
-			g_SteamCompMgrAppRefreshCycle = 1'000'000'000ul / nRealRefresh;
-			g_SteamCompMgrLimitedAppRefreshCycle = 1'000'000'000ul / nRealRefresh * nVblankDivisor;
+			g_SteamCompMgrAppRefreshCycle = gamescope::mHzToRefreshCycle( nRealRefreshmHz );
+			g_SteamCompMgrLimitedAppRefreshCycle = g_SteamCompMgrAppRefreshCycle * nVblankDivisor;
 		}
 
 		// Handle presentation-time stuff
