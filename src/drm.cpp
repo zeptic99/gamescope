@@ -157,6 +157,7 @@ namespace gamescope
 			std::optional<CDRMAtomicProperty> IN_FORMATS; // Immutable
 
 			std::optional<CDRMAtomicProperty> FB_ID;
+			std::optional<CDRMAtomicProperty> IN_FENCE_FD;
 			std::optional<CDRMAtomicProperty> CRTC_ID;
 			std::optional<CDRMAtomicProperty> SRC_X;
 			std::optional<CDRMAtomicProperty> SRC_Y;
@@ -405,8 +406,6 @@ struct drm_t {
 	gamescope::CDRMPlane *pPrimaryPlane;
 	gamescope::CDRMCRTC *pCRTC;
 	gamescope::CDRMConnector *pConnector;
-	int kms_in_fence_fd;
-	int kms_out_fence_fd;
 
 	struct wlr_drm_format_set primary_formats;
 
@@ -1092,6 +1091,9 @@ void load_pnps(void)
 
 extern bool env_to_bool(const char *env);
 
+uint32_t g_uAlwaysSignalledSyncobj = 0;
+int g_nAlwaysSignalledSyncFile = -1;
+
 bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 {
 	load_pnps();
@@ -1143,6 +1145,17 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 	}
 	if (drmGetCap(drm->fd, DRM_CAP_CURSOR_HEIGHT, &drm->cursor_height) != 0) {
 		drm->cursor_height = 64;
+	}
+
+	int err = drmSyncobjCreate(drm->fd, DRM_SYNCOBJ_CREATE_SIGNALED, &g_uAlwaysSignalledSyncobj);
+	if (err < 0) {
+		drm_log.errorf("Failed to create dummy signalled syncobj");
+		return false;
+	}
+	err = drmSyncobjExportSyncFile(drm->fd, g_uAlwaysSignalledSyncobj, &g_nAlwaysSignalledSyncFile);
+	if (err < 0) {
+		drm_log.errorf("Failed to create dummy signalled sync file");
+		return false;
 	}
 
 	uint64_t cap;
@@ -1246,8 +1259,6 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 		}
 	}
 
-	drm->kms_in_fence_fd = -1;
-
 	std::thread flip_handler_thread( flip_handler_thread_run );
 	flip_handler_thread.detach();
 
@@ -1320,6 +1331,7 @@ void finish_drm(struct drm_t *drm)
 	for ( std::unique_ptr< gamescope::CDRMPlane > &pPlane : drm->planes )
 	{
 		pPlane->GetProperties().FB_ID->SetPendingValue( req, 0, true );
+		pPlane->GetProperties().IN_FENCE_FD->SetPendingValue( req, -1, true );
 		pPlane->GetProperties().CRTC_ID->SetPendingValue( req, 0, true );
 		pPlane->GetProperties().SRC_X->SetPendingValue( req, 0, true );
 		pPlane->GetProperties().SRC_Y->SetPendingValue( req, 0, true );
@@ -1892,6 +1904,7 @@ namespace gamescope
 			m_Props.IN_FORMATS               = CDRMAtomicProperty::Instantiate( "IN_FORMATS",               this, *rawProperties );
 
 			m_Props.FB_ID                    = CDRMAtomicProperty::Instantiate( "FB_ID",                    this, *rawProperties );
+			m_Props.IN_FENCE_FD              = CDRMAtomicProperty::Instantiate( "IN_FENCE_FD",              this, *rawProperties );
 			m_Props.CRTC_ID                  = CDRMAtomicProperty::Instantiate( "CRTC_ID",                  this, *rawProperties );
 			m_Props.SRC_X                    = CDRMAtomicProperty::Instantiate( "SRC_X",                    this, *rawProperties );
 			m_Props.SRC_Y                    = CDRMAtomicProperty::Instantiate( "SRC_Y",                    this, *rawProperties );
@@ -2352,6 +2365,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 			}
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", frameInfo->layers[ i ].fbid);
+			liftoff_layer_set_property( drm->lo_layers[ i ], "IN_FENCE_FD", g_nAlwaysSignalledSyncFile);
 			drm->fbids_in_req.push_back( frameInfo->layers[ i ].fbid );
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", entry.layerState[i].zpos );
@@ -2467,6 +2481,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 		else
 		{
 			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", 0 );
+			liftoff_layer_set_property( drm->lo_layers[ i ], "IN_FENCE_FD", -1 );
 
 			liftoff_layer_unset_property( drm->lo_layers[ i ], "COLOR_ENCODING" );
 			liftoff_layer_unset_property( drm->lo_layers[ i ], "COLOR_RANGE" );
