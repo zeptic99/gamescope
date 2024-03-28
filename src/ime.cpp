@@ -124,8 +124,6 @@ struct wlserver_input_method_manager {
 
 static LogScope ime_log("ime");
 
-static struct wlserver_input_method *active_input_method = nullptr;
-
 static xkb_keysym_t keysym_from_ch(uint32_t ch)
 {
 	// There's a bug in libxkbcommon where the EURO symbol doesn't map to the correct keysym
@@ -493,9 +491,6 @@ static const struct gamescope_input_method_interface ime_impl = {
 
 void destroy_ime(struct wlserver_input_method *ime)
 {
-	if (ime == active_input_method)
-		active_input_method = nullptr;
-
 	wlr_keyboard_finish(&ime->keyboard);
 }
 
@@ -535,11 +530,6 @@ static void manager_handle_create_input_method(struct wl_client *client, struct 
 	struct wl_resource *ime_resource = wl_resource_create(client, &gamescope_input_method_interface, version, id);
 	wl_resource_set_implementation(ime_resource, &ime_impl, nullptr, ime_handle_resource_destroy);
 
-	if (active_input_method != nullptr) {
-		gamescope_input_method_send_unavailable(ime_resource);
-		return;
-	}
-
 	struct wlserver_input_method *ime = new wlserver_input_method();
 	ime->resource = ime_resource;
 	ime->manager = manager;
@@ -558,8 +548,6 @@ static void manager_handle_create_input_method(struct wl_client *client, struct 
 
 	ime->ime_reset_ime_keyboard_event_source = wl_event_loop_add_timer(manager->server->event_loop, reset_ime_keyboard, ime);
 	ime->ime_release_ime_keypress_event_source = wl_event_loop_add_timer(manager->server->event_loop, release_key_if_needed, ime);
-
-	active_input_method = ime;
 }
 
 struct wlserver_input_method *create_local_ime()
