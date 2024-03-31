@@ -21,10 +21,10 @@
 
 LogScope g_VBlankLog("vblank");
 
-// #define VBLANK_DEBUG
-
 namespace gamescope
 {
+	ConVar<bool> vblank_debug( "vblank_debug", false, "Enable vblank debug spew to stderr." );
+
 	CVBlankTimer::CVBlankTimer()
 	{
 		m_ulTargetVBlank = get_time_in_nanos();
@@ -150,7 +150,7 @@ namespace gamescope
 
 			ulOffset = ulNewRollingDrawTime + ulRedZone;
 
-			if ( !bPreemptive )
+			if ( vblank_debug && !bPreemptive )
 				VBlankDebugSpew( ulOffset, ulDrawTime, ulRedZone );
 		}
 		else
@@ -170,7 +170,7 @@ namespace gamescope
 
 			ulOffset = ulDrawTime + ulRedZone;
 
-			if ( !bPreemptive )
+			if ( vblank_debug && !bPreemptive )
 				VBlankDebugSpew( ulOffset, ulDrawTime, ulRedZone );
 		}
 
@@ -274,10 +274,12 @@ namespace gamescope
 				// Doing this aims to include that, like we were before, but with timerfd.
 				.ulWakeupTime = m_TimerFDSchedule.ulScheduledWakeupPoint,
 			};
-#ifdef VBLANK_DEBUG
-			uint64_t ulNow = get_time_in_nanos();
-			fprintf( stderr, "wakeup: %lu\n", ulNow );
-#endif
+
+			if ( vblank_debug )
+			{
+				uint64_t ulNow = get_time_in_nanos();
+				g_VBlankLog.infof( "TimerFD Wakeup: %lu\n", ulNow );
+			}
 
 			gpuvis_trace_printf( "vblank timerfd wakeup" );
 
@@ -326,7 +328,6 @@ namespace gamescope
 
 	void CVBlankTimer::VBlankDebugSpew( uint64_t ulOffset, uint64_t ulDrawTime, uint64_t ulRedZone )
 	{
-#ifdef VBLANK_DEBUG
 		static uint64_t s_ulVBlankID = 0;
 		static uint64_t s_ulLastDrawTime = kStartingVBlankDrawTime;
 		static uint64_t s_ulLastOffset = kStartingVBlankDrawTime + ulRedZone;
@@ -334,9 +335,9 @@ namespace gamescope
 		if ( s_ulVBlankID++ % 300 == 0 || ulDrawTime > s_ulLastOffset )
 		{
 			if ( ulDrawTime > s_ulLastOffset )
-				fprintf( stderr, " !! missed vblank " );
+				g_VBlankLog.infof( " !! missed vblank " );
 
-			fprintf( stderr, "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
+			g_VBlankLog.infof( "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
 				ulRedZone / 1'000'000.0,
 				m_ulVBlankRateOfDecayPercentage,
 				m_ulRollingMaxDrawTime / 1'000'000.0,
@@ -348,7 +349,6 @@ namespace gamescope
 
 		s_ulLastDrawTime = ulDrawTime;
 		s_ulLastOffset = ulOffset;
-#endif
 	}
 
 	void CVBlankTimer::NudgeThread()
