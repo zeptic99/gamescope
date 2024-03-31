@@ -110,7 +110,7 @@ namespace gamescope
 		// Need to re-test that.
 		const uint64_t ulRedZone = eScreenType == GAMESCOPE_SCREEN_TYPE_INTERNAL
 			? m_ulVBlankDrawBufferRedZone
-			: ( m_ulVBlankDrawBufferRedZone * 60 * kMilliSecInNanoSecs ) / ( nRefreshRate * kMilliSecInNanoSecs );
+			: std::min<uint64_t>( m_ulVBlankDrawBufferRedZone, ( m_ulVBlankDrawBufferRedZone * 60'000 * nRefreshRate ) / 60'000 );
 
 		bool bVRR = GetBackend()->IsVRRActive();
 		uint64_t ulOffset = 0;
