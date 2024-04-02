@@ -192,6 +192,7 @@ namespace gamescope
 		gamescope_control_screenshot_type eScreenshotType = GAMESCOPE_CONTROL_SCREENSHOT_TYPE_BASE_PLANE_ONLY;
 		uint32_t uScreenshotFlags = 0;
 		bool bX11PropertyRequested = false;
+		bool bWaylandRequested = false;
 	};
 
 	class CScreenshotManager

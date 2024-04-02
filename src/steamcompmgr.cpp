@@ -3006,7 +3006,7 @@ paint_all(bool async)
 					XDeleteProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDebugScreenShotAtom );
 				}
 
-				if ( bScreenshotSuccess )
+				if ( bScreenshotSuccess && oScreenshotInfo->bWaylandRequested )
 				{
 						wlserver_lock();
 						for ( const auto &control : wlserver.gamescope_controls )

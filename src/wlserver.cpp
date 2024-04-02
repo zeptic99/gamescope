@@ -993,6 +993,7 @@ static void gamescope_control_take_screenshot( struct wl_client *client, struct 
 		.szScreenshotPath = path,
 		.eScreenshotType  = (gamescope_control_screenshot_type)type,
 		.uScreenshotFlags = flags,
+		.bWaylandRequested = true,
 	} );
 }
 
