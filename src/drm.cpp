@@ -3446,7 +3446,7 @@ namespace gamescope
 
 		virtual bool UsesModifiers() const override
 		{
-			return true;
+			return g_DRM.allow_modifiers;
 		}
 		virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const override
 		{
