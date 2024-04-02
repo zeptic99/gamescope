@@ -7317,6 +7317,18 @@ void steamcompmgr_check_xdg(bool vblank)
 {
 	if (wlserver_xdg_dirty())
 	{
+		if (global_focus.focusWindow && global_focus.focusWindow->type == steamcompmgr_win_type_t::XDG)
+			global_focus.focusWindow = nullptr;
+		if (global_focus.inputFocusWindow && global_focus.inputFocusWindow->type == steamcompmgr_win_type_t::XDG)
+			global_focus.inputFocusWindow = nullptr;
+		if (global_focus.overlayWindow && global_focus.overlayWindow->type == steamcompmgr_win_type_t::XDG)
+			global_focus.overlayWindow = nullptr;
+		if (global_focus.notificationWindow && global_focus.notificationWindow->type == steamcompmgr_win_type_t::XDG)
+			global_focus.notificationWindow = nullptr;
+		if (global_focus.overrideWindow && global_focus.overrideWindow->type == steamcompmgr_win_type_t::XDG)
+			global_focus.overrideWindow = nullptr;
+		if (global_focus.fadeWindow && global_focus.fadeWindow->type == steamcompmgr_win_type_t::XDG)
+			global_focus.fadeWindow = nullptr;
 		g_steamcompmgr_xdg_wins = wlserver_get_xdg_shell_windows();
 		focusDirty = true;
 	}
