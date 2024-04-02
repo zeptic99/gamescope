@@ -48,7 +48,7 @@ struct wlserver_xdg_surface_info
 	}
 
 	// owned by wlserver
-	struct wlr_xdg_toplevel *xdg_toplevel = nullptr;
+	struct wlr_xdg_surface *xdg_surface = nullptr;
 	steamcompmgr_win_t *win = nullptr;
 
 	std::atomic<bool> mapped = { false };

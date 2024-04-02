@@ -1452,7 +1452,7 @@ void gamescope_xwayland_server_t::update_output_info()
 	wlr_output_set_description(output, info->description);
 }
 
-static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
+static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	struct wlserver_xdg_surface_info* info =
 		wl_container_of(listener, info, map);
 
@@ -1460,7 +1460,7 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
 	wlserver.xdg_dirty = true;
 }
 
-static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
+static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
 	struct wlserver_xdg_surface_info* info =
 		wl_container_of(listener, info, unmap);
 
@@ -1468,11 +1468,11 @@ static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 	wlserver.xdg_dirty = true;
 }
 
-static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
+static void xdg_surface_destroy(struct wl_listener *listener, void *data) {
 	struct wlserver_xdg_surface_info* info =
 		wl_container_of(listener, info, destroy);
 
-	wlserver_wl_surface_info *wlserver_surface = get_wl_surface_info(info->xdg_toplevel->base->surface);
+	wlserver_wl_surface_info *wlserver_surface = get_wl_surface_info(info->xdg_surface->surface);
 	if (!wlserver_surface)
 	{
 		wl_log.infof("No base surface info. (destroy)");
@@ -1485,7 +1485,7 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
 	}
 	info->main_surface = nullptr;
 	info->win = nullptr;
-	info->xdg_toplevel = nullptr;
+	info->xdg_surface = nullptr;
 	info->mapped = false;
 
 	wl_list_remove(&info->map.link);
@@ -1528,15 +1528,15 @@ void xdg_surface_new(struct wl_listener *listener, void *data)
 	wlserver_xdg_surface_info* xdg_surface_info = &window->xdg().surface;
 	xdg_surface_info->main_surface = xdg_surface->surface;
 	xdg_surface_info->win = window.get();
-	xdg_surface_info->xdg_toplevel = xdg_surface->toplevel;
+	xdg_surface_info->xdg_surface = xdg_surface;
 
 	wlserver_surface->xdg_surface = xdg_surface_info;
 
-	xdg_surface_info->map.notify = xdg_toplevel_map;
+	xdg_surface_info->map.notify = xdg_surface_map;
 	wl_signal_add(&xdg_surface->surface->events.map, &xdg_surface_info->map);
-	xdg_surface_info->unmap.notify = xdg_toplevel_unmap;
+	xdg_surface_info->unmap.notify = xdg_surface_unmap;
 	wl_signal_add(&xdg_surface->surface->events.unmap, &xdg_surface_info->unmap);
-	xdg_surface_info->destroy.notify = xdg_toplevel_destroy;
+	xdg_surface_info->destroy.notify = xdg_surface_destroy;
 	wl_signal_add(&xdg_surface->events.destroy, &xdg_surface_info->destroy);
 
 	for (auto it = g_PendingCommits.begin(); it != g_PendingCommits.end();)
@@ -1807,12 +1807,12 @@ void wlserver_keyboardfocus( struct wlr_surface *surface )
 
 	if (wlserver.kb_focus_surface != surface) {
 		auto old_wl_surf = get_wl_surface_info( wlserver.kb_focus_surface );
-		if (old_wl_surf && old_wl_surf->xdg_surface && old_wl_surf->xdg_surface->xdg_toplevel)
-			wlr_xdg_toplevel_set_activated(old_wl_surf->xdg_surface->xdg_toplevel, false);
+		if (old_wl_surf && old_wl_surf->xdg_surface && old_wl_surf->xdg_surface->xdg_surface && old_wl_surf->xdg_surface->xdg_surface->toplevel)
+			wlr_xdg_toplevel_set_activated(old_wl_surf->xdg_surface->xdg_surface->toplevel, false);
 
 		auto new_wl_surf = get_wl_surface_info( surface );
-		if (new_wl_surf && new_wl_surf->xdg_surface && new_wl_surf->xdg_surface->xdg_toplevel)
-			wlr_xdg_toplevel_set_activated(new_wl_surf->xdg_surface->xdg_toplevel, true);
+		if (new_wl_surf && new_wl_surf->xdg_surface && new_wl_surf->xdg_surface->xdg_surface && new_wl_surf->xdg_surface->xdg_surface->toplevel)
+			wlr_xdg_toplevel_set_activated(new_wl_surf->xdg_surface->xdg_surface->toplevel, true);
 	}
 
 	assert( wlserver.wlr.virtual_keyboard_device != nullptr );
