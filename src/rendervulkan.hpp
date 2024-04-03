@@ -15,6 +15,7 @@
 #include "main.hpp"
 #include "color_helpers.h"
 #include "gamescope_shared.h"
+#include "backend.h"
 
 #include "shaders/descriptor_set_constants.h"
 
@@ -170,7 +171,7 @@ public:
 	inline uint32_t contentWidth() {return m_contentWidth; }
 	inline uint32_t contentHeight() {return m_contentHeight; }
 	inline uint32_t rowPitch() { return m_unRowPitch; }
-	inline uint32_t fbid() { return m_FBID; }
+	inline const gamescope::Rc<gamescope::IBackendFb> GetBackendFb() { return m_pBackendFb; }
 	inline uint8_t *mappedData() { return m_pMappedData; }
 	inline VkFormat format() const { return m_format; }
 	inline const struct wlr_dmabuf_attributes& dmabuf() { return m_dmabuf; }
@@ -231,7 +232,8 @@ private:
 	uint32_t m_chromaOffset = 0;
 	uint32_t m_chromaPitch = 0;
 	
-	uint32_t m_FBID = 0;
+	std::shared_ptr<gamescope::IBackendFb> m_pOwnedBackendFb;
+	gamescope::Rc<gamescope::IBackendFb> m_pBackendFb;
 
 	uint8_t *m_pMappedData = nullptr;
 
@@ -278,7 +280,7 @@ struct FrameInfo_t
 	struct Layer_t
 	{
 		std::shared_ptr<CVulkanTexture> tex;
-		uint32_t fbid; // TODO pretty sure we can just move this into tex
+		gamescope::Rc<gamescope::IBackendFb> pBackendFb;
 		int zpos;
 
 		vec2_t offset;

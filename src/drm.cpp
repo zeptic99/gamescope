@@ -366,6 +366,18 @@ namespace gamescope
 
 		ConnectorProperties m_Props;
 	};
+
+	class CDRMFb final : public CBaseBackendFb
+	{
+	public:
+		CDRMFb( uint32_t uFbId, wlr_buffer *pClientBuffer );
+		~CDRMFb();
+
+		uint32_t GetFbId() const { return m_uFbId; }
+	
+	private:
+		uint32_t m_uFbId = 0;
+	};
 }
 
 struct saved_mode {
@@ -426,12 +438,18 @@ struct drm_t {
 		drm_valve1_transfer_function output_tf = DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT;
 	} current, pending;
 
-	/* FBs in the atomic request, but not yet submitted to KMS */
-	std::vector < uint32_t > fbids_in_req;
-	/* FBs submitted to KMS, but not yet displayed on screen */
-	std::vector < uint32_t > fbids_queued;
-	/* FBs currently on screen */
-	std::vector < uint32_t > fbids_on_screen;
+	// FBs in the atomic request, but not yet submitted to KMS
+	// Accessed only on req thread
+	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_FbIdsInRequest;
+
+	// FBs currently queued to go on screen.
+	// May be accessed by page flip handler thread and req thread, thus mutex.
+	std::mutex m_QueuedFbIdsMutex;
+	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_QueuedFbIds;
+	// FBs currently on screen.
+	// Accessed only on page flip handler thread.
+	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_VisibleFbIds;
+
 
 	std::unordered_map< uint32_t, struct fb > fb_map;
 	std::mutex fb_map_mutex;
@@ -556,13 +574,6 @@ inline uint64_t drm_calc_s31_32(float val)
 	return color.s31_32;
 }
 
-
-static struct fb& get_fb( struct drm_t& drm, uint32_t id )
-{
-	std::lock_guard<std::mutex> m( drm.fb_map_mutex );
-	return drm.fb_map[ id ];
-}
-
 static gamescope::CDRMCRTC *find_crtc_for_connector( struct drm_t *drm, gamescope::CDRMConnector *pConnector )
 {
 	for ( std::unique_ptr< gamescope::CDRMCRTC > &pCRTC : drm->crtcs )
@@ -645,8 +656,6 @@ static gamescope::CDRMPlane *find_primary_plane(struct drm_t *drm)
 	return nullptr;
 }
 
-static void drm_unlock_fb_internal( struct drm_t *drm, struct fb *fb );
-
 extern void mangoapp_output_update( uint64_t vblanktime );
 static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsigned int usec, unsigned int crtc_id, void *data)
 {
@@ -670,48 +679,12 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 	drm_verbose_log.debugf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
 	gpuvis_trace_printf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
 
-	for ( uint32_t i = 0; i < g_DRM.fbids_on_screen.size(); i++ )
 	{
-		uint32_t previous_fbid = g_DRM.fbids_on_screen[ i ];
-		assert( previous_fbid != 0 );
-
-		struct fb &previous_fb = get_fb( g_DRM, previous_fbid );
-
-		if ( --previous_fb.n_refs == 0 )
-		{
-			// we flipped away from this previous fbid, now safe to delete
-			std::lock_guard<std::mutex> lock( g_DRM.free_queue_lock );
-
-			for ( uint32_t i = 0; i < g_DRM.fbid_unlock_queue.size(); i++ )
-			{
-				if ( g_DRM.fbid_unlock_queue[ i ] == previous_fbid )
-				{
-					drm_verbose_log.debugf("deferred unlock %u", previous_fbid);
-
-					drm_unlock_fb_internal( &g_DRM, &get_fb( g_DRM, previous_fbid ) );
-
-					g_DRM.fbid_unlock_queue.erase( g_DRM.fbid_unlock_queue.begin() + i );
-					break;
-				}
-			}
-
-			for ( uint32_t i = 0; i < g_DRM.fbid_free_queue.size(); i++ )
-			{
-				if ( g_DRM.fbid_free_queue[ i ] == previous_fbid )
-				{
-					drm_verbose_log.debugf( "deferred free %u", previous_fbid );
-
-					drm_drop_fbid( &g_DRM, previous_fbid );
-
-					g_DRM.fbid_free_queue.erase( g_DRM.fbid_free_queue.begin() + i );
-					break;
-				}
-			}
-		}
+		std::unique_lock lock( g_DRM.m_QueuedFbIdsMutex );
+		// Swap and clear from queue -> visible to avoid allocations.
+		g_DRM.m_VisibleFbIds.swap( g_DRM.m_QueuedFbIds );
+		g_DRM.m_QueuedFbIds.clear();
 	}
-
-	g_DRM.fbids_on_screen = g_DRM.fbids_queued;
-	g_DRM.fbids_queued.clear();
 
 	g_DRM.flip_lock.unlock();
 
@@ -1394,8 +1367,9 @@ void finish_drm(struct drm_t *drm)
 	// page-flip handler thread.
 }
 
-uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf )
+std::shared_ptr<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf )
 {
+	std::shared_ptr<gamescope::IBackendFb> pBackendFb;
 	uint32_t fb_id = 0;
 
 	if ( !wlr_drm_format_set_has( &drm->formats, dma_buf->format, dma_buf->modifier ) )
@@ -1442,16 +1416,7 @@ uint32_t drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct
 
 	drm_verbose_log.debugf("make fbid %u", fb_id);
 
-	/* Nested scope so fb doesn't end up in the out: label */
-	{
-		struct fb &fb = get_fb( *drm, fb_id );
-		assert( fb.held_refs == 0 );
-		fb.id = fb_id;
-		fb.buf = buf;
-		if (!buf)
-			fb.held_refs++;
-		fb.n_refs = 0;
-	}
+	pBackendFb = std::make_shared<gamescope::CDRMFb>( fb_id, buf );
 
 out:
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
@@ -1475,77 +1440,7 @@ out:
 		}
 	}
 
-	return fb_id;
-}
-
-void drm_drop_fbid( struct drm_t *drm, uint32_t fbid )
-{
-	struct fb &fb = get_fb( *drm, fbid );
-	assert( fb.held_refs == 0 ||
-	        fb.buf == nullptr );
-
-	fb.held_refs = 0;
-
-	if ( fb.n_refs != 0 )
-	{
-		std::lock_guard<std::mutex> lock( drm->free_queue_lock );
-		drm->fbid_free_queue.push_back( fbid );
-		return;
-	}
-
-	if (drmModeRmFB( drm->fd, fbid ) != 0 )
-	{
-		drm_log.errorf_errno( "drmModeRmFB failed" );
-	}
-}
-
-static void drm_unlock_fb_internal( struct drm_t *drm, struct fb *fb )
-{
-	assert( fb->held_refs == 0 );
-	assert( fb->n_refs == 0 );
-
-	if ( fb->buf != nullptr )
-	{
-		wlserver_lock();
-		wlr_buffer_unlock( fb->buf );
-		wlserver_unlock();
-	}
-}
-
-void drm_lock_fbid( struct drm_t *drm, uint32_t fbid )
-{
-	struct fb &fb = get_fb( *drm, fbid );
-	assert( fb.n_refs == 0 );
-
-	if ( fb.held_refs++ == 0 )
-	{
-		if ( fb.buf != nullptr )
-		{
-			wlserver_lock();
-			wlr_buffer_lock( fb.buf );
-			wlserver_unlock();
-		}
-	}
-}
-
-void drm_unlock_fbid( struct drm_t *drm, uint32_t fbid )
-{
-	struct fb &fb = get_fb( *drm, fbid );
-
-	assert( fb.held_refs > 0 );
-	if ( --fb.held_refs != 0 )
-		return;
-
-	if ( fb.n_refs != 0 )
-	{
-		std::lock_guard<std::mutex> lock( drm->free_queue_lock );
-		drm->fbid_unlock_queue.push_back( fbid );
-		return;
-	}
-
-	/* FB isn't being used in any page-flip, free it immediately */
-	drm_verbose_log.debugf("free fbid %u", fbid);
-	drm_unlock_fb_internal( drm, &fb );
+	return pBackendFb;
 }
 
 static void update_drm_effective_orientations( struct drm_t *drm, const drmModeModeInfo *pMode )
@@ -2333,6 +2228,22 @@ namespace gamescope
 
 		return std::nullopt;
 	}
+
+	/////////////////////////
+	// CDRMFb
+	/////////////////////////
+	CDRMFb::CDRMFb( uint32_t uFbId, wlr_buffer *pClientBuffer )
+		: CBaseBackendFb( pClientBuffer )
+		, m_uFbId{ uFbId }
+	{
+
+	}
+	CDRMFb::~CDRMFb()
+	{
+		// I own the fbid.
+		drmModeRmFB( g_DRM.fd, m_uFbId );
+		m_uFbId = 0;
+	}
 }
 
 static int
@@ -2358,15 +2269,17 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 	{
 		if ( i < frameInfo->layerCount )
 		{
-			if ( frameInfo->layers[ i ].fbid == 0 )
+			if ( frameInfo->layers[ i ].pBackendFb == nullptr )
 			{
 				drm_verbose_log.errorf("drm_prepare_liftoff: layer %d has no FB", i );
 				return -EINVAL;
 			}
 
-			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", frameInfo->layers[ i ].fbid);
+			gamescope::CDRMFb *pDrmFb = static_cast<gamescope::CDRMFb *>( frameInfo->layers[ i ].pBackendFb.get() );
+
+			liftoff_layer_set_property( drm->lo_layers[ i ], "FB_ID", pDrmFb->GetFbId());
 			liftoff_layer_set_property( drm->lo_layers[ i ], "IN_FENCE_FD", g_nAlwaysSignalledSyncFile);
-			drm->fbids_in_req.push_back( frameInfo->layers[ i ].fbid );
+			drm->m_FbIdsInRequest.emplace_back( frameInfo->layers[ i ].pBackendFb );
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", entry.layerState[i].zpos );
 			liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", frameInfo->layers[ i ].opacity * 0xffff);
@@ -2598,7 +2511,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 			drm->needs_modeset = true;
 	}
 
-	drm->fbids_in_req.clear();
+	drm->m_FbIdsInRequest.clear();
 
 	bool needs_modeset = drm->needs_modeset.exchange(false);
 
@@ -2741,7 +2654,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		drmModeAtomicFree( drm->req );
 		drm->req = nullptr;
 
-		drm->fbids_in_req.clear();
+		drm->m_FbIdsInRequest.clear();
 
 		if ( needs_modeset )
 			drm->needs_modeset = true;
@@ -3279,7 +3192,7 @@ namespace gamescope
 				baseLayer->zpos = g_zposBase;
 
 				baseLayer->tex = vulkan_get_last_output_image( false, false );
-				baseLayer->fbid = baseLayer->tex->fbid();
+				baseLayer->pBackendFb = baseLayer->tex->GetBackendFb();
 				baseLayer->applyColorMgmt = false;
 
 				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
@@ -3305,7 +3218,7 @@ namespace gamescope
 					overlayLayer->zpos = g_zposOverlay;
 
 					overlayLayer->tex = vulkan_get_last_output_image( true, bDefer );
-					overlayLayer->fbid = overlayLayer->tex->fbid();
+					overlayLayer->pBackendFb = overlayLayer->tex->GetBackendFb();
 					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
 
 					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;
@@ -3426,22 +3339,9 @@ namespace gamescope
 			return std::make_shared<BackendBlob>( data, uBlob, true );
 		}
 
-		virtual uint32_t ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
+		virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
 		{
 			return drm_fbid_from_dmabuf( &g_DRM, pBuffer, pDmaBuf );
-		}
-
-        virtual void LockBackendFb( uint32_t uFbId ) override
-		{
-			drm_lock_fbid( &g_DRM, uFbId );
-		}
-        virtual void UnlockBackendFb( uint32_t uFbId ) override
-		{
-			drm_unlock_fbid( &g_DRM, uFbId );
-		}
-        virtual void DropBackendFb( uint32_t uFbId ) override
-		{
-			drm_drop_fbid( &g_DRM, uFbId );
 		}
 
 		virtual bool UsesModifiers() const override
@@ -3566,7 +3466,6 @@ namespace gamescope
 			int ret = 0;
 
 			assert( drm->req != nullptr );
-			assert( drm->fbids_queued.size() == 0 );
 
 			defer( if ( drm->req != nullptr ) { drmModeAtomicFree( drm->req ); drm->req = nullptr; } );
 
@@ -3578,14 +3477,10 @@ namespace gamescope
 
 				// Do it before the commit, as otherwise the pageflip handler could
 				// potentially beat us to the refcount checks.
-				for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
-				{
-					struct fb &fb = get_fb( g_DRM, drm->fbids_in_req[ i ] );
-					assert( fb.held_refs );
-					fb.n_refs++;
-				}
 
-				drm->fbids_queued = drm->fbids_in_req;
+				// Swap over request FDs -> Queue
+				std::unique_lock lock( drm->m_QueuedFbIdsMutex );
+				drm->m_QueuedFbIds.swap( drm->m_FbIdsInRequest );
 			}
 
 			m_PresentFeedback.m_uQueuedPresents++;
@@ -3612,13 +3507,14 @@ namespace gamescope
 
 				drm_rollback( drm );
 
-				// Undo refcount if the commit didn't actually work
-				for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
+				// Swap back over to what was previously queued (probably nothing)
+				// if this commit failed.
 				{
-					get_fb( g_DRM, drm->fbids_in_req[ i ] ).n_refs--;
+					std::unique_lock lock( drm->m_QueuedFbIdsMutex );
+					drm->m_QueuedFbIds.swap( drm->m_FbIdsInRequest );
 				}
-
-				drm->fbids_queued.clear();
+				// Clear our refs.
+				drm->m_FbIdsInRequest.clear();
 
 				m_PresentFeedback.m_uQueuedPresents--;
 
@@ -3627,7 +3523,9 @@ namespace gamescope
 
 				return ret;
 			} else {
-				drm->fbids_in_req.clear();
+				// Our request went through!
+				// Clear what we swapped with (what was previously queued)
+				drm->m_FbIdsInRequest.clear();
 
 				drm->current = drm->pending;
 

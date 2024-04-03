@@ -76,6 +76,7 @@ namespace gamescope
     class CWaylandConnector;
     class CWaylandPlane;
     class CWaylandBackend;
+    class CWaylandFb;
 
     class CWaylandConnector final : public IBackendConnector
     {
@@ -288,6 +289,32 @@ namespace gamescope
         int32_t nScale = 1;
     };
 
+    class CWaylandFb final : public CBaseBackendFb
+    {
+    public:
+        CWaylandFb( CWaylandBackend *pBackend, wl_buffer *pHostBuffer, wlr_buffer *pClientBuffer );
+        ~CWaylandFb();
+
+        void OnCompositorAcquire();
+        void OnCompositorRelease();
+
+        wl_buffer *GetHostBuffer() const { return m_pHostBuffer; }
+        wlr_buffer *GetClientBuffer() const { return m_pClientBuffer; }
+
+        void Wayland_Buffer_Release( wl_buffer *pBuffer );
+        static const wl_buffer_listener s_BufferListener;
+
+    private:
+        CWaylandBackend *m_pBackend = nullptr;
+        wl_buffer *m_pHostBuffer = nullptr;
+        wlr_buffer *m_pClientBuffer = nullptr;
+        bool m_bCompositorAcquired = false;
+    };
+    const wl_buffer_listener CWaylandFb::s_BufferListener =
+    {
+        .release = WAYLAND_USERDATA_TO_THIS( CWaylandFb, Wayland_Buffer_Release ),
+    };
+
     class CWaylandInputThread
     {
     public:
@@ -438,10 +465,7 @@ namespace gamescope
 
         virtual std::shared_ptr<BackendBlob> CreateBackendBlob( const std::type_info &type, std::span<const uint8_t> data ) override;
 
-        virtual uint32_t ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
-        virtual void LockBackendFb( uint32_t uFbId ) override;
-        virtual void UnlockBackendFb( uint32_t uFbId ) override;
-        virtual void DropBackendFb( uint32_t uFbId ) override;
+        virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
         virtual bool UsesModifiers() const override;
         virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const override;
 
@@ -485,6 +509,7 @@ namespace gamescope
         friend CWaylandConnector;
         friend CWaylandPlane;
         friend CWaylandInputThread;
+        friend CWaylandFb;
 
         wl_display *GetDisplay() const { return m_pDisplay; }
         wl_shm *GetShm() const { return m_pShm; }
@@ -498,9 +523,6 @@ namespace gamescope
         frog_color_management_factory_v1 *GetFrogColorManagementFactory() const { return m_pFrogColorMgmtFactory; }
         wp_fractional_scale_manager_v1 *GetFractionalScaleManager() const { return m_pFractionalScaleManager; }
         libdecor *GetLibDecor() const { return m_pLibDecor; }
-
-        uint32_t ImportWlBuffer( wl_buffer *pBuffer );
-        wl_buffer *FbIdToBuffer( uint32_t uFbId );
 
         void SetFullscreen( bool bFullscreen ); // Thread safe, can be called from the input thread.
         void UpdateFullscreenState();
@@ -625,6 +647,58 @@ namespace gamescope
         .modifiers     = WAYLAND_NULL(),
         .repeat_info   = WAYLAND_NULL(),
     };
+
+    //////////////////
+    // CWaylandFb
+    //////////////////
+
+    CWaylandFb::CWaylandFb( CWaylandBackend *pBackend, wl_buffer *pHostBuffer, wlr_buffer *pClientBuffer )
+        : CBaseBackendFb( pClientBuffer )
+        , m_pBackend     { pBackend }
+        , m_pHostBuffer  { pHostBuffer }
+    {
+        assert( !ReferenceOwnsObject() );
+
+        wl_buffer_add_listener( pHostBuffer, &s_BufferListener, this );
+    }
+
+    CWaylandFb::~CWaylandFb()
+    {
+        // I own the pHostBuffer.
+        wl_buffer_destroy( m_pHostBuffer );
+        m_pHostBuffer = nullptr;
+    }
+
+    void CWaylandFb::OnCompositorAcquire()
+    {
+        // If the compositor has acquired us, track that
+        // and increment the ref count.
+        if ( !m_bCompositorAcquired )
+        {
+            m_bCompositorAcquired = true;
+            IncRef();
+        }
+    }
+
+    void CWaylandFb::OnCompositorRelease()
+    {
+        // Compositor has released us, decrement rc.
+        assert( m_bCompositorAcquired );
+
+        if ( m_bCompositorAcquired )
+        {
+            DecRef();
+            m_bCompositorAcquired = false;
+        }
+    }
+
+    void CWaylandFb::Wayland_Buffer_Release( wl_buffer *pBuffer )
+    {
+        assert( m_pHostBuffer );
+        assert( m_pHostBuffer == pBuffer );
+
+        OnCompositorRelease();
+    }
 
     //////////////////
     // CWaylandConnector
@@ -872,28 +946,34 @@ namespace gamescope
 
     void CWaylandPlane::Present( const FrameInfo_t::Layer_t *pLayer )
     {
-        wl_buffer *pBuffer = pLayer ? m_pBackend->FbIdToBuffer( pLayer->fbid ) : nullptr;
+        if ( pLayer && pLayer->pBackendFb != nullptr )
+        {
+            CWaylandFb *pWaylandFb = static_cast<CWaylandFb*>( pLayer->pBackendFb.get() );
+            wl_buffer *pBuffer = pWaylandFb->GetHostBuffer();
 
-        if ( pBuffer )
-        {
-            Present(
-                ClipPlane( WaylandPlaneState
-                {
-                    .pBuffer     = pBuffer,
-                    .nDestX      = int32_t( -pLayer->offset.x ),
-                    .nDestY      = int32_t( -pLayer->offset.y ),
-                    .flSrcX      = 0.0,
-                    .flSrcY      = 0.0,
-                    .flSrcWidth  = double( pLayer->tex->width() ),
-                    .flSrcHeight = double( pLayer->tex->height() ),
-                    .nDstWidth   = int32_t( pLayer->tex->width() / double( pLayer->scale.x ) ),
-                    .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
-                    .eColorspace = pLayer->colorspace,
-                } ) );
-        }
-        else
-        {
-            Present( std::nullopt );
+            if ( pBuffer )
+            {
+                pWaylandFb->OnCompositorAcquire();
+
+                Present(
+                    ClipPlane( WaylandPlaneState
+                    {
+                        .pBuffer     = pBuffer,
+                        .nDestX      = int32_t( -pLayer->offset.x ),
+                        .nDestY      = int32_t( -pLayer->offset.y ),
+                        .flSrcX      = 0.0,
+                        .flSrcY      = 0.0,
+                        .flSrcWidth  = double( pLayer->tex->width() ),
+                        .flSrcHeight = double( pLayer->tex->height() ),
+                        .nDstWidth   = int32_t( pLayer->tex->width() / double( pLayer->scale.x ) ),
+                        .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
+                        .eColorspace = pLayer->colorspace,
+                    } ) );
+            }
+            else
+            {
+                Present( std::nullopt );
+            }
         }
     }
 
@@ -1140,7 +1220,7 @@ namespace gamescope
                 xdg_log.errorf( "Failed to create dummy black texture." );
                 return false;
             }
-            m_pBlackBuffer = FbIdToBuffer( m_pBlackTexture->fbid() );
+            m_pBlackBuffer = static_cast<CWaylandFb*>( m_pBlackTexture->GetBackendFb().get() )->GetHostBuffer();
         }
 
         if ( !m_pBlackBuffer )
@@ -1280,7 +1360,7 @@ namespace gamescope
                 compositeLayer.zpos = g_zposBase;
 
                 compositeLayer.tex = vulkan_get_last_output_image( false, false );
-                compositeLayer.fbid = compositeLayer.tex->fbid();
+                compositeLayer.pBackendFb = compositeLayer.tex->GetBackendFb().get();
                 compositeLayer.applyColorMgmt = false;
 
                 compositeLayer.filter = GamescopeUpscaleFilter::NEAREST;
@@ -1340,13 +1420,13 @@ namespace gamescope
         return std::make_shared<BackendBlob>( data );
     }
 
-    uint32_t CWaylandBackend::ImportDmabufToBackend( wlr_buffer *pClientBuffer, wlr_dmabuf_attributes *pDmaBuf )
+    std::shared_ptr<IBackendFb> CWaylandBackend::ImportDmabufToBackend( wlr_buffer *pClientBuffer, wlr_dmabuf_attributes *pDmaBuf )
     {
         zwp_linux_buffer_params_v1 *pBufferParams = zwp_linux_dmabuf_v1_create_params( m_pLinuxDmabuf );
         if ( !pBufferParams )
         {
             xdg_log.errorf( "Failed to create imported dmabuf params" );
-            return 0;
+            return nullptr;
         }
 
         for ( int i = 0; i < pDmaBuf->n_planes; i++ )
@@ -1371,27 +1451,12 @@ namespace gamescope
         if ( !pImportedBuffer )
         {
             xdg_log.errorf( "Failed to import dmabuf" );
-            return 0;
+            return nullptr;
         }
 
         zwp_linux_buffer_params_v1_destroy( pBufferParams );
 
-        return ImportWlBuffer( pImportedBuffer );
-    }
-    void CWaylandBackend::LockBackendFb( uint32_t uFbId )
-    {
-        // No need to refcount on this backend.
-    }
-    void CWaylandBackend::UnlockBackendFb( uint32_t uFbId )
-    {
-        // No need to refcount on this backend.
-    }
-    void CWaylandBackend::DropBackendFb( uint32_t uFbId )
-    {
-        assert( m_ImportedFbs.contains( uFbId ) );
-        auto iter = m_ImportedFbs.find( uFbId );
-        wl_buffer_destroy( iter->second );
-        m_ImportedFbs.erase( iter );
+        return std::make_shared<CWaylandFb>( this, pImportedBuffer, pClientBuffer );
     }
 
     bool CWaylandBackend::UsesModifiers() const
@@ -1642,29 +1707,6 @@ namespace gamescope
             else
                 wl_pointer_set_cursor( m_pPointer, m_uPointerEnterSerial, m_pCursorSurface, m_pCursorInfo->uXHotspot, m_pCursorInfo->uYHotspot );
         }
-    }
-
-    //
-
-    uint32_t CWaylandBackend::ImportWlBuffer( wl_buffer *pBuffer )
-    {
-        static uint32_t s_uFbIdCounter = 0;
-        uint32_t uFbId = ++s_uFbIdCounter;
-        // Handle wraparound incase we ever have 4mil surfaces lol.
-        if ( uFbId == 0 )
-            uFbId++;
-
-        m_ImportedFbs[uFbId] = pBuffer;
-        return uFbId;
-    }
-
-    wl_buffer *CWaylandBackend::FbIdToBuffer( uint32_t uFbId )
-    {
-        if ( uFbId == 0 )
-            return nullptr;
-
-        assert( m_ImportedFbs.contains( uFbId ) );
-        return m_ImportedFbs[uFbId];
     }
 
     void CWaylandBackend::SetFullscreen( bool bFullscreen )

@@ -2270,7 +2270,8 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 
 	if ( flags.bFlippable == true )
 	{
-		m_FBID = GetBackend()->ImportDmabufToBackend( nullptr, &m_dmabuf );
+		m_pOwnedBackendFb = GetBackend()->ImportDmabufToBackend( nullptr, &m_dmabuf );
+		m_pBackendFb = m_pOwnedBackendFb.get();
 	}
 
 	bool bHasAlpha = pDMA ? DRMFormatHasAlpha( pDMA->format ) : true;
@@ -2454,12 +2455,11 @@ CVulkanTexture::~CVulkanTexture( void )
 		m_linearView = VK_NULL_HANDLE;
 	}
 
-	if ( m_FBID != 0 )
-	{
-		GetBackend()->DropBackendFb( m_FBID );
-		m_FBID = 0;
-	}
+	if ( m_pBackendFb != nullptr )
+		m_pBackendFb = nullptr;
 
+	if ( m_pOwnedBackendFb != nullptr )
+		m_pOwnedBackendFb = nullptr;
 
 	if ( m_vkImageMemory != VK_NULL_HANDLE )
 	{

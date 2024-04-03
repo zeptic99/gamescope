@@ -4,6 +4,7 @@
 #include "gamescope_shared.h"
 #include "vulkan_include.h"
 #include "convar.h"
+#include "rc.h"
 
 #include <cassert>
 #include <span>
@@ -141,6 +142,24 @@ namespace gamescope
         std::atomic<uint64_t> m_uCompletedPresents = { 0u };
     };
 
+    class IBackendFb : public IRcObject<false /* Reference does NOT own. The wlr_buffer import + notarizer owns the object*/ >
+    {
+        // Dummy
+    };
+
+    class CBaseBackendFb : public IBackendFb
+    {
+    public:
+        CBaseBackendFb( wlr_buffer *pClientBuffer );
+        virtual ~CBaseBackendFb();
+
+        uint32_t IncRef() override;
+        uint32_t DecRef() override;
+
+    private:
+        wlr_buffer *m_pClientBuffer = nullptr;
+    };
+
     class IBackend
     {
     public:
@@ -169,10 +188,10 @@ namespace gamescope
 
         // For DRM, this is
         // dmabuf -> fb_id.
-        virtual uint32_t ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) = 0;
-        virtual void LockBackendFb( uint32_t uFbId ) = 0;
-        virtual void UnlockBackendFb( uint32_t uFbId ) = 0;
-        virtual void DropBackendFb( uint32_t uFbId ) = 0;
+        //
+        // shared_ptr owns the structure.
+        // Rc manages acquire/release of buffer to/from client while imported.
+        virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) = 0;
 
         virtual bool UsesModifiers() const = 0;
         virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const = 0;

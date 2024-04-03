@@ -474,22 +474,9 @@ namespace gamescope
 			return std::make_shared<BackendBlob>( data );
 		}
 
-		virtual uint32_t ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
+		virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
 		{
 			return 0;
-		}
-
-        virtual void LockBackendFb( uint32_t uFbId ) override
-		{
-			abort();
-		}
-        virtual void UnlockBackendFb( uint32_t uFbId ) override
-		{
-			abort();
-		}
-        virtual void DropBackendFb( uint32_t uFbId ) override
-		{
-			abort();
 		}
 
 		virtual bool UsesModifiers() const override

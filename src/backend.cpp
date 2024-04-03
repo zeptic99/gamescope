@@ -1,6 +1,11 @@
 #include "backend.h"
 #include "vblankmanager.hpp"
 #include "convar.h"
+#include "wlserver.hpp"
+
+#include "wlr_begin.hpp"
+#include <wlr/types/wlr_buffer.h>
+#include "wlr_end.hpp"
 
 extern void sleep_until_nanos(uint64_t nanos);
 extern bool env_to_bool(const char *env);
@@ -35,6 +40,44 @@ namespace gamescope
         }
 
         return true;
+    }
+
+    /////////////////
+    // CBaseBackendFb
+    /////////////////
+
+    CBaseBackendFb::CBaseBackendFb( wlr_buffer *pClientBuffer )
+        : m_pClientBuffer{ pClientBuffer }
+    {
+    }
+
+    CBaseBackendFb::~CBaseBackendFb()
+    {
+        // I do not own the client buffer, but I released that in DecRef.
+        m_pClientBuffer = nullptr;
+    }
+
+    uint32_t CBaseBackendFb::IncRef()
+    {
+        uint32_t uRefCount = IBackendFb::IncRef();
+        if ( m_pClientBuffer && uRefCount == 1 )
+        {
+            wlserver_lock();
+            wlr_buffer_lock( m_pClientBuffer );
+            wlserver_unlock( false );
+        }
+        return uRefCount;
+    }
+    uint32_t CBaseBackendFb::DecRef()
+    {
+        uint32_t uRefCount = IBackendFb::DecRef();
+        if ( m_pClientBuffer && uRefCount == 0 )
+        {
+            wlserver_lock();
+            wlr_buffer_unlock( m_pClientBuffer );
+            wlserver_unlock();
+        }
+        return uRefCount;
     }
 
     /////////////////

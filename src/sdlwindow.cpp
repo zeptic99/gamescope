@@ -130,10 +130,7 @@ namespace gamescope
 
 		virtual std::shared_ptr<BackendBlob> CreateBackendBlob( const std::type_info &type, std::span<const uint8_t> data ) override;
 
-        virtual uint32_t ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
-        virtual void LockBackendFb( uint32_t uFbId ) override;
-        virtual void UnlockBackendFb( uint32_t uFbId ) override;
-        virtual void DropBackendFb( uint32_t uFbId ) override;
+        virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
 		virtual bool UsesModifiers() const override;
 		virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const override;
 
@@ -397,21 +394,9 @@ namespace gamescope
 		return std::make_shared<BackendBlob>( data );
 	}
 
-	uint32_t CSDLBackend::ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf )
+	std::shared_ptr<IBackendFb> CSDLBackend::ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf )
 	{
-		return 0;
-	}
-	void CSDLBackend::LockBackendFb( uint32_t uFbId )
-	{
-		abort();
-	}
-	void CSDLBackend::UnlockBackendFb( uint32_t uFbId )
-	{
-		abort();
-	}
-	void CSDLBackend::DropBackendFb( uint32_t uFbId )
-	{
-		abort();
+		return nullptr;
 	}
 
 	bool CSDLBackend::UsesModifiers() const

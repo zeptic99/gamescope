@@ -701,11 +701,8 @@ struct commit_t : public gamescope::IWaitable
 			CloseFenceInternal();
 		}
 
-        if ( fb_id != 0 )
-		{
-			GetBackend()->UnlockBackendFb( fb_id );
-			fb_id = 0;
-		}
+        if ( pBackendFb != nullptr )
+			pBackendFb = nullptr;
 
 		wlserver_lock();
 		if (!presentation_feedbacks.empty())
@@ -732,7 +729,7 @@ struct commit_t : public gamescope::IWaitable
 	}
 
 	struct wlr_buffer *buf = nullptr;
-	uint32_t fb_id = 0;
+	gamescope::Rc<gamescope::IBackendFb> pBackendFb;
 	std::shared_ptr<CVulkanTexture> vulkanTex;
 	uint64_t commitID = 0;
 	bool done = false;
@@ -1107,7 +1104,7 @@ struct wlr_buffer_map_entry {
 	struct wl_listener listener;
 	struct wlr_buffer *buf;
 	std::shared_ptr<CVulkanTexture> vulkanTex;
-	uint32_t fb_id;
+	std::shared_ptr<gamescope::IBackendFb> pBackendFb;
 };
 
 static std::mutex wlr_buffer_map_lock;
@@ -1372,9 +1369,10 @@ destroy_buffer( struct wl_listener *listener, void * )
 	std::lock_guard<std::mutex> lock( wlr_buffer_map_lock );
 	wlr_buffer_map_entry *entry = wl_container_of( listener, entry, listener );
 
-	if ( entry->fb_id != 0 )
+	if ( entry->pBackendFb != nullptr )
 	{
-		GetBackend()->DropBackendFb( entry->fb_id );
+		assert( entry->pBackendFb->GetRefCount() == 0 );
+		entry->pBackendFb = nullptr;
 	}
 
 	wl_list_remove( &entry->listener.link );
@@ -1409,7 +1407,9 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	if ( it != wlr_buffer_map.end() )
 	{
 		commit->vulkanTex = it->second.vulkanTex;
-		commit->fb_id = it->second.fb_id;
+
+		// Transfer from shared_ptr of the import -> Rc of the usage.
+		std::shared_ptr<gamescope::IBackendFb> pBackendFb = it->second.pBackendFb;
 
 		/* Unlock here to avoid deadlock [1],
 		 * drm_lock_fbid calls wlserver_lock.
@@ -1417,10 +1417,8 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 		 * is no longer accessed. */
 		lock.unlock();
 
-		if (commit->fb_id)
-		{
-			GetBackend()->LockBackendFb( commit->fb_id );
-		}
+		// Going -> rc now
+		commit->pBackendFb = pBackendFb.get();
 
 		return commit;
 	}
@@ -1444,22 +1442,19 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	commit->vulkanTex = vulkan_create_texture_from_wlr_buffer( buf );
 	assert( commit->vulkanTex );
 
-	commit->fb_id = 0;
 	struct wlr_dmabuf_attributes dmabuf = {0};
+	std::shared_ptr<gamescope::IBackendFb> pBackendFb;
 	if ( wlr_buffer_get_dmabuf( buf, &dmabuf ) )
 	{
-		commit->fb_id = GetBackend()->ImportDmabufToBackend( buf, &dmabuf );
-
-		if ( commit->fb_id )
-		{
-			GetBackend()->LockBackendFb( commit->fb_id );
-		}
+		pBackendFb = GetBackend()->ImportDmabufToBackend( buf, &dmabuf );
+		// shared_ptr ref -> Rc import for commit
+		commit->pBackendFb = pBackendFb.get();
 	}
 
 	entry.listener.notify = destroy_buffer;
 	entry.buf = buf;
 	entry.vulkanTex = commit->vulkanTex;
-	entry.fb_id = commit->fb_id;
+	entry.pBackendFb = pBackendFb;
 
 	wlserver_lock();
 	wl_signal_add( &buf->events.destroy, &entry.listener );
@@ -2059,7 +2054,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->applyColorMgmt = false;
 
 	layer->tex = m_texture;
-	layer->fbid = m_texture->fbid();
+	layer->pBackendFb = m_texture->GetBackendFb();
 
 	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
@@ -2115,7 +2110,7 @@ paint_cached_base_layer(const std::shared_ptr<commit_t>& commit, const BaseLayer
 	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
 		layer->ctm = s_scRGB709To2020Matrix;
 	layer->tex = commit->vulkanTex;
-	layer->fbid = commit->fb_id;
+	layer->pBackendFb = commit->pBackendFb;
 
 	layer->filter = base.filter;
 	layer->blackBorder = true;
@@ -2314,7 +2309,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	}
 
 	layer->tex = lastCommit->vulkanTex;
-	layer->fbid = lastCommit->fb_id;
+	layer->pBackendFb = lastCommit->pBackendFb;
 
 	layer->filter = (w->isOverlay || w->isExternalOverlay) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
@@ -2550,7 +2545,7 @@ paint_all(bool async)
 			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
 			layer->ctm = nullptr;
 			layer->tex = tex;
-			layer->fbid = tex->fbid();
+			layer->pBackendFb = tex->GetBackendFb();
 
 			layer->filter = GamescopeUpscaleFilter::NEAREST;
 			layer->blackBorder = true;
@@ -2645,8 +2640,7 @@ paint_all(bool async)
 		FrameInfo_t::Layer_t *layer = &frameInfo.layers[ curLayer ];
 
 		layer->applyColorMgmt = false;
-		layer->fbid = MuraCorrectionImage->fbid();
-		layer->offset = vec2_t{ 0, 0 };
+		layer->pBackendFb = MuraCorrectionImage->GetBackendFb();
 		layer->scale = vec2_t{ 1.0f, 1.0f };
 		layer->blackBorder = true;
 		layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU;
