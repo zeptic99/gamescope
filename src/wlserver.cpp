@@ -1861,8 +1861,8 @@ void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y
 
 static void wlserver_clampcursor()
 {
-	wlserver.mouse_surface_cursorx = std::clamp( wlserver.mouse_surface_cursorx, 0.0, wlserver.mouse_focus_surface->current.width - 1.0 );
-	wlserver.mouse_surface_cursory = std::clamp( wlserver.mouse_surface_cursory, 0.0, wlserver.mouse_focus_surface->current.height - 1.0 );
+	wlserver.mouse_surface_cursorx = std::clamp( wlserver.mouse_surface_cursorx, 0.0, wlserver.mouse_focus_surface ? wlserver.mouse_focus_surface->current.width - 1.0 : g_nOutputWidth );
+	wlserver.mouse_surface_cursory = std::clamp( wlserver.mouse_surface_cursory, 0.0, wlserver.mouse_focus_surface ? wlserver.mouse_focus_surface->current.height - 1.0 : g_nOutputHeight );
 }
 
 static void wlserver_warpcursor( double x, double y )
