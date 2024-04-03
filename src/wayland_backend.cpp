@@ -570,7 +570,8 @@ namespace gamescope
         zwp_linux_dmabuf_v1 *m_pLinuxDmabuf = nullptr;
         xdg_wm_base *m_pXdgWmBase = nullptr;
         wp_viewporter *m_pViewporter = nullptr;
-        wl_buffer *m_pBlackBuffer = nullptr;
+        Rc<CWaylandFb> m_BlackFb;
+        std::shared_ptr<CWaylandFb> m_pOwnedBlackFb;
         std::shared_ptr<CVulkanTexture> m_pBlackTexture;
         wp_presentation *m_pPresentation = nullptr;
         frog_color_management_factory_v1 *m_pFrogColorMgmtFactory = nullptr;
@@ -946,34 +947,31 @@ namespace gamescope
 
     void CWaylandPlane::Present( const FrameInfo_t::Layer_t *pLayer )
     {
-        if ( pLayer && pLayer->pBackendFb != nullptr )
+        CWaylandFb *pWaylandFb = pLayer && pLayer->pBackendFb != nullptr ? static_cast<CWaylandFb*>( pLayer->pBackendFb.get() ) : nullptr;
+        wl_buffer *pBuffer = pWaylandFb ? pWaylandFb->GetHostBuffer() : nullptr;
+
+        if ( pBuffer )
         {
-            CWaylandFb *pWaylandFb = static_cast<CWaylandFb*>( pLayer->pBackendFb.get() );
-            wl_buffer *pBuffer = pWaylandFb->GetHostBuffer();
+            pWaylandFb->OnCompositorAcquire();
 
-            if ( pBuffer )
-            {
-                pWaylandFb->OnCompositorAcquire();
-
-                Present(
-                    ClipPlane( WaylandPlaneState
-                    {
-                        .pBuffer     = pBuffer,
-                        .nDestX      = int32_t( -pLayer->offset.x ),
-                        .nDestY      = int32_t( -pLayer->offset.y ),
-                        .flSrcX      = 0.0,
-                        .flSrcY      = 0.0,
-                        .flSrcWidth  = double( pLayer->tex->width() ),
-                        .flSrcHeight = double( pLayer->tex->height() ),
-                        .nDstWidth   = int32_t( pLayer->tex->width() / double( pLayer->scale.x ) ),
-                        .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
-                        .eColorspace = pLayer->colorspace,
-                    } ) );
-            }
-            else
-            {
-                Present( std::nullopt );
-            }
+            Present(
+                ClipPlane( WaylandPlaneState
+                {
+                    .pBuffer     = pBuffer,
+                    .nDestX      = int32_t( -pLayer->offset.x ),
+                    .nDestY      = int32_t( -pLayer->offset.y ),
+                    .flSrcX      = 0.0,
+                    .flSrcY      = 0.0,
+                    .flSrcWidth  = double( pLayer->tex->width() ),
+                    .flSrcHeight = double( pLayer->tex->height() ),
+                    .nDstWidth   = int32_t( pLayer->tex->width() / double( pLayer->scale.x ) ),
+                    .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
+                    .eColorspace = pLayer->colorspace,
+                } ) );
+        }
+        else
+        {
+            Present( std::nullopt );
         }
     }
 
@@ -1210,7 +1208,9 @@ namespace gamescope
 
         if ( m_pSinglePixelBufferManager )
         {
-            m_pBlackBuffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer( m_pSinglePixelBufferManager, 0, 0, 0, ~0u );
+            wl_buffer *pBlackBuffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer( m_pSinglePixelBufferManager, 0, 0, 0, ~0u );
+            m_pOwnedBlackFb = std::make_shared<CWaylandFb>( this, pBlackBuffer, nullptr );
+            m_BlackFb = m_pOwnedBlackFb.get();
         }
         else
         {
@@ -1220,10 +1220,10 @@ namespace gamescope
                 xdg_log.errorf( "Failed to create dummy black texture." );
                 return false;
             }
-            m_pBlackBuffer = static_cast<CWaylandFb*>( m_pBlackTexture->GetBackendFb().get() )->GetHostBuffer();
+            m_BlackFb = static_cast<CWaylandFb *>( m_pBlackTexture->GetBackendFb().get() );
         }
 
-        if ( !m_pBlackBuffer )
+        if ( m_BlackFb == nullptr )
         {
             xdg_log.errorf( "Failed to create 1x1 black buffer." );
             return false;
@@ -1326,10 +1326,12 @@ namespace gamescope
                 uint32_t uCurrentPlane = 0;
                 if ( bNeedsBacking )
                 {
+                    m_BlackFb->OnCompositorAcquire();
+
                     m_Planes[uCurrentPlane++].Present(
                         WaylandPlaneState
                         {
-                            .pBuffer     = m_pBlackBuffer,
+                            .pBuffer     = m_BlackFb->GetHostBuffer(),
                             .flSrcWidth  = 1.0,
                             .flSrcHeight = 1.0,
                             .nDstWidth   = int32_t( g_nOutputWidth ),
