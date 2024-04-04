@@ -141,6 +141,7 @@ namespace gamescope
         int32_t nDstWidth;
         int32_t nDstHeight;
         GamescopeAppTextureColorspace eColorspace;
+        bool bOpaque;
     };
 
     inline WaylandPlaneState ClipPlane( const WaylandPlaneState &state )
@@ -530,6 +531,7 @@ namespace gamescope
         void SetHostCompositorIsCurrentlyVRR( bool bActive ) { m_bHostCompositorIsCurrentlyVRR = bActive; }
 
         bool CurrentDisplaySupportsVRR() const { return m_bHostCompositorIsCurrentlyVRR; }
+        wl_region *GetFullRegion() const { return m_pFullRegion; }
 
     private:
 
@@ -570,6 +572,7 @@ namespace gamescope
         zwp_linux_dmabuf_v1 *m_pLinuxDmabuf = nullptr;
         xdg_wm_base *m_pXdgWmBase = nullptr;
         wp_viewporter *m_pViewporter = nullptr;
+        wl_region *m_pFullRegion = nullptr;
         Rc<CWaylandFb> m_BlackFb;
         std::shared_ptr<CWaylandFb> m_pOwnedBlackFb;
         std::shared_ptr<CVulkanTexture> m_pBlackTexture;
@@ -918,6 +921,7 @@ namespace gamescope
             // Use the subsurface set_position thing instead.
             wl_surface_attach( m_pSurface, oState->pBuffer, 0, 0 );
             wl_surface_damage( m_pSurface, 0, 0, INT32_MAX, INT32_MAX );
+            wl_surface_set_opaque_region( m_pSurface, oState->bOpaque ? m_pBackend->GetFullRegion() : nullptr );
             wl_surface_set_buffer_scale( m_pSurface, 1 );
         }
         else
@@ -967,6 +971,7 @@ namespace gamescope
                     .nDstWidth   = int32_t( pLayer->tex->width() / double( pLayer->scale.x ) ),
                     .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
                     .eColorspace = pLayer->colorspace,
+                    .bOpaque     = pLayer->zpos == g_zposBase,
                 } ) );
         }
         else
@@ -1188,6 +1193,9 @@ namespace gamescope
 
     bool CWaylandBackend::PostInit()
     {
+        m_pFullRegion = wl_compositor_create_region( m_pCompositor );
+        wl_region_add( m_pFullRegion, 0, 0, INT32_MAX, INT32_MAX );
+
         for ( uint32_t i = 0; i < 8; i++ )
             m_Planes[i].Init( i == 0 ? nullptr : &m_Planes[0], i == 0 ? nullptr : &m_Planes[ i - 1 ] );
 
@@ -1337,6 +1345,7 @@ namespace gamescope
                             .nDstWidth   = int32_t( g_nOutputWidth ),
                             .nDstHeight  = int32_t( g_nOutputHeight ),
                             .eColorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
+                            .bOpaque     = true,
                         } );
                 }
 
