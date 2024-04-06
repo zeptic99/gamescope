@@ -3198,7 +3198,7 @@ namespace gamescope
 				baseLayer->zpos = g_zposBase;
 
 				baseLayer->tex = vulkan_get_last_output_image( false, false );
-				baseLayer->pBackendFb = baseLayer->tex->GetBackendFb();
+				baseLayer->pBackendFb = baseLayer->tex->GetBackendFb().get();
 				baseLayer->applyColorMgmt = false;
 
 				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
@@ -3224,7 +3224,7 @@ namespace gamescope
 					overlayLayer->zpos = g_zposOverlay;
 
 					overlayLayer->tex = vulkan_get_last_output_image( true, bDefer );
-					overlayLayer->pBackendFb = overlayLayer->tex->GetBackendFb();
+					overlayLayer->pBackendFb = overlayLayer->tex->GetBackendFb().get();
 					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
 
 					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;

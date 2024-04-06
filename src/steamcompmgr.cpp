@@ -2054,7 +2054,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->applyColorMgmt = false;
 
 	layer->tex = m_texture;
-	layer->pBackendFb = m_texture->GetBackendFb();
+	layer->pBackendFb = m_texture->GetBackendFb().get();
 
 	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
@@ -2545,7 +2545,7 @@ paint_all(bool async)
 			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
 			layer->ctm = nullptr;
 			layer->tex = tex;
-			layer->pBackendFb = tex->GetBackendFb();
+			layer->pBackendFb = tex->GetBackendFb().get();
 
 			layer->filter = GamescopeUpscaleFilter::NEAREST;
 			layer->blackBorder = true;
@@ -2640,7 +2640,7 @@ paint_all(bool async)
 		FrameInfo_t::Layer_t *layer = &frameInfo.layers[ curLayer ];
 
 		layer->applyColorMgmt = false;
-		layer->pBackendFb = MuraCorrectionImage->GetBackendFb();
+		layer->pBackendFb = MuraCorrectionImage->GetBackendFb().get();
 		layer->scale = vec2_t{ 1.0f, 1.0f };
 		layer->blackBorder = true;
 		layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU;
