@@ -56,6 +56,13 @@ static constexpr bool k_bUseCursorPlane = false;
 extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
 
+gamescope::ConVar<bool> cv_drm_single_plane_optimizations( "drm_single_plane_optimizations", true, "Whether or not to enable optimizations for single plane usage." );
+gamescope::ConVar<bool> cv_drm_debug_disable_shaper_and_3dlut( "drm_debug_disable_shaper_and_3dlut", false, "Shaper + 3DLUT chicken bit. (Force disable/DEFAULT, no logic change)" );
+gamescope::ConVar<bool> cv_drm_debug_disable_degamma_tf( "drm_debug_disable_degamma_tf", false, "Degamma chicken bit. (Forces DEGAMMA_TF to DEFAULT, does not affect other logic)" );
+gamescope::ConVar<bool> cv_drm_debug_disable_regamma_tf( "drm_debug_disable_regamma_tf", false, "Regamma chicken bit. (Forces REGAMMA_TF to DEFAULT, does not affect other logic)" );
+gamescope::ConVar<bool> cv_drm_debug_disable_output_tf( "drm_debug_disable_output_tf", false, "Force default (identity) output TF, affects other logic. Not a property directly." );
+gamescope::ConVar<bool> cv_drm_deug_disable_blend_tf( "drm_deug_disable_blend_tf", false, "Blending chicken bit. (Forces BLEND_TF to DEFAULT, does not affect other logic)" );
+
 namespace gamescope
 {
 	// Get a DRM mode in mHz
@@ -1686,13 +1693,6 @@ static bool is_liftoff_caching_enabled()
 	return !disabled;
 }
 
-bool g_bDisableShaperAnd3DLUT = false;
-bool g_bDisableDegamma = false;
-bool g_bDisableRegamma = false;
-bool g_bDisableBlendTF = false;
-
-bool g_bSinglePlaneOptimizations = true;
-
 namespace gamescope
 {
 	////////////////////
@@ -2269,7 +2269,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 			return -EINVAL;
 	}
 
-	bool bSinglePlane = frameInfo->layerCount < 2 && g_bSinglePlaneOptimizations;
+	bool bSinglePlane = frameInfo->layerCount < 2 && cv_drm_single_plane_optimizations;
 
 	for ( int i = 0; i < k_nMaxLayers; i++ )
 	{
@@ -2352,12 +2352,12 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 						shaper_tf = DRM_VALVE1_TRANSFER_FUNCTION_BT709;
 					}
 
-					if (!g_bDisableDegamma)
+					if (!cv_drm_debug_disable_degamma_tf)
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", degamma_tf );
 					else
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_DEGAMMA_TF", 0 );
 
-					if ( !g_bDisableShaperAnd3DLUT )
+					if ( !cv_drm_debug_disable_shaper_and_3dlut )
 					{
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_SHAPER_LUT", drm->pending.shaperlut_id[ ColorSpaceToEOTFIndex( entry.layerState[i].colorspace ) ]->GetBlobValue() );
 						liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_SHAPER_TF", shaper_tf );
@@ -2386,7 +2386,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 
 			if ( drm_supports_color_mgmt( drm ) )
 			{
-				if (!g_bDisableBlendTF && !bSinglePlane)
+				if (!cv_drm_deug_disable_blend_tf && !bSinglePlane)
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", drm->pending.output_tf );
 				else
 					liftoff_layer_set_property( drm->lo_layers[ i ], "VALVE1_PLANE_BLEND_TF", DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT );
@@ -2524,11 +2524,11 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	assert( drm->req == nullptr );
 	drm->req = drmModeAtomicAlloc();
 
-	bool bSinglePlane = frameInfo->layerCount < 2 && g_bSinglePlaneOptimizations;
+	bool bSinglePlane = frameInfo->layerCount < 2 && cv_drm_single_plane_optimizations;
 
 	if ( drm_supports_color_mgmt( &g_DRM ) && frameInfo->applyOutputColorMgmt )
 	{
-		if ( !g_bDisableRegamma && !bSinglePlane )
+		if ( !cv_drm_debug_disable_output_tf && !bSinglePlane )
 		{
 			drm->pending.output_tf = g_bOutputHDREnabled
 				? DRM_VALVE1_TRANSFER_FUNCTION_PQ
