@@ -2640,7 +2640,12 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	if ( drm->pCRTC )
 	{
 		if ( drm->pCRTC->GetProperties().VALVE1_CRTC_REGAMMA_TF )
-			drm->pCRTC->GetProperties().VALVE1_CRTC_REGAMMA_TF->SetPendingValue( drm->req, drm->pending.output_tf, bForceInRequest );
+		{
+			if ( !cv_drm_debug_disable_regamma_tf )
+				drm->pCRTC->GetProperties().VALVE1_CRTC_REGAMMA_TF->SetPendingValue( drm->req, drm->pending.output_tf, bForceInRequest );
+			else
+				drm->pCRTC->GetProperties().VALVE1_CRTC_REGAMMA_TF->SetPendingValue( drm->req, DRM_VALVE1_TRANSFER_FUNCTION_DEFAULT, bForceInRequest );
+		}
 	}
 
 	drm->flags = flags;
