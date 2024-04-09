@@ -511,19 +511,19 @@ static void drm_unset_connector( struct drm_t *drm );
 
 static constexpr uint32_t s_kSteamDeckLCDRates[] =
 {
-	40'000, 41'000, 42'000, 43'000, 44'000, 45'000, 46'000, 47'000, 48'000, 49'000,
-	50'000, 51'000, 52'000, 53'000, 54'000, 55'000, 56'000, 57'000, 58'000, 59'000,
-	60'000,
+	40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+	50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+	60,
 };
 
 static constexpr uint32_t s_kSteamDeckOLEDRates[] =
 {
-	45'000, 47'000, 48'000, 49'000, 
-	50'000, 51'000, 53'000, 55'000, 56'000, 59'000, 
-	60'000, 62'000, 64'000, 65'000, 66'000, 68'000, 
-	72'000, 73'000, 76'000, 77'000, 78'000, 
-	80'000, 81'000, 82'000, 84'000, 85'000, 86'000, 87'000, 88'000, 
-	90'000, 
+	45, 47, 48, 49, 
+	50, 51, 53, 55, 56, 59, 
+	60, 62, 64, 65, 66, 68, 
+	72, 73, 76, 77, 78, 
+	80, 81, 82, 84, 85, 86, 87, 88, 
+	90, 
 };
 
 static void update_connector_display_info_wl(struct drm_t *drm)
@@ -3418,7 +3418,7 @@ namespace gamescope
 
 		virtual bool HackTemporarySetDynamicRefresh( int nRefresh ) override
 		{
-			return drm_set_refresh( &g_DRM, ConvertmHzToHz( nRefresh ) );
+			return drm_set_refresh( &g_DRM, nRefresh );
 		}
 
 		virtual void HackUpdatePatchedEdid() override

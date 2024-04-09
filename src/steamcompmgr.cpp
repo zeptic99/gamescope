@@ -2616,23 +2616,26 @@ paint_all(bool async)
 	{
 		auto rates = GetBackend()->GetCurrentConnector()->GetValidDynamicRefreshRates();
 
-		int nDynamicRefresh = g_nDynamicRefreshRate[GetBackend()->GetScreenType()];
+		int nDynamicRefreshHz = g_nDynamicRefreshRate[GetBackend()->GetScreenType()];
 
-		int nTargetRefresh = nDynamicRefresh && steamcompmgr_window_should_refresh_switch( global_focus.focusWindow )// && !global_focus.overlayWindow
-			? nDynamicRefresh
+		int nTargetRefreshHz = nDynamicRefreshHz && steamcompmgr_window_should_refresh_switch( global_focus.focusWindow )// && !global_focus.overlayWindow
+			? nDynamicRefreshHz
 			: int( rates[ rates.size() - 1 ] );
 
 		uint64_t now = get_time_in_nanos();
 
-		if ( g_nOutputRefresh == nTargetRefresh )
-			g_uDynamicRefreshEqualityTime = now;
-
 		// Compare in Hz, as the actual resulting clocks from the mode generation
 		// may give us eg. 90'004 vs 90'000
 		int32_t nOutputRefreshHz = gamescope::ConvertmHzToHz( g_nOutputRefresh );
-		int32_t nTargetRefreshHz = gamescope::ConvertmHzToHz( nTargetRefresh );
-		if ( nOutputRefreshHz != nTargetRefreshHz && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
-			GetBackend()->HackTemporarySetDynamicRefresh( nTargetRefresh );
+
+		if ( nOutputRefreshHz == nTargetRefreshHz )
+		{
+			g_uDynamicRefreshEqualityTime = now;
+		}
+		else if ( g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
+		{
+			GetBackend()->HackTemporarySetDynamicRefresh( nTargetRefreshHz );
+		}
 	}
 
 	bool bDoMuraCompensation = is_mura_correction_enabled() && frameInfo.layerCount;

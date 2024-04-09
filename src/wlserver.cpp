@@ -1040,10 +1040,10 @@ void wlserver_send_gamescope_control( wl_resource *control )
 	wl_array_init(&display_rates);
 	if ( pConn->GetValidDynamicRefreshRates().size() )
 	{
-		for ( uint32_t uRatemHz : pConn->GetValidDynamicRefreshRates() )
+		for ( uint32_t uRateHz : pConn->GetValidDynamicRefreshRates() )
 		{
-			uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, 1 );
-			*ptr = gamescope::ConvertmHzToHz( uRatemHz );
+			uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, sizeof( uint32_t ) );
+			*ptr = uRateHz;
 		}
 	}
 	else if ( g_nOutputRefresh > 0 )
