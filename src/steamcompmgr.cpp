@@ -2627,7 +2627,11 @@ paint_all(bool async)
 		if ( g_nOutputRefresh == nTargetRefresh )
 			g_uDynamicRefreshEqualityTime = now;
 
-		if ( g_nOutputRefresh != nTargetRefresh && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
+		// Compare in Hz, as the actual resulting clocks from the mode generation
+		// may give us eg. 90'004 vs 90'000
+		int32_t nOutputRefreshHz = gamescope::ConvertmHzToHz( g_nOutputRefresh );
+		int32_t nTargetRefreshHz = gamescope::ConvertmHzToHz( nTargetRefresh );
+		if ( nOutputRefreshHz != nTargetRefreshHz && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
 			GetBackend()->HackTemporarySetDynamicRefresh( nTargetRefresh );
 	}
 
