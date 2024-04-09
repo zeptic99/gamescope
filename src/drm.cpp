@@ -397,7 +397,7 @@ struct saved_mode {
 struct drm_t {
 	bool bUseLiftoff;
 
-	int fd;
+	int fd = -1;
 
 	int preferred_width, preferred_height, preferred_refresh;
 
@@ -3001,6 +3001,8 @@ namespace gamescope
 
 		virtual ~CDRMBackend()
 		{
+			if ( g_DRM.fd != -1 )
+				finish_drm( &g_DRM );
 		}
 
 		virtual bool Init() override
