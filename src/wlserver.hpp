@@ -106,7 +106,7 @@ private:
 	struct wlr_output *output = nullptr;
 	struct wlr_output_state *output_state = nullptr;
 
-	std::map<uint32_t, wlserver_content_override *> content_overrides;
+	std::unordered_map<uint32_t, wlserver_content_override *> content_overrides;
 
 	bool xwayland_ready = false;
 	_XDisplay *dpy = NULL;
