@@ -393,18 +393,6 @@ struct saved_mode {
 	int refresh;
 };
 
-struct fb {
-	uint32_t id;
-	/* Client buffer, if any */
-	struct wlr_buffer *buf;
-	/* A FB is held if it's being used by steamcompmgr
-	 * doesn't need to be atomic as it's only ever
-	 * modified/read from the steamcompmgr thread */
-	int held_refs;
-	/* Number of page-flips using the FB */
-	std::atomic< uint32_t > n_refs;
-};
-
 struct drm_t {
 	bool bUseLiftoff;
 
@@ -419,8 +407,6 @@ struct drm_t {
 	std::vector< std::unique_ptr< gamescope::CDRMPlane > > planes;
 	std::vector< std::unique_ptr< gamescope::CDRMCRTC > > crtcs;
 	std::unordered_map< uint32_t, gamescope::CDRMConnector > connectors;
-
-	std::map< uint32_t, drmModePropertyRes * > props;
 
 	gamescope::CDRMPlane *pPrimaryPlane;
 	gamescope::CDRMCRTC *pCRTC;
@@ -456,14 +442,6 @@ struct drm_t {
 	// FBs currently on screen.
 	// Accessed only on page flip handler thread.
 	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_VisibleFbIds;
-
-
-	std::unordered_map< uint32_t, struct fb > fb_map;
-	std::mutex fb_map_mutex;
-
-	std::mutex free_queue_lock;
-	std::vector< uint32_t > fbid_unlock_queue;
-	std::vector< uint32_t > fbid_free_queue;
 
 	std::mutex flip_lock;
 
