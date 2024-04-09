@@ -2225,7 +2225,8 @@ namespace gamescope
 	CDRMFb::~CDRMFb()
 	{
 		// I own the fbid.
-		drmModeRmFB( g_DRM.fd, m_uFbId );
+		if ( drmModeRmFB( g_DRM.fd, m_uFbId ) != 0 )
+			drm_log.errorf_errno( "drmModeRmFB failed" );
 		m_uFbId = 0;
 	}
 }
