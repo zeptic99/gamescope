@@ -171,7 +171,7 @@ public:
 	inline uint32_t contentWidth() {return m_contentWidth; }
 	inline uint32_t contentHeight() {return m_contentHeight; }
 	inline uint32_t rowPitch() { return m_unRowPitch; }
-	inline const std::shared_ptr<gamescope::IBackendFb> GetBackendFb() { return m_pBackendFb; }
+	inline gamescope::IBackendFb* GetBackendFb() { return m_pBackendFb.get(); }
 	inline uint8_t *mappedData() { return m_pMappedData; }
 	inline VkFormat format() const { return m_format; }
 	inline const struct wlr_dmabuf_attributes& dmabuf() { return m_dmabuf; }
@@ -233,7 +233,7 @@ private:
 	uint32_t m_chromaPitch = 0;
 	
 	// If this texture owns the backend Fb (ie. it's an internal texture)
-	std::shared_ptr<gamescope::IBackendFb> m_pBackendFb;
+	gamescope::OwningRc<gamescope::IBackendFb> m_pBackendFb;
 
 	uint8_t *m_pMappedData = nullptr;
 

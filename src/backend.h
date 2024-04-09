@@ -142,7 +142,7 @@ namespace gamescope
         std::atomic<uint64_t> m_uCompletedPresents = { 0u };
     };
 
-    class IBackendFb : public IRcObject<false /* Reference does NOT own. The wlr_buffer import + notarizer owns the object*/ >
+    class IBackendFb : public IRcObject
     {
         // Dummy
     };
@@ -191,7 +191,7 @@ namespace gamescope
         //
         // shared_ptr owns the structure.
         // Rc manages acquire/release of buffer to/from client while imported.
-        virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) = 0;
+        virtual OwningRc<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) = 0;
 
         virtual bool UsesModifiers() const = 0;
         virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const = 0;

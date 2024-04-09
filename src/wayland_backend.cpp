@@ -466,7 +466,7 @@ namespace gamescope
 
         virtual std::shared_ptr<BackendBlob> CreateBackendBlob( const std::type_info &type, std::span<const uint8_t> data ) override;
 
-        virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
+        virtual OwningRc<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override;
         virtual bool UsesModifiers() const override;
         virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const override;
 
@@ -661,8 +661,6 @@ namespace gamescope
         , m_pBackend     { pBackend }
         , m_pHostBuffer  { pHostBuffer }
     {
-        assert( !ReferenceOwnsObject() );
-
         wl_buffer_add_listener( pHostBuffer, &s_BufferListener, this );
     }
 
@@ -1228,7 +1226,7 @@ namespace gamescope
                 xdg_log.errorf( "Failed to create dummy black texture." );
                 return false;
             }
-            m_BlackFb = static_cast<CWaylandFb *>( m_pBlackTexture->GetBackendFb().get() );
+            m_BlackFb = static_cast<CWaylandFb *>( m_pBlackTexture->GetBackendFb() );
         }
 
         if ( m_BlackFb == nullptr )
@@ -1371,7 +1369,7 @@ namespace gamescope
                 compositeLayer.zpos = g_zposBase;
 
                 compositeLayer.tex = vulkan_get_last_output_image( false, false );
-                compositeLayer.pBackendFb = compositeLayer.tex->GetBackendFb().get();
+                compositeLayer.pBackendFb = compositeLayer.tex->GetBackendFb();
                 compositeLayer.applyColorMgmt = false;
 
                 compositeLayer.filter = GamescopeUpscaleFilter::NEAREST;
@@ -1431,7 +1429,7 @@ namespace gamescope
         return std::make_shared<BackendBlob>( data );
     }
 
-    std::shared_ptr<IBackendFb> CWaylandBackend::ImportDmabufToBackend( wlr_buffer *pClientBuffer, wlr_dmabuf_attributes *pDmaBuf )
+    OwningRc<IBackendFb> CWaylandBackend::ImportDmabufToBackend( wlr_buffer *pClientBuffer, wlr_dmabuf_attributes *pDmaBuf )
     {
         zwp_linux_buffer_params_v1 *pBufferParams = zwp_linux_dmabuf_v1_create_params( m_pLinuxDmabuf );
         if ( !pBufferParams )
@@ -1467,7 +1465,7 @@ namespace gamescope
 
         zwp_linux_buffer_params_v1_destroy( pBufferParams );
 
-        return std::make_shared<CWaylandFb>( this, pImportedBuffer, pClientBuffer );
+        return new CWaylandFb{ this, pImportedBuffer, pClientBuffer };
     }
 
     bool CWaylandBackend::UsesModifiers() const

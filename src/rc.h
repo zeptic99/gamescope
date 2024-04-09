@@ -5,65 +5,107 @@
 
 namespace gamescope
 {
-    template <bool bReferenceOwns = true>
     class RcObject
     {
     public:
-        static constexpr bool ReferenceOwnsObject()
+        virtual ~RcObject()
         {
-            return bReferenceOwns;
         }
 
-        inline uint32_t IncRef()
+        uint32_t IncRef()
         {
-            return ++m_uRefCount;
+            uint32_t uRefCount = m_uRefCount++;
+            if ( !uRefCount )
+                IncRefPrivate();
+            return uRefCount;
         }
 
-        inline uint32_t DecRef()
+        uint32_t DecRef()
         {
-            return --m_uRefCount;
+            uint32_t uRefCount = --m_uRefCount;
+            if ( !uRefCount )
+                DecRefPrivate();
+            return uRefCount;
         }
 
-        inline uint32_t GetRefCount()
+        uint32_t IncRefPrivate()
+        {
+            return m_uRefPrivate++;
+        }
+
+        uint32_t DecRefPrivate()
+        {
+            uint32_t uRefPrivate = --m_uRefPrivate;
+            if ( !uRefPrivate )
+            {
+                m_uRefPrivate += 0x80000000;
+                delete this;
+            }
+            
+            return uRefPrivate;
+        }
+
+        uint32_t GetRefCount() const
         {
             return m_uRefCount;
         }
 
-    private:
-        std::atomic<uint32_t> m_uRefCount{ 0u };
-    };
-
-    template <bool bReferenceOwns = true>
-    class IRcObject : public RcObject<bReferenceOwns>
-    {
-    public:
-        virtual ~IRcObject()
+        uint32_t GetRefCountPrivate() const
         {
+            return m_uRefPrivate;
         }
 
+        bool HasLiveReferences() const
+        {
+            return bool( m_uRefCount.load() | ( m_uRefPrivate.load() & 0x7FFFFFFF ) );
+        }
+
+    private:
+        std::atomic<uint32_t> m_uRefCount{ 0u };
+        std::atomic<uint32_t> m_uRefPrivate{ 0u };
+    };
+
+    class IRcObject : public RcObject
+    {
+    public:
         virtual uint32_t IncRef()
         {
-            return RcObject<bReferenceOwns>::IncRef();
+            return RcObject::IncRef();
         }
 
         virtual uint32_t DecRef()
         {
-            return RcObject<bReferenceOwns>::DecRef();
+            return RcObject::DecRef();
         }
     };
 
+    template <typename T, bool Public>
+    struct RcRef_
+    {
+        static void IncRef( T* pObject ) { pObject->IncRef(); }
+        static void DecRef( T* pObject ) { pObject->DecRef(); }
+    };
+
     template <typename T>
+    struct RcRef_<T, false>
+    {
+        static void IncRef( T* pObject ) { pObject->IncRefPrivate(); }
+        static void DecRef( T* pObject ) { pObject->DecRefPrivate(); }
+    };
+
+    template <typename T, bool Public = true>
     class Rc
     {
-        template <typename Tx>
+        template <typename Tx, bool Publicx>
         friend class Rc;
 
+        using RcRef = RcRef_<T, Public>;
     public:
         Rc() { }
         Rc( std::nullptr_t ) { }
 
         Rc( T* pObject )
-        : m_pObject{ pObject }
+            : m_pObject{ pObject }
         {
             this->IncRef();
         }
@@ -75,7 +117,7 @@ namespace gamescope
         }
 
         template <typename Tx>
-        Rc( const Rc<Tx>& other )
+        Rc( const Rc<Tx, Public>& other )
             : m_pObject{ other.m_pObject }
         {
             this->IncRef();
@@ -88,7 +130,7 @@ namespace gamescope
         }
 
         template <typename Tx>
-        Rc( Rc<Tx>&& other )
+        Rc( Rc<Tx, Public>&& other )
             : m_pObject{ other.m_pObject }
         {
             other.m_pObject = nullptr;
@@ -110,7 +152,7 @@ namespace gamescope
         }
 
         template <typename Tx>
-        Rc& operator = ( const Rc<Tx>& other )
+        Rc& operator = ( const Rc<Tx, Public>& other )
         {
             other.IncRef();
             this->DecRef();
@@ -127,7 +169,7 @@ namespace gamescope
         }
 
         template <typename Tx>
-        Rc& operator = ( Rc<Tx>&& other )
+        Rc& operator = ( Rc<Tx, Public>&& other )
         {
             this->DecRef();
             this->m_pObject = other.m_pObject;
@@ -159,19 +201,16 @@ namespace gamescope
         inline void IncRef() const
         {
             if ( m_pObject != nullptr )
-                m_pObject->IncRef();
+                RcRef::IncRef( m_pObject );
         }
 
         inline void DecRef() const
         {
             if ( m_pObject != nullptr )
-            {
-                if ( m_pObject->DecRef() == 0 )
-                {
-                    if constexpr ( m_pObject->ReferenceOwnsObject() )
-                        delete m_pObject;
-                }
-            }
+                RcRef::DecRef( m_pObject );
         }
     };
+
+    template <typename T>
+    using OwningRc = Rc<T, false>;
 }

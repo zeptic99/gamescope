@@ -54,13 +54,14 @@ namespace gamescope
     CBaseBackendFb::~CBaseBackendFb()
     {
         // I do not own the client buffer, but I released that in DecRef.
+        assert( !HasLiveReferences() );
         m_pClientBuffer = nullptr;
     }
 
     uint32_t CBaseBackendFb::IncRef()
     {
         uint32_t uRefCount = IBackendFb::IncRef();
-        if ( m_pClientBuffer && uRefCount == 1 )
+        if ( m_pClientBuffer && !uRefCount )
         {
             wlserver_lock();
             wlr_buffer_lock( m_pClientBuffer );
@@ -71,7 +72,7 @@ namespace gamescope
     uint32_t CBaseBackendFb::DecRef()
     {
         uint32_t uRefCount = IBackendFb::DecRef();
-        if ( m_pClientBuffer && uRefCount == 0 )
+        if ( m_pClientBuffer && !uRefCount )
         {
             wlserver_lock();
             wlr_buffer_unlock( m_pClientBuffer );

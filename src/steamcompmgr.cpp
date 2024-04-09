@@ -1104,7 +1104,7 @@ struct wlr_buffer_map_entry {
 	struct wl_listener listener;
 	struct wlr_buffer *buf;
 	std::shared_ptr<CVulkanTexture> vulkanTex;
-	std::shared_ptr<gamescope::IBackendFb> pBackendFb;
+	gamescope::OwningRc<gamescope::IBackendFb> pBackendFb;
 };
 
 static std::mutex wlr_buffer_map_lock;
@@ -1408,8 +1408,8 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	{
 		commit->vulkanTex = it->second.vulkanTex;
 
-		// Transfer from shared_ptr of the import -> Rc of the usage.
-		std::shared_ptr<gamescope::IBackendFb> pBackendFb = it->second.pBackendFb;
+		// Transfer from OwningRc of the import -> Rc of the usage.
+		gamescope::OwningRc<gamescope::IBackendFb> pBackendFb = it->second.pBackendFb;
 
 		/* Unlock here to avoid deadlock [1],
 		 * drm_lock_fbid calls wlserver_lock.
@@ -1443,11 +1443,11 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	assert( commit->vulkanTex );
 
 	struct wlr_dmabuf_attributes dmabuf = {0};
-	std::shared_ptr<gamescope::IBackendFb> pBackendFb;
+	gamescope::OwningRc<gamescope::IBackendFb> pBackendFb;
 	if ( wlr_buffer_get_dmabuf( buf, &dmabuf ) )
 	{
 		pBackendFb = GetBackend()->ImportDmabufToBackend( buf, &dmabuf );
-		// shared_ptr ref -> Rc import for commit
+		// OwningRc ref -> Rc import for commit
 		commit->pBackendFb = pBackendFb.get();
 	}
 
@@ -2054,7 +2054,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->applyColorMgmt = false;
 
 	layer->tex = m_texture;
-	layer->pBackendFb = m_texture->GetBackendFb().get();
+	layer->pBackendFb = m_texture->GetBackendFb();
 
 	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
@@ -2545,7 +2545,7 @@ paint_all(bool async)
 			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
 			layer->ctm = nullptr;
 			layer->tex = tex;
-			layer->pBackendFb = tex->GetBackendFb().get();
+			layer->pBackendFb = tex->GetBackendFb();
 
 			layer->filter = GamescopeUpscaleFilter::NEAREST;
 			layer->blackBorder = true;
@@ -2647,7 +2647,7 @@ paint_all(bool async)
 		FrameInfo_t::Layer_t *layer = &frameInfo.layers[ curLayer ];
 
 		layer->applyColorMgmt = false;
-		layer->pBackendFb = MuraCorrectionImage->GetBackendFb().get();
+		layer->pBackendFb = MuraCorrectionImage->GetBackendFb();
 		layer->scale = vec2_t{ 1.0f, 1.0f };
 		layer->blackBorder = true;
 		layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU;

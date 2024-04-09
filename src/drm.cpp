@@ -1358,15 +1358,15 @@ void finish_drm(struct drm_t *drm)
 	// page-flip handler thread.
 }
 
-std::shared_ptr<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf )
+gamescope::OwningRc<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *drm, struct wlr_buffer *buf, struct wlr_dmabuf_attributes *dma_buf )
 {
-	std::shared_ptr<gamescope::IBackendFb> pBackendFb;
+	gamescope::OwningRc<gamescope::IBackendFb> pBackendFb;
 	uint32_t fb_id = 0;
 
 	if ( !wlr_drm_format_set_has( &drm->formats, dma_buf->format, dma_buf->modifier ) )
 	{
 		drm_verbose_log.errorf( "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out", dma_buf->format, dma_buf->modifier );
-		return 0;
+		return nullptr;
 	}
 
 	uint32_t handles[4] = {0};
@@ -1407,7 +1407,7 @@ std::shared_ptr<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *drm, 
 
 	drm_verbose_log.debugf("make fbid %u", fb_id);
 
-	pBackendFb = std::make_shared<gamescope::CDRMFb>( fb_id, buf );
+	pBackendFb = new gamescope::CDRMFb( fb_id, buf );
 
 out:
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
@@ -3182,7 +3182,7 @@ namespace gamescope
 				baseLayer->zpos = g_zposBase;
 
 				baseLayer->tex = vulkan_get_last_output_image( false, false );
-				baseLayer->pBackendFb = baseLayer->tex->GetBackendFb().get();
+				baseLayer->pBackendFb = baseLayer->tex->GetBackendFb();
 				baseLayer->applyColorMgmt = false;
 
 				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
@@ -3208,7 +3208,7 @@ namespace gamescope
 					overlayLayer->zpos = g_zposOverlay;
 
 					overlayLayer->tex = vulkan_get_last_output_image( true, bDefer );
-					overlayLayer->pBackendFb = overlayLayer->tex->GetBackendFb().get();
+					overlayLayer->pBackendFb = overlayLayer->tex->GetBackendFb();
 					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
 
 					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;
@@ -3329,7 +3329,7 @@ namespace gamescope
 			return std::make_shared<BackendBlob>( data, uBlob, true );
 		}
 
-		virtual std::shared_ptr<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
+		virtual OwningRc<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
 		{
 			return drm_fbid_from_dmabuf( &g_DRM, pBuffer, pDmaBuf );
 		}
