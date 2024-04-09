@@ -611,6 +611,13 @@ static struct wl_listener new_surface_listener = { .notify = wlserver_new_surfac
 
 void gamescope_xwayland_server_t::destroy_content_override( struct wlserver_content_override *co )
 {
+	if ( co->surface )
+	{
+		wlserver_wl_surface_info *wl_surface_info = get_wl_surface_info( co->surface );
+		if ( wl_surface_info )
+			wl_surface_info->x11_surface = nullptr;
+	}
+
 	if ( co->gamescope_swapchain )
 	{
 		gamescope_swapchain_send_retired(co->gamescope_swapchain);
