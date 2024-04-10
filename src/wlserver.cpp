@@ -1725,6 +1725,7 @@ void wlserver_unlock(bool flush)
 extern std::mutex g_SteamCompMgrXWaylandServerMutex;
 
 static int g_wlserverNudgePipe[2] = {-1, -1};
+static std::atomic<bool> g_bShutdownWLServer{ false };
 
 void wlserver_run(void)
 {
@@ -1747,7 +1748,8 @@ void wlserver_run(void)
         },
     };
 
-	while ( g_bRun ) {
+	while ( !g_bShutdownWLServer )
+	{
 		int ret = poll( pollfds, 2, -1 );
 
 		if ( ret < 0 ) {
@@ -1798,9 +1800,11 @@ void wlserver_run(void)
 	wlserver_unlock(false);
 }
 
-void wlserver_force_shutdown()
+void wlserver_shutdown()
 {
     assert( wlserver_is_lock_held() );
+
+	g_bShutdownWLServer = true;
 
     if (wlserver.display)
     {

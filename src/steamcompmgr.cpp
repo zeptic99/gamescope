@@ -6047,7 +6047,7 @@ steamcompmgr_exit(void)
     gamescope::IBackend::Set( nullptr );
 
     wlserver_lock();
-    wlserver_force_shutdown();
+    wlserver_shutdown();
     wlserver_unlock(false);
 
 	pthread_exit(NULL);
