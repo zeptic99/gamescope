@@ -62,6 +62,7 @@ gamescope::ConVar<bool> cv_drm_debug_disable_degamma_tf( "drm_debug_disable_dega
 gamescope::ConVar<bool> cv_drm_debug_disable_regamma_tf( "drm_debug_disable_regamma_tf", false, "Regamma chicken bit. (Forces REGAMMA_TF to DEFAULT, does not affect other logic)" );
 gamescope::ConVar<bool> cv_drm_debug_disable_output_tf( "drm_debug_disable_output_tf", false, "Force default (identity) output TF, affects other logic. Not a property directly." );
 gamescope::ConVar<bool> cv_drm_debug_disable_blend_tf( "drm_debug_disable_blend_tf", false, "Blending chicken bit. (Forces BLEND_TF to DEFAULT, does not affect other logic)" );
+gamescope::ConVar<bool> cv_drm_debug_disable_explicit_sync( "drm_debug_disable_explicit_sync", false, "Force disable explicit sync on the DRM backend." );
 
 namespace gamescope
 {
@@ -3437,7 +3438,7 @@ namespace gamescope
 
 		virtual bool SupportsExplicitSync() const override
 		{
-			return g_bSupportsSyncObjs;
+			return g_bSupportsSyncObjs && !cv_drm_debug_disable_explicit_sync;
 		}
 
 		virtual bool IsVisible() const override
