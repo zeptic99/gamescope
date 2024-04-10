@@ -239,12 +239,13 @@ namespace gamescope
         static IBackend *Get();
         template <typename T>
         static bool Set();
+
+        static bool Set( IBackend *pBackend );
     protected:
         friend BackendBlob;
 
         virtual void OnBackendBlobDestroyed( BackendBlob *pBlob ) = 0;
     private:
-        static bool Set( IBackend *pBackend );
     };
 
 

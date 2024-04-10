@@ -6044,7 +6044,7 @@ steamcompmgr_exit(void)
 		statsThreadSem.signal();
 	}
 
-    //sdlwindow_shutdown();
+    gamescope::IBackend::Set( nullptr );
 
     wlserver_lock();
     wlserver_force_shutdown();

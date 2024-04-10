@@ -31,12 +31,15 @@ namespace gamescope
             s_pBackend = nullptr;
         }
 
-        s_pBackend = pBackend;
-        if ( !s_pBackend->Init() )
+        if ( pBackend )
         {
-            delete s_pBackend;
-            s_pBackend = nullptr;
-            return false;
+            s_pBackend = pBackend;
+            if ( !s_pBackend->Init() )
+            {
+                delete s_pBackend;
+                s_pBackend = nullptr;
+                return false;
+            }
         }
 
         return true;
