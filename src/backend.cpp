@@ -74,11 +74,12 @@ namespace gamescope
     }
     uint32_t CBaseBackendFb::DecRef()
     {
+        wlr_buffer *pClientBuffer = m_pClientBuffer;
         uint32_t uRefCount = IBackendFb::DecRef();
-        if ( m_pClientBuffer && !uRefCount )
+        if ( pClientBuffer && !uRefCount )
         {
             wlserver_lock();
-            wlr_buffer_unlock( m_pClientBuffer );
+            wlr_buffer_unlock( pClientBuffer );
             wlserver_unlock();
         }
         return uRefCount;
