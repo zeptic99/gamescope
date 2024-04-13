@@ -111,7 +111,7 @@ namespace gamescope
     class CFunctionWaitable final : public IWaitable
     {
     public:
-        CFunctionWaitable( int nFD, std::function<void()> fnPollFunc )
+        CFunctionWaitable( int nFD, std::function<void()> fnPollFunc = nullptr )
             : m_nFD{ nFD }
             , m_fnPollFunc{ fnPollFunc }
         {
@@ -119,7 +119,8 @@ namespace gamescope
 
         void OnPollIn() final
         {
-            m_fnPollFunc();
+            if ( m_fnPollFunc )
+                m_fnPollFunc();
         }
 
         void Drain()
@@ -260,7 +261,7 @@ namespace gamescope
             epoll_ctl( m_nEpollFD, EPOLL_CTL_DEL, pWaitable->GetFD(), nullptr );
         }
 
-        void PollEvents( int nTimeOut = -1 )
+        int PollEvents( int nTimeOut = -1 )
         {
             epoll_event events[MaxEvents];
 
@@ -269,15 +270,15 @@ namespace gamescope
                 int nEventCount = epoll_wait( m_nEpollFD, events, MaxEvents, nTimeOut );
 
                 if ( !m_bRunning )
-                    return;
+                    return 0;
 
                 if ( nEventCount < 0 )
                 {
-                    if ( errno == EAGAIN )
+                    if ( errno == EAGAIN || errno == EINTR )
                         continue;
 
                     g_WaitableLog.errorf_errno( "Failed to epoll_wait in CAsyncWaiter" );
-                    return;
+                    return nEventCount;
                 }
 
                 for ( int i = 0; i < nEventCount; i++ )
@@ -288,7 +289,7 @@ namespace gamescope
                     pWaitable->HandleEvents( event.events );
                 }
 
-                return;
+                return nEventCount;
             }
         }
 

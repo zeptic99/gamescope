@@ -7,6 +7,7 @@
 #include "defer.hpp"
 #include "convar.h"
 #include "refresh_rate.h"
+#include "waitable.h"
 
 #include <cstring>
 #include <unordered_map>
@@ -320,6 +321,7 @@ namespace gamescope
     {
     public:
         CWaylandInputThread();
+        ~CWaylandInputThread();
 
         bool Init( CWaylandBackend *pBackend );
 
@@ -340,6 +342,8 @@ namespace gamescope
         void HandleKey( uint32_t uKey, bool bPressed );
 
         CWaylandBackend *m_pBackend = nullptr;
+
+        CWaiter<4> m_Waiter;
 
         std::thread m_Thread;
         std::atomic<bool> m_bInitted = { false };
@@ -1919,6 +1923,15 @@ namespace gamescope
     {
     }
 
+    CWaylandInputThread::~CWaylandInputThread()
+    {
+        m_bInitted = true;
+        m_bInitted.notify_all();
+
+        m_Waiter.Shutdown();
+        m_Thread.join();
+    }
+
     bool CWaylandInputThread::Init( CWaylandBackend *pBackend )
     {
         m_pBackend = pBackend;
@@ -1970,9 +1983,20 @@ namespace gamescope
     {
         m_bInitted.wait( false );
 
+        if ( !m_Waiter.IsRunning() )
+            return;
+
         int nFD = wl_display_get_fd( m_pBackend->GetDisplay() );
+        if ( nFD < 0 )
+        {
+            abort();
+        }
+
+        CFunctionWaitable waitable( nFD );
+        m_Waiter.AddWaitable( &waitable );
+
         int nRet = 0;
-        for ( ;; )
+        while ( m_Waiter.IsRunning() )
         {
             if ( ( nRet = wl_display_dispatch_queue_pending( m_pBackend->GetDisplay(), m_pQueue ) ) < 0 )
             {
@@ -1987,22 +2011,11 @@ namespace gamescope
                 abort();
             }
 
-            pollfd pollfd =
+            if ( ( nRet = m_Waiter.PollEvents() ) <= 0 )
             {
-                .fd     = nFD,
-                .events = POLLIN,
-            };
-            if ( ( nRet = poll( &pollfd, 1, -1 ) ) <= 0 )
-            {
-                int nErrno = errno;
                 wl_display_cancel_read( m_pBackend->GetDisplay() );
                 if ( nRet < 0 )
-                {
-                    if ( nErrno == EINTR || nErrno == EAGAIN )
-                        continue;
-
                     abort();
-                }
 
                 assert( nRet == 0 );
                 continue;
