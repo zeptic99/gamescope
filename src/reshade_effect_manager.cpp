@@ -307,26 +307,26 @@ PingPongUniform::PingPongUniform(reshadefx::uniform_info uniformInfo)
     : ReshadeUniform(uniformInfo)
 {
     if (auto minAnnotation =
-            std::find_if(uniformInfo.annotations.begin(), uniformInfo.annotations.end(), [](const auto& a) { return a.name == "min"; });
+            std::ranges::find_if(uniformInfo.annotations, std::bind_front(std::equal_to{}, "min"), &reshadefx::annotation::name);
         minAnnotation != uniformInfo.annotations.end())
     {
         min = minAnnotation->type.is_floating_point() ? minAnnotation->value.as_float[0] : static_cast<float>(minAnnotation->value.as_int[0]);
     }
     if (auto maxAnnotation =
-            std::find_if(uniformInfo.annotations.begin(), uniformInfo.annotations.end(), [](const auto& a) { return a.name == "max"; });
+            std::ranges::find_if(uniformInfo.annotations, std::bind_front(std::equal_to{}, "max"), &reshadefx::annotation::name);
         maxAnnotation != uniformInfo.annotations.end())
     {
         max = maxAnnotation->type.is_floating_point() ? maxAnnotation->value.as_float[0] : static_cast<float>(maxAnnotation->value.as_int[0]);
     }
     if (auto smoothingAnnotation =
-            std::find_if(uniformInfo.annotations.begin(), uniformInfo.annotations.end(), [](const auto& a) { return a.name == "smoothing"; });
+            std::ranges::find_if(uniformInfo.annotations, std::bind_front(std::equal_to{}, "smoothing"), &reshadefx::annotation::name);
         smoothingAnnotation != uniformInfo.annotations.end())
     {
         smoothing = smoothingAnnotation->type.is_floating_point() ? smoothingAnnotation->value.as_float[0]
                                                                     : static_cast<float>(smoothingAnnotation->value.as_int[0]);
     }
     if (auto stepAnnotation =
-            std::find_if(uniformInfo.annotations.begin(), uniformInfo.annotations.end(), [](const auto& a) { return a.name == "step"; });
+            std::ranges::find_if(uniformInfo.annotations, std::bind_front(std::equal_to{}, "step"), &reshadefx::annotation::name);
         stepAnnotation != uniformInfo.annotations.end())
     {
         stepMin =
@@ -375,13 +375,13 @@ RandomUniform::RandomUniform(reshadefx::uniform_info uniformInfo)
     : ReshadeUniform(uniformInfo)
 {
     if (auto minAnnotation =
-            std::find_if(uniformInfo.annotations.begin(), uniformInfo.annotations.end(), [](const auto& a) { return a.name == "min"; });
+            std::ranges::find_if(uniformInfo.annotations, std::bind_front(std::equal_to{}, "min"), &reshadefx::annotation::name);
         minAnnotation != uniformInfo.annotations.end())
     {
         min = minAnnotation->type.is_integral() ? minAnnotation->value.as_int[0] : static_cast<int>(minAnnotation->value.as_float[0]);
     }
     if (auto maxAnnotation =
-            std::find_if(uniformInfo.annotations.begin(), uniformInfo.annotations.end(), [](const auto& a) { return a.name == "max"; });
+            std::ranges::find_if(uniformInfo.annotations, std::bind_front(std::equal_to{}, "max"), &reshadefx::annotation::name);
         maxAnnotation != uniformInfo.annotations.end())
     {
         max = maxAnnotation->type.is_integral() ? maxAnnotation->value.as_int[0] : static_cast<int>(maxAnnotation->value.as_float[0]);
@@ -491,7 +491,7 @@ static std::vector<std::shared_ptr<ReshadeUniform>> createReshadeUniforms(const 
     std::vector<std::shared_ptr<ReshadeUniform>> uniforms;
     for (auto& uniform : module.uniforms)
     {
-        auto sourceAnnotation = std::find_if(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) { return a.name == "source"; });
+        auto sourceAnnotation = std::ranges::find_if(uniform.annotations, std::bind_front(std::equal_to{}, "source"), &reshadefx::annotation::name);
         if (sourceAnnotation == uniform.annotations.end())
         {
             uniforms.push_back(std::make_shared<DataUniform>(uniform));
@@ -965,8 +965,7 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
             assert(ret);
         }
 
-        if (const auto source = std::find_if(
-                tex.annotations.begin(), tex.annotations.end(), [](const auto& a) { return a.name == "source"; });
+        if (const auto source = std::ranges::find_if(tex.annotations , std::bind_front(std::equal_to{}, "source"), &reshadefx::annotation::name);
             source != tex.annotations.end())
         {
             std::string filePath = local_reshade_path + "/Textures/" + source->value.string_data;
