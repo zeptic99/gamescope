@@ -6616,6 +6616,11 @@ spawn_client( char **argv, bool bAsyncChild )
 		// Restore prior rlimit in case child uses select()
 		restore_fd_limit();
 
+		// Kill myself when my parent dies.
+#ifdef __linux__
+		prctl( PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0 );
+#endif
+
 		// Reset signal stuff
 		setsid();
 		sigset_t set;
