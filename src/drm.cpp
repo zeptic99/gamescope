@@ -424,7 +424,7 @@ struct drm_t {
 
 	std::shared_ptr<gamescope::BackendBlob> sdr_static_metadata;
 
-	struct {
+	struct drm_state_t {
 		std::shared_ptr<gamescope::BackendBlob> mode_id;
 		uint32_t color_mgmt_serial;
 		std::shared_ptr<gamescope::BackendBlob> lut3d_id[ EOTF_Count ];
@@ -1354,6 +1354,26 @@ void finish_drm(struct drm_t *drm)
 	drmModeAtomicFree(req);
 
 	free(drm->device_name);
+
+	wlr_drm_format_set_finish( &drm->formats );
+	wlr_drm_format_set_finish( &drm->primary_formats );
+	drm->m_FbIdsInRequest.clear();
+	{
+		std::unique_lock lock( drm->m_QueuedFbIdsMutex );
+		drm->m_QueuedFbIds.clear();
+	}
+	{
+		std::unique_lock lock( drm->flip_lock );
+		drm->m_VisibleFbIds.clear();
+	}
+	drm->sdr_static_metadata = nullptr;
+	drm->current = drm_t::drm_state_t{};
+	drm->pending = drm_t::drm_state_t{};
+	drm->planes.clear();
+	drm->crtcs.clear();
+	drm->connectors.clear();
+
+
 
 	// We can't close the DRM FD here, it might still be in use by the
 	// page-flip handler thread.

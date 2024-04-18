@@ -293,7 +293,11 @@ namespace gamescope
         ~BackendBlob()
         {
             if ( m_bOwned )
-                IBackend::Get()->OnBackendBlobDestroyed( this );
+            {
+                IBackend *pBackend = IBackend::Get();
+                if ( pBackend )
+                    pBackend->OnBackendBlobDestroyed( this );
+            }
         }
 
         // No copy constructor, because we can't duplicate the blob handle.

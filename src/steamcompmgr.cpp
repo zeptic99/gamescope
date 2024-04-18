@@ -6044,6 +6044,18 @@ steamcompmgr_exit(void)
 		statsThreadSem.signal();
 	}
 
+	{
+		g_ColorMgmt.pending.appHDRMetadata = nullptr;
+		g_ColorMgmt.current.appHDRMetadata = nullptr;
+
+		s_scRGB709To2020Matrix = nullptr;
+		for (int i = 0; i < gamescope::GAMESCOPE_SCREEN_TYPE_COUNT; i++)
+		{
+			s_MuraCorrectionImage[i] = nullptr;
+			s_MuraCTMBlob[i] = nullptr;
+		}
+	}
+
     gamescope::IBackend::Set( nullptr );
 
     wlserver_lock();
