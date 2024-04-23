@@ -53,6 +53,7 @@
 #include "ime.hpp"
 #include "xwayland_ctx.hpp"
 #include "refresh_rate.h"
+#include "InputEmulation.h"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"
@@ -1564,6 +1565,10 @@ void xdg_surface_new(struct wl_listener *listener, void *data)
 	}
 }
 
+static gamescope::CAsyncWaiter g_LibEisWaiter( "gamescope-eis" );
+// TODO: Move me into some ownership of eg. wlserver.
+static std::unique_ptr<gamescope::GamescopeInputServer> g_InputServer;
+
 bool wlserver_init( void ) {
 	assert( wlserver.display != nullptr );
 
@@ -1677,6 +1682,26 @@ bool wlserver_init( void ) {
 
 	wl_signal_emit( &wlserver.wlr.multi_backend->events.new_input, kbd );
 
+#if HAVE_LIBEIS
+	{
+		char szEISocket[ 64 ];
+		snprintf( szEISocket, sizeof( szEISocket ), "%s-ei", wlserver.wl_display_name );
+
+		g_InputServer = std::make_unique<gamescope::GamescopeInputServer>();
+		if ( g_InputServer->Init( szEISocket ) )
+		{
+			setenv( "LIBEI_SOCKET", szEISocket, 1 );
+			g_LibEisWaiter.AddWaitable( g_InputServer.get() );
+		}
+		else
+		{
+			wl_log.errorf( "Initializing libei failed, XTEST will not be available!" );
+		}
+	}
+#else
+	wl_log.errorf( "Gamescope built without libei, XTEST will not be available!" );
+#endif
+
 	for (int i = 0; i < g_nXWaylandCount; i++)
 	{
 		auto server = std::make_unique<gamescope_xwayland_server_t>(wlserver.display);
@@ -1787,6 +1812,8 @@ void wlserver_run(void)
 		std::unique_lock lock2(g_wlserver_xdg_shell_windows_lock);
 		wlserver.xdg_wins.clear();
 	}
+
+	g_InputServer = nullptr;
 
 	// Released when steamcompmgr closes.
 	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
