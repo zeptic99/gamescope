@@ -543,8 +543,6 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 	{
 		wlserver_x11_surface_info *x11_surface = surf->x11_surface;
 
-		x11_surface->xwayland_server->destroy_content_override( x11_surface, surf->wlr );
-
 		wlserver_x11_surface_info_finish(x11_surface);
 		// Re-init it so it can be destroyed for good on the x11 side.
 		// This just clears it out from the main wl surface mainly.
@@ -579,6 +577,12 @@ static void handle_wl_surface_destroy( struct wl_listener *l, void *data )
 	surf->pending_presentation_feedbacks.clear();
 
 	surf->wlr->data = nullptr;
+
+	for ( wl_resource *pSwapchain : surf->gamescope_swapchains )
+	{
+		wl_resource_set_user_data( pSwapchain, nullptr );
+	}
+
 	delete surf;
 }
 
@@ -773,18 +777,21 @@ static void create_gamescope_xwayland( void )
 
 
 
-
-
-static void gamescope_swapchain_destroy( struct wl_client *client, struct wl_resource *resource )
+static void gamescope_swapchain_handle_resource_destroy( struct wl_resource *resource )
 {
 	wlserver_wl_surface_info *wl_surface_info = (wlserver_wl_surface_info *)wl_resource_get_user_data( resource );
-
+	if ( wl_surface_info )
+	{
 	wlserver_x11_surface_info *x11_surface = wl_surface_info->x11_surface;
 	if (x11_surface)
 		x11_surface->xwayland_server->destroy_content_override( x11_surface, wl_surface_info->wlr );
 
 	std::erase(wl_surface_info->gamescope_swapchains, resource);
+	}
+}
 
+static void gamescope_swapchain_destroy( struct wl_client *client, struct wl_resource *resource )
+{
 	wl_resource_destroy( resource );
 }
 
@@ -917,7 +924,7 @@ static void gamescope_swapchain_factory_v2_create_swapchain( struct wl_client *c
 
 	struct wl_resource *gamescope_swapchain_resource
 		= wl_resource_create( client, &gamescope_swapchain_interface, wl_resource_get_version( resource ), id );
-	wl_resource_set_implementation( gamescope_swapchain_resource, &gamescope_swapchain_impl, wl_surface_info, NULL );
+	wl_resource_set_implementation( gamescope_swapchain_resource, &gamescope_swapchain_impl, wl_surface_info, gamescope_swapchain_handle_resource_destroy );
 
 	if (wl_surface_info->gamescope_swapchains.size())
 		wl_log.errorf("create_swapchain: Surface already had a gamescope_swapchain! Warning!");
@@ -2367,6 +2374,8 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 
 	if (surf->main_surface)
 	{
+		surf->xwayland_server->destroy_content_override( surf, surf->main_surface );
+
 		wlserver_wl_surface_info *wl_info = get_wl_surface_info(surf->main_surface);
 		if (wl_info)
 			wl_info->x11_surface = nullptr;
@@ -2374,6 +2383,8 @@ void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf )
 
 	if (surf->override_surface)
 	{
+		surf->xwayland_server->destroy_content_override( surf, surf->override_surface );
+
 		wlserver_wl_surface_info *wl_info = get_wl_surface_info(surf->override_surface);
 		if (wl_info)
 			wl_info->x11_surface = nullptr;
