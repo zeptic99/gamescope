@@ -689,12 +689,16 @@ namespace gamescope
     void CWaylandFb::OnCompositorRelease()
     {
         // Compositor has released us, decrement rc.
-        assert( m_bCompositorAcquired );
+        //assert( m_bCompositorAcquired );
 
         if ( m_bCompositorAcquired )
         {
             DecRef();
             m_bCompositorAcquired = false;
+        }
+        else
+        {
+            xdg_log.errorf( "Compositor released us but we were not acquired. Oh no." );
         }
     }
 
