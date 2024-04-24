@@ -495,7 +495,7 @@ static void ime_handle_pointer_warp(struct wl_client *client, struct wl_resource
 {
 	struct wlserver_input_method *ime = (struct wlserver_input_method *)wl_resource_get_user_data(ime_resource);
 
-	wlserver_mousewarp(wl_fixed_to_double(x), wl_fixed_to_double(y), ++ime->uFakeTimestamp);
+	wlserver_mousewarp(wl_fixed_to_double(x), wl_fixed_to_double(y), ++ime->uFakeTimestamp, false );
 }
 
 static void ime_handle_pointer_wheel(struct wl_client *client, struct wl_resource *ime_resource, int32_t x, int32_t y)

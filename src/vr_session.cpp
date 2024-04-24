@@ -682,7 +682,7 @@ namespace gamescope
                             wlserver_lock();
                             if ( GetTouchClickMode() == TouchClickModes::Passthrough )
                                 wlserver_touchmotion( x / float( g_nOutputWidth ), y / float( g_nOutputHeight ), 0, ++m_uFakeTimestamp );
-                            wlserver_mousewarp( x, y, m_uFakeTimestamp );
+                            wlserver_mousewarp( x, y, m_uFakeTimestamp, false );
                             wlserver_unlock();
                             break;
                         }

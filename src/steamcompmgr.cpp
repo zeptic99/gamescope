@@ -898,7 +898,7 @@ uint32_t		inputCounter;
 uint32_t		lastPublishedInputCounter;
 
 bool			focusDirty = false;
-bool			hasRepaint = false;
+std::atomic<bool> hasRepaint = false;
 bool			hasRepaintNonBasePlane = false;
 
 unsigned long	damageSequence = 0;
@@ -1587,57 +1587,33 @@ MouseCursor::MouseCursor(xwayland_ctx_t *ctx)
 	, m_imageEmpty(false)
 	, m_ctx(ctx)
 {
-	m_lastX = g_nNestedWidth / 2;
-	m_lastY = g_nNestedHeight / 2;
 	updateCursorFeedback( true );
+}
+
+void MouseCursor::UpdatePosition()
+{
+	wlserver_lock();
+	m_x = wlserver.mouse_surface_cursorx;
+	m_y = wlserver.mouse_surface_cursory;
+	wlserver_unlock();
 }
 
 void MouseCursor::checkSuspension()
 {
-	unsigned int buttonMask = 0;
-
-	bool bWasHidden = wlserver.bCursorHidden;
-
-	steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
-	if (window && window->ignoreNextClickForVisibility)
-	{
-		window->ignoreNextClickForVisibility--;
-		wlserver.bCursorHidden = true;
-		return;
-	}
-	else
-	{
-		if (buttonMask & ( Button1Mask | Button2Mask | Button3Mask | Button4Mask | Button5Mask )) {
-			wlserver.bCursorHidden = false;
-
-			// Move the cursor back to where we left it if the window didn't want us to give
-			// it hover/focus where we left it and we moved it before.
-			if (window_wants_no_focus_when_mouse_hidden(window) && bWasHidden)
-			{
-				wlserver_lock();
-				wlserver_mousewarp( m_lastX, m_lastY, 0 );
-				wlserver_unlock();
-				XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, m_lastX, m_lastY);
-			}
-		}
-	}
-
 	const bool suspended = int64_t( get_time_in_nanos() ) - int64_t( wlserver.ulLastMovedCursorTime ) > int64_t( cursorHideTime );
 	if (!wlserver.bCursorHidden && suspended) {
 		wlserver.bCursorHidden = true;
 
+		steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
 		// Rearm warp count
-		if (window) {
-			window->mouseMoved = 0;
-
+		if (window)
+		{
 			// Move the cursor to the bottom right corner, just off screen if we can
 			// if the window (ie. Steam) doesn't want hover/focus events.
 			if ( window_wants_no_focus_when_mouse_hidden(window) )
 			{
-				m_lastX = m_x;
-				m_lastY = m_y;
 				wlserver_lock();
-				wlserver_mousewarp( window->xwayland().a.width - 1, window->xwayland().a.height - 1, 0 );
+				wlserver_fake_mouse_pos( window->xwayland().a.width - 1, window->xwayland().a.height - 1 );
 				wlserver_mousehide();
 				wlserver_unlock();
 			}
@@ -1651,11 +1627,6 @@ void MouseCursor::checkSuspension()
 	}
 
 	updateCursorFeedback();
-}
-
-void MouseCursor::warp(int x, int y)
-{
-	XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, x, y);
 }
 
 void MouseCursor::setDirty()
@@ -1750,67 +1721,6 @@ bool MouseCursor::setCursorImageByName(const char *name)
 	XFlush(m_ctx->dpy);
 	setDirty();
 	return true;
-}
-
-void MouseCursor::constrainPosition()
-{
-	steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
-	steamcompmgr_win_t *override = m_ctx->focus.overrideWindow;
-	if (window == override)
-		window = m_ctx->focus.focusWindow;
-
-	if (!window)
-		return;
-
-	auto barricade = [this](CursorBarrier& barrier, const CursorBarrierInfo& info) {
-		if (barrier.info.x1 == info.x1 && barrier.info.x2 == info.x2 &&
-			barrier.info.y1 == info.y1 && barrier.info.y2 == info.y2)
-			return;
-
-		if (barrier.obj != None)
-		{
-			XFixesDestroyPointerBarrier(m_ctx->dpy, barrier.obj);
-			barrier.obj = None;
-		}
-
-		barrier.obj = XFixesCreatePointerBarrier(m_ctx->dpy, DefaultRootWindow(m_ctx->dpy),
-										  info.x1, info.y1, info.x2, info.y2, 0, 0, NULL);
-		barrier.info = info;
-	};
-
-	int x1 = window->xwayland().a.x;
-	int y1 = window->xwayland().a.y;
-	if (override)
-	{
-		x1 = std::min(x1, override->xwayland().a.x);
-		y1 = std::min(y1, override->xwayland().a.y);
-	}
-	int x2 = window->xwayland().a.x + window->xwayland().a.width;
-	int y2 = window->xwayland().a.y + window->xwayland().a.height;
-	if (override)
-	{
-		x2 = std::max(x2, override->xwayland().a.x + override->xwayland().a.width);
-		y2 = std::max(y2, override->xwayland().a.y + override->xwayland().a.height);
-	}
-
-	// Constrain it to the window; careful, the corners will leak due to a known X server bug.
-	barricade(m_barriers[0], CursorBarrierInfo{ 0, y1, m_ctx->root_width, y1 });
-	barricade(m_barriers[1], CursorBarrierInfo{ x2, 0, x2, m_ctx->root_height });
-	barricade(m_barriers[2], CursorBarrierInfo{ m_ctx->root_width, y2, 0, y2 });
-	barricade(m_barriers[3], CursorBarrierInfo{ x1, m_ctx->root_height, x1, 0 });
-
-	// Make sure the cursor is somewhere in our jail
-	int rootX = m_x, rootY = m_y;
-
-	if ( rootX >= x2 || rootY >= y2 || rootX < x1 || rootY < y1 ) {
-		if ( window_wants_no_focus_when_mouse_hidden( window ) && wlserver.bCursorHidden )
-			warp(window->xwayland().a.width - 1, window->xwayland().a.height - 1);
-		else
-			warp(window->xwayland().a.width / 2, window->xwayland().a.height / 2);
-
-		m_lastX = window->xwayland().a.width / 2;
-		m_lastY = window->xwayland().a.height / 2;
-	}
 }
 
 int MouseCursor::x() const
@@ -1987,8 +1897,8 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	if ( m_imageEmpty || wlserver.bCursorHidden )
 		return;
 
-	int winX = wlserver.mouse_surface_cursorx;
-	int winY = wlserver.mouse_surface_cursory;
+	int winX = x();
+	int winY = y();
 
 	// Also need new texture
 	if (!getTexture()) {
@@ -3643,8 +3553,6 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 
 	w = ctx->focus.focusWindow;
 
-	ctx->cursor->constrainPosition();
-
 	if ( inputFocus == ctx->focus.focusWindow && ctx->focus.overrideWindow )
 	{
 		if ( ctx->list[0].xwayland().id != ctx->focus.overrideWindow->xwayland().id )
@@ -3700,13 +3608,16 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 		// do wlserver_mousefocus and need to update m_x and m_y of the cursor.
 		if ( bResetToCorner )
 		{
-			inputFocus->mouseMoved = 0;
-			ctx->cursor->forcePosition(inputFocus->xwayland().a.width - 1, inputFocus->xwayland().a.height - 1);
+			wlserver_lock();
+			wlserver_mousewarp( inputFocus->xwayland().a.width / 2, inputFocus->xwayland().a.height / 2, 0, true );
+			wlserver_fake_mouse_pos( inputFocus->xwayland().a.width - 1, inputFocus->xwayland().a.height - 1 );
+			wlserver_unlock();
 		}
 		else if ( bResetToCenter )
 		{
-			inputFocus->mouseMoved = 0;
-			ctx->cursor->forcePosition(inputFocus->xwayland().a.width / 2, inputFocus->xwayland().a.height / 2);
+			wlserver_lock();
+			wlserver_mousewarp( inputFocus->xwayland().a.width / 2, inputFocus->xwayland().a.height / 2, 0, true );
+			wlserver_unlock();
 		}
 	}
 
@@ -4012,14 +3923,12 @@ determine_and_apply_focus()
 	// the window is first clicked on despite it having focus.
 	if ( global_focus.inputFocusWindow && global_focus.inputFocusWindow->appID == 405900 )
 	{
-		global_focus.inputFocusWindow->mouseMoved = 0;
-		global_focus.inputFocusWindow->ignoreNextClickForVisibility = 2;
-
 		auto now = get_time_in_milliseconds();
 
 		wlserver_lock();
 		wlserver_touchdown( 0.5, 0.5, 0, now );
 		wlserver_touchup( 0, now + 1 );
+		wlserver_mousehide();
 		wlserver_unlock();
 	}
 
@@ -4542,8 +4451,6 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	new_win->requestedHeight = 0;
 	new_win->nudged = false;
 	new_win->ignoreOverrideRedirect = false;
-
-	new_win->mouseMoved = 0;
 
 	wlserver_x11_surface_info_init( &new_win->xwayland().surface, ctx->xwayland_server, id );
 
@@ -7862,6 +7769,12 @@ steamcompmgr_main(int argc, char **argv)
 		if ( is_fading_out() )
 			hasRepaint = true;
 
+		if ( vblank )
+		{
+			if ( global_focus.cursor )
+				global_focus.cursor->UpdatePosition();
+		}
+
 		static int nIgnoredOverlayRepaints = 0;
 
 		const bool bVRR = GetBackend()->IsVRRActive();
@@ -7928,7 +7841,6 @@ steamcompmgr_main(int argc, char **argv)
 
 		if (global_focus.cursor)
 		{
-			global_focus.cursor->constrainPosition();
 			global_focus.cursor->checkSuspension();
 
 			if (global_focus.cursor->needs_server_flush())

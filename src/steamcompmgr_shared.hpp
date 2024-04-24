@@ -120,7 +120,6 @@ struct steamcompmgr_win_t {
 	bool hasHwndStyle;
 	uint32_t hwndStyle;
 	bool hasHwndStyleEx;
-	int ignoreNextClickForVisibility;
 	uint32_t hwndStyleEx;
 
 	motif_hints_t *motif_hints;
@@ -130,8 +129,6 @@ struct steamcompmgr_win_t {
 
 	bool unlockedForFrameCallback;
 	bool receivedDoneCommit;
-
-	unsigned int mouseMoved;
 
 	std::vector< std::shared_ptr<commit_t> > commit_queue;
 	std::shared_ptr<std::vector< uint32_t >> icon;

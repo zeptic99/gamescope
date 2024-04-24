@@ -145,7 +145,7 @@ namespace gamescope
                 case EIS_EVENT_POINTER_MOTION_ABSOLUTE:
                 {
                     wlserver_lock();
-                    wlserver_mousewarp( eis_event_pointer_get_absolute_x( pEisEvent ), eis_event_pointer_get_absolute_y( pEisEvent ), ++s_uSequence );
+                    wlserver_mousewarp( eis_event_pointer_get_absolute_x( pEisEvent ), eis_event_pointer_get_absolute_y( pEisEvent ), ++s_uSequence, true );
                     wlserver_unlock();
                 }
                 break;

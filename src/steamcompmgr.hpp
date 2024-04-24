@@ -65,8 +65,6 @@ public:
 	int x() const;
 	int y() const;
 
-	void constrainPosition();
-
 	void paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, FrameInfo_t *frameInfo);
 	void setDirty();
 
@@ -82,15 +80,10 @@ public:
 		checkSuspension();
 	}
 
+	void UpdatePosition();
+
 	bool isHidden() { return wlserver.bCursorHidden || m_imageEmpty; }
 	bool imageEmpty() const { return m_imageEmpty; }
-
-	void forcePosition(int x, int y)
-	{
-		warp(x, y);
-		m_x = x;
-		m_y = y;
-	}
 
 	void undirty() { getTexture(); }
 
@@ -103,7 +96,6 @@ public:
 
 	void checkSuspension();
 private:
-	void warp(int x, int y);
 
 	bool getTexture();
 
@@ -116,12 +108,7 @@ private:
 	bool m_dirty;
 	bool m_imageEmpty;
 
-	CursorBarrier m_barriers[4] = {};
-
 	xwayland_ctx_t *m_ctx;
-
-	int m_lastX = 0;
-	int m_lastY = 0;
 
 	bool m_bCursorVisibleFeedback = false;
 	bool m_needs_server_flush = false;
