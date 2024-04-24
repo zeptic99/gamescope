@@ -40,6 +40,7 @@
 #include "vblankmanager.hpp"
 #include "wlserver.hpp"
 #include "refresh_rate.h"
+#include <sys/utsname.h>
 
 #include "wlr_begin.hpp"
 #include <libliftoff.h>
@@ -66,6 +67,27 @@ gamescope::ConVar<bool> cv_drm_debug_disable_explicit_sync( "drm_debug_disable_e
 
 namespace gamescope
 {
+	std::tuple<int32_t, int32_t, int32_t> GetKernelVersion()
+	{
+		utsname name;
+		if ( uname( &name ) != 0 )
+			return std::make_tuple( 0, 0, 0 );
+
+		std::vector<std::string_view> szVersionParts = Split( name.release, "." );
+
+		uint32_t uVersion[3] = { 0 };
+		for ( size_t i = 0; i < szVersionParts.size() && i < 3; i++ )
+		{
+			auto oPart = Parse<int32_t>( szVersionParts[i] );
+			if ( !oPart )
+				break;
+
+			uVersion[i] = *oPart;
+		}
+
+		return std::make_tuple( uVersion[0], uVersion[1], uVersion[2] );
+	}
+
 	// Get a DRM mode in mHz
 	// Taken from wlroots, but we can't access it as we don't
 	// use the drm backend.
@@ -3460,6 +3482,20 @@ namespace gamescope
 
 		virtual bool SupportsExplicitSync() const override
 		{
+#if __linux__
+			auto [nMajor, nMinor, nPatch] = GetKernelVersion();
+			
+			// Only expose support on 6.8+ for eventfd fixes.
+			if ( nMajor < 6 )
+				return false;
+
+			if ( nMajor == 6 && nMinor < 8 )
+				return false;
+#else
+			// I don't know about this for FreeBSD, etc.
+			return false;
+#endif
+
 			return g_bSupportsSyncObjs && !cv_drm_debug_disable_explicit_sync;
 		}
 

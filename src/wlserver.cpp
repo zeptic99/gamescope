@@ -1630,6 +1630,7 @@ bool wlserver_init( void ) {
 	{
 		int drm_fd = wlr_renderer_get_drm_fd( wlserver.wlr.renderer );
 		wlserver.wlr.drm_syncobj_manager_v1 = wlr_linux_drm_syncobj_manager_v1_create( wlserver.display, 1, drm_fd );
+		wl_log.infof( "Using explicit sync when available" );
 	}
 
 	wlserver.relative_pointer_manager = wlr_relative_pointer_manager_v1_create(wlserver.display);
