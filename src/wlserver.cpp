@@ -36,7 +36,9 @@
 #include <wlr/xwayland/server.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_linux_drm_syncobj_v1.h>
+#include <wlr/util/region.h>
 #include "wlr_end.hpp"
 
 #include "gamescope-xwayland-protocol.h"
@@ -1649,6 +1651,12 @@ bool wlserver_init( void ) {
 		wl_log.errorf( "Failed to create relative pointer manager" );
 		return false;
 	}
+	wlserver.constraints = wlr_pointer_constraints_v1_create(wlserver.display);
+	if ( !wlserver.constraints )
+	{
+		wl_log.errorf( "Failed to create pointer constraints" );
+		return false;
+	}
 
 	wlserver.xdg_shell = wlr_xdg_shell_create(wlserver.display, 3);
 	if (!wlserver.xdg_shell)
@@ -1921,26 +1929,28 @@ void wlserver_oncursorevent()
 	}
 }
 
+
 void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x /* = 0 */, int y /* = 0 */ )
 {
 	assert( wlserver_is_lock_held() );
 
 	wlserver.mouse_focus_surface = wlrsurface;
 
-	if ( x < wlrsurface->current.width && y < wlrsurface->current.height )
+	auto [nWidth, nHeight] = wlserver_get_surface_extent( wlrsurface );
+
+	if ( x < nWidth && y < nHeight )
 	{
 		wlserver.mouse_surface_cursorx = x;
 		wlserver.mouse_surface_cursory = y;
 	}
 	else
 	{
-		auto [nWidth, nHeight] = wlserver_get_surface_extent( wlrsurface );
 		wlserver.mouse_surface_cursorx = nWidth / 2.0;
 		wlserver.mouse_surface_cursory = nHeight / 2.0;
 	}
 
 	wlserver_oncursorevent();
-
+	wlr_seat_pointer_warp( wlserver.wlr.seat, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 	wlr_seat_pointer_notify_enter( wlserver.wlr.seat, wlrsurface, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
 }
 
@@ -1965,8 +1975,12 @@ void wlserver_mousemotion( double x, double y, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
 
-	wlserver.mouse_surface_cursorx += x;
-	wlserver.mouse_surface_cursory += y;
+	struct wlr_pointer_constraint_v1 *constraint = wlr_pointer_constraints_v1_constraint_for_surface(wlserver.constraints, wlserver.mouse_focus_surface, wlserver.wlr.seat);
+	if ( !constraint )
+	{
+		wlserver.mouse_surface_cursorx += x;
+		wlserver.mouse_surface_cursory += y;
+	}
 
 	wlserver_clampcursor();
 
@@ -1976,7 +1990,10 @@ void wlserver_mousemotion( double x, double y, uint32_t time )
 	wlserver_oncursorevent();
 
 	wlserver_perform_rel_pointer_motion( x, y );
-	wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+	if ( !constraint )
+	{
+		wlr_seat_pointer_notify_motion( wlserver.wlr.seat, time, wlserver.mouse_surface_cursorx, wlserver.mouse_surface_cursory );
+	}
 	wlr_seat_pointer_notify_frame( wlserver.wlr.seat );
 }
 

@@ -1391,6 +1391,8 @@ void MouseCursor::UpdatePosition()
 
 void MouseCursor::checkSuspension()
 {
+	getTexture();
+
 	const bool suspended = int64_t( get_time_in_nanos() ) - int64_t( wlserver.ulLastMovedCursorTime ) > int64_t( cursorHideTime );
 	if (!wlserver.bCursorHidden && suspended) {
 		wlserver.bCursorHidden = true;
@@ -3313,9 +3315,6 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 	if ( keyboardFocusWindow && ctx->currentKeyboardFocusWindow && find_win( ctx, ctx->currentKeyboardFocusWindow ) == keyboardFocusWin )
 		keyboardFocusWindow = ctx->currentKeyboardFocusWindow;
 
-	bool bResetToCorner = false;
-	bool bResetToCenter = false;
-
 	if ( ctx->focus.inputFocusWindow != inputFocus ||
 		ctx->focus.inputFocusMode != inputFocus->inputFocusMode ||
 		ctx->currentKeyboardFocusWindow != keyboardFocusWindow )
@@ -3337,9 +3336,9 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 			// (steam -> game)
 			// put us back in the centre of the screen.
 			if (window_wants_no_focus_when_mouse_hidden(inputFocus))
-				bResetToCorner = true;
+				ctx->focus.bResetToCorner = true;
 			else if ( window_wants_no_focus_when_mouse_hidden(inputFocus) != window_wants_no_focus_when_mouse_hidden(ctx->focus.inputFocusWindow) )
-				bResetToCenter = true;
+				ctx->focus.bResetToCenter = true;
 
 			// cursor is likely not interactable anymore in its original context, hide
 			// don't care if we change kb focus window due to that happening when
@@ -3400,25 +3399,6 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 			(unsigned)ctx->focus.focusWindow->xwayland().a.height != ctx->focus.focusWindow->requestedHeight))
 		{
 			XResizeWindow(ctx->dpy, ctx->focus.focusWindow->xwayland().id, ctx->focus.focusWindow->requestedWidth, ctx->focus.focusWindow->requestedHeight);
-		}
-	}
-
-	if ( inputFocus )
-	{
-		// Cannot simply XWarpPointer here as we immediately go on to
-		// do wlserver_mousefocus and need to update m_x and m_y of the cursor.
-		if ( bResetToCorner )
-		{
-			wlserver_lock();
-			wlserver_mousewarp( inputFocus->xwayland().a.width / 2, inputFocus->xwayland().a.height / 2, 0, true );
-			wlserver_fake_mouse_pos( inputFocus->xwayland().a.width - 1, inputFocus->xwayland().a.height - 1 );
-			wlserver_unlock();
-		}
-		else if ( bResetToCenter )
-		{
-			wlserver_lock();
-			wlserver_mousewarp( inputFocus->xwayland().a.width / 2, inputFocus->xwayland().a.height / 2, 0, true );
-			wlserver_unlock();
 		}
 	}
 
@@ -3606,6 +3586,28 @@ determine_and_apply_focus()
 		// going from override -> focus and we don't want to hide then as it's probably a dropdown.
 		if ( global_focus.cursor && global_focus.inputFocusWindow != previous_focus.inputFocusWindow )
 			global_focus.cursor->hide();
+	}
+
+	if ( global_focus.inputFocusWindow )
+	{
+		// Cannot simply XWarpPointer here as we immediately go on to
+		// do wlserver_mousefocus and need to update m_x and m_y of the cursor.
+		if ( global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCorner )
+		{
+			wlserver_lock();
+			wlserver_mousewarp( global_focus.inputFocusWindow->xwayland().a.width / 2, global_focus.inputFocusWindow->xwayland().a.height / 2, 0, true );
+			wlserver_fake_mouse_pos( global_focus.inputFocusWindow->xwayland().a.width - 1, global_focus.inputFocusWindow->xwayland().a.height - 1 );
+			wlserver_unlock();
+		}
+		else if ( global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCenter )
+		{
+			wlserver_lock();
+			wlserver_mousewarp( global_focus.inputFocusWindow->xwayland().a.width / 2, global_focus.inputFocusWindow->xwayland().a.height / 2, 0, true );
+			wlserver_unlock();
+		}
+
+		global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCorner = false;
+		global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCenter = false;
 	}
 
 	// Determine if we need to repaints
@@ -4503,7 +4505,7 @@ handle_wl_surface_id(xwayland_ctx_t *ctx, steamcompmgr_win_t *w, uint32_t surfac
 	// If we already focused on our side and are handling this late,
 	// let wayland know now.
 	if ( w == global_focus.inputFocusWindow )
-		wlserver_mousefocus( main_surface );
+		wlserver_mousefocus( main_surface, INT32_MAX, INT32_MAX );
 
 	steamcompmgr_win_t *keyboardFocusWindow = global_focus.inputFocusWindow;
 

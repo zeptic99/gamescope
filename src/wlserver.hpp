@@ -160,6 +160,7 @@ struct wlserver_t {
 
 	struct wlr_xdg_shell *xdg_shell;
 	struct wlr_relative_pointer_manager_v1 *relative_pointer_manager;
+	struct wlr_pointer_constraints_v1 *constraints;
 	struct wl_listener new_xdg_surface;
 	struct wl_listener new_xdg_toplevel;
 	std::vector<std::shared_ptr<steamcompmgr_win_t>> xdg_wins;
@@ -292,8 +293,6 @@ void wlserver_shutdown();
 void wlserver_send_gamescope_control( wl_resource *control );
 
 bool wlsession_active();
-
-void wlserver_mousewarp( double x, double y, uint32_t time, bool bSynthetic );
 
 void wlserver_fake_mouse_pos( double x, double y );
 

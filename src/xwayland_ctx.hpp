@@ -34,6 +34,8 @@ struct focus_t
 	steamcompmgr_win_t				*notificationWindow;
 	steamcompmgr_win_t				*overrideWindow;
 	bool			outdatedInteractiveFocus;
+	bool			bResetToCorner = false;
+	bool			bResetToCenter = false;
 };
 
 struct CommitDoneEntry_t
