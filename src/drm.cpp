@@ -1565,6 +1565,7 @@ struct LiftoffStateCacheEntry
 		uint32_t zpos;
 		uint32_t srcW, srcH;
 		uint32_t crtcX, crtcY, crtcW, crtcH;
+		uint16_t opacity;
 		drm_color_encoding colorEncoding;
 		drm_color_range    colorRange;
 		GamescopeAppTextureColorspace colorspace;
@@ -1592,6 +1593,7 @@ struct LiftoffStateCacheEntryKasher
 			hash_combine(hash, k.layerState[i].crtcY);
 			hash_combine(hash, k.layerState[i].crtcW);
 			hash_combine(hash, k.layerState[i].crtcH);
+			hash_combine(hash, k.layerState[i].opacity);
 			hash_combine(hash, k.layerState[i].colorEncoding);
 			hash_combine(hash, k.layerState[i].colorRange);
 			hash_combine(hash, k.layerState[i].colorspace);
@@ -1728,6 +1730,7 @@ LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( struct drm_t *drm, con
 		entry.layerState[i].crtcY = crtcY;
 		entry.layerState[i].crtcW = crtcW;
 		entry.layerState[i].crtcH = crtcH;
+		entry.layerState[i].opacity = frameInfo->layers[i].opacity * 0xffff;
 		entry.layerState[i].ycbcr = frameInfo->layers[i].isYcbcr();
 		if ( entry.layerState[i].ycbcr )
 		{
