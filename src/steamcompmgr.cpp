@@ -90,6 +90,7 @@
 #include "hdmi.h"
 #include "convar.h"
 #include "refresh_rate.h"
+#include "commit.h"
 
 #if HAVE_AVIF
 #include "avif/avif.h"
@@ -683,179 +684,7 @@ struct ignore {
 	unsigned long	sequence;
 };
 
-struct commit_t;
-
-gamescope::CAsyncWaiter<std::shared_ptr<commit_t>> g_ImageWaiter{ "gamescope_img" };
-
-struct commit_t : public gamescope::IWaitable
-{
-	commit_t()
-	{
-		static uint64_t maxCommmitID = 0;
-		commitID = ++maxCommmitID;
-	}
-    ~commit_t()
-    {
-		{
-			std::unique_lock lock( m_WaitableCommitStateMutex );
-			CloseFenceInternal();
-		}
-
-        if ( pBackendFb != nullptr )
-			pBackendFb = nullptr;
-
-		wlserver_lock();
-		if (!presentation_feedbacks.empty())
-		{
-			wlserver_presentation_feedback_discard(surf, presentation_feedbacks);
-			// presentation_feedbacks cleared by wlserver_presentation_feedback_discard
-		}
-		wlr_buffer_unlock( buf );
-		if ( m_oReleasePoint )
-			m_oReleasePoint->Release();
-		wlserver_unlock();
-    }
-
-	GamescopeAppTextureColorspace colorspace() const
-	{
-		VkColorSpaceKHR colorspace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-		if (feedback && vulkanTex)
-			colorspace = feedback->vk_colorspace;
-
-		if (!vulkanTex)
-			return GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
-
-		return VkColorSpaceToGamescopeAppTextureColorSpace(vulkanTex->format(), colorspace);
-	}
-
-	struct wlr_buffer *buf = nullptr;
-	gamescope::Rc<gamescope::IBackendFb> pBackendFb;
-	std::shared_ptr<CVulkanTexture> vulkanTex;
-	uint64_t commitID = 0;
-	bool done = false;
-	bool async = false;
-	bool fifo = false;
-	bool is_steam = false;
-	std::optional<wlserver_vk_swapchain_feedback> feedback = std::nullopt;
-
-	uint64_t win_seq = 0;
-	struct wlr_surface *surf = nullptr;
-	std::vector<struct wl_resource*> presentation_feedbacks;
-
-	std::optional<uint32_t> present_id = std::nullopt;
-	uint64_t desired_present_time = 0;
-	uint64_t earliest_present_time = 0;
-	uint64_t present_margin = 0;
-
-	// For waitable:
-	int GetFD() final
-	{
-		return m_nCommitFence;
-	}
-
-	void OnPollIn() final
-	{
-		gpuvis_trace_end_ctx_printf( commitID, "wait fence" );
-
-		{
-			std::unique_lock lock( m_WaitableCommitStateMutex );
-			if ( !CloseFenceInternal() )
-				return;
-		}
-
-		Signal();
-
-		nudge_steamcompmgr();
-	}
-
-	void Signal()
-	{
-		uint64_t frametime;
-		if ( m_bMangoNudge )
-		{
-			uint64_t now = get_time_in_nanos();
-			static uint64_t lastFrameTime = now;
-			frametime = now - lastFrameTime;
-			lastFrameTime = now;
-		}
-
-		// TODO: Move this so it's called in the main loop.
-		// Instead of looping over all the windows like before.
-		// When we get the new IWaitable stuff in there.
-		{
-			std::unique_lock< std::mutex > lock( m_pDoneCommits->listCommitsDoneLock );
-			m_pDoneCommits->listCommitsDone.push_back( CommitDoneEntry_t{
-				.winSeq = win_seq,
-				.commitID = commitID,
-				.desiredPresentTime = desired_present_time,
-				.fifo = fifo,
-			} );
-		}
-
-		if ( m_bMangoNudge )
-			mangoapp_update( IsPerfOverlayFIFO() ? uint64_t(~0ull) : frametime, frametime, uint64_t(~0ull) );
-	}
-
-	void OnPollHangUp() final
-	{
-		std::unique_lock lock( m_WaitableCommitStateMutex );
-		CloseFenceInternal();
-	}
-
-	bool IsPerfOverlayFIFO()
-	{
-		return fifo || is_steam;
-	}
-
-	// Returns true if we had a fence that was closed.
-	bool CloseFenceInternal()
-	{
-		if ( m_nCommitFence < 0 )
-			return false;
-
-		// Will automatically remove from epoll!
-		g_ImageWaiter.RemoveWaitable( this );
-		close( m_nCommitFence );
-		m_nCommitFence = -1;
-		return true;
-	}
-
-	void SetFence( int nFence, bool bMangoNudge, CommitDoneList_t *pDoneCommits )
-	{
-		std::unique_lock lock( m_WaitableCommitStateMutex );
-		CloseFenceInternal();
-
-		m_nCommitFence = nFence;
-		m_bMangoNudge = bMangoNudge;
-		m_pDoneCommits = pDoneCommits;
-	}
-
-	void SetReleasePoint( const std::optional<GamescopeTimelinePoint>& oReleasePoint )
-	{
-		m_oReleasePoint = oReleasePoint;
-	}
-
-	std::mutex m_WaitableCommitStateMutex;
-	int m_nCommitFence = -1;
-	bool m_bMangoNudge = false;
-	CommitDoneList_t *m_pDoneCommits = nullptr; // I hate this
-	std::optional<GamescopeTimelinePoint> m_oReleasePoint;
-};
-
-static inline void GarbageCollectWaitableCommit( std::shared_ptr<commit_t> &commit )
-{
-	std::unique_lock lock( commit->m_WaitableCommitStateMutex );
-
-	// This case is basically never ever hit.
-	// But we should handle it just in case.
-	// I have not seen it ever trigger even in extensive
-	// stress testing.
-	if ( commit->m_nCommitFence >= 0 )
-	{
-		g_ImageWaiter.GCWaitable( commit, commit.get() );
-		commit->CloseFenceInternal();
-	}
-}
+gamescope::CAsyncWaiter<gamescope::Rc<commit_t>> g_ImageWaiter{ "gamescope_img" };
 
 gamescope::CWaiter g_SteamCompMgrWaiter;
 
@@ -1059,7 +888,7 @@ enum HeldCommitTypes_t
 	HELD_COMMIT_COUNT,
 };
 
-std::array<std::shared_ptr<commit_t>, HELD_COMMIT_COUNT> g_HeldCommits;
+std::array<gamescope::Rc<commit_t>, HELD_COMMIT_COUNT> g_HeldCommits;
 bool g_bPendingFade = false;
 
 /* opacity property name; sometime soon I'll write up an EWMH spec for it */
@@ -1385,10 +1214,10 @@ destroy_buffer( struct wl_listener *listener, void * )
 	wlr_buffer_map.erase( wlr_buffer_map.find( entry->buf ) );
 }
 
-static std::shared_ptr<commit_t>
+static gamescope::Rc<commit_t>
 import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback, std::vector<struct wl_resource*> presentation_feedbacks, std::optional<uint32_t> present_id, uint64_t desired_present_time, bool fifo )
 {
-	std::shared_ptr<commit_t> commit = std::make_shared<commit_t>();
+	gamescope::Rc<commit_t> commit = new commit_t;
 	std::unique_lock<std::mutex> lock( wlr_buffer_map_lock );
 
 	commit->win_seq = w->seq;
@@ -1485,7 +1314,7 @@ window_has_commits( steamcompmgr_win_t *w )
 }
 
 static void
-get_window_last_done_commit( steamcompmgr_win_t *w, std::shared_ptr<commit_t> &commit )
+get_window_last_done_commit( steamcompmgr_win_t *w, gamescope::Rc<commit_t> &commit )
 {
 	int32_t lastCommit = window_last_done_commit_id( w );
 
@@ -2003,7 +1832,7 @@ struct BaseLayerInfo_t
 std::array< BaseLayerInfo_t, HELD_COMMIT_COUNT > g_CachedPlanes = {};
 
 static void
-paint_cached_base_layer(const std::shared_ptr<commit_t>& commit, const BaseLayerInfo_t& base, struct FrameInfo_t *frameInfo, float flOpacityScale)
+paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerInfo_t& base, struct FrameInfo_t *frameInfo, float flOpacityScale)
 {
 	int curLayer = frameInfo->layerCount++;
 
@@ -2038,7 +1867,7 @@ using PaintWindowFlags = uint32_t;
 
 wlserver_vk_swapchain_feedback* steamcompmgr_get_base_layer_swapchain_feedback()
 {
-	if ( !g_HeldCommits[ HELD_COMMIT_BASE ] )
+	if ( g_HeldCommits[ HELD_COMMIT_BASE ] == nullptr )
 		return nullptr;
 
 	if ( !g_HeldCommits[ HELD_COMMIT_BASE ]->feedback )
@@ -2055,17 +1884,17 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	int drawXOffset = 0, drawYOffset = 0;
 	float currentScaleRatio_x = 1.0;
 	float currentScaleRatio_y = 1.0;
-	std::shared_ptr<commit_t> lastCommit;
+	gamescope::Rc<commit_t> lastCommit;
 	if ( w )
 		get_window_last_done_commit( w, lastCommit );
 
 	if ( flags & PaintWindowFlag::BasePlane )
 	{
-		if ( !lastCommit )
+		if ( lastCommit == nullptr )
 		{
 			// If we're the base plane and have no valid contents
 			// pick up that buffer we've been holding onto if we have one.
-			if ( g_HeldCommits[ HELD_COMMIT_BASE ] )
+			if ( g_HeldCommits[ HELD_COMMIT_BASE ] != nullptr )
 			{
 				paint_cached_base_layer( g_HeldCommits[ HELD_COMMIT_BASE ], g_CachedPlanes[ HELD_COMMIT_BASE ], frameInfo, flOpacityScale );
 				return;
@@ -2090,7 +1919,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	// first ever frame so we have no cached base layer
 	// to hold on to, so we should not add a layer in that
 	// instance either.
-	if (!w || !lastCommit)
+	if (!w || lastCommit == nullptr)
 		return;
 
 	// Base plane will stay as tex=0 if we don't have contents yet, which will
@@ -2291,7 +2120,7 @@ paint_all(bool async)
 	steamcompmgr_win_t *input;
 
 	unsigned int currentTime = get_time_in_milliseconds();
-	bool fadingOut = ( currentTime - fadeOutStartTime < g_FadeOutDuration || g_bPendingFade ) && g_HeldCommits[HELD_COMMIT_FADE];
+	bool fadingOut = ( currentTime - fadeOutStartTime < g_FadeOutDuration || g_bPendingFade ) && g_HeldCommits[HELD_COMMIT_FADE] != nullptr;
 
 	w = global_focus.focusWindow;
 	overlay = global_focus.overlayWindow;
@@ -2375,7 +2204,7 @@ paint_all(bool async)
 			else
 			{
 				{
-					if ( g_HeldCommits[HELD_COMMIT_FADE] )
+					if ( g_HeldCommits[HELD_COMMIT_FADE] != nullptr )
 					{
 						g_HeldCommits[HELD_COMMIT_FADE] = nullptr;
 						g_bPendingFade = false;
@@ -2395,7 +2224,7 @@ paint_all(bool async)
 	}
 	else
 	{
-		if ( g_HeldCommits[HELD_COMMIT_BASE] )
+		if ( g_HeldCommits[HELD_COMMIT_BASE] != nullptr )
 			paint_cached_base_layer(g_HeldCommits[HELD_COMMIT_BASE], g_CachedPlanes[HELD_COMMIT_BASE], &frameInfo, 1.0f);
 	}
 
@@ -3876,7 +3705,7 @@ determine_and_apply_focus()
 	{
 		if ( g_FadeOutDuration != 0 && !g_bFirstFrame )
 		{
-			if ( !g_HeldCommits[ HELD_COMMIT_FADE ] )
+			if ( g_HeldCommits[ HELD_COMMIT_FADE ] == nullptr )
 			{
 				global_focus.fadeWindow = previous_focus.focusWindow;
 				g_HeldCommits[ HELD_COMMIT_FADE ] = g_HeldCommits[ HELD_COMMIT_BASE ];
@@ -4591,9 +4420,6 @@ finish_destroy_win(xwayland_ctx_t *ctx, Window id, bool gone)
 
 			if (gone)
 			{
-				// Manually GC this here to avoid bubbles on close/RemoveWaitable
-				for ( auto& commit : w->commit_queue )
-					GarbageCollectWaitableCommit( commit );
 				// release all commits now we are closed.
                 w->commit_queue.clear();
 			}
@@ -6132,13 +5958,7 @@ bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t co
 	if ( bFoundWindow == true )
 	{
 		if ( j > 0 )
-		{
-			// we can release all commits prior to done ones
-			// GC to be safe
-			for ( auto it = w->commit_queue.begin(); it != w->commit_queue.begin() + j; it++ )
-				GarbageCollectWaitableCommit( *it );
 			w->commit_queue.erase( w->commit_queue.begin(), w->commit_queue.begin() + j );
-		}
 		w->receivedDoneCommit = true;
 		return true;
 	}
@@ -6368,10 +6188,10 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		return;
 	}
 
-	std::shared_ptr<commit_t> newCommit = import_commit( w, reslistentry.surf, buf, reslistentry.async, std::move(reslistentry.feedback), std::move(reslistentry.presentation_feedbacks), reslistentry.present_id, reslistentry.desired_present_time, reslistentry.fifo );
+	gamescope::Rc<commit_t> newCommit = import_commit( w, reslistentry.surf, buf, reslistentry.async, std::move(reslistentry.feedback), std::move(reslistentry.presentation_feedbacks), reslistentry.present_id, reslistentry.desired_present_time, reslistentry.fifo );
 
 	int fence = -1;
-	if ( newCommit )
+	if ( newCommit != nullptr )
 	{
 		// Whether or not to nudge mango app when this commit is done.
 		const bool mango_nudge = ( w == global_focus.focusWindow && !w->isSteamStreamingClient ) ||
@@ -7699,7 +7519,7 @@ steamcompmgr_main(int argc, char **argv)
 		{
 			GamescopeAppTextureColorspace current_app_colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 			std::shared_ptr<gamescope::BackendBlob> app_hdr_metadata = nullptr;
-			if ( g_HeldCommits[HELD_COMMIT_BASE] )
+			if ( g_HeldCommits[HELD_COMMIT_BASE] != nullptr )
 			{
 				current_app_colorspace = g_HeldCommits[HELD_COMMIT_BASE]->colorspace();
 				if (g_HeldCommits[HELD_COMMIT_BASE]->feedback)
@@ -7787,7 +7607,7 @@ steamcompmgr_main(int argc, char **argv)
 
 		const bool bSteamOverlayOpen  = global_focus.overlayWindow && global_focus.overlayWindow->opacity;
 		// If we are running behind, allow tearing.
-		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] && g_HeldCommits[HELD_COMMIT_BASE]->async);
+		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] != nullptr && g_HeldCommits[HELD_COMMIT_BASE]->async);
 
 		const bool bForceRepaint = g_bForceRepaint.exchange(false);
 		const bool bForceSyncFlip = bForceRepaint || is_fading_out();

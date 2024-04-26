@@ -54,6 +54,7 @@
 #include "xwayland_ctx.hpp"
 #include "refresh_rate.h"
 #include "InputEmulation.h"
+#include "commit.h"
 
 #if HAVE_PIPEWIRE
 #include "pipewire.hpp"

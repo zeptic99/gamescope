@@ -95,6 +95,7 @@ required_wlroots_features = ['xwayland']
 src = [
   'steamcompmgr.cpp',
   'convar.cpp',
+  'commit.cpp',
   'color_helpers.cpp',
   'main.cpp',
   'edid.cpp',

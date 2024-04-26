@@ -130,7 +130,7 @@ struct steamcompmgr_win_t {
 	bool unlockedForFrameCallback;
 	bool receivedDoneCommit;
 
-	std::vector< std::shared_ptr<commit_t> > commit_queue;
+	std::vector< gamescope::Rc<commit_t> > commit_queue;
 	std::shared_ptr<std::vector< uint32_t >> icon;
 
 	steamcompmgr_win_type_t		type;
