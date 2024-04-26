@@ -1794,7 +1794,7 @@ struct BaseLayerInfo_t
 std::array< BaseLayerInfo_t, HELD_COMMIT_COUNT > g_CachedPlanes = {};
 
 static void
-paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerInfo_t& base, struct FrameInfo_t *frameInfo, float flOpacityScale)
+paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerInfo_t& base, struct FrameInfo_t *frameInfo, float flOpacityScale, bool bOverrideOpacity )
 {
 	int curLayer = frameInfo->layerCount++;
 
@@ -1804,7 +1804,7 @@ paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerIn
 	layer->scale.y = base.scale[1];
 	layer->offset.x = base.offset[0];
 	layer->offset.y = base.offset[1];
-	layer->opacity = base.opacity * flOpacityScale;
+	layer->opacity = bOverrideOpacity ? flOpacityScale : base.opacity * flOpacityScale;
 
 	layer->colorspace = commit->colorspace();
 	layer->ctm = nullptr;
@@ -1858,7 +1858,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 			// pick up that buffer we've been holding onto if we have one.
 			if ( g_HeldCommits[ HELD_COMMIT_BASE ] != nullptr )
 			{
-				paint_cached_base_layer( g_HeldCommits[ HELD_COMMIT_BASE ], g_CachedPlanes[ HELD_COMMIT_BASE ], frameInfo, flOpacityScale );
+				paint_cached_base_layer( g_HeldCommits[ HELD_COMMIT_BASE ], g_CachedPlanes[ HELD_COMMIT_BASE ], frameInfo, flOpacityScale, true );
 				return;
 			}
 		}
@@ -2160,7 +2160,7 @@ paint_all(bool async)
 					? 0.0f
 					: ((currentTime - fadeOutStartTime) / (float)g_FadeOutDuration);
 		
-				paint_cached_base_layer(g_HeldCommits[HELD_COMMIT_FADE], g_CachedPlanes[HELD_COMMIT_FADE], &frameInfo, 1.0f - opacityScale);
+				paint_cached_base_layer(g_HeldCommits[HELD_COMMIT_FADE], g_CachedPlanes[HELD_COMMIT_FADE], &frameInfo, 1.0f - opacityScale, false);
 				paint_window(w, w, &frameInfo, global_focus.cursor, PaintWindowFlag::BasePlane | PaintWindowFlag::FadeTarget | PaintWindowFlag::DrawBorders, opacityScale, override);
 			}
 			else
@@ -2187,7 +2187,17 @@ paint_all(bool async)
 	else
 	{
 		if ( g_HeldCommits[HELD_COMMIT_BASE] != nullptr )
-			paint_cached_base_layer(g_HeldCommits[HELD_COMMIT_BASE], g_CachedPlanes[HELD_COMMIT_BASE], &frameInfo, 1.0f);
+		{
+			float opacityScale = 1.0f;
+			if ( fadingOut )
+			{
+				opacityScale = g_bPendingFade
+					? 0.0f
+					: ((currentTime - fadeOutStartTime) / (float)g_FadeOutDuration);
+			}
+
+			paint_cached_base_layer( g_HeldCommits[HELD_COMMIT_BASE], g_CachedPlanes[HELD_COMMIT_BASE], &frameInfo, opacityScale, true );
+		}
 	}
 
 	// TODO: We want to paint this at the same scale as the normal window and probably
@@ -3663,7 +3673,7 @@ determine_and_apply_focus()
 	XFlush( root_ctx->dpy );
 
 	// Sort out fading.
-	if (previous_focus.focusWindow != global_focus.focusWindow)
+	if (global_focus.focusWindow && previous_focus.focusWindow != global_focus.focusWindow)
 	{
 		if ( g_FadeOutDuration != 0 && !g_bFirstFrame )
 		{
