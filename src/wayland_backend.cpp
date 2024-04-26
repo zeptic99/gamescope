@@ -693,8 +693,8 @@ namespace gamescope
 
         if ( m_bCompositorAcquired )
         {
-            DecRef();
             m_bCompositorAcquired = false;
+            DecRef();
         }
         else
         {
