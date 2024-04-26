@@ -1089,43 +1089,6 @@ get_time_in_milliseconds(void)
 	return (unsigned int)(get_time_in_nanos() / 1'000'000ul);
 }
 
-static void
-discard_ignore(xwayland_ctx_t *ctx, unsigned long sequence)
-{
-	while (ctx->ignore_head)
-	{
-		if ((long) (sequence - ctx->ignore_head->sequence) > 0)
-		{
-			ignore  *next = ctx->ignore_head->next;
-			free(ctx->ignore_head);
-			ctx->ignore_head = next;
-			if (!ctx->ignore_head)
-				ctx->ignore_tail = &ctx->ignore_head;
-		}
-		else
-			break;
-	}
-}
-
-static void
-set_ignore(xwayland_ctx_t *ctx, unsigned long sequence)
-{
-	ignore  *i = (ignore *)malloc(sizeof(ignore));
-	if (!i)
-		return;
-	i->sequence = sequence;
-	i->next = NULL;
-	*ctx->ignore_tail = i;
-	ctx->ignore_tail = &i->next;
-}
-
-static int
-should_ignore(xwayland_ctx_t *ctx, unsigned long sequence)
-{
-	discard_ignore(ctx, sequence);
-	return ctx->ignore_head && ctx->ignore_head->sequence == sequence;
-}
-
 bool xwayland_ctx_t::HasQueuedEvents()
 {
 	// If mode is QueuedAlready, XEventsQueued() returns the number of
@@ -1159,7 +1122,6 @@ find_win(xwayland_ctx_t *ctx, Window id, bool find_children = true)
 	Window parent = None;
 	Window *children = NULL;
 	unsigned int childrenCount;
-	set_ignore(ctx, NextRequest(ctx->dpy));
 	XQueryTree(ctx->dpy, id, &root, &parent, &children, &childrenCount);
 	if (children)
 		XFree(children);
@@ -4041,7 +4003,6 @@ finish_unmap_win(xwayland_ctx_t *ctx, steamcompmgr_win_t *w)
 	// TODO clear done commits here?
 
 	/* don't care about properties anymore */
-	set_ignore(ctx, NextRequest(ctx->dpy));
 	XSelectInput(ctx->dpy, w->xwayland().id, 0);
 
 	ctx->clipChanged = true;
@@ -4197,7 +4158,6 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	else
 		p = &ctx->list;
 	new_win->xwayland().id = id;
-	set_ignore(ctx, NextRequest(ctx->dpy));
 	if (!XGetWindowAttributes(ctx->dpy, id, &new_win->xwayland().a))
 	{
 		delete new_win;
@@ -4211,7 +4171,6 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 		new_win->xwayland().damage = None;
 	else
 	{
-		set_ignore(ctx, NextRequest(ctx->dpy));
 		new_win->xwayland().damage = XDamageCreate(ctx->dpy, id, XDamageReportRawRectangles);
 	}
 	new_win->opacity = OPAQUE;
@@ -4283,8 +4242,11 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 
 	wlserver_x11_surface_info_init( &new_win->xwayland().surface, ctx->xwayland_server, id );
 
-	new_win->xwayland().next = *p;
-	*p = new_win;
+	{
+		std::unique_lock lock( ctx->list_mutex );
+		new_win->xwayland().next = *p;
+		*p = new_win;
+	}
 	if (new_win->xwayland().a.map_state == IsViewable)
 		map_win(ctx, id, sequence);
 
@@ -4302,6 +4264,8 @@ restack_win(xwayland_ctx_t *ctx, steamcompmgr_win_t *w, Window new_above)
 		old_above = None;
 	if (old_above != new_above)
 	{
+		std::unique_lock lock( ctx->list_mutex );
+
 		steamcompmgr_win_t **prev;
 
 		/* unhook */
@@ -4318,9 +4282,9 @@ restack_win(xwayland_ctx_t *ctx, steamcompmgr_win_t *w, Window new_above)
 			if ((*prev)->xwayland().id == new_above)
 				break;
 		}
+
 		w->xwayland().next = *prev;
 		*prev = w;
-
 		focusDirty = true;
 	}
 }
@@ -4410,10 +4374,13 @@ finish_destroy_win(xwayland_ctx_t *ctx, Window id, bool gone)
 		{
 			if (gone)
 				finish_unmap_win (ctx, w);
-			*prev = w->xwayland().next;
+			
+			{
+				std::unique_lock lock( ctx->list_mutex );
+				*prev = w->xwayland().next;
+			}
 			if (w->xwayland().damage != None)
 			{
-				set_ignore(ctx, NextRequest(ctx->dpy));
 				XDamageDestroy(ctx->dpy, w->xwayland().damage);
 				w->xwayland().damage = None;
 			}
@@ -4499,7 +4466,6 @@ damage_win(xwayland_ctx_t *ctx, XDamageNotifyEvent *de)
 	// they do here and they just seem to ignore it.
 	if (w->xwayland().damage)
 	{
-		set_ignore(ctx, NextRequest(ctx->dpy));
 		XDamageSubtract(ctx->dpy, w->xwayland().damage, None, None);
 	}
 
@@ -5685,71 +5651,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 static int
 error(Display *dpy, XErrorEvent *ev)
 {
-	xwayland_ctx_t *ctx = NULL;
-	// Find ctx for dpy
-	{
-		gamescope_xwayland_server_t *server = NULL;
-		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
-		{
-			if (server->ctx->dpy == dpy)
-			{
-				ctx = server->ctx.get();
-				break;
-			}
-		}
-	}
-	if ( !ctx )
-	{
-		// Not for us!
-		return 0;
-	}
-	int	    o;
-	const char    *name = NULL;
-	static char buffer[256];
-
-	if (should_ignore(ctx, ev->serial))
-		return 0;
-
-	if (ev->request_code == ctx->composite_opcode &&
-		ev->minor_code == X_CompositeRedirectSubwindows)
-	{
-		xwm_log.errorf("Another composite manager is already running");
-		exit(1);
-	}
-
-	o = ev->error_code - ctx->xfixes_error;
-	switch (o) {
-		case BadRegion: name = "BadRegion";	break;
-		default: break;
-	}
-	o = ev->error_code - ctx->damage_error;
-	switch (o) {
-		case BadDamage: name = "BadDamage";	break;
-		default: break;
-	}
-	o = ev->error_code - ctx->render_error;
-	switch (o) {
-		case BadPictFormat: name ="BadPictFormat"; break;
-		case BadPicture: name ="BadPicture"; break;
-		case BadPictOp: name ="BadPictOp"; break;
-		case BadGlyphSet: name ="BadGlyphSet"; break;
-		case BadGlyph: name ="BadGlyph"; break;
-		default: break;
-	}
-
-	if (name == NULL)
-	{
-		buffer[0] = '\0';
-		XGetErrorText(ctx->dpy, ev->error_code, buffer, sizeof(buffer));
-		name = buffer;
-	}
-
-	xwm_log.errorf("error %d: %s request %d minor %d serial %lu",
-			 ev->error_code, (strlen(name) > 0) ? name : "unknown",
-			 ev->request_code, ev->minor_code, ev->serial);
-
-	gotXError = true;
-	/*    abort();	    this is just annoying to most people */
+	// Do nothing. XErrors are usually benign.
 	return 0;
 }
 
@@ -6454,8 +6356,6 @@ void xwayland_ctx_t::Dispatch()
 			xwm_log.errorf("XNextEvent failed");
 			break;
 		}
-		if ((ev.type & 0x7f) != KeymapNotify)
-			discard_ignore(ctx, ev.xany.serial);
 		if (debugEvents)
 		{
 			gpuvis_trace_printf("event %d", ev.type);
@@ -6644,7 +6544,6 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	assert(!xwayland_server->ctx);
 	xwayland_server->ctx = std::make_unique<xwayland_ctx_t>();
 	xwayland_ctx_t *ctx = xwayland_server->ctx.get();
-	ctx->ignore_tail = &ctx->ignore_head;
 
 	int	composite_major, composite_minor;
 	int	xres_major, xres_minor;
@@ -7731,7 +7630,8 @@ struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xw
 	// and go back to it's top-level parent.
 	// The xwayland bypass layer does this as we can have child windows
 	// that cover the whole parent.
-	steamcompmgr_win_t *w = find_win( xwayland_server->ctx.get(), xid, true );
+	std::unique_lock lock( xwayland_server->ctx->list_mutex );
+	steamcompmgr_win_t *w = find_win( xwayland_server->ctx.get(), xid, false );
 	if ( !w )
 		return nullptr;
 
