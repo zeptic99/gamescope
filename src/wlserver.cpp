@@ -1573,9 +1573,11 @@ void xdg_surface_new(struct wl_listener *listener, void *data)
 	}
 }
 
+#if HAVE_LIBEIS
 static gamescope::CAsyncWaiter g_LibEisWaiter( "gamescope-eis" );
 // TODO: Move me into some ownership of eg. wlserver.
 static std::unique_ptr<gamescope::GamescopeInputServer> g_InputServer;
+#endif
 
 bool wlserver_init( void ) {
 	assert( wlserver.display != nullptr );
@@ -1822,7 +1824,9 @@ void wlserver_run(void)
 		wlserver.xdg_wins.clear();
 	}
 
+#if HAVE_LIBEIS
 	g_InputServer = nullptr;
+#endif
 
 	// Released when steamcompmgr closes.
 	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
