@@ -7643,7 +7643,7 @@ struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xw
 	// The xwayland bypass layer does this as we can have child windows
 	// that cover the whole parent.
 	std::unique_lock lock( xwayland_server->ctx->list_mutex );
-	steamcompmgr_win_t *w = find_win( xwayland_server->ctx.get(), xid, false );
+	steamcompmgr_win_t *w = find_win( xwayland_server->ctx.get(), xid, true );
 	if ( !w )
 		return nullptr;
 
