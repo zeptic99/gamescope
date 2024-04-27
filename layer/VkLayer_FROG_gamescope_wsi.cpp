@@ -102,7 +102,11 @@ namespace GamescopeWSILayer {
     if (appid == 1600780)
       flags |= GamescopeLayerClient::Flag::DisableHDR;
 
-    if (pApplicationInfo && pApplicationInfo->pEngineName) {
+    const char *frameLimiterAwareEnv = getenv("GAMESCOPE_WSI_FRAME_LIMITER_AWARE");
+    if (frameLimiterAwareEnv && *frameLimiterAwareEnv) {
+      if (atoi(frameLimiterAwareEnv) != 0)
+        flags |= GamescopeLayerClient::Flag::FrameLimiterAware;
+    } else if (pApplicationInfo && pApplicationInfo->pEngineName) {
       // This matches regular vkd3d, not just vkd3d-proton as well...
       // Oh well... /shrug.
       if ((pApplicationInfo->pEngineName == "vkd3d"sv && pApplicationInfo->engineVersion >= VK_MAKE_VERSION(2, 12, 0)) ||
