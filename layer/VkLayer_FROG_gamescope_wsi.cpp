@@ -870,8 +870,6 @@ namespace GamescopeWSILayer {
 
       VkSwapchainCreateInfoKHR swapchainInfo = *pCreateInfo;
 
-      const bool forceFifo = gamescopeIsForcingFifo();
-      const bool frameLimiterAware = gamescopeSurface->frameLimiterAware();
       const bool canBypass = gamescopeSurface->canBypassXWayland();
       // If we can't flip, fallback to the regular XCB surface on the XCB window.
       if (!canBypass)
@@ -882,28 +880,20 @@ namespace GamescopeWSILayer {
       vkroots::ChainPatcher<VkSwapchainPresentModesCreateInfoEXT>
         presentModePatcher(&swapchainInfo, [&](VkSwapchainPresentModesCreateInfoEXT *pPresentModesCreateInfo)
       {
-        if (!frameLimiterAware) {
-          static constexpr std::array<VkPresentModeKHR, 2> s_PossibleModes = {{
-            VK_PRESENT_MODE_FIFO_KHR,
-            VK_PRESENT_MODE_MAILBOX_KHR,
-          }};
-          pPresentModesCreateInfo->presentModeCount = uint32_t(s_PossibleModes.size());
-          pPresentModesCreateInfo->pPresentModes    = s_PossibleModes.data();
-        } else {
-          static constexpr std::array<VkPresentModeKHR, 1> s_FifoModes = {{
-            VK_PRESENT_MODE_FIFO_KHR,
-          }};
-          static constexpr std::array<VkPresentModeKHR, 1> s_NonFifoModes = {{
-            VK_PRESENT_MODE_MAILBOX_KHR,
-          }};
-          pPresentModesCreateInfo->presentModeCount = forceFifo ? uint32_t(s_FifoModes.size()) : uint32_t(s_NonFifoModes.size());
-          pPresentModesCreateInfo->pPresentModes    = forceFifo ? s_FifoModes.data() : s_NonFifoModes.data();
-        }
+        // Always send MAILBOX as the mode to the driver, as we implement FIFO ourselves -- using the
+        // Gamescope swapchain protocol.
+        static constexpr std::array<VkPresentModeKHR, 1> s_MailboxMode = {{
+          VK_PRESENT_MODE_MAILBOX_KHR,
+        }};
+        pPresentModesCreateInfo->presentModeCount = uint32_t(s_MailboxMode.size());
+        pPresentModesCreateInfo->pPresentModes    = s_MailboxMode.data();
         return true;
       });
 
       // Force the colorspace to sRGB before sending to the driver.
       swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      // We always send MAILBOX to the driver.
+      swapchainInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
       fprintf(stderr, "[Gamescope WSI] Creating swapchain for xid: 0x%0x - minImageCount: %u - format: %s - colorspace: %s - flip: %s\n",
         gamescopeSurface->window,
@@ -967,7 +957,7 @@ namespace GamescopeWSILayer {
           .surface             = pCreateInfo->surface, // Always the Wayland side surface.
           .isBypassingXWayland = canBypass,
           .forceFifo           = gamescopeIsForcingFifo(), // Were we forcing fifo when this swapchain was made?
-          .presentMode         = swapchainInfo.presentMode, // The new present mode.
+          .presentMode         = pCreateInfo->presentMode, // The new present mode.
           .serverId            = *serverId,
         });
         gamescopeSwapchain->pastPresentTimings.reserve(MaxPastPresentationTimes);
