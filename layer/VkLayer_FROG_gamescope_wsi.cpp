@@ -552,21 +552,26 @@ namespace GamescopeWSILayer {
         return pDispatch->GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities);
 
       // Incomplete writes here, do not return VK_INCOMPLETE.
-      if (auto state = GamescopeSurface::get(pSurfaceInfo->surface)) {
-        if (gamescopeIsForcingFifo() && state->frameLimiterAware()) {
-          const auto *pPresentMode = vkroots::FindInChain<VkSurfacePresentModeEXT>(pSurfaceInfo);
-          const std::array<VkPresentModeKHR, 1> s_SingleMode = {{
-            pPresentMode ? pPresentMode->presentMode : VK_PRESENT_MODE_FIFO_KHR,
-          }};
-          auto *pPresentModeCompat = vkroots::RemoveFromChain<VkSurfacePresentModeCompatibilityEXT>(&pSurfaceCapabilities);
-          if (pPresentModeCompat)
-            vkroots::helpers::array(s_SingleMode, &pPresentModeCompat->presentModeCount, pPresentModeCompat->pPresentModes);
-        }
-      }
+      if (gamescopeIsForcingFifo() && gamescopeSurface->frameLimiterAware()) {
+        const auto *pPresentMode = vkroots::FindInChain<VkSurfacePresentModeEXT>(pSurfaceInfo);
+        const std::array<VkPresentModeKHR, 1> s_SingleMode = {{
+          pPresentMode ? pPresentMode->presentMode : VK_PRESENT_MODE_FIFO_KHR,
+        }};
+        auto [pPresentModeCompat, pPresentModeCompatParent] = vkroots::RemoveFromChain<VkSurfacePresentModeCompatibilityEXT>(&pSurfaceCapabilities);
+        if (pPresentModeCompat)
+          vkroots::helpers::array(s_SingleMode, &pPresentModeCompat->presentModeCount, pPresentModeCompat->pPresentModes);
 
-      VkResult res = VK_SUCCESS;
-      if ((res = pDispatch->GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities)) != VK_SUCCESS)
-        return res;
+        VkResult res = VK_SUCCESS;
+        if ((res = pDispatch->GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities)) != VK_SUCCESS)
+          return res;
+
+        if (pPresentModeCompat)
+          vkroots::AddToChain(pPresentModeCompatParent, pPresentModeCompat);
+      } else {
+        VkResult res = VK_SUCCESS;
+        if ((res = pDispatch->GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities)) != VK_SUCCESS)
+          return res;
+      }
 
       auto rect = xcb::getWindowRect(gamescopeSurface->connection, gamescopeSurface->window);
       if (!rect)
