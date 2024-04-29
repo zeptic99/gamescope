@@ -133,6 +133,7 @@ namespace gamescope
                 {
                     // Don't care.
                 }
+                break;
 
                 case EIS_EVENT_POINTER_MOTION:
                 {
