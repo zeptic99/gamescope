@@ -557,7 +557,7 @@ namespace GamescopeWSILayer {
         const std::array<VkPresentModeKHR, 1> s_SingleMode = {{
           pPresentMode ? pPresentMode->presentMode : VK_PRESENT_MODE_FIFO_KHR,
         }};
-        auto [pPresentModeCompat, pPresentModeCompatParent] = vkroots::RemoveFromChain<VkSurfacePresentModeCompatibilityEXT>(&pSurfaceCapabilities);
+        auto [pPresentModeCompat, pPresentModeCompatParent] = vkroots::RemoveFromChain<VkSurfacePresentModeCompatibilityEXT>(pSurfaceCapabilities);
         if (pPresentModeCompat)
           vkroots::helpers::array(s_SingleMode, &pPresentModeCompat->presentModeCount, pPresentModeCompat->pPresentModes);
 
