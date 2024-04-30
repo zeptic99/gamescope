@@ -3772,7 +3772,7 @@ std::optional<uint64_t> vulkan_composite( struct FrameInfo_t *frameInfo, std::sh
 		nisFrameInfo.layers[0].scale.x = 1.0f;
 		nisFrameInfo.layers[0].scale.y = 1.0f;
 
-		cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, nisFrameInfo.layerCount, nisFrameInfo.ycbcrMask()));
+		cmdBuffer->bindPipeline( g_device.pipeline(SHADER_TYPE_BLIT, nisFrameInfo.layerCount, nisFrameInfo.ycbcrMask(), 0u, nisFrameInfo.colorspaceMask(), outputTF ));
 		bind_all_layers(cmdBuffer.get(), &nisFrameInfo);
 		cmdBuffer->bindTarget(compositeImage);
 		cmdBuffer->uploadConstants<BlitPushData_t>(&nisFrameInfo);
