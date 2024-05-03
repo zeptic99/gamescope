@@ -1711,6 +1711,7 @@ bool wlserver_init( void ) {
 		{
 			setenv( "LIBEI_SOCKET", szEISocket, 1 );
 			g_LibEisWaiter.AddWaitable( g_InputServer.get() );
+			wl_log.infof( "Successfully initialized libei for input emulation!" );
 		}
 		else
 		{
