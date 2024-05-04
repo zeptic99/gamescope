@@ -12,6 +12,8 @@
 #include <list>
 #include <optional>
 
+#include <pixman-1/pixman.h>
+
 #include "vulkan_include.h"
 
 #include "steamcompmgr_shared.hpp"
@@ -143,6 +145,9 @@ struct wlserver_t {
 	struct wlr_surface *kb_focus_surface;
 	double mouse_surface_cursorx = 0.0f;
 	double mouse_surface_cursory = 0.0f;
+	bool mouse_constraint_requires_warp = false;
+	pixman_region32_t confine;
+	struct wlr_pointer_constraint_v1 *mouse_constraint = nullptr;
 	uint64_t ulLastMovedCursorTime = 0;
 	bool bCursorHidden = true;
 	
@@ -163,6 +168,7 @@ struct wlserver_t {
 	struct wlr_pointer_constraints_v1 *constraints;
 	struct wl_listener new_xdg_surface;
 	struct wl_listener new_xdg_toplevel;
+	struct wl_listener new_pointer_constraint;
 	std::vector<std::shared_ptr<steamcompmgr_win_t>> xdg_wins;
 	std::atomic<bool> xdg_dirty;
 	std::mutex xdg_commit_lock;
@@ -213,7 +219,7 @@ void wlserver_lock(void);
 void wlserver_unlock(bool flush = true);
 bool wlserver_is_lock_held(void);
 
-void wlserver_keyboardfocus( struct wlr_surface *surface );
+void wlserver_keyboardfocus( struct wlr_surface *surface, bool bConstrain = true );
 void wlserver_key( uint32_t key, bool press, uint32_t time );
 
 void wlserver_mousefocus( struct wlr_surface *wlrsurface, int x = 0, int y = 0 );
