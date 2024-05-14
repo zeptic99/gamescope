@@ -199,7 +199,7 @@ namespace gamescope
                     m_flScrollAccum[1] = 0.0;
 
                     if ( flScrollX == 0.0 && flScrollY == 0.0 )
-                        return;
+                        break;
 
                     wlserver_lock();
                     wlserver_mousewheel( flScrollX, flScrollY, ++s_uSequence );
@@ -213,6 +213,8 @@ namespace gamescope
                 }
                 break;
             }
+
+            eis_event_unref( pEisEvent );
         }
     }
 }
