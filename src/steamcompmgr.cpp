@@ -153,6 +153,10 @@ uint32_t g_reshade_technique_idx = 0;
 bool g_bSteamIsActiveWindow = false;
 bool g_bForceInternal = false;
 
+static std::vector< steamcompmgr_win_t* > GetGlobalPossibleFocusWindows();
+static bool
+pick_primary_focus_and_override(focus_t *out, Window focusControlWindow, const std::vector<steamcompmgr_win_t*>& vecPossibleFocusWindows, bool globalFocus, const std::vector<uint32_t>& ctxFocusControlAppIDs);
+
 bool env_to_bool(const char *env)
 {
 	if (!env || !*env)
@@ -2087,6 +2091,69 @@ static void update_touch_scaling( const struct FrameInfo_t *frameInfo )
 	focusedWindowOffsetY = frameInfo->layers[ frameInfo->layerCount - 1 ].offset.y;
 }
 
+#if HAVE_PIPEWIRE
+static void paint_pipewire( struct pipewire_buffer *pPipewireBuffer )
+{
+	if ( !pPipewireBuffer || !pPipewireBuffer->texture )
+		return;
+
+	struct FrameInfo_t frameInfo = {};
+	frameInfo.applyOutputColorMgmt = true;
+	frameInfo.outputEncodingEOTF   = EOTF_Gamma22;
+	frameInfo.allowVRR             = false;
+	frameInfo.bFadingOut           = false;
+
+	// Apply screenshot-style color management.
+	for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
+	{
+		frameInfo.lut3D[nInputEOTF]     = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut3d;
+		frameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
+	}
+
+	focus_t *pFocus = nullptr;
+	if ( pPipewireBuffer->gamescope_info.focus_appid )
+	{
+		static focus_t s_PipewireFocus{};
+		if ( s_PipewireFocus.IsDirty() )
+		{
+			std::vector<steamcompmgr_win_t *> vecPossibleFocusWindows = GetGlobalPossibleFocusWindows();
+
+			std::vector<uint32_t> vecAppIds{ uint32_t( pPipewireBuffer->gamescope_info.focus_appid ) };
+			pick_primary_focus_and_override( &s_PipewireFocus, None, vecPossibleFocusWindows, false, vecAppIds );
+		}
+		pFocus = &s_PipewireFocus;
+	}
+	else
+	{
+		pFocus = &global_focus;
+	}
+
+	if ( pFocus->focusWindow )
+	{
+		bool bAppIdMatches = !pPipewireBuffer->gamescope_info.focus_appid || pFocus->focusWindow->appID == pPipewireBuffer->gamescope_info.focus_appid;
+
+		if ( bAppIdMatches )
+		{
+			paint_window( pFocus->focusWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoExpensiveFilter, 1.0f, pFocus->overrideWindow );
+
+			if ( pFocus->overrideWindow && !pFocus->focusWindow->isSteamStreamingClient )
+				paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
+		}
+	}
+
+	std::optional<uint64_t> oPipewireSequence = vulkan_composite( &frameInfo, pPipewireBuffer->texture, false, nullptr, false );
+
+	if ( oPipewireSequence )
+	{
+		vulkan_wait( *oPipewireSequence, true );
+
+		push_pipewire_buffer( pPipewireBuffer );
+		// TODO: make sure the pw_buffer isn't lost in one of the failure
+		// code-paths above
+	}
+}
+#endif
+
 static void
 paint_all(bool async)
 {
@@ -2412,48 +2479,8 @@ paint_all(bool async)
 	}
 
 #if HAVE_PIPEWIRE
-	struct pipewire_buffer *pw_buffer = dequeue_pipewire_buffer();
-	if ( pw_buffer )
-	{
-		if ( pw_buffer->texture )
-		{
-			struct FrameInfo_t pipewireFrameInfo = frameInfo;
-
-			// If using a pipewire stream, apply screenshot color management.
-			for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
-			{
-				pipewireFrameInfo.lut3D[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut3d;
-				pipewireFrameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
-			}
-
-			if ( is_mura_correction_enabled() )
-			{
-				// Remove the last layer which is for mura...
-				for (int i = 0; i < pipewireFrameInfo.layerCount; i++)
-				{
-					if (pipewireFrameInfo.layers[i].zpos >= (int)g_zposMuraCorrection)
-					{
-						pipewireFrameInfo.layerCount = i;
-						break;
-					}
-				}
-
-				// Re-enable output color management (blending) if it was disabled by mura.
-				pipewireFrameInfo.applyOutputColorMgmt = true;
-			}
-
-			std::optional<uint64_t> oPipewireSequence = vulkan_composite( &pipewireFrameInfo, pw_buffer->texture, false, nullptr, false );
-
-			if ( oPipewireSequence )
-			{
-				vulkan_wait( *oPipewireSequence, true );
-
-				push_pipewire_buffer( pw_buffer );
-				// TODO: make sure the pw_buffer isn't lost in one of the failure
-				// code-paths above
-			}
-		}
-	}
+	if ( struct pipewire_buffer *pw_buffer = dequeue_pipewire_buffer() )
+		paint_pipewire( pw_buffer );
 #endif
 
 	std::optional<gamescope::GamescopeScreenshotInfo> oScreenshotInfo =
