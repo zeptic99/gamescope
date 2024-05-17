@@ -1274,7 +1274,7 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 }
 
 static int32_t
-window_last_done_commit_id( steamcompmgr_win_t *w )
+window_last_done_commit_index( steamcompmgr_win_t *w )
 {
 	int32_t lastCommit = -1;
 	for ( uint32_t i = 0; i < w->commit_queue.size(); i++ )
@@ -1291,13 +1291,13 @@ window_last_done_commit_id( steamcompmgr_win_t *w )
 static bool
 window_has_commits( steamcompmgr_win_t *w )
 {
-	return window_last_done_commit_id( w ) != -1;
+	return window_last_done_commit_index( w ) != -1;
 }
 
 static void
 get_window_last_done_commit( steamcompmgr_win_t *w, gamescope::Rc<commit_t> &commit )
 {
-	int32_t lastCommit = window_last_done_commit_id( w );
+	int32_t lastCommit = window_last_done_commit_index( w );
 
 	if ( lastCommit == -1 )
 	{
@@ -1311,7 +1311,7 @@ get_window_last_done_commit( steamcompmgr_win_t *w, gamescope::Rc<commit_t> &com
 static commit_t*
 get_window_last_done_commit_peek( steamcompmgr_win_t *w )
 {
-	int32_t lastCommit = window_last_done_commit_id( w );
+	int32_t lastCommit = window_last_done_commit_index( w );
 
 	if ( lastCommit == -1 )
 	{
@@ -1319,6 +1319,19 @@ get_window_last_done_commit_peek( steamcompmgr_win_t *w )
 	}
 
 	return w->commit_queue[ lastCommit ].get();
+}
+
+static int64_t
+window_last_done_commit_id( steamcompmgr_win_t *w )
+{
+	if ( !w )
+		return 0;
+
+	commit_t *pCommit = get_window_last_done_commit_peek( w );
+	if ( !pCommit )
+		return 0;
+
+	return pCommit->commitID;
 }
 
 // For Steam, etc.
@@ -2094,9 +2107,23 @@ static void update_touch_scaling( const struct FrameInfo_t *frameInfo )
 }
 
 #if HAVE_PIPEWIRE
-static void paint_pipewire( struct pipewire_buffer *pPipewireBuffer )
+static void paint_pipewire()
 {
-	if ( !pPipewireBuffer || !pPipewireBuffer->texture )
+	static struct pipewire_buffer *s_pPipewireBuffer = nullptr;
+
+	// If the stream stopped/changed, and the underlying pw_buffer was thus
+	// destroyed, then destroy this buffer and grab a new one.
+	if ( s_pPipewireBuffer && s_pPipewireBuffer->IsStale() )
+	{
+		pipewire_destroy_buffer( s_pPipewireBuffer );
+		s_pPipewireBuffer = nullptr;
+	}
+
+	// Queue up a buffer with some metadata.
+	if ( !s_pPipewireBuffer )
+		s_pPipewireBuffer = dequeue_pipewire_buffer();
+
+	if ( !s_pPipewireBuffer || !s_pPipewireBuffer->texture )
 		return;
 
 	struct FrameInfo_t frameInfo = {};
@@ -2112,15 +2139,17 @@ static void paint_pipewire( struct pipewire_buffer *pPipewireBuffer )
 		frameInfo.shaperLut[nInputEOTF] = g_ScreenshotColorMgmtLuts[nInputEOTF].vk_lut1d;
 	}
 
+	const uint64_t ulFocusAppId = s_pPipewireBuffer->gamescope_info.focus_appid;
+
 	focus_t *pFocus = nullptr;
-	if ( pPipewireBuffer->gamescope_info.focus_appid )
+	if ( ulFocusAppId )
 	{
 		static focus_t s_PipewireFocus{};
 		if ( s_PipewireFocus.IsDirty() )
 		{
 			std::vector<steamcompmgr_win_t *> vecPossibleFocusWindows = GetGlobalPossibleFocusWindows();
 
-			std::vector<uint32_t> vecAppIds{ uint32_t( pPipewireBuffer->gamescope_info.focus_appid ) };
+			std::vector<uint32_t> vecAppIds{ uint32_t( ulFocusAppId ) };
 			pick_primary_focus_and_override( &s_PipewireFocus, None, vecPossibleFocusWindows, false, vecAppIds );
 		}
 		pFocus = &s_PipewireFocus;
@@ -2130,28 +2159,41 @@ static void paint_pipewire( struct pipewire_buffer *pPipewireBuffer )
 		pFocus = &global_focus;
 	}
 
-	if ( pFocus->focusWindow )
-	{
-		bool bAppIdMatches = !pPipewireBuffer->gamescope_info.focus_appid || pFocus->focusWindow->appID == pPipewireBuffer->gamescope_info.focus_appid;
+	if ( !pFocus->focusWindow )
+		return;
 
-		if ( bAppIdMatches )
-		{
-			paint_window( pFocus->focusWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoExpensiveFilter, 1.0f, pFocus->overrideWindow );
+	const bool bAppIdMatches = !ulFocusAppId || pFocus->focusWindow->appID == ulFocusAppId;
+	if ( !bAppIdMatches )
+		return;
 
-			if ( pFocus->overrideWindow && !pFocus->focusWindow->isSteamStreamingClient )
-				paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
-		}
-	}
+	// If the commits are the same as they were last time, don't repaint and don't push a new buffer on the stream.
+	static uint64_t s_ulLastFocusCommitId = 0;
+	static uint64_t s_ulLastOverrideCommitId = 0;
 
-	std::optional<uint64_t> oPipewireSequence = vulkan_composite( &frameInfo, pPipewireBuffer->texture, false, nullptr, false );
+	uint64_t ulFocusCommitId = window_last_done_commit_id( pFocus->focusWindow );
+	uint64_t ulOverrideCommitId = window_last_done_commit_id( pFocus->overrideWindow );
+
+	if ( ulFocusCommitId == s_ulLastFocusCommitId &&
+	     ulOverrideCommitId == s_ulLastOverrideCommitId )
+		return;
+
+	s_ulLastFocusCommitId = ulFocusCommitId;
+	s_ulLastOverrideCommitId = ulOverrideCommitId;
+
+	// Paint the windows we have onto the Pipewire stream.
+	paint_window( pFocus->focusWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoExpensiveFilter, 1.0f, pFocus->overrideWindow );
+
+	if ( pFocus->overrideWindow && !pFocus->focusWindow->isSteamStreamingClient )
+		paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
+
+	std::optional<uint64_t> oPipewireSequence = vulkan_composite( &frameInfo, s_pPipewireBuffer->texture, false, nullptr, false );
 
 	if ( oPipewireSequence )
 	{
 		vulkan_wait( *oPipewireSequence, true );
 
-		push_pipewire_buffer( pPipewireBuffer );
-		// TODO: make sure the pw_buffer isn't lost in one of the failure
-		// code-paths above
+		push_pipewire_buffer( s_pPipewireBuffer );
+		s_pPipewireBuffer = nullptr;
 	}
 }
 #endif
@@ -2481,8 +2523,8 @@ paint_all(bool async)
 	}
 
 #if HAVE_PIPEWIRE
-	if ( struct pipewire_buffer *pw_buffer = dequeue_pipewire_buffer() )
-		paint_pipewire( pw_buffer );
+	if ( pipewire_is_streaming() )
+		paint_pipewire();
 #endif
 
 	std::optional<gamescope::GamescopeScreenshotInfo> oScreenshotInfo =

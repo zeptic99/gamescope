@@ -56,6 +56,11 @@ static void destroy_buffer(struct pipewire_buffer *buffer) {
 	delete buffer;
 }
 
+void pipewire_destroy_buffer(struct pipewire_buffer *buffer)
+{
+	destroy_buffer(buffer);
+}
+
 static void calculate_capture_size()
 {
 	s_nCaptureWidth = s_nOutputWidth;
@@ -575,8 +580,6 @@ static void stream_handle_remove_buffer(void *data, struct pw_buffer *pw_buffer)
 
 	if (!buffer->copying) {
 		destroy_buffer(buffer);
-	} else {
-		nudge_pipewire();
 	}
 }
 
@@ -722,6 +725,12 @@ bool init_pipewire(void)
 uint32_t get_pipewire_stream_node_id(void)
 {
 	return pipewire_state.stream_node_id;
+}
+
+bool pipewire_is_streaming()
+{
+	struct pipewire_state *state = &pipewire_state;
+	return state->streaming;
 }
 
 struct pipewire_buffer *dequeue_pipewire_buffer(void)
