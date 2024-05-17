@@ -3466,6 +3466,31 @@ const char *get_win_display_name(steamcompmgr_win_t *window)
 		return "";
 }
 
+static std::vector< steamcompmgr_win_t* > GetGlobalPossibleFocusWindows()
+{
+	std::vector< steamcompmgr_win_t* > vecPossibleFocusWindows;
+
+	{
+		gamescope_xwayland_server_t *server = NULL;
+		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
+		{
+			std::vector< steamcompmgr_win_t* > vecLocalPossibleFocusWindows = server->ctx->GetPossibleFocusWindows();
+			vecPossibleFocusWindows.insert( vecPossibleFocusWindows.end(), vecLocalPossibleFocusWindows.begin(), vecLocalPossibleFocusWindows.end() );
+		}
+	}
+
+	for ( const auto& xdg_win : g_steamcompmgr_xdg_wins )
+	{
+		if ( xdg_win->xdg().surface.mapped )
+			vecPossibleFocusWindows.push_back( xdg_win.get() );
+	}
+
+	// Determine global primary focus
+	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(), is_focus_priority_greater );
+
+	return vecPossibleFocusWindows;
+}
+
 static void
 determine_and_apply_focus()
 {
@@ -3480,25 +3505,19 @@ determine_and_apply_focus()
 	std::vector< unsigned long > focusable_appids;
 	std::vector< unsigned long > focusable_windows;
 
-	// Determine local context focuses
-	std::vector< steamcompmgr_win_t* > vecPossibleFocusWindows;
+	// Apply focus to the XWayland contexts.
 	{
 		gamescope_xwayland_server_t *server = NULL;
 		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 		{
 			std::vector< steamcompmgr_win_t* > vecLocalPossibleFocusWindows = server->ctx->GetPossibleFocusWindows();
-			vecPossibleFocusWindows.insert( vecPossibleFocusWindows.end(), vecLocalPossibleFocusWindows.begin(), vecLocalPossibleFocusWindows.end() );
-
 			if ( server->ctx->focus.IsDirty() )
 				server->ctx->DetermineAndApplyFocus( vecLocalPossibleFocusWindows );
 		}
 	}
 
-	for ( const auto& xdg_win : g_steamcompmgr_xdg_wins )
-	{
-		if ( xdg_win->xdg().surface.mapped )
-			vecPossibleFocusWindows.push_back( xdg_win.get() );
-	}
+	// Determine local context focuses
+	std::vector<steamcompmgr_win_t *> vecPossibleFocusWindows = GetGlobalPossibleFocusWindows();
 
 	for ( steamcompmgr_win_t *focusable_window : vecPossibleFocusWindows )
 	{
@@ -3540,10 +3559,6 @@ determine_and_apply_focus()
 
 	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusableWindowsAtom, XA_CARDINAL, 32, PropModeReplace,
 					 (unsigned char *)focusable_windows.data(), focusable_windows.size() );
-
-	// Determine global primary focus
-	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
-					is_focus_priority_greater );
 
 	gameFocused = pick_primary_focus_and_override(&global_focus, root_ctx->focusControlWindow, vecPossibleFocusWindows, true, vecFocuscontrolAppIDs);
 
