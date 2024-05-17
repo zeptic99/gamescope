@@ -3222,10 +3222,33 @@ found:;
 	return localGameFocused;
 }
 
-static void
-determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>& vecGlobalPossibleFocusWindows)
+ std::vector< steamcompmgr_win_t* > xwayland_ctx_t::GetPossibleFocusWindows()
+ {
+	std::vector<steamcompmgr_win_t*> vecPossibleFocusWindows;
+
+	for (steamcompmgr_win_t *w = this->list; w; w = w->xwayland().next)
+	{
+		// Always skip system tray icons and overlays
+		if ( w->isSysTrayIcon || w->isOverlay || w->isExternalOverlay )
+		{
+			continue;
+		}
+
+		if ( w->xwayland().a.map_state == IsViewable && w->xwayland().a.c_class == InputOutput &&
+			( win_has_game_id( w ) || window_is_steam( w ) || w->isSteamStreamingClient ) &&
+			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient ) )
+		{
+			vecPossibleFocusWindows.push_back( w );
+		}
+	}
+
+	return vecPossibleFocusWindows;
+ }
+
+void xwayland_ctx_t::DetermineAndApplyFocus( const std::vector< steamcompmgr_win_t* > &vecPossibleFocusWindows )
 {
-	steamcompmgr_win_t *w;
+	xwayland_ctx_t *ctx = this;
+
 	steamcompmgr_win_t *inputFocus = NULL;
 
 	steamcompmgr_win_t *prevFocusWindow = ctx->focus.focusWindow;
@@ -3236,22 +3259,8 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 
 	unsigned int maxOpacity = 0;
 	unsigned int maxOpacityExternal = 0;
-	std::vector< steamcompmgr_win_t* > vecPossibleFocusWindows;
-	for (w = ctx->list; w; w = w->xwayland().next)
+	for (steamcompmgr_win_t *w = ctx->list; w; w = w->xwayland().next)
 	{
-		// Always skip system tray icons
-		if ( w->isSysTrayIcon )
-		{
-			continue;
-		}
-
-		if ( w->xwayland().a.map_state == IsViewable && w->xwayland().a.c_class == InputOutput && w->isOverlay == false && w->isExternalOverlay == false &&
-			( win_has_game_id( w ) || window_is_steam( w ) || w->isSteamStreamingClient ) &&
-			 (w->opacity > TRANSLUCENT || w->isSteamStreamingClient == true ) )
-		{
-			vecPossibleFocusWindows.push_back( w );
-		}
-
 		if (w->isOverlay)
 		{
 			if (w->xwayland().a.width > 1200 && w->opacity >= maxOpacity)
@@ -3279,11 +3288,6 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 			inputFocus = w;
 		}
 	}
-
-	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(),
-					  is_focus_priority_greater );
-
-	vecGlobalPossibleFocusWindows.insert(vecGlobalPossibleFocusWindows.end(), vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end());
 
 	pick_primary_focus_and_override( &ctx->focus, ctx->focusControlWindow, vecPossibleFocusWindows, false, vecFocuscontrolAppIDs );
 
@@ -3366,6 +3370,7 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 		ctx->currentKeyboardFocusWindow = keyboardFocusWindow;
 	}
 
+	steamcompmgr_win_t *w;
 	w = ctx->focus.focusWindow;
 
 	if ( inputFocus == ctx->focus.focusWindow && ctx->focus.overrideWindow )
@@ -3473,8 +3478,11 @@ determine_and_apply_focus()
 		gamescope_xwayland_server_t *server = NULL;
 		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 		{
+			std::vector< steamcompmgr_win_t* > vecLocalPossibleFocusWindows = server->ctx->GetPossibleFocusWindows();
+			vecPossibleFocusWindows.insert( vecPossibleFocusWindows.end(), vecLocalPossibleFocusWindows.begin(), vecLocalPossibleFocusWindows.end() );
+
 			if ( server->ctx->focus.IsDirty() )
-				determine_and_apply_focus(server->ctx.get(), vecPossibleFocusWindows);
+				server->ctx->DetermineAndApplyFocus( vecLocalPossibleFocusWindows );
 		}
 	}
 
