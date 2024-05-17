@@ -696,6 +696,22 @@ Window x11_win(steamcompmgr_win_t *w) {
 	return w->xwayland().id;
 }
 
+static uint64_t s_ulFocusSerial = 0ul;
+static inline void MakeFocusDirty()
+{
+	s_ulFocusSerial++;
+}
+
+static inline uint64_t GetFocusSerial()
+{
+	return s_ulFocusSerial;
+}
+
+bool focus_t::IsDirty()
+{
+	return ulCurrentFocusSerial != GetFocusSerial();
+}
+
 struct global_focus_t : public focus_t
 {
 	steamcompmgr_win_t	  	 		*keyboardFocusWindow;
@@ -726,7 +742,6 @@ float			focusedWindowOffsetY = 0.0f;
 uint32_t		inputCounter;
 uint32_t		lastPublishedInputCounter;
 
-bool			focusDirty = false;
 std::atomic<bool> hasRepaint = false;
 bool			hasRepaintNonBasePlane = false;
 
@@ -3416,6 +3431,8 @@ determine_and_apply_focus(xwayland_ctx_t *ctx, std::vector<steamcompmgr_win_t*>&
 	}
 
 	XFree(children);
+
+	ctx->focus.ulCurrentFocusSerial = GetFocusSerial();
 }
 
 wlr_surface *win_surface(steamcompmgr_win_t *window)
@@ -3456,7 +3473,8 @@ determine_and_apply_focus()
 		gamescope_xwayland_server_t *server = NULL;
 		for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
 		{
-			determine_and_apply_focus(server->ctx.get(), vecPossibleFocusWindows);
+			if ( server->ctx->focus.IsDirty() )
+				determine_and_apply_focus(server->ctx.get(), vecPossibleFocusWindows);
 		}
 	}
 
@@ -3735,7 +3753,7 @@ determine_and_apply_focus()
 		wlserver_unlock();
 	}
 
-	focusDirty = false;
+	global_focus.ulCurrentFocusSerial = GetFocusSerial();
 }
 
 static void
@@ -4006,7 +4024,7 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 		XSetInputFocus(ctx->dpy, w->xwayland().id, RevertToNone, CurrentTime);
 	}
 
-	focusDirty = true;
+	MakeFocusDirty();
 }
 
 static void
@@ -4028,7 +4046,7 @@ unmap_win(xwayland_ctx_t *ctx, Window id, bool fade)
 		return;
 	w->xwayland().a.map_state = IsUnmapped;
 
-	focusDirty = true;
+	MakeFocusDirty();
 
 	finish_unmap_win(ctx, w);
 }
@@ -4262,7 +4280,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	if (new_win->xwayland().a.map_state == IsViewable)
 		map_win(ctx, id, sequence);
 
-	focusDirty = true;
+	MakeFocusDirty();
 }
 
 static void
@@ -4297,7 +4315,7 @@ restack_win(xwayland_ctx_t *ctx, steamcompmgr_win_t *w, Window new_above)
 
 		w->xwayland().next = *prev;
 		*prev = w;
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 }
 
@@ -4312,7 +4330,7 @@ configure_win(xwayland_ctx_t *ctx, XConfigureEvent *ce)
 		{
 			ctx->root_width = ce->width;
 			ctx->root_height = ce->height;
-			focusDirty = true;
+			MakeFocusDirty();
 
 			gamescope_xwayland_server_t *root_server = wlserver_get_xwayland_server(0);
 			xwayland_ctx_t *root_ctx = root_server->ctx.get();
@@ -4330,7 +4348,7 @@ configure_win(xwayland_ctx_t *ctx, XConfigureEvent *ce)
 	w->xwayland().a.override_redirect = ce->override_redirect;
 	restack_win(ctx, w, ce->above);
 
-	focusDirty = true;
+	MakeFocusDirty();
 }
 
 static void
@@ -4444,7 +4462,7 @@ destroy_win(xwayland_ctx_t *ctx, Window id, bool gone, bool fade)
 	if (x11_win(global_focus.fadeWindow) == id && gone)
 		global_focus.fadeWindow = nullptr;
 		
-	focusDirty = true;
+	MakeFocusDirty();
 
 	finish_destroy_win(ctx, id, gone);
 }
@@ -4464,14 +4482,14 @@ damage_win(xwayland_ctx_t *ctx, XDamageNotifyEvent *de)
 	// First damage event we get, compute focus; we only want to focus damaged
 	// windows to have meaningful frames.
 	if (w->appID && w->xwayland().damage_sequence == 0)
-		focusDirty = true;
+		MakeFocusDirty();
 
 	w->xwayland().damage_sequence = damageSequence++;
 
 	// If we just passed the focused window, we might be eliglible to take over
 	if ( focus && focus != w && w->appID &&
 		w->xwayland().damage_sequence > focus->xwayland().damage_sequence)
-		focusDirty = true;
+		MakeFocusDirty();
 
 	// Josh: This will sometimes cause a BadDamage error.
 	// I looked around at different compositors to see what
@@ -4547,13 +4565,13 @@ handle_net_wm_state(xwayland_ctx_t *ctx, steamcompmgr_win_t *w, XClientMessageEv
 	for (size_t i = 0; i < 2; i++) {
 		if (props[i] == ctx->atoms.netWMStateFullscreenAtom) {
 			update_net_wm_state(action, &w->isFullscreen);
-			focusDirty = true;
+			MakeFocusDirty();
 		} else if (props[i] == ctx->atoms.netWMStateSkipTaskbarAtom) {
 			update_net_wm_state(action, &w->skipTaskbar);
-			focusDirty = true;
+			MakeFocusDirty();
 		} else if (props[i] == ctx->atoms.netWMStateSkipPagerAtom) {
 			update_net_wm_state(action, &w->skipPager);
-			focusDirty = true;
+			MakeFocusDirty();
 		} else if (props[i] != None) {
 			xwm_log.debugf("Unhandled NET_WM_STATE property change: %s", XGetAtomName(ctx->dpy, props[i]));
 		}
@@ -4937,7 +4955,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteamLegacyBigPicture = get_prop(ctx, w->xwayland().id, ctx->atoms.steamAtom, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.steamInputFocusAtom )
@@ -4946,7 +4964,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->inputFocusMode = get_prop(ctx, w->xwayland().id, ctx->atoms.steamInputFocusAtom, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.steamTouchClickModeAtom )
@@ -4959,7 +4977,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteamStreamingClient = get_prop(ctx, w->xwayland().id, ctx->atoms.steamStreamingClientAtom, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.steamStreamingClientVideoAtom)
@@ -4968,18 +4986,18 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isSteamStreamingClientVideo = get_prop(ctx, w->xwayland().id, ctx->atoms.steamStreamingClientVideoAtom, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.gamescopeCtrlAppIDAtom )
 	{
 		get_prop( ctx, ctx->root, ctx->atoms.gamescopeCtrlAppIDAtom, vecFocuscontrolAppIDs );
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if (ev->atom == ctx->atoms.gamescopeCtrlWindowAtom )
 	{
 		ctx->focusControlWindow = get_prop( ctx, ctx->root, ctx->atoms.gamescopeCtrlWindowAtom, None );
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if ( ev->atom == ctx->atoms.gamescopeScreenShotAtom )
 	{
@@ -5020,7 +5038,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			}
 			w->appID = appID;
 
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.overlayAtom)
@@ -5029,7 +5047,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isOverlay = get_prop(ctx, w->xwayland().id, ctx->atoms.overlayAtom, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.externalOverlayAtom)
@@ -5038,7 +5056,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isExternalOverlay = get_prop(ctx, w->xwayland().id, ctx->atoms.externalOverlayAtom, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.winTypeAtom)
@@ -5047,7 +5065,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			get_win_type(ctx, w);
-			focusDirty = true;
+			MakeFocusDirty();
 		}		
 	}
 	if (ev->atom == ctx->atoms.sizeHintsAtom)
@@ -5056,14 +5074,14 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			get_size_hints(ctx, w);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.gamesRunningAtom)
 	{
 		gamesRunningCount = get_prop(ctx, ctx->root, ctx->atoms.gamesRunningAtom, 0);
 
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if (ev->atom == ctx->atoms.screenScaleAtom)
 	{
@@ -5076,7 +5094,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			hasRepaint = true;
 		}
 
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if (ev->atom == ctx->atoms.screenZoomAtom)
 	{
@@ -5089,7 +5107,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			hasRepaint = true;
 		}
 
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if (ev->atom == ctx->atoms.WMTransientForAtom)
 	{
@@ -5107,7 +5125,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			}
 			get_win_type( ctx, w );
 
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == XA_WM_NAME || ev->atom == ctx->atoms.netWMNameAtom)
@@ -5145,7 +5163,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		steamcompmgr_win_t *w = find_win(ctx, ev->window);
 		if (w) {
 			get_motif_hints(ctx, w);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 #if 0
@@ -5287,7 +5305,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if ( ev->atom == ctx->atoms.gamescopeSteamMaxHeight )
 	{
 		g_nSteamMaxHeight = get_prop( ctx, ctx->root, ctx->atoms.gamescopeSteamMaxHeight, 0 );
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if ( ev->atom == ctx->atoms.gamescopeVRREnabled )
 	{
@@ -5460,7 +5478,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if ( ev->atom == ctx->atoms.gamescopeForceWindowsFullscreen )
 	{
 		ctx->force_windows_fullscreen = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeForceWindowsFullscreen, 0 );
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 	if ( ev->atom == ctx->atoms.gamescopeColorLut3DOverride )
 	{
@@ -5621,7 +5639,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			wlserver_destroy_xwayland_server(server);
 			wlserver_unlock();
 
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.gamescopeReshadeTechniqueIdx)
@@ -5645,7 +5663,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 			w->hasHwndStyle = true;
 			w->hwndStyle = get_prop(ctx, w->xwayland().id, ctx->atoms.wineHwndStyle, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 	if (ev->atom == ctx->atoms.wineHwndStyleEx)
@@ -5655,7 +5673,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 			w->hasHwndStyleEx = true;
 			w->hwndStyleEx = get_prop(ctx, w->xwayland().id, ctx->atoms.wineHwndStyleEx, 0);
-			focusDirty = true;
+			MakeFocusDirty();
 		}
 	}
 }
@@ -5832,13 +5850,13 @@ bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t co
 			{
 				if ( ctx->focus.outdatedInteractiveFocus )
 				{
-					focusDirty = true;
+					MakeFocusDirty();
 					ctx->focus.outdatedInteractiveFocus = false;
 				}
 			}
 			if ( global_focus.outdatedInteractiveFocus )
 			{
-				focusDirty = true;
+				MakeFocusDirty();
 				global_focus.outdatedInteractiveFocus = false;
 
 				// If this is an external overlay, repaint
@@ -6455,7 +6473,7 @@ void xwayland_ctx_t::Dispatch()
 						if (w)
 						{
 							get_size_hints(ctx, w);
-							focusDirty = true;
+							MakeFocusDirty();
 						}
 					}
 				}
@@ -6986,7 +7004,7 @@ void steamcompmgr_check_xdg(bool vblank)
 		if (global_focus.fadeWindow && global_focus.fadeWindow->type == steamcompmgr_win_type_t::XDG)
 			global_focus.fadeWindow = nullptr;
 		g_steamcompmgr_xdg_wins = wlserver_get_xdg_shell_windows();
-		focusDirty = true;
+		MakeFocusDirty();
 	}
 
 	handle_done_commits_xdg();
@@ -7257,7 +7275,7 @@ steamcompmgr_main(int argc, char **argv)
 			flush_root = true;
 		}
 
-		if (focusDirty)
+		if (global_focus.IsDirty())
 			determine_and_apply_focus();
 
 		// If our DRM state is out-of-date, refresh it. This might update
@@ -7479,7 +7497,7 @@ steamcompmgr_main(int argc, char **argv)
 		// Handles if we got a commit for the window we want to focus
 		// to switch to it for painting (outdatedInteractiveFocus)
 		// Doesn't realllly matter but avoids an extra frame of being on the wrong window.
-		if (focusDirty)
+		if (global_focus.IsDirty())
 			determine_and_apply_focus();
 
 		if ( window_is_steam( global_focus.focusWindow ) )

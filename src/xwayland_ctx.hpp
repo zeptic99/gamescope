@@ -36,6 +36,10 @@ struct focus_t
 	bool			outdatedInteractiveFocus;
 	bool			bResetToCorner = false;
 	bool			bResetToCenter = false;
+
+	uint64_t		ulCurrentFocusSerial = UINT64_MAX;
+
+	bool IsDirty();
 };
 
 struct CommitDoneEntry_t
