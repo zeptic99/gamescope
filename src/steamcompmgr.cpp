@@ -3316,6 +3316,8 @@ found:;
 		}
 	}
 
+	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(), is_focus_priority_greater );
+
 	return vecPossibleFocusWindows;
  }
 
