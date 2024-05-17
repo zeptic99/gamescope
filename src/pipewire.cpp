@@ -14,6 +14,8 @@
 #include "pipewire.hpp"
 #include "log.hpp"
 
+#include <spa/debug/format.h>
+
 static LogScope pwr_log("pipewire");
 
 static struct pipewire_state pipewire_state = { .stream_node_id = SPA_ID_INVALID };
@@ -97,7 +99,7 @@ static void build_format_params(struct spa_pod_builder *builder, spa_video_forma
 		SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&size),
 		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate),
 		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size ),
-		SPA_FORMAT_VIDEO_gamescope_focus_appid, SPA_POD_CHOICE_RANGE_Long( 0, 0, UINT64_MAX ),
+		SPA_FORMAT_VIDEO_gamescope_focus_appid, SPA_POD_CHOICE_RANGE_Long( 0ll, 0ll, INT32_MAX ),
 		0);
 	if (format == SPA_VIDEO_FORMAT_NV12) {
 		spa_pod_builder_add(builder,
@@ -126,7 +128,7 @@ static void build_format_params(struct spa_pod_builder *builder, spa_video_forma
 		SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&size),
 		SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&framerate),
 		SPA_FORMAT_VIDEO_requested_size, SPA_POD_CHOICE_RANGE_Rectangle( &min_requested_size, &min_requested_size, &max_requested_size ),
-		SPA_FORMAT_VIDEO_gamescope_focus_appid, SPA_POD_CHOICE_RANGE_Long( 0, 0, UINT64_MAX ),
+		SPA_FORMAT_VIDEO_gamescope_focus_appid, SPA_POD_CHOICE_RANGE_Long( 0ll, 0ll, INT32_MAX ),
 		0);
 	if (format == SPA_VIDEO_FORMAT_NV12) {
 		spa_pod_builder_add(builder,
@@ -141,6 +143,9 @@ static void build_format_params(struct spa_pod_builder *builder, spa_video_forma
 			0);
 	}
 	params.push_back((const struct spa_pod *) spa_pod_builder_pop(builder, &obj_frame));
+
+//	for (auto& param : params)
+//		spa_debug_format(2, nullptr, param);
 }
 
 
