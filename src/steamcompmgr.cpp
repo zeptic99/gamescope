@@ -2522,11 +2522,6 @@ paint_all(bool async)
 		return;
 	}
 
-#if HAVE_PIPEWIRE
-	if ( pipewire_is_streaming() )
-		paint_pipewire();
-#endif
-
 	std::optional<gamescope::GamescopeScreenshotInfo> oScreenshotInfo =
 		gamescope::CScreenshotManager::Get().ProcessPendingScreenshot();
 
@@ -7669,6 +7664,11 @@ steamcompmgr_main(int argc, char **argv)
 			hasRepaintNonBasePlane = false;
 			nIgnoredOverlayRepaints = 0;
 		}
+
+#if HAVE_PIPEWIRE
+		if ( vblank && pipewire_is_streaming() )
+			paint_pipewire();
+#endif
 
 		if ( vblank )
 		{
