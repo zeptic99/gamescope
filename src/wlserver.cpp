@@ -2024,6 +2024,11 @@ std::pair<int, int> wlserver_get_surface_extent( struct wlr_surface *pSurface )
 
 void wlserver_oncursorevent()
 {
+	// Don't repaint if we would use a nested cursor.
+	// TODO: Move this check into GetBackend().
+	if ( GetBackend()->GetNestedHints() && !g_bForceRelativeMouse )
+		return;
+
 	if ( !wlserver.bCursorHidden && wlserver.bCursorHasImage )
 	{
 		hasRepaint = true;
