@@ -1841,6 +1841,8 @@ namespace PaintWindowFlag
 	static const uint32_t NotificationMode = 1u << 2;
 	static const uint32_t DrawBorders = 1u << 3;
 	static const uint32_t NoScale = 1u << 4;
+	static const uint32_t NoFilter = 1u << 5;
+	static const uint32_t NoExpensiveFilter = 1u << 6;
 }
 using PaintWindowFlags = uint32_t;
 
@@ -2029,11 +2031,17 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	layer->tex = lastCommit->vulkanTex;
 	layer->pBackendFb = lastCommit->pBackendFb;
 
-	layer->filter = (w->isOverlay || w->isExternalOverlay) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
+	layer->filter = ( flags & PaintWindowFlag::NoFilter ) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
 	layer->ctm = nullptr;
 	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
 		layer->ctm = s_scRGB709To2020Matrix;
+
+	if ( ( flags & PaintWindowFlag::NoExpensiveFilter ) &&
+		 ( layer->filter == GamescopeUpscaleFilter::FSR || layer->filter == GamescopeUpscaleFilter::NIS ) )
+	{
+		layer->filter = GamescopeUpscaleFilter::LINEAR;
+	}
 
 	if (layer->filter == GamescopeUpscaleFilter::PIXEL)
 	{
@@ -2223,7 +2231,7 @@ paint_all(bool async)
 	// as we will have too many layers. Better to be safe than sorry.
 	if ( override && w && !w->isSteamStreamingClient )
 	{
-		paint_window(override, w, &frameInfo, global_focus.cursor, 0, 1.0f, override);
+		paint_window(override, w, &frameInfo, global_focus.cursor, PaintWindowFlag::NoFilter, 1.0f, override);
 		// Don't update touch scaling for frameInfo. We don't ever make it our
 		// wlserver_mousefocus window.
 		//update_touch_scaling( &frameInfo );
@@ -2236,7 +2244,7 @@ paint_all(bool async)
 	{
 		if (externalOverlay->opacity)
 		{
-			paint_window(externalOverlay, externalOverlay, &frameInfo, global_focus.cursor, PaintWindowFlag::NoScale);
+			paint_window(externalOverlay, externalOverlay, &frameInfo, global_focus.cursor, PaintWindowFlag::NoScale | PaintWindowFlag::NoFilter);
 
 			if ( externalOverlay == global_focus.inputFocusWindow )
 				update_touch_scaling( &frameInfo );
@@ -2245,7 +2253,7 @@ paint_all(bool async)
 
 	if (overlay && overlay->opacity)
 	{
-		paint_window(overlay, overlay, &frameInfo, global_focus.cursor, PaintWindowFlag::DrawBorders);
+		paint_window(overlay, overlay, &frameInfo, global_focus.cursor, PaintWindowFlag::DrawBorders | PaintWindowFlag::NoFilter);
 
 		if ( overlay == global_focus.inputFocusWindow )
 			update_touch_scaling( &frameInfo );
@@ -2284,7 +2292,7 @@ paint_all(bool async)
 	{
 		if (notification->opacity)
 		{
-			paint_window(notification, notification, &frameInfo, global_focus.cursor, PaintWindowFlag::NotificationMode);
+			paint_window(notification, notification, &frameInfo, global_focus.cursor, PaintWindowFlag::NotificationMode | PaintWindowFlag::NoFilter);
 		}
 	}
 
