@@ -2320,6 +2320,9 @@ namespace gamescope
         if ( m_uAxisSource != WL_POINTER_AXIS_SOURCE_WHEEL )
             return;
 
+        if ( x == 0.0 && y == 0.0 )
+            return;
+
         wlserver_lock();
         wlserver_mousewheel( x, y, ++m_uFakeTimestamp );
         wlserver_unlock();
