@@ -2607,7 +2607,11 @@ paint_all(bool async)
 			frameInfo.outputEncodingEOTF = bHDRScreenshot ? EOTF_PQ : EOTF_Gamma22;
 
 			uint32_t uCompositeDebugBackup = g_uCompositeDebug;
-			g_uCompositeDebug = 0;
+
+			if ( oScreenshotInfo->eScreenshotType != GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER )
+			{
+				g_uCompositeDebug = 0;
+			}
 
 			std::optional<uint64_t> oScreenshotSeq;
 			if ( drmCaptureFormat == DRM_FORMAT_NV12 )
@@ -2618,7 +2622,10 @@ paint_all(bool async)
 			else
 				oScreenshotSeq = vulkan_screenshot( &frameInfo, pScreenshotTexture, nullptr );
 
-			g_uCompositeDebug = uCompositeDebugBackup;
+			if ( oScreenshotInfo->eScreenshotType != GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER )
+			{
+				g_uCompositeDebug = uCompositeDebugBackup;
+			}
 
 			if ( !oScreenshotSeq )
 			{
