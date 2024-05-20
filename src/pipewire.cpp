@@ -35,7 +35,6 @@ static uint32_t s_nOutputWidth;
 static uint32_t s_nOutputHeight;
 
 static void destroy_buffer(struct pipewire_buffer *buffer) {
-	assert(!buffer->copying);
 	assert(buffer->buffer == nullptr);
 
 	switch (buffer->type) {
