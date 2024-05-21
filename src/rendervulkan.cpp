@@ -166,7 +166,6 @@ Target *pNextFind(const Base *base, VkStructureType sType)
 }
 
 #define VK_STRUCTURE_TYPE_WSI_IMAGE_CREATE_INFO_MESA (VkStructureType)1000001002
-#define VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA (VkStructureType)1000001003
 
 struct wsi_image_create_info {
 	VkStructureType sType;
@@ -177,11 +176,6 @@ struct wsi_image_create_info {
 	const uint64_t *modifiers;
 };
 
-struct wsi_memory_allocate_info {
-	VkStructureType sType;
-	const void *pNext;
-	bool implicit_sync;
-};
 
 // DRM doesn't have 32bit floating point formats, so add our own
 #define DRM_FORMAT_ABGR32323232F fourcc_code('A', 'B', '8', 'F')
@@ -2064,7 +2058,6 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 	if ( pExistingImageToReuseMemory == nullptr )
 	{
 		// Possible pNexts
-		wsi_memory_allocate_info wsiAllocInfo = {};
 		VkImportMemoryFdInfoKHR importMemoryInfo = {};
 		VkExportMemoryAllocateInfo memory_export_info = {};
 		VkMemoryDedicatedAllocateInfo memory_dedicated_info = {};
@@ -2101,13 +2094,6 @@ bool CVulkanTexture::BInit( uint32_t width, uint32_t height, uint32_t depth, uin
 				vk_log.errorf_errno( "dup failed" );
 				return false;
 			}
-
-			// We're importing WSI buffers from GL or Vulkan, set implicit_sync
-			wsiAllocInfo = {
-					.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA,
-					.pNext = std::exchange(allocInfo.pNext, &wsiAllocInfo),
-					.implicit_sync = true,
-			};
 
 			// Memory already provided by pDMA
 			importMemoryInfo = {
