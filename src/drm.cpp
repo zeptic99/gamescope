@@ -2487,6 +2487,31 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 
 	int ret = liftoff_output_apply( drm->lo_output, drm->req, drm->flags, &lo_options);
 
+	// The NVIDIA 555 series drivers started advertising DRM_CAP_SYNCOBJ, but do
+	// not support IN_FENCE_FD. However, there is no way to hide the IN_FENCE_FD
+	// property in a DRM-KMS driver, so the driver returns EPERM when an
+	// application sets IN_FENCE_FD. To work around this, the first time a
+	// commit fails with -EPERM, try it again with the IN_FENCE_FD property
+	// reset to its default value. If this succeeds, disable use of the
+	// IN_FENCE_FD property.
+	static bool attempted_in_fence_fallback = false;
+	if ( ret == -EPERM && !attempted_in_fence_fallback && !cv_drm_debug_disable_in_fence_fd )
+	{
+		attempted_in_fence_fallback = true;
+		for ( int i = 0; i < frameInfo->layerCount; i++ )
+		{
+			liftoff_layer_set_property( drm->lo_layers[ i ], "IN_FENCE_FD", -1 );
+		}
+
+		ret = liftoff_output_apply( drm->lo_output, drm->req, drm->flags, &lo_options );
+
+		if ( ret == 0 )
+		{
+			// IN_FENCE_FD isn't actually supported. Avoid it in the future.
+			cv_drm_debug_disable_in_fence_fd  = true;
+		}
+	}
+
 	if ( ret == 0 )
 	{
 		// We don't support partial composition yet
