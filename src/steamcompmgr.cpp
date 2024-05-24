@@ -2583,9 +2583,6 @@ paint_all(bool async)
 							break;
 						}
 					}
-
-					// Re-enable output color management (blending) if it was disabled by mura.
-					frameInfo.applyOutputColorMgmt = true;
 				}
 				else
 				{
@@ -2600,14 +2597,12 @@ paint_all(bool async)
 								break;
 							}
 						}
-
-						// Re-enable output color management (blending) if it was disabled by mura.
-						frameInfo.applyOutputColorMgmt = true;
 					}
 				}
-			}
 
-			frameInfo.applyOutputColorMgmt = true;
+				// Re-enable output color management (blending) if it was disabled by mura.
+				frameInfo.applyOutputColorMgmt = true;
+			}
 
 			frameInfo.outputEncodingEOTF = bHDRScreenshot ? EOTF_PQ : EOTF_Gamma22;
 
