@@ -38,6 +38,7 @@ static bool GetVulkanInstanceExtensionsRequired( std::vector< std::string > &out
 static bool GetVulkanDeviceExtensionsRequired( VkPhysicalDevice pPhysicalDevice, std::vector< std::string > &outDeviceExtensionList );
 
 gamescope::ConVar<bool> cv_vr_always_warp_cursor( "vr_always_warp_cursor", true, "Whether or not we should always warp the cursor, even if it is invisible so we get hover events." );
+gamescope::ConVar<bool> cv_vr_use_modifiers( "vr_use_modifiers", true, "Use DMA-BUF modifiers?" );
 
 // Not in public headers yet.
 namespace vr
@@ -225,6 +226,22 @@ namespace gamescope
         BackendConnectorHDRInfo m_HDRInfo{};
     };
 
+
+    class COpenVRBackend;
+
+    class COpenVRFb final : public CBaseBackendFb
+    {
+    public:
+        COpenVRFb( COpenVRBackend *pBackend, vr::SharedTextureHandle_t ulHandle, wlr_buffer *pClientBuffer );
+        ~COpenVRFb();
+
+        vr::SharedTextureHandle_t GetSharedTextureHandle() const { return m_ulHandle; }
+    private:
+        COpenVRBackend *m_pBackend = nullptr;
+        vr::SharedTextureHandle_t m_ulHandle = 0;
+    };
+
+
 	class COpenVRBackend final : public CBaseBackend, public INestedHints
 	{
 	public:
@@ -332,6 +349,45 @@ namespace gamescope
             if ( !m_pchOverlayName )
                 m_pchOverlayName = "Gamescope";
 
+            m_pIPCResourceManager = vr::VRIPCResourceManager();
+            if ( m_pIPCResourceManager )
+            {
+                uint32_t uFormatCount = 0;
+                m_pIPCResourceManager->GetDmabufFormats( &uFormatCount, nullptr );
+
+                if ( uFormatCount )
+                {
+                    std::vector<uint32_t> uFormats;
+                    uFormats.resize( uFormatCount );
+                    m_pIPCResourceManager->GetDmabufFormats( &uFormatCount, uFormats.data() );
+
+                    for ( uint32_t i = 0; i < uFormatCount; i++ )
+                    {
+                        uint32_t uFormat = uFormats[i];
+                        uint32_t uModifierCount = 0;
+                        m_pIPCResourceManager->GetDmabufModifiers( vr::VRApplication_Overlay, uFormat, &uModifierCount, nullptr );
+
+                        if ( uModifierCount )
+                        {
+                            std::vector<uint64_t> ulModifiers;
+                            ulModifiers.resize( uModifierCount );
+                            m_pIPCResourceManager->GetDmabufModifiers( vr::VRApplication_Overlay, uFormat, &uModifierCount, ulModifiers.data() );
+
+                            for ( uint64_t ulModifier : ulModifiers )
+                            {
+                                if ( ulModifier != DRM_FORMAT_MOD_INVALID )
+                                    m_FormatModifiers[uFormat].emplace_back( ulModifier );
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ( UsesModifiers() )
+            {
+                openvr_log.infof( "Using modifiers!" );
+            }
+
             if ( !vr::VROverlay() )
             {
                 openvr_log.errorf( "SteamVR runtime version mismatch!\n" );
@@ -431,24 +487,36 @@ namespace gamescope
 
             auto outputImage = vulkan_get_last_output_image( false, false );
 
-            vr::VRVulkanTextureData_t data =
-            {
-                .m_nImage            = (uint64_t)(uintptr_t)outputImage->vkImage(),
-                .m_pDevice           = g_device.device(),
-                .m_pPhysicalDevice   = g_device.physDev(),
-                .m_pInstance         = g_device.instance(),
-                .m_pQueue            = g_device.queue(),
-                .m_nQueueFamilyIndex = g_device.queueFamily(),
-                .m_nWidth            = outputImage->width(),
-                .m_nHeight           = outputImage->height(),
-                .m_nFormat           = outputImage->format(),
-                .m_nSampleCount      = 1,
-            };
-
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_EnableControlBarSteamUI, steamMode );
 
-            vr::Texture_t texture = { &data, vr::TextureType_Vulkan, vr::ColorSpace_Gamma };
-            vr::VROverlay()->SetOverlayTexture( m_hOverlay, &texture );
+            if ( UsesModifiers() )
+            {
+                COpenVRFb *pFb = static_cast<COpenVRFb *>( outputImage->GetBackendFb() );
+                vr::SharedTextureHandle_t ulHandle = pFb->GetSharedTextureHandle();
+
+                vr::Texture_t texture = { (void *)&ulHandle, vr::TextureType_SharedTextureHandle, vr::ColorSpace_Gamma };
+                vr::VROverlay()->SetOverlayTexture( m_hOverlay, &texture );
+            }
+            else
+            {
+                vr::VRVulkanTextureData_t data =
+                {
+                    .m_nImage            = (uint64_t)(uintptr_t)outputImage->vkImage(),
+                    .m_pDevice           = g_device.device(),
+                    .m_pPhysicalDevice   = g_device.physDev(),
+                    .m_pInstance         = g_device.instance(),
+                    .m_pQueue            = g_device.queue(),
+                    .m_nQueueFamilyIndex = g_device.queueFamily(),
+                    .m_nWidth            = outputImage->width(),
+                    .m_nHeight           = outputImage->height(),
+                    .m_nFormat           = outputImage->format(),
+                    .m_nSampleCount      = 1,
+                };
+
+                vr::Texture_t texture = { &data, vr::TextureType_Vulkan, vr::ColorSpace_Gamma };
+                vr::VROverlay()->SetOverlayTexture( m_hOverlay, &texture );
+            }
+
             if ( m_bNudgeToVisible )
             {
                 vr::VROverlay()->ShowDashboard( m_pchOverlayKey );
@@ -477,16 +545,73 @@ namespace gamescope
 
 		virtual OwningRc<IBackendFb> ImportDmabufToBackend( wlr_buffer *pBuffer, wlr_dmabuf_attributes *pDmaBuf ) override
 		{
-			return nullptr;
+            if ( !UsesModifiers() )
+                return nullptr;
+
+			vr::DmabufAttributes_t dmabufAttributes =
+            {
+                .unWidth       = uint32_t( pDmaBuf->width ),
+                .unHeight      = uint32_t( pDmaBuf->height ),
+                .unDepth       = 1,
+                .unMipLevels   = 1,
+                .unArrayLayers = 1,
+                .unSampleCount = 1,
+                .unFormat      = pDmaBuf->format,
+                .ulModifier    = pDmaBuf->modifier,
+                .unPlaneCount  = uint32_t( pDmaBuf->n_planes ),
+                .plane         =
+                {
+                    {
+                        .unOffset = pDmaBuf->offset[0],
+                        .unStride = pDmaBuf->stride[0],
+                        .nFd      = pDmaBuf->fd[0],
+                    },
+                    {
+                        .unOffset = pDmaBuf->offset[1],
+                        .unStride = pDmaBuf->stride[1],
+                        .nFd      = pDmaBuf->fd[1],
+                    },
+                    {
+                        .unOffset = pDmaBuf->offset[2],
+                        .unStride = pDmaBuf->stride[2],
+                        .nFd      = pDmaBuf->fd[2],
+                    },
+                    {
+                        .unOffset = pDmaBuf->offset[3],
+                        .unStride = pDmaBuf->stride[3],
+                        .nFd      = pDmaBuf->fd[3],
+                    },
+                }
+            };
+
+            vr::SharedTextureHandle_t ulSharedHandle = 0;
+            if ( !m_pIPCResourceManager->ImportDmabuf( vr::VRApplication_Overlay, &dmabufAttributes, &ulSharedHandle ) )
+                return nullptr;
+            assert( ulSharedHandle != 0 );
+
+            return new COpenVRFb{ this, ulSharedHandle, pBuffer };
 		}
 
 		virtual bool UsesModifiers() const override
 		{
-			return false;
+            if ( !cv_vr_use_modifiers )
+                return false;
+
+            if ( !m_pIPCResourceManager )
+                return false;
+
+			return !m_FormatModifiers.empty();
 		}
 		virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const override
 		{
-			return std::span<const uint64_t>{};
+            if ( !UsesModifiers() )
+                return std::span<const uint64_t>{};
+
+            auto iter = m_FormatModifiers.find( uDrmFormat );
+            if ( iter == m_FormatModifiers.end() )
+                return std::span<const uint64_t>{};
+
+            return std::span<const uint64_t>{ iter->second.begin(), iter->second.end() };
 		}
 
 		virtual IBackendConnector *GetCurrentConnector() override
@@ -635,6 +760,11 @@ namespace gamescope
             return nullptr;
         }
 
+        vr::IVRIPCResourceManagerClient *GetIPCResourceManager()
+        {
+            return m_pIPCResourceManager;
+        }
+
 	protected:
 
 		virtual void OnBackendBlobDestroyed( BackendBlob *pBlob ) override
@@ -768,8 +898,28 @@ namespace gamescope
         wlserver_input_method *m_pIME = nullptr;
         std::atomic<bool> m_bOverlayVisible = { false };
 
+        vr::IVRIPCResourceManagerClient *m_pIPCResourceManager = nullptr;
+        std::unordered_map<uint32_t, std::vector<uint64_t>> m_FormatModifiers;
+
         std::atomic<uint32_t> m_uFakeTimestamp = { 0 };
 	};
+
+	/////////////////////////
+	// COpenVRFb
+	/////////////////////////
+
+    COpenVRFb::COpenVRFb( COpenVRBackend *pBackend, vr::SharedTextureHandle_t ulHandle, wlr_buffer *pClientBuffer )
+        : CBaseBackendFb{ pClientBuffer }
+        , m_pBackend{ pBackend }
+        , m_ulHandle{ ulHandle }
+    {
+    }
+
+    COpenVRFb::~COpenVRFb()
+    {
+        m_pBackend->GetIPCResourceManager()->UnrefResource( m_ulHandle );
+        m_ulHandle = 0;
+    }
 
 	/////////////////////////
 	// Backend Instantiator
