@@ -859,6 +859,7 @@ unsigned int g_BlurFadeStartTime = 0;
 
 pid_t focusWindow_pid;
 
+focus_t g_steamcompmgr_xdg_focus;
 std::vector<std::shared_ptr<steamcompmgr_win_t>> g_steamcompmgr_xdg_wins;
 
 static bool
@@ -1431,7 +1432,7 @@ void MouseCursor::checkSuspension()
 			if ( window_wants_no_focus_when_mouse_hidden(window) )
 			{
 				wlserver_lock();
-				wlserver_fake_mouse_pos( window->xwayland().a.width - 1, window->xwayland().a.height - 1 );
+				wlserver_fake_mouse_pos( window->GetGeometry().nWidth - 1, window->GetGeometry().nHeight - 1 );
 				wlserver_mousehide();
 				wlserver_unlock();
 			}
@@ -1725,14 +1726,14 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 		return;
 	}
 
-	uint32_t sourceWidth = window->xwayland().a.width;
-	uint32_t sourceHeight = window->xwayland().a.height;
+	uint32_t sourceWidth = window->GetGeometry().nWidth;
+	uint32_t sourceHeight = window->GetGeometry().nHeight;
 
 	if ( fit )
 	{
 		// If we have an override window, try to fit it in as long as it won't make our scale go below 1.0.
-		sourceWidth = std::max<uint32_t>( sourceWidth, clamp<int>( fit->xwayland().a.x + fit->xwayland().a.width, 0, currentOutputWidth ) );
-		sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->xwayland().a.y + fit->xwayland().a.height, 0, currentOutputHeight ) );
+		sourceWidth = std::max<uint32_t>( sourceWidth, clamp<int>( fit->GetGeometry().nX + fit->GetGeometry().nWidth, 0, currentOutputWidth ) );
+		sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->GetGeometry().nY + fit->GetGeometry().nHeight, 0, currentOutputHeight ) );
 	}
 
 	float cursor_scale = 1.0f;
@@ -1755,8 +1756,8 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	cursorOffsetY = (currentOutputHeight - sourceHeight * currentScaleRatio_y) / 2.0f;
 
 	// Actual point on scaled screen where the cursor hotspot should be
-	scaledX = (winX - window->xwayland().a.x) * currentScaleRatio_x + cursorOffsetX;
-	scaledY = (winY - window->xwayland().a.y) * currentScaleRatio_y + cursorOffsetY;
+	scaledX = (winX - window->GetGeometry().nX) * currentScaleRatio_x + cursorOffsetX;
+	scaledY = (winY - window->GetGeometry().nY) * currentScaleRatio_y + cursorOffsetY;
 
 	if ( zoomScaleRatio != 1.0 )
 	{
@@ -1924,8 +1925,8 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 
 	if (notificationMode)
 	{
-		sourceWidth = mainOverlayWindow->xwayland().a.width;
-		sourceHeight = mainOverlayWindow->xwayland().a.height;
+		sourceWidth = mainOverlayWindow->GetGeometry().nWidth;
+		sourceHeight = mainOverlayWindow->GetGeometry().nHeight;
 	}
 	else if ( flags & PaintWindowFlag::NoScale )
 	{
@@ -1947,21 +1948,19 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 			sourceWidth = lastCommit->vulkanTex->width();
 			sourceHeight = lastCommit->vulkanTex->height();
 		} else {
-			sourceWidth = scaleW->xwayland().a.width;
-			sourceHeight = scaleW->xwayland().a.height;
+			sourceWidth = scaleW->GetGeometry().nWidth;
+			sourceHeight = scaleW->GetGeometry().nHeight;
 		}
 
 		if ( fit )
 		{
 			// If we have an override window, try to fit it in as long as it won't make our scale go below 1.0.
-			sourceWidth = std::max<uint32_t>( sourceWidth, clamp<int>( fit->xwayland().a.x + fit->xwayland().a.width, 0, currentOutputWidth ) );
-			sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->xwayland().a.y + fit->xwayland().a.height, 0, currentOutputHeight ) );
+			sourceWidth = std::max<uint32_t>( sourceWidth, clamp<int>( fit->GetGeometry().nX + fit->GetGeometry().nWidth, 0, currentOutputWidth ) );
+			sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->GetGeometry().nY + fit->GetGeometry().nHeight, 0, currentOutputHeight ) );
 		}
 	}
 
-	bool offset = false;
-	if ( w->type == steamcompmgr_win_type_t::XWAYLAND )
-		offset = ( ( w->xwayland().a.x || w->xwayland().a.y ) && w != scaleW );
+	bool offset = ( ( w->GetGeometry().nX || w->GetGeometry().nY ) && w != scaleW );
 
 	if (sourceWidth != currentOutputWidth || sourceHeight != currentOutputHeight || offset || globalScaleRatio != 1.0f)
 	{
@@ -1970,10 +1969,10 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 		drawXOffset = ((int)currentOutputWidth - (int)sourceWidth * currentScaleRatio_x) / 2.0f;
 		drawYOffset = ((int)currentOutputHeight - (int)sourceHeight * currentScaleRatio_y) / 2.0f;
 
-		if ( w->type == steamcompmgr_win_type_t::XWAYLAND && w != scaleW )
+		if ( w != scaleW )
 		{
-			drawXOffset += w->xwayland().a.x * currentScaleRatio_x;
-			drawYOffset += w->xwayland().a.y * currentScaleRatio_y;
+			drawXOffset += w->GetGeometry().nX * currentScaleRatio_x;
+			drawYOffset += w->GetGeometry().nY * currentScaleRatio_y;
 		}
 
 		if ( zoomScaleRatio != 1.0 )
@@ -2001,8 +2000,8 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	{
 		int xOffset = 0, yOffset = 0;
 
-		int width = w->xwayland().a.width * currentScaleRatio_x;
-		int height = w->xwayland().a.height * currentScaleRatio_y;
+		int width = w->GetGeometry().nWidth * currentScaleRatio_x;
+		int height = w->GetGeometry().nHeight * currentScaleRatio_y;
 
 		if (globalScaleRatio != 1.0f)
 		{
@@ -2920,13 +2919,10 @@ win_has_game_id( steamcompmgr_win_t *w )
 static bool
 win_is_useless( steamcompmgr_win_t *w )
 {
-	if (w->type != steamcompmgr_win_type_t::XWAYLAND)
-		return false;
-
 	// Windows that are 1x1 are pretty useless for override redirects.
 	// Just ignore them.
 	// Fixes the Xbox Login in Age of Empires 2: DE.
-	return w->xwayland().a.width == 1 && w->xwayland().a.height == 1;
+	return w->GetGeometry().nWidth == 1 && w->GetGeometry().nHeight == 1;
 }
 
 static bool
@@ -3093,7 +3089,7 @@ static bool is_good_override_candidate( steamcompmgr_win_t *override, steamcompm
 	if ( !focus )
 		return false;
 
-	return override != focus && override->xwayland().a.x >= 0 && override->xwayland().a.y >= 0;
+	return override != focus && override->GetGeometry().nX >= 0 && override->GetGeometry().nY >= 0;
 } 
 
 static bool
@@ -3125,15 +3121,6 @@ pick_primary_focus_and_override(focus_t *out, Window focusControlWindow, const s
 		{
 			for ( steamcompmgr_win_t *focusable_window : vecPossibleFocusWindows )
 			{
-				// HACK: Bring any Wayland windows to global focus for now
-				// until appID stuff is plumbed for them.
-				if ( focusable_window->type == steamcompmgr_win_type_t::XDG )
-				{
-					focus = focusable_window;
-					localGameFocused = true;
-					goto found;
-				}
-
 				if ( focusable_window->appID == focusable_appid )
 				{
 					focus = focusable_window;
@@ -3342,7 +3329,7 @@ void xwayland_ctx_t::DetermineAndApplyFocus( const std::vector< steamcompmgr_win
 	{
 		if (w->isOverlay)
 		{
-			if (w->xwayland().a.width > 1200 && w->opacity >= maxOpacity)
+			if (w->GetGeometry().nWidth > 1200 && w->opacity >= maxOpacity)
 			{
 				ctx->focus.overlayWindow = w;
 				maxOpacity = w->opacity;
@@ -3473,7 +3460,7 @@ void xwayland_ctx_t::DetermineAndApplyFocus( const std::vector< steamcompmgr_win
 		ctx->focus.focusWindow->nudged = true;
 	}
 
-	if (w->xwayland().a.x != 0 || w->xwayland().a.y != 0)
+	if (w->GetGeometry().nX != 0 || w->GetGeometry().nY != 0)
 		XMoveWindow(ctx->dpy, ctx->focus.focusWindow->xwayland().id, 0, 0);
 
 	if ( window_is_fullscreen( ctx->focus.focusWindow ) || ctx->force_windows_fullscreen )
@@ -3488,14 +3475,14 @@ void xwayland_ctx_t::DetermineAndApplyFocus( const std::vector< steamcompmgr_win
 			fs_width  = ctx->root_width * steam_height_scale;
 		}
 
-		if ( w->xwayland().a.width != fs_width || w->xwayland().a.height != fs_height || globalScaleRatio != 1.0f )
+		if ( w->GetGeometry().nWidth != fs_width || w->GetGeometry().nHeight != fs_height || globalScaleRatio != 1.0f )
 			XResizeWindow(ctx->dpy, ctx->focus.focusWindow->xwayland().id, fs_width, fs_height);
 	}
 	else
 	{
 		if (ctx->focus.focusWindow->sizeHintsSpecified &&
-			((unsigned)ctx->focus.focusWindow->xwayland().a.width != ctx->focus.focusWindow->requestedWidth ||
-			(unsigned)ctx->focus.focusWindow->xwayland().a.height != ctx->focus.focusWindow->requestedHeight))
+			((unsigned)ctx->focus.focusWindow->GetGeometry().nWidth != ctx->focus.focusWindow->requestedWidth ||
+			(unsigned)ctx->focus.focusWindow->GetGeometry().nHeight != ctx->focus.focusWindow->requestedHeight))
 		{
 			XResizeWindow(ctx->dpy, ctx->focus.focusWindow->xwayland().id, ctx->focus.focusWindow->requestedWidth, ctx->focus.focusWindow->requestedHeight);
 		}
@@ -3537,6 +3524,16 @@ const char *get_win_display_name(steamcompmgr_win_t *window)
 		return "";
 }
 
+
+static std::vector< steamcompmgr_win_t* >
+steamcompmgr_xdg_get_possible_focus_windows()
+{
+	std::vector< steamcompmgr_win_t* > windows;
+	for ( auto &win : g_steamcompmgr_xdg_wins )
+		windows.emplace_back( win.get() );
+	return windows;
+}
+
 static std::vector< steamcompmgr_win_t* > GetGlobalPossibleFocusWindows()
 {
 	std::vector< steamcompmgr_win_t* > vecPossibleFocusWindows;
@@ -3550,16 +3547,21 @@ static std::vector< steamcompmgr_win_t* > GetGlobalPossibleFocusWindows()
 		}
 	}
 
-	for ( const auto& xdg_win : g_steamcompmgr_xdg_wins )
 	{
-		if ( xdg_win->xdg().surface.mapped )
-			vecPossibleFocusWindows.push_back( xdg_win.get() );
+		std::vector< steamcompmgr_win_t* > vecLocalPossibleFocusWindows = steamcompmgr_xdg_get_possible_focus_windows();
+		vecPossibleFocusWindows.insert( vecPossibleFocusWindows.end(), vecLocalPossibleFocusWindows.begin(), vecLocalPossibleFocusWindows.end() );
 	}
 
 	// Determine global primary focus
 	std::stable_sort( vecPossibleFocusWindows.begin(), vecPossibleFocusWindows.end(), is_focus_priority_greater );
 
 	return vecPossibleFocusWindows;
+}
+
+static void
+steamcompmgr_xdg_determine_and_apply_focus( const std::vector< steamcompmgr_win_t* > &vecPossibleFocusWindows )
+{
+	pick_primary_focus_and_override( &g_steamcompmgr_xdg_focus, None, vecPossibleFocusWindows, false, vecFocuscontrolAppIDs );
 }
 
 static void
@@ -3585,6 +3587,13 @@ determine_and_apply_focus()
 			if ( server->ctx->focus.IsDirty() )
 				server->ctx->DetermineAndApplyFocus( vecLocalPossibleFocusWindows );
 		}
+	}
+
+	// Apply focus to XDG contexts (TODO merge me with some nice abstraction of "environments")
+	{
+		std::vector< steamcompmgr_win_t* > vecLocalPossibleFocusWindows = steamcompmgr_xdg_get_possible_focus_windows();
+		if ( g_steamcompmgr_xdg_focus.IsDirty() )
+			steamcompmgr_xdg_determine_and_apply_focus( vecLocalPossibleFocusWindows );
 	}
 
 	// Determine local context focuses
@@ -3712,22 +3721,22 @@ determine_and_apply_focus()
 	{
 		// Cannot simply XWarpPointer here as we immediately go on to
 		// do wlserver_mousefocus and need to update m_x and m_y of the cursor.
-		if ( global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCorner )
+		if ( global_focus.inputFocusWindow->GetFocus()->bResetToCorner )
 		{
 			wlserver_lock();
-			wlserver_mousewarp( global_focus.inputFocusWindow->xwayland().a.width / 2, global_focus.inputFocusWindow->xwayland().a.height / 2, 0, true );
-			wlserver_fake_mouse_pos( global_focus.inputFocusWindow->xwayland().a.width - 1, global_focus.inputFocusWindow->xwayland().a.height - 1 );
+			wlserver_mousewarp( global_focus.inputFocusWindow->GetGeometry().nWidth / 2, global_focus.inputFocusWindow->GetGeometry().nHeight / 2, 0, true );
+			wlserver_fake_mouse_pos( global_focus.inputFocusWindow->GetGeometry().nWidth - 1, global_focus.inputFocusWindow->GetGeometry().nHeight - 1 );
 			wlserver_unlock();
 		}
-		else if ( global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCenter )
+		else if ( global_focus.inputFocusWindow->GetFocus()->bResetToCenter )
 		{
 			wlserver_lock();
-			wlserver_mousewarp( global_focus.inputFocusWindow->xwayland().a.width / 2, global_focus.inputFocusWindow->xwayland().a.height / 2, 0, true );
+			wlserver_mousewarp( global_focus.inputFocusWindow->GetGeometry().nWidth / 2, global_focus.inputFocusWindow->GetGeometry().nHeight / 2, 0, true );
 			wlserver_unlock();
 		}
 
-		global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCorner = false;
-		global_focus.inputFocusWindow->xwayland().ctx->focus.bResetToCenter = false;
+		global_focus.inputFocusWindow->GetFocus()->bResetToCorner = false;
+		global_focus.inputFocusWindow->GetFocus()->bResetToCenter = false;
 	}
 
 	// Determine if we need to repaints
@@ -3933,8 +3942,8 @@ get_size_hints(xwayland_ctx_t *ctx, steamcompmgr_win_t *w)
 				// If we have a unique children that isn't override-reidrect that is
 				// contained inside this fullscreen window, it's probably it.
 				if (attribs.override_redirect == false &&
-					attribs.width <= w->xwayland().a.width &&
-					attribs.height <= w->xwayland().a.height)
+					attribs.width <= w->GetGeometry().nWidth &&
+					attribs.height <= w->GetGeometry().nHeight)
 				{
 					w->sizeHintsSpecified = true;
 
@@ -4153,7 +4162,7 @@ unmap_win(xwayland_ctx_t *ctx, Window id, bool fade)
 	finish_unmap_win(ctx, w);
 }
 
-static uint32_t
+uint32_t
 get_appid_from_pid( pid_t pid )
 {
 	uint32_t unFoundAppId = 0;
@@ -5034,7 +5043,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			{
 				if (w->isOverlay)
 				{
-					if (w->xwayland().a.width > 1200 && w->opacity >= maxOpacity)
+					if (w->GetGeometry().nWidth > 1200 && w->opacity >= maxOpacity)
 					{
 						ctx->focus.overlayWindow = w;
 						maxOpacity = w->opacity;
