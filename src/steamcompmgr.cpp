@@ -6058,20 +6058,35 @@ void handle_done_commits_xwayland( xwayland_ctx_t *ctx, bool vblank, uint64_t vb
 	ctx->doneCommits.listCommitsDone.swap( commits_before_their_time );
 }
 
-void handle_done_commits_xdg()
+void handle_done_commits_xdg( bool vblank, uint64_t vblank_idx )
 {
 	std::lock_guard<std::mutex> lock( g_steamcompmgr_xdg_done_commits.listCommitsDoneLock );
 
 	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	// commits that were not ready to be presented based on their display timing.
-	std::vector< CommitDoneEntry_t > commits_before_their_time;
+	static std::vector< CommitDoneEntry_t > commits_before_their_time;
+	commits_before_their_time.clear();
+	commits_before_their_time.reserve( 32 );
+
+	// windows in FIFO mode we got a new frame to present for this vblank
+	static std::unordered_set< uint64_t > fifo_win_seqs;
+	fifo_win_seqs.clear();
+	fifo_win_seqs.reserve( 32 );
 
 	uint64_t now = get_time_in_nanos();
+
+	vblank = vblank && steamcompmgr_should_vblank_window( true, vblank_idx );
 
 	// very fast loop yes
 	for ( auto& entry : g_steamcompmgr_xdg_done_commits.listCommitsDone )
 	{
+		if (entry.fifo && (!vblank || fifo_win_seqs.count(entry.winSeq) > 0))
+		{
+			commits_before_their_time.push_back( entry );
+			continue;
+		}
+		
 		if (!entry.earliestPresentTime)
 		{
 			entry.earliestPresentTime = next_refresh_time;
@@ -6086,12 +6101,18 @@ void handle_done_commits_xdg()
 
 		for (const auto& xdg_win : g_steamcompmgr_xdg_wins)
 		{
+			if (xdg_win->seq != entry.winSeq)
+				continue;
 			if (handle_done_commit(xdg_win.get(), nullptr, entry.commitID, entry.earliestPresentTime, entry.earliestLatchTime))
+			{
+				if (entry.fifo)
+					fifo_win_seqs.insert(entry.winSeq);
 				break;
+			}
 		}
 	}
 
-	g_steamcompmgr_xdg_done_commits.listCommitsDone = std::move( commits_before_their_time );
+	g_steamcompmgr_xdg_done_commits.listCommitsDone.swap( commits_before_their_time );
 }
 
 void handle_presented_for_window( steamcompmgr_win_t* w )
@@ -7089,7 +7110,7 @@ extern int g_nPreferredOutputHeight;
 
 static bool g_bWasFSRActive = false;
 
-void steamcompmgr_check_xdg(bool vblank)
+void steamcompmgr_check_xdg(bool vblank, uint64_t vblank_idx)
 {
 	if (wlserver_xdg_dirty())
 	{
@@ -7109,7 +7130,7 @@ void steamcompmgr_check_xdg(bool vblank)
 		MakeFocusDirty();
 	}
 
-	handle_done_commits_xdg();
+	handle_done_commits_xdg( vblank, vblank_idx );
 
 	// When we have observed both a complete commit and a VBlank, we should request a new frame.
 	if (vblank)
@@ -7495,6 +7516,8 @@ steamcompmgr_main(int argc, char **argv)
 			}
 		}
 
+		steamcompmgr_check_xdg(vblank, vblank_idx);
+
 		if ( vblank )
 		{
 			vblank_idx++;
@@ -7593,8 +7616,6 @@ steamcompmgr_main(int argc, char **argv)
 				flush_root = true;
 			}
 		}
-
-		steamcompmgr_check_xdg(vblank);
 
 		// Handles if we got a commit for the window we want to focus
 		// to switch to it for painting (outdatedInteractiveFocus)
