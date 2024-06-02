@@ -507,7 +507,7 @@ bool set_color_mgmt_enabled( bool bEnabled )
 	return true;
 }
 
-static std::shared_ptr<CVulkanTexture> s_MuraCorrectionImage[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT];
+static gamescope::OwningRc<CVulkanTexture> s_MuraCorrectionImage[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT];
 static std::shared_ptr<gamescope::BackendBlob> s_MuraCTMBlob[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT];
 static float g_flMuraScale = 1.0f;
 static bool g_bMuraCompensationDisabled = false;
@@ -951,8 +951,7 @@ static bool		useXRes = true;
 struct wlr_buffer_map_entry {
 	struct wl_listener listener;
 	struct wlr_buffer *buf;
-	std::shared_ptr<CVulkanTexture> vulkanTex;
-	gamescope::OwningRc<gamescope::IBackendFb> pBackendFb;
+	gamescope::OwningRc<CVulkanTexture> vulkanTex;
 };
 
 static std::mutex wlr_buffer_map_lock;
@@ -1179,10 +1178,10 @@ destroy_buffer( struct wl_listener *listener, void * )
 	std::lock_guard<std::mutex> lock( wlr_buffer_map_lock );
 	wlr_buffer_map_entry *entry = wl_container_of( listener, entry, listener );
 
-	if ( entry->pBackendFb != nullptr )
+	if ( entry->vulkanTex != nullptr )
 	{
-		assert( entry->pBackendFb->GetRefCount() == 0 );
-		entry->pBackendFb = nullptr;
+		assert( entry->vulkanTex->GetRefCount() == 0 );
+		entry->vulkanTex = nullptr;
 	}
 
 	wl_list_remove( &entry->listener.link );
@@ -1216,10 +1215,8 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	auto it = wlr_buffer_map.find( buf );
 	if ( it != wlr_buffer_map.end() )
 	{
-		commit->vulkanTex = it->second.vulkanTex;
-
-		// Transfer from OwningRc of the import -> Rc of the usage.
-		gamescope::OwningRc<gamescope::IBackendFb> pBackendFb = it->second.pBackendFb;
+		// Transfer from OwningRc of the texture -> Rc of the usage.
+		gamescope::OwningRc<CVulkanTexture> pVulkanTexture = it->second.vulkanTex;
 
 		/* Unlock here to avoid deadlock [1],
 		 * drm_lock_fbid calls wlserver_lock.
@@ -1227,8 +1224,8 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 		 * is no longer accessed. */
 		lock.unlock();
 
-		// Going -> rc now
-		commit->pBackendFb = pBackendFb.get();
+		// Going from OwningRc -> Rc now.
+		commit->vulkanTex = pVulkanTexture;
 
 		return commit;
 	}
@@ -1249,22 +1246,18 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	 *		 valid in all cases, even after a rehash." */
 	lock.unlock();
 
-	commit->vulkanTex = vulkan_create_texture_from_wlr_buffer( buf );
-	assert( commit->vulkanTex );
-
 	struct wlr_dmabuf_attributes dmabuf = {0};
 	gamescope::OwningRc<gamescope::IBackendFb> pBackendFb;
 	if ( wlr_buffer_get_dmabuf( buf, &dmabuf ) )
 	{
 		pBackendFb = GetBackend()->ImportDmabufToBackend( buf, &dmabuf );
-		// OwningRc ref -> Rc import for commit
-		commit->pBackendFb = pBackendFb.get();
 	}
 
 	entry.listener.notify = destroy_buffer;
 	entry.buf = buf;
-	entry.vulkanTex = commit->vulkanTex;
-	entry.pBackendFb = pBackendFb;
+	entry.vulkanTex = vulkan_create_texture_from_wlr_buffer( buf, std::move( pBackendFb ) );
+	
+	commit->vulkanTex = entry.vulkanTex.get();
 
 	wlserver_lock();
 	wl_signal_add( &buf->events.destroy, &entry.listener );
@@ -1405,7 +1398,7 @@ void calc_scale_factor(float &out_scale_x, float &out_scale_y, float sourceWidth
  * Constructor for a cursor. It is hidden in the beginning (normally until moved by user).
  */
 MouseCursor::MouseCursor(xwayland_ctx_t *ctx)
-	: m_texture(0)
+	: m_texture(nullptr)
 	, m_dirty(true)
 	, m_imageEmpty(false)
 	, m_ctx(ctx)
@@ -1791,7 +1784,6 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->applyColorMgmt = false;
 
 	layer->tex = m_texture;
-	layer->pBackendFb = m_texture->GetBackendFb();
 
 	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
@@ -1847,7 +1839,6 @@ paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerIn
 	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
 		layer->ctm = s_scRGB709To2020Matrix;
 	layer->tex = commit->vulkanTex;
-	layer->pBackendFb = commit->pBackendFb;
 
 	layer->filter = base.filter;
 	layer->blackBorder = true;
@@ -2048,7 +2039,6 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	}
 
 	layer->tex = lastCommit->vulkanTex;
-	layer->pBackendFb = lastCommit->pBackendFb;
 
 	layer->filter = ( flags & PaintWindowFlag::NoFilter ) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
@@ -2186,11 +2176,11 @@ static void paint_pipewire()
 	if ( pFocus->overrideWindow && !pFocus->focusWindow->isSteamStreamingClient )
 		paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
 
-	std::shared_ptr<CVulkanTexture> pRGBTexture = s_pPipewireBuffer->texture->isYcbcr()
+	gamescope::Rc<CVulkanTexture> pRGBTexture = s_pPipewireBuffer->texture->isYcbcr()
 		? vulkan_acquire_screenshot_texture( g_nOutputWidth, g_nOutputHeight, false, DRM_FORMAT_XRGB2101010 )
-		: s_pPipewireBuffer->texture;
+		: gamescope::Rc<CVulkanTexture>{ s_pPipewireBuffer->texture };
 
-	std::shared_ptr<CVulkanTexture> pYUVTexture = s_pPipewireBuffer->texture->isYcbcr() ? s_pPipewireBuffer->texture : nullptr;
+	gamescope::Rc<CVulkanTexture> pYUVTexture = s_pPipewireBuffer->texture->isYcbcr() ? s_pPipewireBuffer->texture : nullptr;
 
 	uint32_t uCompositeDebugBackup = g_uCompositeDebug;
 	g_uCompositeDebug = 0;
@@ -2405,7 +2395,6 @@ paint_all(bool async)
 			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
 			layer->ctm = nullptr;
 			layer->tex = tex;
-			layer->pBackendFb = tex->GetBackendFb();
 
 			layer->filter = GamescopeUpscaleFilter::NEAREST;
 			layer->blackBorder = true;
@@ -2507,7 +2496,6 @@ paint_all(bool async)
 		FrameInfo_t::Layer_t *layer = &frameInfo.layers[ curLayer ];
 
 		layer->applyColorMgmt = false;
-		layer->pBackendFb = MuraCorrectionImage->GetBackendFb();
 		layer->scale = vec2_t{ 1.0f, 1.0f };
 		layer->blackBorder = true;
 		layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU;
@@ -2551,7 +2539,7 @@ paint_all(bool async)
 		else if ( path.extension() == ".nv12.bin" )
 			drmCaptureFormat = DRM_FORMAT_NV12;
 
-		std::shared_ptr<CVulkanTexture> pScreenshotTexture;
+		gamescope::Rc<CVulkanTexture> pScreenshotTexture;
 		if ( drmCaptureFormat != DRM_FORMAT_INVALID )
 			pScreenshotTexture = vulkan_acquire_screenshot_texture( g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat );
 

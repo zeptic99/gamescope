@@ -581,8 +581,8 @@ namespace gamescope
         wp_viewporter *m_pViewporter = nullptr;
         wl_region *m_pFullRegion = nullptr;
         Rc<CWaylandFb> m_BlackFb;
-        std::shared_ptr<CWaylandFb> m_pOwnedBlackFb;
-        std::shared_ptr<CVulkanTexture> m_pBlackTexture;
+        OwningRc<CWaylandFb> m_pOwnedBlackFb;
+        OwningRc<CVulkanTexture> m_pBlackTexture;
         wp_presentation *m_pPresentation = nullptr;
         frog_color_management_factory_v1 *m_pFrogColorMgmtFactory = nullptr;
         zwp_pointer_constraints_v1 *m_pPointerConstraints = nullptr;
@@ -961,7 +961,7 @@ namespace gamescope
 
     void CWaylandPlane::Present( const FrameInfo_t::Layer_t *pLayer )
     {
-        CWaylandFb *pWaylandFb = pLayer && pLayer->pBackendFb != nullptr ? static_cast<CWaylandFb*>( pLayer->pBackendFb.get() ) : nullptr;
+        CWaylandFb *pWaylandFb = pLayer && pLayer->tex != nullptr ? static_cast<CWaylandFb*>( pLayer->tex->GetBackendFb() ) : nullptr;
         wl_buffer *pBuffer = pWaylandFb ? pWaylandFb->GetHostBuffer() : nullptr;
 
         if ( pBuffer )
@@ -1227,7 +1227,7 @@ namespace gamescope
         if ( m_pSinglePixelBufferManager )
         {
             wl_buffer *pBlackBuffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer( m_pSinglePixelBufferManager, 0, 0, 0, ~0u );
-            m_pOwnedBlackFb = std::make_shared<CWaylandFb>( this, pBlackBuffer, nullptr );
+            m_pOwnedBlackFb = new CWaylandFb( this, pBlackBuffer, nullptr );
             m_BlackFb = m_pOwnedBlackFb.get();
         }
         else
@@ -1381,7 +1381,6 @@ namespace gamescope
                 compositeLayer.zpos = g_zposBase;
 
                 compositeLayer.tex = vulkan_get_last_output_image( false, false );
-                compositeLayer.pBackendFb = compositeLayer.tex->GetBackendFb();
                 compositeLayer.applyColorMgmt = false;
 
                 compositeLayer.filter = GamescopeUpscaleFilter::NEAREST;
