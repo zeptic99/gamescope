@@ -171,21 +171,23 @@ namespace GamescopeWSILayer {
 
     bool valid() const { return compositor && gamescopeSwapchainFactory; }
 
-    static constexpr wl_registry_listener s_registryListener = {
-      .global = [](void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
-        auto objects = reinterpret_cast<GamescopeWaylandObjects *>(data);
+    static const wl_registry_listener s_registryListener;
+  };
 
-        if (interface == "wl_compositor"sv) {
-          objects->compositor = reinterpret_cast<wl_compositor *>(
-            wl_registry_bind(registry, name, &wl_compositor_interface, version));
-        } else if (interface == "gamescope_swapchain_factory_v2"sv) {
-          objects->gamescopeSwapchainFactory = reinterpret_cast<gamescope_swapchain_factory_v2 *>(
-            wl_registry_bind(registry, name, &gamescope_swapchain_factory_v2_interface, version));
-        }
-      },
-      .global_remove = [](void* data, wl_registry* registry, uint32_t name) {
-      },
-    };
+  const wl_registry_listener GamescopeWaylandObjects::s_registryListener = {
+    .global = [](void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
+      auto objects = reinterpret_cast<GamescopeWaylandObjects *>(data);
+
+      if (interface == "wl_compositor"sv) {
+        objects->compositor = reinterpret_cast<wl_compositor *>(
+          wl_registry_bind(registry, name, &wl_compositor_interface, version));
+      } else if (interface == "gamescope_swapchain_factory_v2"sv) {
+        objects->gamescopeSwapchainFactory = reinterpret_cast<gamescope_swapchain_factory_v2 *>(
+          wl_registry_bind(registry, name, &gamescope_swapchain_factory_v2_interface, version));
+      }
+    },
+    .global_remove = [](void* data, wl_registry* registry, uint32_t name) {
+    },
   };
 
   struct GamescopeInstanceData {
