@@ -144,6 +144,7 @@ namespace gamescope
         int32_t nDstHeight;
         GamescopeAppTextureColorspace eColorspace;
         bool bOpaque;
+        uint32_t uFractionalScale;
     };
 
     inline WaylandPlaneState ClipPlane( const WaylandPlaneState &state )
@@ -908,7 +909,7 @@ namespace gamescope
             }
 
             // Fraction with denominator of 120 per. spec
-            const uint32_t uScale = GetScale();
+            const uint32_t uScale = oState->uFractionalScale;
 
             wp_viewport_set_source(
                 m_pViewport,
@@ -982,6 +983,7 @@ namespace gamescope
                     .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
                     .eColorspace = pLayer->colorspace,
                     .bOpaque     = pLayer->zpos == g_zposBase,
+                    .uFractionalScale = m_uFractionalScale,
                 } ) );
         }
         else
@@ -1346,7 +1348,8 @@ namespace gamescope
                 {
                     m_BlackFb->OnCompositorAcquire();
 
-                    m_Planes[uCurrentPlane++].Present(
+                    CWaylandPlane *pPlane = &m_Planes[uCurrentPlane++];
+                    pPlane->Present(
                         WaylandPlaneState
                         {
                             .pBuffer     = m_BlackFb->GetHostBuffer(),
@@ -1356,6 +1359,7 @@ namespace gamescope
                             .nDstHeight  = int32_t( g_nOutputHeight ),
                             .eColorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
                             .bOpaque     = true,
+                            .uFractionalScale = pPlane->GetScale(),
                         } );
                 }
 
@@ -2265,8 +2269,10 @@ namespace gamescope
         if ( !oState )
             return;
 
-        double flX = ( wl_fixed_to_double( fSurfaceX ) + oState->nDestX ) / g_nOutputWidth;
-        double flY = ( wl_fixed_to_double( fSurfaceY ) + oState->nDestY ) / g_nOutputHeight;
+        uint32_t uScale = oState->uFractionalScale;
+
+        double flX = ( wl_fixed_to_double( fSurfaceX ) * uScale / 120.0 + oState->nDestX ) / g_nOutputWidth;
+        double flY = ( wl_fixed_to_double( fSurfaceY ) * uScale / 120.0 + oState->nDestY ) / g_nOutputHeight;
 
         wlserver_lock();
         wlserver_touchmotion( flX, flY, 0, ++m_uFakeTimestamp );
