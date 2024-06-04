@@ -983,7 +983,7 @@ namespace gamescope
                     .nDstHeight  = int32_t( pLayer->tex->height() / double( pLayer->scale.y ) ),
                     .eColorspace = pLayer->colorspace,
                     .bOpaque     = pLayer->zpos == g_zposBase,
-                    .uFractionalScale = m_uFractionalScale,
+                    .uFractionalScale = GetScale(),
                 } ) );
         }
         else
