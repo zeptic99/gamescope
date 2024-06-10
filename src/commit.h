@@ -1,6 +1,6 @@
 #include "steamcompmgr_shared.hpp"
 
-struct commit_t final : public gamescope::IWaitable, public gamescope::RcObject
+struct commit_t final : public gamescope::RcObject, public gamescope::IWaitable
 {
 	commit_t();
     ~commit_t();
