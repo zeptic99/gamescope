@@ -331,7 +331,7 @@ namespace gamescope
 			if ( ulDrawTime > s_ulLastOffset )
 				g_VBlankLog.infof( " !! missed vblank " );
 
-			g_VBlankLog.infof( "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms\n",
+			g_VBlankLog.infof( "redZone: %.2fms decayRate: %lu%% - rollingMaxDrawTime: %.2fms lastDrawTime: %.2fms lastOffset: %.2fms - drawTime: %.2fms offset: %.2fms",
 				ulRedZone / 1'000'000.0,
 				m_ulVBlankRateOfDecayPercentage,
 				m_ulRollingMaxDrawTime / 1'000'000.0,
