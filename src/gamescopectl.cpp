@@ -1,5 +1,9 @@
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <vector>
+#include <span>
+#include <optional>
 
 #include <wayland-client.h>
 #include <gamescope-control-client-protocol.h>
