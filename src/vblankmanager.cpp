@@ -275,12 +275,6 @@ namespace gamescope
 				.ulWakeupTime = m_TimerFDSchedule.ulScheduledWakeupPoint,
 			};
 
-			if ( vblank_debug )
-			{
-				uint64_t ulNow = get_time_in_nanos();
-				g_VBlankLog.infof( "TimerFD Wakeup: %lu\n", ulNow );
-			}
-
 			gpuvis_trace_printf( "vblank timerfd wakeup" );
 
 			ITimerWaitable::DisarmTimer();
