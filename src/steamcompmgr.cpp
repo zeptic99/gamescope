@@ -966,6 +966,30 @@ namespace gamescope
 		static CScreenshotManager s_Instance;
 		return s_Instance;
 	}
+
+	static ConCommand cc_screenshot( "screenshot", "Take a screenshot to a given path.",
+	[]( std::span<std::string_view> args )
+	{
+		std::string_view szPath = "/tmp/gamescope.png";
+		if ( args.size() > 1 )
+			szPath = args[1];
+
+		gamescope_control_screenshot_type eScreenshotType = GAMESCOPE_CONTROL_SCREENSHOT_TYPE_BASE_PLANE_ONLY;
+		if ( args.size() > 2 )
+		{
+			std::optional<uint32_t> oType = Parse<uint32_t>( args[2] );
+			if ( oType )
+				eScreenshotType = static_cast<gamescope_control_screenshot_type>( *oType );
+		}
+
+		gamescope::CScreenshotManager::Get().TakeScreenshot( gamescope::GamescopeScreenshotInfo
+		{
+			.szScreenshotPath      = std::string( szPath ),
+			.eScreenshotType       = eScreenshotType,
+			.uScreenshotFlags      = 0,
+			.bX11PropertyRequested = false,
+		} );
+	});
 }
 
 
