@@ -366,6 +366,7 @@ struct FrameInfo_t
 };
 
 extern uint32_t g_uCompositeDebug;
+extern gamescope::ConVar<uint32_t> cv_composite_debug;
 
 namespace CompositeDebugFlag
 {

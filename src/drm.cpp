@@ -496,7 +496,7 @@ struct DRMPresentCtx
 	uint64_t ulPendingFlipCount = 0;
 };
 
-extern bool alwaysComposite;
+extern gamescope::ConVar<bool> cv_composite_force;
 extern bool g_bColorSliderInUse;
 extern bool fadingOut;
 extern std::string g_reshade_effect;
@@ -3156,7 +3156,7 @@ namespace gamescope
 			bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
 
 			bool bNeedsFullComposite = false;
-			bNeedsFullComposite |= alwaysComposite;
+			bNeedsFullComposite |= cv_composite_force;
 			bNeedsFullComposite |= bWasFirstFrame;
 			bNeedsFullComposite |= pFrameInfo->useFSRLayer0;
 			bNeedsFullComposite |= pFrameInfo->useNISLayer0;

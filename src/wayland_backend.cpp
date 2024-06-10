@@ -40,7 +40,7 @@ extern bool g_bForceHDR10OutputDebug;
 extern bool g_bBorderlessOutputWindow;
 extern bool g_bAllowVRR;
 
-extern bool alwaysComposite;
+extern gamescope::ConVar<bool> cv_composite_force;
 extern bool g_bColorSliderInUse;
 extern bool fadingOut;
 extern std::string g_reshade_effect;
@@ -1317,7 +1317,7 @@ namespace gamescope
 
             bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
 
-            bNeedsFullComposite |= alwaysComposite;
+            bNeedsFullComposite |= cv_composite_force;
             bNeedsFullComposite |= pFrameInfo->useFSRLayer0;
             bNeedsFullComposite |= pFrameInfo->useNISLayer0;
             bNeedsFullComposite |= pFrameInfo->blurLayer0;

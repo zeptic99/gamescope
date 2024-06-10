@@ -119,6 +119,7 @@ static VkResult vulkan_load_module()
 VulkanOutput_t g_output;
 
 uint32_t g_uCompositeDebug = 0u;
+gamescope::ConVar<uint32_t> cv_composite_debug{ "composite_debug", 0, "Debug composition flags" };
 
 template <typename T>
 static bool Contains( const std::span<const T> x, T value )

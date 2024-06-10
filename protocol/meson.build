@@ -30,6 +30,7 @@ protocols = [
 	'gamescope-input-method.xml',
 	'gamescope-control.xml',
 	'gamescope-swapchain.xml',
+	'gamescope-private.xml',
 ]
 
 protocols_client_src = []

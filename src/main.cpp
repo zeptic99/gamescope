@@ -674,10 +674,10 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "xwayland-count") == 0) {
 					g_nXWaylandCount = atoi( optarg );
 				} else if (strcmp(opt_name, "composite-debug") == 0) {
-					g_uCompositeDebug |= CompositeDebugFlag::Markers;
-					g_uCompositeDebug |= CompositeDebugFlag::PlaneBorders;
+					cv_composite_debug |= CompositeDebugFlag::Markers;
+					cv_composite_debug |= CompositeDebugFlag::PlaneBorders;
 				} else if (strcmp(opt_name, "hdr-debug-heatmap") == 0) {
-					g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
+					cv_composite_debug |= CompositeDebugFlag::Heatmap;
 				} else if (strcmp(opt_name, "default-touch-mode") == 0) {
 					gamescope::cv_touch_click_mode = (gamescope::TouchClickMode) atoi( optarg );
 				} else if (strcmp(opt_name, "generate-drm-mode") == 0) {

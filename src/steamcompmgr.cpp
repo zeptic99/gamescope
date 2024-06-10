@@ -946,7 +946,8 @@ static bool		debugFocus = false;
 static bool		drawDebugInfo = false;
 static bool		debugEvents = false;
 bool			steamMode = false;
-bool		alwaysComposite = false;
+
+gamescope::ConVar<bool> cv_composite_force{ "composite_force", false, "Force composition always, never use scanout" };
 static bool		useXRes = true;
 
 struct wlr_buffer_map_entry {
@@ -5400,12 +5401,12 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeCompositeForce )
 	{
-		alwaysComposite = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeForce, 0 );
+		cv_composite_force = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeForce, 0 );
 		hasRepaint = true;
 	}
 	if ( ev->atom == ctx->atoms.gamescopeCompositeDebug )
 	{
-		g_uCompositeDebug = get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
+		cv_composite_debug = get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
 
 		hasRepaint = true;
 	}
@@ -5470,15 +5471,15 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	if ( ev->atom == ctx->atoms.gamescopeDebugHDRHeatmap )
 	{
 		uint32_t heatmap = get_prop( ctx, ctx->root, ctx->atoms.gamescopeDebugHDRHeatmap, 0 );
-		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap;
-		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_MSWCG;
-		g_uCompositeDebug &= ~CompositeDebugFlag::Heatmap_Hard;
+		cv_composite_debug &= ~CompositeDebugFlag::Heatmap;
+		cv_composite_debug &= ~CompositeDebugFlag::Heatmap_MSWCG;
+		cv_composite_debug &= ~CompositeDebugFlag::Heatmap_Hard;
 		if (heatmap != 0)
-			g_uCompositeDebug |= CompositeDebugFlag::Heatmap;
+			cv_composite_debug |= CompositeDebugFlag::Heatmap;
 		if (heatmap == 2)
-			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_MSWCG;
+			cv_composite_debug |= CompositeDebugFlag::Heatmap_MSWCG;
 		if (heatmap == 3)
-			g_uCompositeDebug |= CompositeDebugFlag::Heatmap_Hard;
+			cv_composite_debug |= CompositeDebugFlag::Heatmap_Hard;
 		hasRepaint = true;
 	}
 
@@ -7207,7 +7208,7 @@ steamcompmgr_main(int argc, char **argv)
 				steamMode = true;
 				break;
 			case 'c':
-				alwaysComposite = true;
+				cv_composite_force = true;
 				break;
 			case 'x':
 				useXRes = false;
@@ -7270,7 +7271,7 @@ steamcompmgr_main(int argc, char **argv)
 	const char *pchEnableVkBasalt = getenv( "ENABLE_VKBASALT" );
 	if ( pchEnableVkBasalt != nullptr && pchEnableVkBasalt[0] == '1' )
 	{
-		alwaysComposite = true;
+		cv_composite_force = true;
 	}
 
 	// Enable color mgmt by default.
@@ -7409,6 +7410,8 @@ steamcompmgr_main(int argc, char **argv)
 
 			update_mode_atoms(root_ctx, &flush_root);
 		}
+
+		g_uCompositeDebug = cv_composite_debug;
 
 		g_bOutputHDREnabled = (g_bSupportsHDR_CachedValue || g_bForceHDR10OutputDebug) && cv_hdr_enabled;
 
