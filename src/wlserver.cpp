@@ -377,9 +377,6 @@ static void wlserver_perform_rel_pointer_motion(double unaccel_dx, double unacce
 {
 	assert( wlserver_is_lock_held() );
 
-	unaccel_dx *= g_mouseSensitivity;
-	unaccel_dy *= g_mouseSensitivity;
-
 	wlr_relative_pointer_manager_v1_send_relative_motion( wlserver.relative_pointer_manager, wlserver.wlr.seat, 0, unaccel_dx, unaccel_dy, unaccel_dx, unaccel_dy );
 }
 
@@ -2282,6 +2279,9 @@ static bool wlserver_apply_constraint( double *dx, double *dy )
 void wlserver_mousemotion( double dx, double dy, uint32_t time )
 {
 	assert( wlserver_is_lock_held() );
+
+	dx *= g_mouseSensitivity;
+	dy *= g_mouseSensitivity;
 
 	wlserver_perform_rel_pointer_motion( dx, dy );
 
