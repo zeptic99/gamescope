@@ -303,7 +303,7 @@ namespace gamescope
         COpenVRBackend *m_pBackend = nullptr;
 
         bool m_bIsSubview = false;
-        uint32_t m_uSortOrder = 2;
+        uint32_t m_uSortOrder = 0;
         vr::VROverlayHandle_t m_hOverlay = vr::k_ulOverlayHandleInvalid;
         vr::VROverlayHandle_t m_hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
     };
