@@ -297,6 +297,7 @@ namespace gamescope
         vr::VROverlayHandle_t GetOverlayThumbnail() const { return m_hOverlayThumbnail; }
 
         uint32_t GetSortOrder() const { return m_uSortOrder; }
+        bool IsSubview() const { return m_bIsSubview; }
 
     private:
         COpenVRBackend *m_pBackend = nullptr;
@@ -681,6 +682,10 @@ namespace gamescope
                 return nullptr;
             assert( ulSharedHandle != 0 );
 
+            // Take the first reference!
+            if ( !m_pIPCResourceManager->RefResource( ulSharedHandle, nullptr ) )
+                return nullptr;
+
             return new COpenVRFb{ this, ulSharedHandle, pBuffer };
 		}
 
@@ -745,7 +750,8 @@ namespace gamescope
 
         virtual bool SupportsExplicitSync() const override
         {
-            // We always composite right now, so yes.
+            // We only forward done DMA-BUFs, so this should be fine.
+            // SteamVR does not do any wait/poll/sync on these.
             return true;
         }
 
@@ -926,8 +932,13 @@ namespace gamescope
                         {
                             case vr::VREvent_OverlayClosed:
                             case vr::VREvent_Quit:
-                                raise( SIGTERM );
+                            {
+                                if ( !plane.IsSubview() )
+                                {
+                                    raise( SIGTERM );
+                                }
                                 break;
+                            }
 
                             case vr::VREvent_KeyboardCharInput:
                             {
@@ -998,8 +1009,14 @@ namespace gamescope
                             case vr::VREvent_OverlayShown:
                             case vr::VREvent_OverlayHidden:
                             {
-                                m_bOverlayVisible = vrEvent.eventType == vr::VREvent_OverlayShown;
-                                m_bOverlayVisible.notify_all();
+                                // Only handle this for the base plane.
+                                // Subviews can be hidden if we hide them ourselves,
+                                // or for other reasons.
+                                if ( !plane.IsSubview() )
+                                {
+                                    m_bOverlayVisible = vrEvent.eventType == vr::VREvent_OverlayShown;
+                                    m_bOverlayVisible.notify_all();
+                                }
                                 break;
                             }
 
