@@ -1919,6 +1919,9 @@ void wlserver_run(void)
         },
     };
 
+	wlserver.bWaylandServerRunning = true;
+	wlserver.bWaylandServerRunning.notify_all();
+
 	while ( !g_bShutdownWLServer )
 	{
 		int ret = poll( pollfds, 2, -1 );
@@ -1948,6 +1951,9 @@ void wlserver_run(void)
 			wlserver_unlock();
 		}
 	}
+
+	wlserver.bWaylandServerRunning = false;
+	wlserver.bWaylandServerRunning.notify_all();
 
 	{
 		std::unique_lock lock3(wlserver.xdg_commit_lock);

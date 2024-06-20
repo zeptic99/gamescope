@@ -176,6 +176,8 @@ struct wlserver_t {
 	std::vector<ResListEntry_t> xdg_commit_queue;
 
 	std::vector<wl_resource*> gamescope_controls;
+
+	std::atomic<bool> bWaylandServerRunning = { false };
 };
 
 extern struct wlserver_t wlserver;
