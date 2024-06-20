@@ -2224,7 +2224,7 @@ static void paint_pipewire()
 }
 #endif
 
-gamescope::ConVar<int> cv_cursor_composite{ "cursor_composite", true, "0 = Never composite a cursor. 1 = Composite cursor when not nested. 2 = Always composite a cursor manually" };
+gamescope::ConVar<int> cv_cursor_composite{ "cursor_composite", 1, "0 = Never composite a cursor. 1 = Composite cursor when not nested. 2 = Always composite a cursor manually" };
 
 static void
 paint_all(bool async)
