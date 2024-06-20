@@ -2224,6 +2224,8 @@ static void paint_pipewire()
 }
 #endif
 
+gamescope::ConVar<int> cv_cursor_composite{ "cursor_composite", true, "0 = Never composite a cursor. 1 = Composite cursor when not nested. 2 = Always composite a cursor manually" };
+
 static void
 paint_all(bool async)
 {
@@ -2439,7 +2441,7 @@ paint_all(bool async)
 		global_focus.cursor->undirty();
 	}
 
-	bool bForceHideCursor = GetBackend()->GetNestedHints() && !bSteamCompMgrGrab;
+	bool bForceHideCursor = ( ( GetBackend()->GetNestedHints() && !bSteamCompMgrGrab ) || cv_cursor_composite == 0 ) && cv_cursor_composite != 2;
 
 	// Draw cursor if we need to
 	if (input && !bForceHideCursor) {
