@@ -95,6 +95,7 @@ required_wlroots_features = ['xwayland']
 src = [
   'Backends/HeadlessBackend.cpp',
   'Backends/WaylandBackend.cpp',
+  'Utils/TempFiles.cpp',
   'steamcompmgr.cpp',
   'convar.cpp',
   'commit.cpp',

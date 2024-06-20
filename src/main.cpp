@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <float.h>
+#include <climits>
 
 #include "main.hpp"
 #include "steamcompmgr.hpp"
@@ -24,6 +25,7 @@
 #include "wlserver.hpp"
 #include "convar.h"
 #include "gpuvis_trace_utils.h"
+#include "Utils/TempFiles.h"
 
 #include "backends.h"
 #include "refresh_rate.h"
@@ -590,6 +592,7 @@ static bool IsInDebugSession()
 #endif
 
 bool steamMode = false;
+bool g_bLaunchMangoapp = false;
 
 static void UpdateCompatEnvVars()
 {
@@ -657,6 +660,16 @@ static void UpdateCompatEnvVars()
 
 	// A sane default here.
 	setenv( "GAMESCOPE_NV12_COLORSPACE", "k_EStreamColorspace_BT601", 0 );
+
+	if ( g_bLaunchMangoapp )
+	{
+		char szMangoConfigPath[ PATH_MAX ];
+		int nMangoConfigFd = gamescope::MakeTempFile( szMangoConfigPath, gamescope::k_szGamescopeTempMangoappTemplate );
+		if ( nMangoConfigFd >= 0 )
+		{
+			setenv( "MANGOHUD_CONFIGFILE", szMangoConfigPath, 1 );
+		}
+	}
 }
 
 int g_nPreferredOutputWidth = 0;
@@ -782,6 +795,8 @@ int main(int argc, char **argv)
 					eCurrentBackend = parse_backend_name( optarg );
 				} else if (strcmp(opt_name, "cursor-scale-height") == 0) {
 					g_nCursorScaleHeight = atoi(optarg);
+				} else if (strcmp(opt_name, "mangoapp") == 0) {
+					g_bLaunchMangoapp = true;
 				}
 				break;
 			case '?':

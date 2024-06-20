@@ -7192,7 +7192,7 @@ void update_edid_prop()
 	}
 }
 
-bool g_bLaunchMangoapp = false;
+extern bool g_bLaunchMangoapp;
 
 void
 steamcompmgr_main(int argc, char **argv)
@@ -7274,8 +7274,6 @@ steamcompmgr_main(int argc, char **argv)
 					g_reshade_technique_idx = atoi(optarg);
 				} else if (strcmp(opt_name, "mura-map") == 0) {
 					set_mura_overlay(optarg);
-				} else if (strcmp(opt_name, "mangoapp") == 0) {
-					g_bLaunchMangoapp = true;
 				}
 				break;
 			case '?':
