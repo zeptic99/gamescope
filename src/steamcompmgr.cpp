@@ -85,7 +85,6 @@
 #include "log.hpp"
 #include "defer.hpp"
 #include "win32_styles.h"
-#include "mwm_hints.h"
 #include "edid.h"
 #include "hdmi.h"
 #include "convar.h"
@@ -3987,20 +3986,6 @@ get_size_hints(xwayland_ctx_t *ctx, steamcompmgr_win_t *w)
 }
 
 static void
-get_motif_hints( xwayland_ctx_t *ctx, steamcompmgr_win_t *w )
-{
-	if ( w->motif_hints )
-		XFree( w->motif_hints );
-
-	Atom actual_type;
-	int actual_format;
-	unsigned long nitems, bytesafter;
-	XGetWindowProperty(ctx->dpy, w->xwayland().id, ctx->atoms.motifWMHints, 0L, 20L, False,
-		ctx->atoms.motifWMHints, &actual_type, &actual_format, &nitems,
-		&bytesafter, (unsigned char **)&w->motif_hints );
-}
-
-static void
 get_win_title(xwayland_ctx_t *ctx, steamcompmgr_win_t *w, Atom atom)
 {
 	assert(atom == XA_WM_NAME || atom == ctx->atoms.netWMNameAtom);
@@ -4124,7 +4109,6 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 	w->isExternalOverlay = get_prop(ctx, w->xwayland().id, ctx->atoms.externalOverlayAtom, 0);
 
 	get_size_hints(ctx, w);
-	get_motif_hints(ctx, w);
 
 	get_net_wm_state(ctx, w);
 
@@ -4358,7 +4342,6 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 	new_win->inputFocusMode = 0;
 	new_win->is_dialog = false;
 	new_win->maybe_a_dropdown = false;
-	new_win->motif_hints = nullptr;
 
 	new_win->hasHwndStyle = false;
 	new_win->hwndStyle = 0;
@@ -5292,14 +5275,6 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 				if ( GetBackend()->GetNestedHints() )
 					GetBackend()->GetNestedHints()->SetIcon( w->icon );
 			}
-		}
-	}
-	if (ev->atom == ctx->atoms.motifWMHints)
-	{
-		steamcompmgr_win_t *w = find_win(ctx, ev->window);
-		if (w) {
-			get_motif_hints(ctx, w);
-			MakeFocusDirty();
 		}
 	}
 #if 0
@@ -6844,7 +6819,6 @@ void init_xwayland_ctx(uint32_t serverId, gamescope_xwayland_server_t *xwayland_
 	ctx->atoms.utf8StringAtom = XInternAtom(ctx->dpy, "UTF8_STRING", false);
 	ctx->atoms.netWMNameAtom = XInternAtom(ctx->dpy, "_NET_WM_NAME", false);
 	ctx->atoms.netWMIcon = XInternAtom(ctx->dpy, "_NET_WM_ICON", false);
-	ctx->atoms.motifWMHints = XInternAtom(ctx->dpy, "_MOTIF_WM_HINTS", false);
 	ctx->atoms.netSystemTrayOpcodeAtom = XInternAtom(ctx->dpy, "_NET_SYSTEM_TRAY_OPCODE", false);
 	ctx->atoms.steamStreamingClientAtom = XInternAtom(ctx->dpy, "STEAM_STREAMING_CLIENT", false);
 	ctx->atoms.steamStreamingClientVideoAtom = XInternAtom(ctx->dpy, "STEAM_STREAMING_CLIENT_VIDEO", false);
