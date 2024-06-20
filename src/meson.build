@@ -96,6 +96,7 @@ src = [
   'Backends/HeadlessBackend.cpp',
   'Backends/WaylandBackend.cpp',
   'Utils/TempFiles.cpp',
+  'Utils/Version.cpp',
   'steamcompmgr.cpp',
   'convar.cpp',
   'commit.cpp',
@@ -157,9 +158,14 @@ foreach feat : required_wlroots_features
   endif
 endforeach
 
+gamescope_version = vcs_tag(
+  command : ['git', 'describe', '--always', '--tags', '--dirty=+'],
+  input   : 'GamescopeVersion.h.in',
+  output  : 'GamescopeVersion.h')
+
   executable(
     'gamescope',
-    src, reshade_src,
+    src, reshade_src, gamescope_version,
     include_directories : [reshade_include],
     dependencies: [
       dep_wayland, dep_x11, dep_xdamage, dep_xcomposite, dep_xrender, dep_xext, dep_xfixes,
@@ -182,4 +188,4 @@ executable('gamescope_color_microbench', ['color_bench.cpp', 'color_helpers.cpp'
 
 executable('gamescope_color_tests', ['color_tests.cpp', 'color_helpers.cpp'], dependencies:[glm_dep])
 
-executable('gamescopectl', ['gamescopectl.cpp', 'convar.cpp', 'log.cpp'], protocols_client_src, dependencies: [dep_wayland], install:true )
+executable('gamescopectl', ['gamescopectl.cpp', 'convar.cpp', 'log.cpp', 'Utils/Version.cpp'], protocols_client_src, dependencies: [dep_wayland], install:true )
