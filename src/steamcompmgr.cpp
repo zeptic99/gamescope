@@ -945,7 +945,7 @@ float			currentFrameRate;
 static bool		debugFocus = false;
 static bool		drawDebugInfo = false;
 static bool		debugEvents = false;
-bool			steamMode = false;
+extern bool		steamMode;
 
 gamescope::ConVar<bool> cv_composite_force{ "composite_force", false, "Force composition always, never use scanout" };
 static bool		useXRes = true;
@@ -7227,9 +7227,6 @@ steamcompmgr_main(int argc, char **argv)
 				break;
 			case 'v':
 				drawDebugInfo = true;
-				break;
-			case 'e':
-				steamMode = true;
 				break;
 			case 'c':
 				cv_composite_force = true;
