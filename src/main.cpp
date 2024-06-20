@@ -557,6 +557,7 @@ static bool CheckWaylandPresentationTime()
 	wl_display_roundtrip(display);
 
 	wl_registry_destroy(registry);
+	wl_display_disconnect(display);
 
     return g_bSupportsWaylandPresentationTime;
 }
