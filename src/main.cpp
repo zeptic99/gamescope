@@ -654,6 +654,9 @@ static void UpdateCompatEnvVars()
 
 	// Don't minimise stuff on focus loss with SDL.
 	setenv( "SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0", 1 );
+
+	// A sane default here.
+	setenv( "GAMESCOPE_NV12_COLORSPACE", "k_EStreamColorspace_BT601", 0 );
 }
 
 int g_nPreferredOutputWidth = 0;
@@ -833,8 +836,6 @@ int main(int argc, char **argv)
 	}
 #endif
 
-	UpdateCompatEnvVars();
-
 #if 0
 	while( !IsInDebugSession() )
 	{
@@ -921,6 +922,8 @@ int main(int argc, char **argv)
 		fprintf( stderr, "Failed to create backend.\n" );
 		return 1;
 	}
+
+	UpdateCompatEnvVars();
 
 	g_ForcedNV12ColorSpace = parse_colorspace_string( getenv( "GAMESCOPE_NV12_COLORSPACE" ) );
 
