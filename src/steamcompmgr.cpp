@@ -3564,7 +3564,15 @@ steamcompmgr_xdg_get_possible_focus_windows()
 {
 	std::vector< steamcompmgr_win_t* > windows;
 	for ( auto &win : g_steamcompmgr_xdg_wins )
+	{
+		// Always skip system tray icons and overlays
+		if ( win->isSysTrayIcon || win->isOverlay || win->isExternalOverlay )
+		{
+			continue;
+		}
+
 		windows.emplace_back( win.get() );
+	}
 	return windows;
 }
 
@@ -3595,6 +3603,14 @@ static std::vector< steamcompmgr_win_t* > GetGlobalPossibleFocusWindows()
 static void
 steamcompmgr_xdg_determine_and_apply_focus( const std::vector< steamcompmgr_win_t* > &vecPossibleFocusWindows )
 {
+	for ( auto &window : g_steamcompmgr_xdg_wins )
+	{
+		if (window->isOverlay)
+			g_steamcompmgr_xdg_focus.overlayWindow = window.get();
+
+		if (window->isExternalOverlay)
+			g_steamcompmgr_xdg_focus.externalOverlayWindow = window.get();
+	}
 	pick_primary_focus_and_override( &g_steamcompmgr_xdg_focus, None, vecPossibleFocusWindows, false, vecFocuscontrolAppIDs );
 }
 
@@ -3680,6 +3696,16 @@ determine_and_apply_focus()
 	global_focus.overlayWindow = root_ctx->focus.overlayWindow;
 	global_focus.externalOverlayWindow = root_ctx->focus.externalOverlayWindow;
 	global_focus.notificationWindow = root_ctx->focus.notificationWindow;
+
+	if ( !global_focus.overlayWindow )
+	{
+		global_focus.overlayWindow = g_steamcompmgr_xdg_focus.overlayWindow;
+	}
+
+	if ( !global_focus.externalOverlayWindow )
+	{
+		global_focus.externalOverlayWindow = g_steamcompmgr_xdg_focus.externalOverlayWindow;
+	}
 
 	// Pick inputFocusWindow
 	if (global_focus.overlayWindow && global_focus.overlayWindow->inputFocusMode)
