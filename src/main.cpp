@@ -912,6 +912,8 @@ int main(int argc, char **argv)
         }
 	}
 
+	g_ForcedNV12ColorSpace = parse_colorspace_string( getenv( "GAMESCOPE_NV12_COLORSPACE" ) );
+
 	switch ( eCurrentBackend )
 	{
 #if HAVE_DRM
@@ -951,8 +953,6 @@ int main(int argc, char **argv)
 	}
 
 	UpdateCompatEnvVars();
-
-	g_ForcedNV12ColorSpace = parse_colorspace_string( getenv( "GAMESCOPE_NV12_COLORSPACE" ) );
 
 	if ( !vulkan_init_formats() )
 	{
