@@ -90,6 +90,7 @@
 #include "convar.h"
 #include "refresh_rate.h"
 #include "commit.h"
+#include "BufferMemo.h"
 
 #if HAVE_AVIF
 #include "avif/avif.h"
@@ -1193,37 +1194,12 @@ static steamcompmgr_win_t * find_win( xwayland_ctx_t *ctx, struct wlr_surface *s
 	return nullptr;
 }
 
-#ifdef COMMIT_REF_DEBUG
-static int buffer_refs = 0;
-#endif
-
-static void
-destroy_buffer( struct wl_listener *listener, void * )
-{
-	std::lock_guard<std::mutex> lock( wlr_buffer_map_lock );
-	wlr_buffer_map_entry *entry = wl_container_of( listener, entry, listener );
-
-	if ( entry->vulkanTex != nullptr )
-	{
-		assert( entry->vulkanTex->GetRefCount() == 0 );
-		entry->vulkanTex = nullptr;
-	}
-
-	wl_list_remove( &entry->listener.link );
-
-#ifdef COMMIT_REF_DEBUG
-	fprintf(stderr, "destroy_buffer - refs: %d\n", --buffer_refs);
-#endif
-
-	/* Has to be the last thing we do as this deletes *entry. */
-	wlr_buffer_map.erase( wlr_buffer_map.find( entry->buf ) );
-}
+static gamescope::CBufferMemoizer s_BufferMemos;
 
 static gamescope::Rc<commit_t>
 import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback, std::vector<struct wl_resource*> presentation_feedbacks, std::optional<uint32_t> present_id, uint64_t desired_present_time, bool fifo )
 {
 	gamescope::Rc<commit_t> commit = new commit_t;
-	std::unique_lock<std::mutex> lock( wlr_buffer_map_lock );
 
 	commit->win_seq = w->seq;
 	commit->surf = surf;
@@ -1237,39 +1213,12 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	commit->present_id = present_id;
 	commit->desired_present_time = desired_present_time;
 
-	auto it = wlr_buffer_map.find( buf );
-	if ( it != wlr_buffer_map.end() )
+	if ( gamescope::OwningRc<CVulkanTexture> pTexture = s_BufferMemos.LookupVulkanTexture( buf ) )
 	{
-		// Transfer from OwningRc of the texture -> Rc of the usage.
-		gamescope::OwningRc<CVulkanTexture> pVulkanTexture = it->second.vulkanTex;
-
-		/* Unlock here to avoid deadlock [1],
-		 * drm_lock_fbid calls wlserver_lock.
-		 * Map is no longer used here and the element 
-		 * is no longer accessed. */
-		lock.unlock();
-
 		// Going from OwningRc -> Rc now.
-		commit->vulkanTex = pVulkanTexture;
-
+		commit->vulkanTex = pTexture;
 		return commit;
 	}
-
-#ifdef COMMIT_REF_DEBUG
-	fprintf(stderr, "import_commit - refs %d\n", ++buffer_refs);
-#endif
-
-	wlr_buffer_map_entry& entry = wlr_buffer_map[buf];
-	/* [1]
-	 * Need to unlock the wlr_buffer_map_lock to avoid
-	 * a deadlock on destroy_buffer if it owns the wlserver_lock.
-	 * This is safe for a few reasons:
-	 * - 1: All accesses to wlr_buffer_map are done before this lock.
-	 * - 2: destroy_buffer cannot be called from this buffer before now
-	 *      as it only happens because of the signal added below.
-	 * - 3: "References to elements in the unordered_map container remain
-	 *		 valid in all cases, even after a rehash." */
-	lock.unlock();
 
 	struct wlr_dmabuf_attributes dmabuf = {0};
 	gamescope::OwningRc<gamescope::IBackendFb> pBackendFb;
@@ -1277,16 +1226,10 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 	{
 		pBackendFb = GetBackend()->ImportDmabufToBackend( buf, &dmabuf );
 	}
+	gamescope::OwningRc<CVulkanTexture> pOwnedTexture = vulkan_create_texture_from_wlr_buffer( buf, std::move( pBackendFb ) );
+	commit->vulkanTex = pOwnedTexture;
 
-	entry.listener.notify = destroy_buffer;
-	entry.buf = buf;
-	entry.vulkanTex = vulkan_create_texture_from_wlr_buffer( buf, std::move( pBackendFb ) );
-	
-	commit->vulkanTex = entry.vulkanTex.get();
-
-	wlserver_lock();
-	wl_signal_add( &buf->events.destroy, &entry.listener );
-	wlserver_unlock();
+	s_BufferMemos.MemoizeBuffer( buf, std::move( pOwnedTexture ) );
 
 	return commit;
 }
