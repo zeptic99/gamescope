@@ -562,7 +562,7 @@ namespace gamescope
                 bool bNeedsBacking = true;
                 if ( pFrameInfo->layerCount >= 1 )
                 {
-                    if ( pFrameInfo->layers[0].isScreenSize() && !pFrameInfo->layers[0].hasAlpha() )
+                    if ( pFrameInfo->layers[0].isScreenSize() && ( !pFrameInfo->layers[0].hasAlpha() || cv_vr_transparent_backing ) )
                         bNeedsBacking = false;
                 }
 
