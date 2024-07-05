@@ -25,6 +25,8 @@
 #include <signal.h>
 #include <errno.h>
 
+extern const char *__progname;
+
 static LogScope s_ProcessLog( "process" );
 
 namespace gamescope::Process
@@ -497,6 +499,11 @@ namespace gamescope::Process
 
         g_oOldSchedulerInfo = std::nullopt;
 #endif
+    }
+
+    const char *GetProcessName()
+    {
+        return __progname;
     }
 
 }

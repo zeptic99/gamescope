@@ -33,4 +33,6 @@ namespace gamescope::Process
     bool SetRealtime();
     void RestoreRealtime();
 
+    const char *GetProcessName();
+
 }

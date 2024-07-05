@@ -5,6 +5,7 @@
 
 #include <memory>
 
+#include "Utils/Process.h"
 #include "defer.hpp"
 #include "log.hpp"
 
@@ -22,6 +23,19 @@ bool LogScope::has(enum LogPriority priority) {
 	return priority <= this->priority;
 }
 
+static const char *GetLogName( LogPriority ePriority )
+{
+	switch ( ePriority )
+	{
+		case LOG_SILENT:	return "[\e[0;37m" "Shh.." "\e[0m]";
+		case LOG_ERROR:		return "[\e[0;31m" "Error" "\e[0m]";
+		case LOG_WARNING:	return "[\e[0;33m" "Warn" "\e[0m] ";
+		case LOG_DEBUG:		return "[\e[0;35m" "Debug" "\e[0m]";
+		default:
+		case LOG_INFO:		return "[\e[0;34m" "Info" "\e[0m] ";
+	}
+}
+
 void LogScope::vlogf(enum LogPriority priority, const char *fmt, va_list args) {
 	if (!this->has(priority)) {
 		return;
@@ -37,7 +51,7 @@ void LogScope::vlogf(enum LogPriority priority, const char *fmt, va_list args) {
 		listener.second( priority, this->name, buf );
 
 	if ( bPrefixEnabled )
-		fprintf(stderr, "%s: %s\n", this->name, buf);
+		fprintf(stderr, "[%s] %s \e[0;37m%s:\e[0m %s\n", gamescope::Process::GetProcessName(), GetLogName( priority ), this->name, buf);
 	else
 	 	fprintf(stderr, "%s\n", buf);
 }
@@ -46,6 +60,13 @@ void LogScope::logf(enum LogPriority priority, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
 	this->vlogf(priority, fmt, args);
+	va_end(args);
+}
+
+void LogScope::warnf(const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	this->vlogf(LOG_WARNING, fmt, args);
 	va_end(args);
 }
 
