@@ -1195,8 +1195,6 @@ static void gamescope_private_execute( struct wl_client *client, struct wl_resou
 	args.emplace_back( value );
 	if ( gamescope::ConCommand::Exec( std::span<std::string_view>{ args } ) )
 		gamescope_private_send_command_executed( resource );
-	else
-		wl_log.errorf( "gamescope_private_execute: Command not found" );
 }
 
 static void gamescope_private_handle_destroy( struct wl_client *client, struct wl_resource *resource )

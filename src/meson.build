@@ -192,4 +192,4 @@ executable('gamescope_color_microbench', ['color_bench.cpp', 'color_helpers.cpp'
 
 executable('gamescope_color_tests', ['color_tests.cpp', 'color_helpers.cpp'], dependencies:[glm_dep])
 
-executable('gamescopectl', ['gamescopectl.cpp', 'convar.cpp', 'log.cpp', 'Utils/Version.cpp'], gamescope_version, protocols_client_src, dependencies: [dep_wayland], install:true )
+executable('gamescopectl', ['gamescopectl.cpp', 'convar.cpp', 'log.cpp', 'Utils/Version.cpp', 'Utils/Process.cpp'], gamescope_version, protocols_client_src, dependencies: [dep_wayland], install:true )

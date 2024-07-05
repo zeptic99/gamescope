@@ -7079,7 +7079,7 @@ void LaunchNestedChildren( char **ppPrimaryChildArgv )
 			pthread_setname_np( pthread_self(), "gamescope-wait" );
 
 			gamescope::Process::WaitForChild( nPrimaryChildPid );
-			s_LaunchLogScope.errorf( "Primary child shut down!" );
+			s_LaunchLogScope.infof( "Primary child shut down!" );
 
 			if ( cv_shutdown_on_primary_child_death )
 				ShutdownGamescope();
