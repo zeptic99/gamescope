@@ -182,7 +182,7 @@ gamescope_version = vcs_tag(
   )
 
 if pipewire_dep.found()
-  executable( 'gamescopestream', 'Apps/gamescopestream.cpp', gamescope_version, protocols_client_src, dependencies: [ pipewire_dep, dep_wayland, libdecor_dep ], install: true )
+  executable( 'gamescopestream', ['Apps/gamescopestream.cpp', 'log.cpp', 'Utils/Process.cpp'], gamescope_version, protocols_client_src, dependencies: [ pipewire_dep, dep_wayland, libdecor_dep ], install: true )
 endif
 
 executable('gamescopereaper', ['Utils/Process.cpp', 'Apps/gamescopereaper.cpp', 'log.cpp'], gamescope_version, install:true )
