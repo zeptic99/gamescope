@@ -83,7 +83,7 @@
 #include "steamcompmgr.hpp"
 #include "vblankmanager.hpp"
 #include "log.hpp"
-#include "defer.hpp"
+#include "Utils/Defer.h"
 #include "win32_styles.h"
 #include "edid.h"
 #include "hdmi.h"

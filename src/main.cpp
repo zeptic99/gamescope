@@ -28,7 +28,7 @@
 #include "Utils/TempFiles.h"
 #include "Utils/Version.h"
 #include "Utils/Process.h"
-#include "defer.hpp"
+#include "Utils/Defer.h"
 
 #include "backends.h"
 #include "refresh_rate.h"
