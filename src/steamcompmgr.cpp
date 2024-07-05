@@ -951,15 +951,6 @@ extern bool		steamMode;
 gamescope::ConVar<bool> cv_composite_force{ "composite_force", false, "Force composition always, never use scanout" };
 static bool		useXRes = true;
 
-struct wlr_buffer_map_entry {
-	struct wl_listener listener;
-	struct wlr_buffer *buf;
-	gamescope::OwningRc<CVulkanTexture> vulkanTex;
-};
-
-static std::mutex wlr_buffer_map_lock;
-static std::unordered_map<struct wlr_buffer*, wlr_buffer_map_entry> wlr_buffer_map;
-
 namespace gamescope
 {
 	CScreenshotManager &CScreenshotManager::Get()
