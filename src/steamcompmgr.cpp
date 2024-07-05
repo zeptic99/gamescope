@@ -3691,12 +3691,18 @@ determine_and_apply_focus()
 
 	// Tell wlserver about our keyboard/mouse focus.
 	if ( global_focus.inputFocusWindow    != previous_focus.inputFocusWindow ||
-		 global_focus.keyboardFocusWindow != previous_focus.keyboardFocusWindow )
+		 global_focus.keyboardFocusWindow != previous_focus.keyboardFocusWindow ||
+		 global_focus.overrideWindow      != previous_focus.overrideWindow )
 	{
 		if ( win_surface(global_focus.inputFocusWindow)    != nullptr ||
 			 win_surface(global_focus.keyboardFocusWindow) != nullptr )
 		{
 			wlserver_lock();
+
+			wlserver_clear_dropdowns();
+			if ( win_surface( global_focus.overrideWindow ) != nullptr )
+				wlserver_notify_dropdown( global_focus.overrideWindow->main_surface(), global_focus.overrideWindow->xwayland().a.x, global_focus.overrideWindow->xwayland().a.y );
+
 			if ( win_surface(global_focus.inputFocusWindow) != nullptr && global_focus.cursor )
 				wlserver_mousefocus( global_focus.inputFocusWindow->main_surface(), global_focus.cursor->x(), global_focus.cursor->y() );
 
