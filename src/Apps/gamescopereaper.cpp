@@ -12,7 +12,7 @@
 
 namespace gamescope
 {
-    static LogScope s_ReaperLog( "gamescope-reaper" );
+    static LogScope s_ReaperLog( "reaper" );
 
     // Watches over a PID and waits for all the children to die.
     // It sets itself up as a subreaper so any children get reparented ti oti.
