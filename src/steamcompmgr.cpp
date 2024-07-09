@@ -750,6 +750,12 @@ uint32_t		lastPublishedInputCounter;
 std::atomic<bool> hasRepaint = false;
 bool			hasRepaintNonBasePlane = false;
 
+static gamescope::ConCommand cc_debug_force_repaint( "debug_force_repaint", "Force a repaint",
+[]( std::span<std::string_view> args )
+{
+	hasRepaint = true;
+});
+
 unsigned long	damageSequence = 0;
 
 uint64_t		cursorHideTime = 10'000ul * 1'000'000ul;
