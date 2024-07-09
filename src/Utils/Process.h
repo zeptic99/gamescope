@@ -23,6 +23,8 @@ namespace gamescope::Process
     // Similar to what an `init` process would do.
     bool WaitForAllChildren( std::optional<pid_t> onStopPid = std::nullopt );
 
+    bool CloseFd( int nFd );
+
     void RaiseFdLimit();
     void RestoreFdLimit();
     void ResetSignals();
