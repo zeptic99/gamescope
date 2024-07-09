@@ -151,13 +151,18 @@ namespace gamescope::Process
         }
     }
 
-    void WaitForAllChildren()
+    bool WaitForAllChildren( std::optional<pid_t> onStopPid )
     {
         for ( ;; )
         {
             int nStatus = 0;
-            if ( waitpid( -1, &nStatus, 0 ) == -1 && errno == ECHILD )
-                return;
+            pid_t nDeadChild = waitpid( -1, &nStatus, 0 );
+
+            if ( onStopPid && nDeadChild == *onStopPid )
+                return true;
+
+            if ( nDeadChild == -1 && errno == ECHILD )
+                return false;
         }
     }
 
