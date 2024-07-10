@@ -621,8 +621,11 @@ static void UpdateCompatEnvVars()
 		{
 			setenv( "MANGOHUD_CONFIGFILE", szMangoConfigPath, 1 );
 
-			const char szDefaultConfig[] = "no_display";
-			fwrite( szDefaultConfig, 1, sizeof( szDefaultConfig ), pMangoConfigFile );
+			if ( steamMode )
+			{
+				const char szDefaultConfig[] = "no_display";
+				fwrite( szDefaultConfig, 1, sizeof( szDefaultConfig ), pMangoConfigFile );
+			}
 			fclose( pMangoConfigFile );
 		}
 	}
