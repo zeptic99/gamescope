@@ -1628,13 +1628,6 @@ bool MouseCursor::getTexture()
 
 	m_imageEmpty = bNoCursor;
 
-	if ( GetBackend()->GetNestedHints() && !g_bForceRelativeMouse )
-	{
-		if ( GetBackend()->GetNestedHints() )
-			GetBackend()->GetNestedHints()->SetRelativeMouseMode( m_imageEmpty );
-		bSteamCompMgrGrab = GetBackend()->GetNestedHints() && m_imageEmpty;
-	}
-
 	m_dirty = false;
 	updateCursorFeedback();
 
@@ -7577,6 +7570,15 @@ steamcompmgr_main(int argc, char **argv)
 		{
 			if ( global_focus.cursor )
 				global_focus.cursor->UpdatePosition();
+		}
+
+		if ( GetBackend()->GetNestedHints() && !g_bForceRelativeMouse )
+		{
+			bool bImageEmpty = global_focus.cursor && global_focus.cursor->imageEmpty();
+
+			if ( GetBackend()->GetNestedHints() )
+				GetBackend()->GetNestedHints()->SetRelativeMouseMode( bImageEmpty );
+			bSteamCompMgrGrab = GetBackend()->GetNestedHints() && bImageEmpty;
 		}
 
 		static int nIgnoredOverlayRepaints = 0;
