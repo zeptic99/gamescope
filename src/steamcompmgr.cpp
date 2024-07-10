@@ -188,8 +188,8 @@ update_runtime_info();
 
 bool g_bAllowVRR = false;
 
-static uint64_t g_SteamCompMgrLimitedAppRefreshCycle = 16'666'666;
-static uint64_t g_SteamCompMgrAppRefreshCycle = 16'666'666;
+uint64_t g_SteamCompMgrLimitedAppRefreshCycle = 16'666'666;
+uint64_t g_SteamCompMgrAppRefreshCycle = 16'666'666;
 
 static const gamescope_color_mgmt_t k_ScreenshotColorMgmt =
 {

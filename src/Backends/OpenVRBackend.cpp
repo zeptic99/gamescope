@@ -47,6 +47,8 @@ extern std::string g_reshade_effect;
 
 extern gamescope::ConVar<bool> cv_hdr_enabled;
 
+extern uint64_t g_SteamCompMgrLimitedAppRefreshCycle;
+
 static LogScope openvr_log("openvr");
 
 static bool GetVulkanInstanceExtensionsRequired( std::vector< std::string > &outInstanceExtensionList );
@@ -1046,7 +1048,7 @@ namespace gamescope
                                             wlserver_mousebutton( BTN_LEFT, true, ++m_uFakeTimestamp );
                                             wlserver_unlock();
 
-                                            sleep_for_nanos( mHzToRefreshCycle( g_nOutputRefresh ) + 1'000'000 );
+                                            sleep_for_nanos( g_SteamCompMgrLimitedAppRefreshCycle + 1'000'000 );
 
                                             wlserver_lock();
                                             wlserver_mousebutton( BTN_LEFT, false, ++m_uFakeTimestamp );
