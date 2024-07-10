@@ -145,7 +145,7 @@ namespace gamescope
 
         template <typename J> bool operator == ( const J &other ) const { return m_Value ==  other; }
         template <typename J> bool operator != ( const J &other ) const { return m_Value !=  other; }
-        template <typename J> bool operator <=>( const J &other ) const { return m_Value <=> other; }
+        template <typename J> auto operator <=>( const J &other ) const { return m_Value <=> other; }
 
         T  operator | (T other) { return m_Value | other; }
         T &operator |=(T other) { return m_Value |= other; }
