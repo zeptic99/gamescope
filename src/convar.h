@@ -154,6 +154,19 @@ namespace gamescope
 
         void InvokeFunc( std::span<std::string_view> pArgs )
         {
+            if ( pArgs.size() == 1 )
+            {
+                // We should move to std format for logging and stuff.
+                // This is kinda gross and grody!
+                std::string sValue = std::to_string( m_Value );
+                console_log.infof( "%.*s: %.*s\n%.*s",
+                    (int)m_pszName.length(), m_pszName.data(),
+                    (int)sValue.length(), sValue.data(),
+                    (int)m_pszDescription.length(), m_pszDescription.data() );
+
+                return;
+            }
+
             if ( pArgs.size() != 2 )
                 return;
 
