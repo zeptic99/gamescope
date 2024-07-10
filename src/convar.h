@@ -163,7 +163,7 @@ namespace gamescope
                 std::optional<Underlying> oResult = Parse<Underlying>( pArgs[1] );
                 SetValue( oResult ? static_cast<T>( *oResult ) : T{} );
             }
-            else if constexpr ( std::is_integral<T>::value )
+            else if constexpr ( std::is_integral<T>::value || std::is_floating_point<T>::value )
             {
                 std::optional<T> oResult = Parse<T>( pArgs[1] );
                 SetValue( oResult ? *oResult : T{} );
