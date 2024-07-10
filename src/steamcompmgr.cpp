@@ -7574,7 +7574,9 @@ steamcompmgr_main(int argc, char **argv)
 
 		if ( GetBackend()->GetNestedHints() && !g_bForceRelativeMouse )
 		{
-			bool bImageEmpty = global_focus.cursor && global_focus.cursor->imageEmpty();
+			bool bImageEmpty =
+				( global_focus.cursor && global_focus.cursor->imageEmpty() ) &&
+				( !window_is_steam( global_focus.inputFocusWindow ) );
 
 			if ( GetBackend()->GetNestedHints() )
 				GetBackend()->GetNestedHints()->SetRelativeMouseMode( bImageEmpty );
