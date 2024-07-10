@@ -487,8 +487,11 @@ namespace gamescope
             if ( cv_hdr_enabled && m_Connector.GetHDRInfo().bExposeHDRSupport )
                 setenv( "DXVK_HDR", "1", false );
 
-            Ratio<uint32_t> aspectRatio{ g_nOutputWidth, g_nOutputHeight };
-            m_pBlackTexture = vulkan_create_flat_texture( aspectRatio.Num(), aspectRatio.Denom(), 0, 0, 0, cv_vr_transparent_backing ? 0 : 255 );
+            // This breaks cursor intersection right now.
+            // Come back to me later.
+            //Ratio<uint32_t> aspectRatio{ g_nOutputWidth, g_nOutputHeight };
+            //m_pBlackTexture = vulkan_create_flat_texture( aspectRatio.Num(), aspectRatio.Denom(), 0, 0, 0, cv_vr_transparent_backing ? 0 : 255 );
+            m_pBlackTexture = vulkan_create_flat_texture( g_nOutputWidth, g_nOutputHeight, 0, 0, 0, cv_vr_transparent_backing ? 0 : 255 );
             if ( !m_pBlackTexture )
             {
                 openvr_log.errorf( "Failed to create dummy black texture." );
