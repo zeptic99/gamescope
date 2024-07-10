@@ -118,6 +118,8 @@ LogScope g_WaitableLog("waitable");
 
 bool g_bWasPartialComposite = false;
 
+bool ShouldDrawCursor();
+
 ///
 // Color Mgmt
 //
@@ -1384,30 +1386,37 @@ void MouseCursor::checkSuspension()
 {
 	getTexture();
 
-	const bool suspended = int64_t( get_time_in_nanos() ) - int64_t( wlserver.ulLastMovedCursorTime ) > int64_t( cursorHideTime );
-	if (!wlserver.bCursorHidden && suspended) {
-		wlserver.bCursorHidden = true;
+	if ( ShouldDrawCursor() )
+	{
+		const bool suspended = int64_t( get_time_in_nanos() ) - int64_t( wlserver.ulLastMovedCursorTime ) > int64_t( cursorHideTime );
+		if (!wlserver.bCursorHidden && suspended) {
+			wlserver.bCursorHidden = true;
 
-		steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
-		// Rearm warp count
-		if (window)
-		{
-			// Move the cursor to the bottom right corner, just off screen if we can
-			// if the window (ie. Steam) doesn't want hover/focus events.
-			if ( window_wants_no_focus_when_mouse_hidden(window) )
+			steamcompmgr_win_t *window = m_ctx->focus.inputFocusWindow;
+			// Rearm warp count
+			if (window)
 			{
-				wlserver_lock();
-				wlserver_fake_mouse_pos( window->GetGeometry().nWidth - 1, window->GetGeometry().nHeight - 1 );
-				wlserver_mousehide();
-				wlserver_unlock();
+				// Move the cursor to the bottom right corner, just off screen if we can
+				// if the window (ie. Steam) doesn't want hover/focus events.
+				if ( window_wants_no_focus_when_mouse_hidden(window) )
+				{
+					wlserver_lock();
+					wlserver_fake_mouse_pos( window->GetGeometry().nWidth - 1, window->GetGeometry().nHeight - 1 );
+					wlserver_mousehide();
+					wlserver_unlock();
+				}
+			}
+
+			// We're hiding the cursor, force redraw if we were showing it
+			if (window && !m_imageEmpty ) {
+				hasRepaintNonBasePlane = true;
+				nudge_steamcompmgr();
 			}
 		}
-
-		// We're hiding the cursor, force redraw if we were showing it
-		if (window && !m_imageEmpty ) {
-			hasRepaintNonBasePlane = true;
-			nudge_steamcompmgr();
-		}
+	}
+	else
+	{
+		wlserver.bCursorHidden = false;
 	}
 
 	wlserver.bCursorHasImage = !m_imageEmpty;
