@@ -1068,6 +1068,8 @@ namespace gamescope
     void CWaylandPlane::Wayland_Surface_Leave( wl_surface *pSurface, wl_output *pOutput )
     {
         std::erase( m_pOutputs, pOutput );
+
+        UpdateVRRRefreshRate();
     }
 
     void CWaylandPlane::LibDecor_Frame_Configure( libdecor_frame *pFrame, libdecor_configuration *pConfiguration )
