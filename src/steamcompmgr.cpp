@@ -856,6 +856,25 @@ void steamcompmgr_set_app_refresh_cycle_override( gamescope::GamescopeScreenType
 	update_app_target_refresh_cycle();
 }
 
+gamescope::ConCommand cc_debug_set_fps_limit( "debug_set_fps_limit", "Set refresh cycle (debug)",
+[](std::span<std::string_view> svArgs)
+{
+	if ( svArgs.size() < 2 )
+		return;
+
+	// TODO: Expose all facets as args.
+	std::optional<int32_t> onFps = gamescope::Parse<int32_t>( svArgs[1] );
+	if ( !onFps )
+	{
+		console_log.errorf( "Failed to parse FPS." );
+		return;
+	}
+
+	int32_t nFps = *onFps;
+
+	steamcompmgr_set_app_refresh_cycle_override( GetBackend()->GetScreenType(), nFps, true, true );
+});
+
 static int g_nRuntimeInfoFd = -1;
 
 bool g_bFSRActive = false;

@@ -236,6 +236,8 @@ namespace gamescope
 
         virtual TouchClickMode GetTouchClickMode() = 0;
 
+        virtual void DumpDebugInfo() = 0;
+
         static IBackend *Get();
         template <typename T>
         static bool Set();
@@ -263,6 +265,8 @@ namespace gamescope
         virtual BackendPresentFeedback& PresentationFeedback() override { return m_PresentFeedback; }
 
         virtual TouchClickMode GetTouchClickMode() override;
+
+        virtual void DumpDebugInfo() override;
     protected:
         BackendPresentFeedback m_PresentFeedback{};
     };
