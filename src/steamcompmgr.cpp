@@ -94,6 +94,10 @@
 #include "Utils/Process.h"
 #include "Utils/Algorithm.h"
 
+#include "wlr_begin.hpp"
+#include "wlr/types/wlr_pointer_constraints_v1.h"
+#include "wlr_end.hpp"
+
 #if HAVE_AVIF
 #include "avif/avif.h"
 #endif
@@ -1383,8 +1387,19 @@ MouseCursor::MouseCursor(xwayland_ctx_t *ctx)
 void MouseCursor::UpdatePosition()
 {
 	wlserver_lock();
-	m_x = wlserver.mouse_surface_cursorx;
-	m_y = wlserver.mouse_surface_cursory;
+	struct wlr_pointer_constraint_v1 *pConstraint = wlserver.GetCursorConstraint();
+	if ( pConstraint && pConstraint->current.cursor_hint.enabled )
+	{
+		m_x = pConstraint->current.cursor_hint.x;
+		m_y = pConstraint->current.cursor_hint.y;
+		m_bConstrained = true;
+	}
+	else
+	{
+		m_x = wlserver.mouse_surface_cursorx;
+		m_y = wlserver.mouse_surface_cursory;
+		m_bConstrained = false;
+	}
 	wlserver_unlock();
 }
 
@@ -7600,7 +7615,7 @@ steamcompmgr_main(int argc, char **argv)
 				( global_focus.cursor && global_focus.cursor->imageEmpty() ) &&
 				( !window_is_steam( global_focus.inputFocusWindow ) );
 
-			const bool bHasPointerConstraint = wlserver.HasMouseConstraint(); // atomic, no lock needed
+			const bool bHasPointerConstraint = global_focus.cursor->IsConstrained();
 
 			uint32_t uAppId = global_focus.inputFocusWindow
 				? global_focus.inputFocusWindow->appID
