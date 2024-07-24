@@ -2712,7 +2712,11 @@ paint_all(bool async)
 					rgbAvifImage.pixels = (uint8_t *)imageData.data();
 					rgbAvifImage.rowBytes = g_nOutputWidth * kCompCnt * sizeof( uint16_t );
 
-					avifImageRGBToYUV( pAvifImage, &rgbAvifImage ); // Not really! See Matrix Coefficients IDENTITY above.
+					if ( ( avifResult = avifImageRGBToYUV( pAvifImage, &rgbAvifImage ) ) != AVIF_RESULT_OK ) // Not really! See Matrix Coefficients IDENTITY above.
+					{
+						xwm_log.errorf( "Failed to convert RGB to YUV: %u", avifResult );
+						return;
+					}
 
 					avifEncoder *pEncoder = avifEncoderCreate();
 					defer( avifEncoderDestroy( pEncoder ) );
