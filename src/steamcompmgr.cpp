@@ -794,32 +794,17 @@ static void _update_app_target_refresh_cycle()
 	if ( !GetBackend()->GetCurrentConnector() )
 		return;
 
-	static gamescope::GamescopeScreenType last_type;
-	static int last_target_fps;
-	static bool first = true;
-
 	gamescope::GamescopeScreenType type = GetBackend()->GetCurrentConnector()->GetScreenType();
+
 	int target_fps = g_nCombinedAppRefreshCycleOverride[type];
 
-	if ( !first && type == last_type && last_target_fps == target_fps )
-	{
-		return;
-	}
-
-	last_type = type;
-	last_target_fps = target_fps;
-	first = false;
+	g_nDynamicRefreshRate[ type ] = 0;
+	g_nSteamCompMgrTargetFPS = 0;
 
 	if ( !target_fps )
 	{
-		g_nDynamicRefreshRate[ type ] = 0;
-		g_nSteamCompMgrTargetFPS = 0;
 		return;
 	}
-
-	auto rates = GetBackend()->GetCurrentConnector()->GetValidDynamicRefreshRates();
-
-	g_nDynamicRefreshRate[ type ] = 0;
 
 	if ( g_nCombinedAppRefreshCycleChangeFPS[ type ] )
 	{
@@ -828,6 +813,8 @@ static void _update_app_target_refresh_cycle()
 
 	if ( g_nCombinedAppRefreshCycleChangeRefresh[ type ] )
 	{
+		auto rates = GetBackend()->GetCurrentConnector()->GetValidDynamicRefreshRates();
+
 		// Find highest mode to do refresh doubling with.
 		for ( auto rate = rates.rbegin(); rate != rates.rend(); rate++ )
 		{
