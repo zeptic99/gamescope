@@ -2113,19 +2113,19 @@ namespace gamescope
 
 		drm_log.infof("Connector %s -> %s - %s", m_Mutable.szName, m_Mutable.szMakePNP, m_Mutable.szModel );
 
+		const bool bIsDeckHDUnofficial = ( m_Mutable.szMakePNP == "DHD"sv && m_Mutable.szModel == "DeckHD-1200p"sv );
+
 		const bool bSteamDeckDisplay =
 			( m_Mutable.szMakePNP == "WLC"sv && m_Mutable.szModel == "ANX7530 U"sv ) ||
 			( m_Mutable.szMakePNP == "ANX"sv && m_Mutable.szModel == "ANX7530 U"sv ) ||
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "ANX7530 U"sv ) ||
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Jupiter"sv ) ||
-			( m_Mutable.szMakePNP == "DHD"sv && m_Mutable.szModel == "DeckHD-1200p"sv ) ||
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Galileo"sv );
 
 		if ( bSteamDeckDisplay )
 		{
 			static constexpr uint32_t kPIDGalileoSDC = 0x3003;
 			static constexpr uint32_t kPIDGalileoBOE = 0x3004;
-			static constexpr uint32_t kPIDJupiterDHD = 0x4001;
 
 			if ( pProduct->product == kPIDGalileoSDC )
 			{
@@ -2137,13 +2137,20 @@ namespace gamescope
 				m_Mutable.eKnownDisplay = GAMESCOPE_KNOWN_DISPLAY_STEAM_DECK_OLED_BOE;
 				m_Mutable.ValidDynamicRefreshRates = std::span( s_kSteamDeckOLEDRates );
 			}
-			else if (pProduct-> product == kPIDJupiterDHD ) {
-				m_Mutable.eKnownDisplay = GAMESCOPE_KNOWN_DISPLAY_STEAM_DECK_LCD_DHD;
-				m_Mutable.ValidDynamicRefreshRates = std::span( s_kSteamDeckLCDRates );
-			}
 			else
 			{
 				m_Mutable.eKnownDisplay = GAMESCOPE_KNOWN_DISPLAY_STEAM_DECK_LCD;
+				m_Mutable.ValidDynamicRefreshRates = std::span( s_kSteamDeckLCDRates );
+			}
+		}
+
+		if ( bIsDeckHDUnofficial )
+		{
+			static constexpr uint32_t kPIDJupiterDHD = 0x4001;
+
+			if ( pProduct->product == kPIDJupiterDHD )
+			{
+				m_Mutable.eKnownDisplay = GAMESCOPE_KNOWN_DISPLAY_STEAM_DECK_LCD_DHD;
 				m_Mutable.ValidDynamicRefreshRates = std::span( s_kSteamDeckLCDRates );
 			}
 		}
