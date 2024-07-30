@@ -25,7 +25,6 @@
 #include <wlr/backend/multi.h>
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/render/wlr_renderer.h>
-#include <wlr/render/timeline.h>
 #include <wlr/render/drm_syncobj.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_keyboard.h>
